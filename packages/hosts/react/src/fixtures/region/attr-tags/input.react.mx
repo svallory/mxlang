@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
-function Card(props: { header?: ReactNode; footer?: { content?: ReactNode; align: string }; children?: ReactNode }) {
+function Card(props: { header?: { content?: ReactNode }; footer?: { content?: ReactNode; align: string }; children?: ReactNode }) {
   return (
     <div class="card">
-      <h2>${props.header}</h2>
+      <h2>${props.header?.content}</h2>
       ${props.children}
       <if=props.footer><small data-align=props.footer.align>${props.footer.content}</small></if>
     </div>

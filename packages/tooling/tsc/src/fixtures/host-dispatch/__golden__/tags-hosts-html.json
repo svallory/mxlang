@@ -7,9 +7,7 @@
         },
         "diagnostics": [],
         "related": [],
-        "dependencies": [
-          "<root>/tags-hosts-html/extra-tags/thing.mx"
-        ],
+        "dependencies": [],
         "unexpected": []
       },
       "tsPlugin": {

@@ -19,14 +19,12 @@ hook guidance. Host selection is `"mx": { "host": "react" }` or a lone
 `@mxlang/host-react` dependency, through the same resolver used by Vite, the
 language server and the TypeScript plugin.
 
-Attribute tags share Preact's v2 `attrTagProps` emission:
-data values carry `{ ...attrs, ...nestedProps, content }`, renderable values
-are passed bare, arrays are real arrays, and control flow stays expression
-shaped. This package exports `AttrTag<C>` specialised to `ReactNode`, and an
-ambient `AttrTag` reference in `.mx` emits a type-only import from
-`@mxlang/host-react`.
-Untyped body-only props use the bare renderable fallback; one
-attributed or nested occurrence makes the whole fallback property data.
+Attribute tags share Preact's record emission (spec §8): each name is one
+`__mxAttrTag({...})` or a fold, whatever the callee declares. This package
+exports `AttrTag<T>` with `content` typed `ReactNode`, and an ambient `AttrTag`
+reference in `.mx` emits a type-only import from `@mxlang/host-react`. A
+library component that wants a renderable (`<Suspense><@fallback>`) receives
+the record too.
 
 `bun run oracle:react` renders the stock 60 fixtures through
 `react-dom/server`'s `renderToStaticMarkup`: **32 pass, 13 skipped(reason), 0

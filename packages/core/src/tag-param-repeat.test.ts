@@ -16,7 +16,6 @@ writeFileSync(join(dir, "Foo.mx"), "<return=1/>");
 const page = join(dir, "page.mx");
 const host: HostDeclarations = {
   name: "tag-param-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: (name) => /^[A-Z]/.test(name),

@@ -162,9 +162,9 @@ describe("Solid IR lowering", () => {
       "component render props",
       `<Layout|input| id="x"><@head><h1>H</h1></@head><@foot|year|>\${year}</@foot><p>\${input}</p></Layout>`,
       [
-        `<Layout id="x" head={() => <h1>H</h1>} foot={(year) => () => <>{() => {`,
+        `<Layout id="x" head={__mxAttrTag({ content: () => <h1>H</h1> })} foot={__mxAttrTag({ content: (year) => () => <>{() => {`,
         "__mxEscape",
-        `}</>}>`,
+        `}</> })}>`,
         `{(input) => <p>{input}</p>}`,
       ],
       ["Layout"],
@@ -351,15 +351,17 @@ describe("Solid IR lowering", () => {
     // last. It becomes an array; each body-only occurrence gets the
     // renderable accessor shape for this untyped callee.
     [
-      "repeated attribute tag becomes an array",
+      "repeated attribute tags fold into one record",
       `<Layout><@item>1</@item><@item>2</@item></Layout>`,
-      ["item={[() => <>1</>, () => <>2</>]}"],
+      [
+        "item={(() => { let __mxAttrTagAcc; __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: () => <>1</> }); __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: () => <>2</> }); return __mxAttrTagAcc; })()}",
+      ],
       ["Layout"],
     ],
     [
-      "single attribute tag stays a plain value",
+      "a single attribute tag is one record",
       `<Layout><@item>1</@item></Layout>`,
-      ["item={() => <>1</>}"],
+      ["item={__mxAttrTag({ content: () => <>1</> })}"],
       ["Layout"],
     ],
     // attribute-tag-silent-drops B2 (Solid's dynamic-tag path shares the same
@@ -573,76 +575,50 @@ describe("Solid callee Input reader", () => {
 });
 
 describe("a failed compile still reports the dependencies it read", () => {
+  // Core reads a callee for whether a `/var` call returns a value; that read
+  // is the dependency a failed compile must still report.
   const dir = mkdtempSync(join(tmpdir(), "mx-solid-deps-"));
-  const callee = join(dir, "card.mx");
-  writeFileSync(
-    callee,
-    'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n',
-  );
+  const returning = join(dir, "ret.mx");
+  writeFileSync(returning, "<return value=1/>\n");
   const caller = join(dir, "page.mx");
-  const source =
-    'import Card from "./card.mx"\n<Card><@header>a</@header><@header>b</@header></Card>\n';
-  const failure = (run: () => unknown): { dependencies?: string[] } => {
+  const failure = (
+    run: () => unknown,
+  ): { dependencies?: string[]; message?: string } => {
     try {
       run();
     } catch (error) {
-      return error as { dependencies?: string[] };
+      return error as { dependencies?: string[]; message?: string };
     }
     throw new Error("expected a compile error");
   };
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  it("compileSolidUnit attaches the callee whose contract failed", () => {
-    expect(
-      failure(() =>
-        compileSolidUnit(source, { filename: caller, targets: solidTargets }),
-      ).dependencies,
-    ).toContain(callee);
-  });
-
-  it("compileSolidMx attaches the callee whose contract failed", () => {
-    expect(
-      failure(() =>
-        compileSolidMx(source.replace(/^import.*\n/, ""), {
-          filename: caller,
-          importSpecifiers: new Map([["Card", "./card.mx"]]),
-          importDefaultFromMarkoOrMx: new Set(["Card"]),
-        }),
-      ).dependencies,
-    ).toContain(callee);
-  });
-
   it("compileSolidUnit attaches them to an error raised after lowering", () => {
     // `/var` inside an `<if>` lowers, then the emitter refuses it: a Solid
     // callback scope has no statement position. Whether the call returns a
     // value is read from the callee.
-    const returning = join(dir, "ret.mx");
-    writeFileSync(returning, "<return value=1/>\n");
     const error = failure(() =>
       compileSolidUnit('import Ret from "./ret.mx"\n<if=true><Ret/x/></if>\n', {
         filename: caller,
         targets: solidTargets,
       }),
-    ) as { dependencies?: string[]; message?: string };
+    );
     expect(error.message).toContain("is not supported on Solid yet");
     expect(error.dependencies).toEqual([returning]);
   });
 
   it("compileSolidMx attaches them to an error raised after lowering", () => {
-    // Lowers clean (one `@header`), then the authored import is refused as
-    // a module-level statement — after `lower` has read the callee.
+    // Lowers clean, then the authored import is refused as a module-level
+    // statement — after `lower` has read the callee.
     const error = failure(() =>
-      compileSolidMx(
-        'import x from "./x"\n<Card><@header>a</@header></Card>\n',
-        {
-          filename: caller,
-          importSpecifiers: new Map([["Card", "./card.mx"]]),
-          importDefaultFromMarkoOrMx: new Set(["Card"]),
-        },
-      ),
-    ) as { dependencies?: string[]; message?: string };
+      compileSolidMx('import x from "./x"\n<Ret/x/>\n', {
+        filename: caller,
+        importSpecifiers: new Map([["Ret", "./ret.mx"]]),
+        importDefaultFromMarkoOrMx: new Set(["Ret"]),
+      }),
+    );
     expect(error.message).toContain("module-level MX statements");
-    expect(error.dependencies).toEqual([callee]);
+    expect(error.dependencies).toEqual([returning]);
   });
 });
 
@@ -1059,7 +1035,11 @@ describe("<define> hoisted to module scope", () => {
     const result = compile(
       `<define/Row|head|>\${head}</define><Row><@head>H</@head></Row>`,
     );
-    expect(result.hoistedDefines).toHaveLength(1);
+    // The define, and the record helper the call needs.
+    expect(result.hoistedDefines.map((d) => d.binding)).toEqual([
+      "__mxAttrTag",
+      expect.stringMatching(/^__mx_DefineRow\d+$/),
+    ]);
     // No tag args: the attribute tag travels in ONE object bound to the
     // first param.
     expect(result.code).toContain('{ "head": ');
@@ -1075,9 +1055,11 @@ describe("<define> hoisted to module scope", () => {
     const result = compile(
       `<define/Row|item, { head, content }|>\${item}\${head}\${content}</define><Row(input.name)><@head>H</@head>body</Row>`,
     );
-    const [hoisted] = result.hoistedDefines;
+    const hoisted = result.hoistedDefines.find((d) =>
+      d.binding.startsWith("__mx_Define"),
+    );
     expect(result.code).toBe(
-      `{${hoisted?.binding}(input.name, { "head": () => <>H</>, content: <>body</> })}`,
+      `{${hoisted?.binding}(input.name, { "head": __mxAttrTag({ content: () => <>H</> }), content: <>body</> })}`,
     );
     // Parse the region the way it is used (inside an element), so a
     // syntactically invalid call argument cannot slip through a substring check.
@@ -1303,11 +1285,8 @@ describe("compileSolidUnit", () => {
     );
     expect(result.map).toBeDefined();
     expect(result.mappings.length).toBeGreaterThan(0);
-    // The callee reader probed candidate paths for an import it could not
-    // resolve on disk in this fixture — the same dependency-reporting
-    // behavior `compileSolidMx` has (`packages/core/AGENTS.md`'s "an
-    // unresolved callee still reports a dependency" bullet).
-    expect(result.dependencies.length).toBeGreaterThan(0);
+    // An attribute tag reads nothing from its callee, so no file is read.
+    expect(result.dependencies).toEqual([]);
     // A whole file is never spliced into someone else's module, so these
     // three region-only fields are always empty here.
     expect(result.hoistedImports).toEqual([]);
@@ -1441,7 +1420,7 @@ describe("compileSolidUnit", () => {
         callee,
         [
           'import type { AttrTag } from "@mxlang/host-solid";',
-          "export interface Input { item: AttrTag<{ attrs: { id: number }; params: [label: string] }>[] }",
+          "export interface Input { item?: AttrTag<{ id: number; content: (label: string) => () => unknown }> }",
           "export default function Row(_input: Input) { return null; }",
         ].join("\n"),
       );
@@ -1453,7 +1432,10 @@ describe("compileSolidUnit", () => {
           importSpecifiers: new Map([["Row", "./Row.tsx"]]),
         },
       );
-      const regionImports = compiled.hoistedImports
+      const regionImports = [
+        ...compiled.hoistedImports,
+        ...compiled.hoistedDefines,
+      ]
         .map((entry) => entry.code)
         .join("\n");
       // `Row` is a `.tsx` default import, so `compiled.code` is now a

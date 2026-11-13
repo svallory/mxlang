@@ -26,7 +26,7 @@ describe("solid: a <define> is scoped to the body that declares it", () => {
   it("a native element body: the <Foo/> after it renders the import", () => {
     const code = compile(`<div>${FOO}</div>\n<Foo/>\n`, true);
     expect(code).not.toContain("__mx_DefineFoo");
-    expect(code).toContain("const __mxDyn0 = Foo;");
+    expect(code).toContain("let __mxDyn0 = Foo;");
   });
 
   it("a native element body: with no import the <Foo/> after it is an unresolved tag", () => {

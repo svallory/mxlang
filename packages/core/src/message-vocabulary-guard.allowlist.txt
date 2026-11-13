@@ -75,9 +75,6 @@ lower.ts :: lowercaseBindingFix :: ==`<${${…}}${…}>` -- example: the suggest
 lower.ts :: localVariableTagMessage :: `<${${…}}/>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
 lower.ts :: lowerStatement :: parsed as a tag with attributes -- host: addressed to the author of a target's translator, who names the statement tags in MX's words
 lower.ts :: tagText :: ==`<${…}>` -- internal: the sentinel name of a dynamic target, which no dialect names
-lower.ts :: ownerLabel :: ==`<${…}>` -- internal: the sentinel name of a dynamic target, which no dialect names
-lower.ts :: rejectUncalledParameterizedAttributeTag :: `<${${…}(/* arguments */)}/>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
-lower.ts :: lowerAuthoredTag :: `<${input.${…}.content}/>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
 lower.ts :: lowerAuthoredTag :: `<${${…}}>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
 
 ir-entry/checks.ts :: checkBranch :: ==`<if>` condition -- internal: span invariant label

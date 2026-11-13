@@ -17,7 +17,6 @@ const MARKO = "Expected a single expression, but found `:` after it.";
 
 const host: HostDeclarations = {
   name: "sugar-after-default-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

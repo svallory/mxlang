@@ -68,7 +68,11 @@ declare module "@mxlang/tsx-bridge" {
 
   /** One `<define>` a region hoisted to module scope. */
   export interface MxRegionHoistedDefine {
-    /** The `function __mx_DefineN(params) { return <>...</>; }` text. */
+    /**
+     * The `function __mx_DefineN(params) { return <>...</>; }` text, or a
+     * host helper's declarations. Every statement is spliced in; a collision
+     * rename renames the first, which declares `binding`.
+     */
     code: string;
     /** The gensym'd module-scope binding the region calls. */
     binding: string;

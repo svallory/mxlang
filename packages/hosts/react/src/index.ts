@@ -1,7 +1,6 @@
 import type {
-  AttrTagConfig,
-  AttrTagOf,
   CompileResult,
+  AttrTag as CoreAttrTag,
   RawSourceMap,
 } from "@mxlang/core";
 import { createTargetLookup, type TargetLookup } from "@mxlang/core";
@@ -38,11 +37,17 @@ export {
 } from "./dialect.ts";
 export type { CompileResult, RawSourceMap };
 
-/** Attribute-tag value specialised to React's renderable node type. */
+/**
+ * The attribute-tag record a React component receives (spec §8): the
+ * first occurrence, carrying every later one, with `map`, `filter`,
+ * `length`, `at` and `toArray`. `T` is one occurrence's attributes; its
+ * `content` is `ReactNode` unless `T` declares its own, as a tag
+ * with params does (`content: (row: Row) => …`).
+ */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default
-  C extends AttrTagConfig = {},
-> = AttrTagOf<C, ReactNode>;
+  // biome-ignore lint/complexity/noBannedTypes: an attribute tag with no attributes
+  T extends object = {},
+> = CoreAttrTag<"content" extends keyof T ? T : T & { content?: ReactNode }>;
 
 /**
  * Compiles a whole-file MX template to a React component module.

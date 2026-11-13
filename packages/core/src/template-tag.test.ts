@@ -59,7 +59,7 @@ function lowerWithTags(
 }
 
 function attrTagsV2(): Policy {
-  return { ...declarations(), attrTags: 2 };
+  return declarations();
 }
 
 function components(
@@ -828,7 +828,6 @@ describe("template custom tags as compilation units", () => {
     expect(call?.attributeTagTree).toMatchObject([
       { kind: "AttributeTag", tag: { name: "item" } },
     ]);
-    expect(call?.attrTagProps.map((prop) => prop.name)).toEqual(["item"]);
   });
 
   it("preserves control flow when a sidecar copies attribute tags", () => {
@@ -854,11 +853,6 @@ describe("template custom tags as compilation units", () => {
     expect(call?.attributeTagTree).toMatchObject([
       { kind: "AttributeTagIf", branches: [{ nodes: [{}] }] },
     ]);
-    expect(call?.attrTagProps[0]).toMatchObject({
-      name: "item",
-      cardinality: "single",
-      source: [{ kind: "AttributeTagIf" }],
-    });
   });
 
   it("removes stale plan entries after an in-place sidecar splice", () => {
@@ -880,7 +874,6 @@ describe("template custom tags as compilation units", () => {
     expect(call?.attributeTagTree).toMatchObject([
       { kind: "AttributeTag", tag: { name: "item" } },
     ]);
-    expect(call?.attrTagProps.map((prop) => prop.name)).toEqual(["item"]);
   });
 
   it("appends sidecar-created attribute tags as unconditional", () => {
@@ -909,14 +902,6 @@ describe("template custom tags as compilation units", () => {
     expect(call?.attributeTagTree.map((node) => node.kind)).toEqual([
       "AttributeTagIf",
       "AttributeTag",
-    ]);
-    expect(call?.attrTagProps).toMatchObject([
-      { name: "item", cardinality: "single" },
-      {
-        name: "other",
-        cardinality: "single",
-        source: [{ kind: "AttributeTag" }],
-      },
     ]);
   });
 

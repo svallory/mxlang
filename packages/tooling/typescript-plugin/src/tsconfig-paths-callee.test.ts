@@ -19,18 +19,18 @@ import { makePluginInstall } from "./fixtures/plugin-install.ts";
 import { createPluginService } from "./fixtures/plugin-service.ts";
 import {
   createNgMxLanguagePlugin,
-  createRegionLanguagePlugins,
   type MxDiagnosticLanguagePlugin,
 } from "./language.ts";
-import { createMxLanguagePlugin } from "./mx-language.ts";
 import { createTsconfigPathsResolver } from "./tsconfig-paths.ts";
 
 /**
  * tsconfig `paths` reach `.mx` callee imports in the editor plugin (mx-c1cu):
  * the resolver the tsserver factory installs from the project's own compiler
  * options (`info.languageServiceHost.getCompilationSettings`) is the same one
- * these tests build directly, so the plugin leg here covers the wiring and a
- * real tsserver run below covers the factory end to end. The language server
+ * these tests build directly, so the plugin leg here covers the resolver and
+ * a real tsserver run below covers the factory end to end. In the tsserver
+ * leg the resolved callee shows as TypeScript's own check of the call
+ * against its Input (TS2353 for an attribute tag it does not declare). The language server
  * has no ts program and stays as it was (its warning is the recorded
  * behaviour there).
  */
@@ -115,35 +115,6 @@ function optionsOf(dir: string): ts.CompilerOptions {
   );
   if (!parsed) throw new Error(`no tsconfig parsed for ${dir}`);
   return parsed.options;
-}
-
-/** `ts.ScriptSnapshot` is optional on the namespace type; tests always have it. */
-const snapshotOf = (text: string): ts.IScriptSnapshot =>
-  (
-    ts.ScriptSnapshot as unknown as {
-      fromString(source: string): ts.IScriptSnapshot;
-    }
-  ).fromString(text);
-
-function compileDiagnosticsFor(project: Scratch, page: string) {
-  const plugin = createMxLanguagePlugin(ts, {
-    resolveImport: createTsconfigPathsResolver(ts, () =>
-      optionsOf(project.dir),
-    ),
-  });
-  plugin.createVirtualCode?.(
-    page,
-    "mx",
-    snapshotOf(readFileSync(page, "utf8")),
-    { getAssociatedScript: () => undefined },
-  );
-  return plugin
-    .getCompileDiagnostics(page)
-    .map(({ message, offset, diagnosticCode }) => ({
-      message,
-      offset,
-      diagnosticCode,
-    }));
 }
 
 // A cold plugin-service program is built and paid inside the first test,
@@ -297,70 +268,14 @@ describe("the plugin resolves aliased .mx callee imports through tsconfig paths"
       rmSync(project.dir, { recursive: true, force: true });
     }
   });
-
-  it("reads the callee's Input for a star alias with the extension kept", () => {
-    const project = scratch({ "~/*": ["src/*"], ...targetHtmlEntry("") });
-    try {
-      const page = project.page(
-        'import Card from "~/Card.mx"\n\n<Card><@tab/></Card>\n',
-      );
-      // An attribute tag is what makes an unreadable callee warn; the read
-      // being real turns that into "declares no attribute tag `tab`" instead
-      // of `MX_UNREADABLE_CALLEE_INPUT`.
-      expect(compileDiagnosticsFor(project, page)).toEqual([
-        {
-          message: "`<Card>` declares no attribute tag `tab`",
-          offset: 37,
-          diagnosticCode: "MX_UNKNOWN_ATTRIBUTE_TAG",
-        },
-      ]);
-    } finally {
-      rmSync(project.dir, { recursive: true, force: true });
-    }
-  });
-
-  it("reads it for an extension-omitted alias and an exact alias", () => {
-    for (const specifier of ["~/Card", "card"]) {
-      const project = scratch({
-        ...(specifier === "card" ? { card: ["./src/Card.mx"] } : {}),
-        "~/*": ["src/*"],
-        ...targetHtmlEntry(""),
-      });
-      try {
-        const page = project.page(
-          `import Card from "${specifier}"\n\n<Card><@tab/></Card>\n`,
-        );
-        expect(compileDiagnosticsFor(project, page)).toEqual([
-          expect.objectContaining({
-            message: "`<Card>` declares no attribute tag `tab`",
-            diagnosticCode: "MX_UNKNOWN_ATTRIBUTE_TAG",
-          }),
-        ]);
-      } finally {
-        rmSync(project.dir, { recursive: true, force: true });
-      }
-    }
-  });
-
-  it("keeps the existing warning for an alias that does not resolve", () => {
-    const project = scratch({ "~/*": ["src/*"], ...targetHtmlEntry("") });
-    try {
-      const page = project.page(
-        'import Card from "~/Missing.mx"\n\n<Card><@tab/></Card>\n',
-      );
-      expect(compileDiagnosticsFor(project, page)).toEqual([
-        {
-          message:
-            "couldn't read `<Card>`'s Input (`~/Missing.mx` not resolvable); attribute-tag shape inferred from this call",
-          offset: 34,
-          diagnosticCode: "MX_UNREADABLE_CALLEE_INPUT",
-        },
-      ]);
-    } finally {
-      rmSync(project.dir, { recursive: true, force: true });
-    }
-  });
 });
+
+const snapshotOf = (text: string): ts.IScriptSnapshot =>
+  (
+    ts.ScriptSnapshot as unknown as {
+      fromString(source: string): ts.IScriptSnapshot;
+    }
+  ).fromString(text);
 
 /** Compile `file` with `plugin`: each diagnostic's code, else its message. */
 function codesFrom(plugin: MxDiagnosticLanguagePlugin, file: string): string[] {
@@ -377,13 +292,13 @@ function codesFrom(plugin: MxDiagnosticLanguagePlugin, file: string): string[] {
 
 // A cold plugin-service program is built and paid inside the first test,
 // as in the sibling plugin-service files.
-describe("every pipeline's plugin reads an aliased callee's Input", {
+describe("the .ng.mx and .astro.mx plugins read an aliased callee", {
   timeout: 60_000,
 }, () => {
-  // The read being real turns the unreadable-callee warning into "declares
-  // no attribute tag `tab`"; without the resolver the alias is unresolvable.
-  const region =
-    'import Card from "~/Card.mx";\n\nexport const view = <Card><@tab/></Card>;\n';
+  // Angular reads a callee during compile (its `Input` and its `export const
+  // selector`), and `.astro.mx` reads a fence import's `<return>` for `/var`;
+  // the value hosts no longer read a callee's `Input` for attribute tags, so
+  // an alias changes none of their compile diagnostics.
   function project(name: string, source: string) {
     const scratchProject = scratch({
       "~/*": ["src/*"],
@@ -397,68 +312,20 @@ describe("every pipeline's plugin reads an aliased callee's Input", {
     return { dir: scratchProject.dir, file, resolveImport };
   }
 
-  it.each(["solid", "preact", "react", "hono"])(
-    "the .%s.mx region plugin",
-    (segment) => {
-      const { dir, file, resolveImport } = project(
-        `page.${segment}.mx`,
-        region,
-      );
-      try {
-        const pluginFor = (
-          options: Parameters<typeof createRegionLanguagePlugins>[1],
-        ) => {
-          const plugin = createRegionLanguagePlugins(ts, options).find(
-            (candidate) => candidate.getLanguageId(file) !== undefined,
-          );
-          if (!plugin) throw new Error(`no region plugin claims ${file}`);
-          return plugin;
-        };
-        expect(codesFrom(pluginFor({ resolveImport }), file)).toEqual([
-          "MX_UNKNOWN_ATTRIBUTE_TAG",
-        ]);
-        expect(codesFrom(pluginFor({}), file)).toEqual([
-          "MX_UNREADABLE_CALLEE_INPUT",
-        ]);
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-  );
-
-  it("the whole-file .mx plugin on the solid host", () => {
-    const { dir, file, resolveImport } = project(
-      "page.mx",
-      'import Card from "~/Card.mx";\n\n<Card><@tab/></Card>\n',
-    );
-    writeFileSync(
-      join(dir, "package.json"),
-      JSON.stringify({ mx: { host: "solid" } }),
-    );
-    try {
-      expect(
-        codesFrom(createMxLanguagePlugin(ts, { resolveImport }), file),
-      ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
-      expect(codesFrom(createMxLanguagePlugin(ts), file)).toEqual([
-        "MX_UNREADABLE_CALLEE_INPUT",
-      ]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
   it("the .astro.mx plugin", () => {
-    // Astro projects an attribute tag's body, so the call gives `<@tab>` one.
+    // Astro refuses `/var` on a tag it read a `<return>` from with its own
+    // message; an unread callee gets core's generic refusal instead.
     const { dir, file, resolveImport } = project(
       "page.astro.mx",
-      '---\nimport Card from "~/Card.mx";\n---\n<Card><@tab>x</@tab></Card>\n',
+      '---\nimport Card from "~/Card.mx";\n---\n<Card/n/>\n',
     );
+    writeFileSync(join(dir, "src", "Card.mx"), "<return value=1/>\n<div/>\n");
     try {
       expect(
         codesFrom(createAmxLanguagePlugin(ts, { resolveImport }), file),
-      ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
+      ).toEqual(["ASTRO_WITH_RESOLVER"]);
       expect(codesFrom(createAmxLanguagePlugin(ts), file)).toEqual([
-        "MX_UNREADABLE_CALLEE_INPUT",
+        "ASTRO_WITHOUT_RESOLVER",
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -612,10 +479,10 @@ describe.skipIf(!built)(
           });
           await server.request("open", { file: page, fileContent: text });
           const before = await diagnostics();
+          // Unresolved, TS cannot find the module; resolved, the callee's
+          // Input types the call and `tab` is not one of its props.
           expect(before.map((d) => d.code)).toContain(
-            change === "create-after-miss"
-              ? "MX_UNREADABLE_CALLEE_INPUT"
-              : "MX_UNKNOWN_ATTRIBUTE_TAG",
+            change === "create-after-miss" ? 2307 : 2353,
           );
           if (change === "create-after-miss") writeFileSync(callee, source);
           else renameSync(callee, join(dir, "lib/Card.mx"));
@@ -628,12 +495,7 @@ describe.skipIf(!built)(
             fileContent: `${text}\n`,
           });
           const after = await diagnostics();
-          expect(after.map((d) => d.code)).toContain(
-            "MX_UNKNOWN_ATTRIBUTE_TAG",
-          );
-          expect(after.map((d) => d.code)).not.toContain(
-            "MX_UNREADABLE_CALLEE_INPUT",
-          );
+          expect(after.map((d) => d.code)).toContain(2353);
           expect(after.map((d) => d.code)).not.toContain(2307);
         } finally {
           server.kill();
@@ -741,66 +603,10 @@ describe.skipIf(!built)(
               text: string;
             }[]),
           ];
-          // A positive assertion proves the factory installed our resolver,
-          // rather than passing because the plugin was never loaded.
-          expect(
-            diagnostics.some((d) => d.code === "MX_UNKNOWN_ATTRIBUTE_TAG"),
-          ).toBe(true);
-          expect(
-            diagnostics.filter((d) => d.code === "MX_UNREADABLE_CALLEE_INPUT"),
-          ).toEqual([]);
+          // A positive assertion proves the plugin is loaded and the aliased
+          // callee resolved: its Input types the call, which has no `tab`.
+          expect(diagnostics.some((d) => d.code === 2353)).toBe(true);
           expect(diagnostics.filter((d) => d.code === 2307)).toEqual([]);
-          if (inherited) {
-            const configFile = join(dir, "base.json");
-            const config = JSON.parse(readFileSync(configFile, "utf8"));
-            config.compilerOptions.paths["~/*"] = ["missing/*"];
-            writeFileSync(configFile, JSON.stringify(config));
-            await server.request("reloadProjects", {});
-            const missing = (await server.request("syntacticDiagnosticsSync", {
-              file: page,
-            })) as { code: number | string; text: string }[];
-            // Volar retains virtual code for an unchanged source snapshot on
-            // reloadProjects. Pin that existing limitation, then prove that
-            // the next caller edit uses the newly loaded compiler options.
-            expect(
-              missing.some((d) => d.code === "MX_UNKNOWN_ATTRIBUTE_TAG"),
-            ).toBe(true);
-            await server.request("close", { file: page });
-            project.page(
-              `import Card from "${specifier}"\n\n<Card><@tab/></Card>\n\n`,
-            );
-            await server.request("open", {
-              file: page,
-              fileContent: readFileSync(page, "utf8"),
-            });
-            const refreshed = (await server.request(
-              "syntacticDiagnosticsSync",
-              { file: page },
-            )) as { code: number | string; text: string }[];
-            expect(
-              refreshed.some((d) => d.code === "MX_UNREADABLE_CALLEE_INPUT"),
-            ).toBe(true);
-            config.compilerOptions.paths["~/*"] = ["src/*"];
-            writeFileSync(configFile, JSON.stringify(config));
-            await server.request("reloadProjects", {});
-            await server.request("close", { file: page });
-            project.page(
-              `import Card from "${specifier}"\n\n<Card><@tab/></Card>\n\n\n`,
-            );
-            await server.request("open", {
-              file: page,
-              fileContent: readFileSync(page, "utf8"),
-            });
-            const restored = (await server.request("syntacticDiagnosticsSync", {
-              file: page,
-            })) as { code: number | string; text: string }[];
-            expect(
-              restored.some((d) => d.code === "MX_UNKNOWN_ATTRIBUTE_TAG"),
-            ).toBe(true);
-            expect(
-              restored.some((d) => d.code === "MX_UNREADABLE_CALLEE_INPUT"),
-            ).toBe(false);
-          }
           await server.request("close", { file: page });
           project.page(`import Card from "${specifier}"\n\n<Card a=123/>\n`);
           await server.request("open", {

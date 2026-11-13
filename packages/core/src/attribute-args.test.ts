@@ -21,7 +21,6 @@ function compile(
     "/v/test.mx",
     {
       tags: {},
-      attrTags: 2,
       isElement: () => true,
       isComponent: (_name, ctx) => ctx.imports.has(_name),
       resolveAttributeMethod: () => true,
@@ -171,7 +170,6 @@ describe("the opt-in attribute argument refusal", () => {
           "/v/test.mx",
           {
             tags: {},
-            attrTags: 2,
             isElement: () => true,
             isComponent: () => false,
             resolveAttributeMethod: () => true,
@@ -200,7 +198,6 @@ describe("the opt-in attribute argument refusal", () => {
         "/v/test.mx",
         {
           tags: {},
-          attrTags: 2,
           isElement: () => true,
           isComponent: () => false,
           resolveAttributeMethod: () => true,
@@ -219,7 +216,6 @@ describe("the opt-in attribute argument refusal", () => {
         "/v/test.mx",
         {
           tags: { "html-comment": { kind: "unsupported" } },
-          attrTags: 2,
           isElement: () => true,
           isComponent: () => false,
           resolveAttributeMethod: () => true,

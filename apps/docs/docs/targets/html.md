@@ -25,18 +25,12 @@ ordinary unknown-target error.
 
 ## Attribute-tag values
 
-> **Being replaced.** This describes the attribute-tag shape that ships
-> today. MX is moving to Marko's attribute-tag record with extra prototype
-> members (`map`, `filter`, `length`, `at`, `toArray`) on every target, so
-> cardinality stops depending on the `Input` declaration
-> ([specification §8](/specification/) is normative).
-
-Import `AttrTag` from `@mxlang/target-html` in hand-written TypeScript. A renderable
-attribute tag is a thunk `() => string`; params change it to
-`(...params) => string`. The default data shape carries attrs and nested tags
-plus an optional `content` thunk. Arrays are real arrays, and conditional and
-looped occurrences preserve source order. See [AttrTag](/language/attr-tag/)
-for declarations, fallback inference, errors, and compiled examples.
+A component receives Marko's attribute-tag record, whatever its `Input`
+declares ([specification §8](/specification/) is normative). Import `AttrTag`
+from `@mxlang/target-html` in hand-written TypeScript: `content` is a thunk
+`() => string`, and params make it `(...params) => string`. Repeated,
+conditional and looped occurrences fold into one record in source order. See
+[AttrTag](/language/attr-tag/) for the type, rendering and compiled examples.
 
 This target renders what Marko's server render emits, minus resume markers.
 Tags are discovered from `tags/` directories and `mx.tags`, and elements are

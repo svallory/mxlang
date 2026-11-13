@@ -1,9 +1,9 @@
 import type { Child } from "hono/jsx";
 
-function Card(props: { header?: Child; footer?: { content?: Child; align: string }; children?: Child }) {
+function Card(props: { header?: { content?: Child }; footer?: { content?: Child; align: string }; children?: Child }) {
   return (
     <div class="card">
-      <h2>${props.header}</h2>
+      <h2>${props.header?.content}</h2>
       ${props.children}
       <if=props.footer><small data-align=props.footer.align>${props.footer.content}</small></if>
     </div>

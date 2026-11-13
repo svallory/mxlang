@@ -14,7 +14,6 @@ const targets = testTargetLookup();
  * keeps the web elements' parse rules (data neutralizes them in its taglib).
  */
 const delegating: HostDeclarations = {
-  attrTags: 2,
   tags: {},
   nativeTags: WEB_ELEMENTS,
   isElement: () => false,

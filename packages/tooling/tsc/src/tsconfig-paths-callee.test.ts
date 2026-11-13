@@ -316,12 +316,10 @@ it(
       p.page('import Card from "~/Missing.mx"\n\n<Card><@tab/></Card>\n');
       const result = p.run();
       expect(result.status).not.toBe(0);
-      // tsc's own paths-aware TS2307, unchanged by this fix.
+      // tsc's own paths-aware TS2307, unchanged by this fix, and nothing
+      // from MX: the attribute tag does not read the callee.
       expect(result.output).toContain("TS2307");
-      // The same warning, code and position as before it.
-      expect(result.output).toContain(
-        "page.mx(3,2): warning MX_UNREADABLE_CALLEE_INPUT: couldn't read `<Card>`'s Input (`~/Missing.mx` not resolvable); attribute-tag shape inferred from this call",
-      );
+      expect(result.output).not.toContain("MX_UNREADABLE_CALLEE_INPUT");
     } finally {
       rmSync(p.dir, { recursive: true, force: true });
     }

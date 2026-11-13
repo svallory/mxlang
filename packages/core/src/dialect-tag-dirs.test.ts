@@ -21,7 +21,6 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { contractDefaultTagDiagnostics } from "./contract-default-tag.ts";
-import { isTranslateError } from "./core.ts";
 import { type CustomTag, deferContract } from "./custom-tags.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import {

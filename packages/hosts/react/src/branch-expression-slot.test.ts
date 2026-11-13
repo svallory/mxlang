@@ -91,12 +91,12 @@ const CASES: Array<[string, string, string]> = [
   [
     "an <@item> body that is a define call (a prop value)",
     `${DEFINE}${IMP}<Bar><@item><Foo/></@item></Bar>`,
-    "return (<><Bar item={__mxDef_Foo()} /></>);",
+    "return (<><Bar item={__mxAttrTag({ content: __mxDef_Foo() })} /></>);",
   ],
   [
     "an <@item|x|> body that is a define call (an arrow body, not a block)",
     `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item></Bar>`,
-    "return (<><Bar item={(x) => __mxDef_Foo()} /></>);",
+    "return (<><Bar item={__mxAttrTag({ content: (x) => __mxDef_Foo() })} /></>);",
   ],
 ];
 
@@ -121,12 +121,12 @@ const UNCHANGED: Array<[string, string, string]> = [
   [
     "a repeated <@item> keeps the call as the child of its keyed fragment",
     `${DEFINE}${IMP}<Bar><@item><Foo/></@item><@item><Foo/></@item></Bar>`,
-    'return (<><Bar item={[<__mxFragment key={"0"}>{__mxDef_Foo()}</__mxFragment>, <__mxFragment key={"1"}>{__mxDef_Foo()}</__mxFragment>]} /></>);',
+    'return (<><Bar item={(() => { let __mxAttrTagAcc; __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: <__mxFragment key={"" + "0"}>{__mxDef_Foo()}</__mxFragment> }); __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: <__mxFragment key={"" + "1"}>{__mxDef_Foo()}</__mxFragment> }); return __mxAttrTagAcc; })()} /></>);',
   ],
   [
     "a repeated <@item|x|> keeps the call as the child of its keyed fragment",
     `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item><@item|x|><Foo/></@item></Bar>`,
-    'return (<><Bar item={[(x) => <__mxFragment key={"0"}>{__mxDef_Foo()}</__mxFragment>, (x) => <__mxFragment key={"1"}>{__mxDef_Foo()}</__mxFragment>]} /></>);',
+    'return (<><Bar item={(() => { let __mxAttrTagAcc; __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: ((x) => <__mxFragment key={"" + "0"}>{__mxDef_Foo()}</__mxFragment>) as (...args: any[]) => any }); __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: ((x) => <__mxFragment key={"" + "1"}>{__mxDef_Foo()}</__mxFragment>) as (...args: any[]) => any }); return __mxAttrTagAcc; })()} /></>);',
   ],
 ];
 
@@ -237,6 +237,12 @@ describe("react: the bare define call renders the HTML the HTML target renders f
         `${DEFINE}<define/Bar|{ item }|><section><${"$"}{item}/></section></define>\n<Bar><@item><Foo/></@item></Bar>`,
         {},
         "<section><p>inner</p></section>",
+      ],
+      [
+        "static, conditional and looped <@item>s folded into one record",
+        `<define/Card|{ item }|><p>${"$"}{item.a}:${"$"}{item.length}:${"$"}{item.map((i) => i.a).join(",")}:<${"$"}{item}/></p></define>\n<Card><@item a=1>x</@item><if=input.c><@item a=2/></if><for|n| of=[3, 4]><@item a=n/></for></Card>`,
+        { c: true },
+        "<p>1:4:1,2,3,4:x</p>",
       ],
       [
         "a <@catch|e|> body that is a define call",

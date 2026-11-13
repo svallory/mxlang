@@ -34,10 +34,12 @@
 
 import * as babelParser from "@babel/parser";
 import {
+  ATTR_TAG_FOLD,
+  ATTR_TAG_RECORD,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
-  type AttrTagProp,
+  attributeTagNames,
   type Block,
   type ComponentTarget,
   concatMapped,
@@ -49,6 +51,7 @@ import {
   // biome-ignore lint/suspicious/noShadowRestrictedNames: the compiler calls the same helper the emitted module imports, so a static value and a runtime one are escaped by one implementation
   escape,
   type ForHead,
+  filterAttributeTagTree,
   type GeneratedMapping,
   type Ir,
   type IrNode,
@@ -477,107 +480,81 @@ export function createEmitter(
     return null;
   };
 
-  /** One concrete attribute-tag occurrence in its declared host shape. */
-  const attrTagValue = (
-    tag: AttributeTag,
-    as: AttrTagProp["as"],
-    valueType: string | null,
-  ): MappedCode => {
-    const content = blockFunction(
-      tag.block.children,
-      tag.block.params.join(", "),
-    );
-    if (as === "renderable") {
-      return valueType
-        ? concatMapped(
-            "(((",
-            content,
-            ") ",
-            mapped("satisfies", tag.nameSpan),
-            ` ${valueType}) as any)`,
-          )
-        : content;
-    }
-
+  /**
+   * One attribute-tag occurrence as an object: its attributes (spreads in
+   * source order), its own attribute tags as records, and its body as
+   * `content`. A bodiless occurrence has no `content` key, as in Marko.
+   *
+   * Both braces and the `content` key map to the tag name, so an error on
+   * the whole object (an attribute the callee requires and the call leaves
+   * out) or on the body's type is reported there.
+   *
+   * `contextual` says whether the callee's declared type reaches this object:
+   * it does through a lone `__mxAttrTag({...})` call, not through a fold's
+   * accumulator, nor for a callee with no type. Without it, a body's
+   * unannotated tag params would be an implicit `any` under strict tsc, so
+   * they are cast to `any`, as an untyped callee's `content` is.
+   */
+  const attrTagValue = (tag: AttributeTag, contextual: boolean): MappedCode => {
     const parts = propPartsOfAttrs(tag.attrs);
-    for (const nested of tag.attrTagProps) {
+    for (const name of attributeTagNames(tag.attributeTagTree)) {
+      const source = filterAttributeTagTree(tag.attributeTagTree, name);
       parts.push(
         concatMapped(
-          mapped(propKey(nested.name), attrTagNameSpan(nested.source)),
+          mapped(propKey(name), attrTagNameSpan(source)),
           ": ",
-          attrTagPropValue(nested, valueType),
+          attrTagRecord(source, contextual),
         ),
       );
     }
-    parts.push(concatMapped("content: ", tag.hasBody ? content : "undefined"));
-    const value = concatMapped("{ ", joinParts(parts), " }");
-    return valueType
-      ? concatMapped(
-          "((",
-          value,
-          " ",
-          mapped("satisfies", tag.nameSpan),
-          ` ${valueType}) as any)`,
-        )
-      : value;
-  };
-
-  const singleNodeValue = (
-    node: AttributeTagNode,
-    as: AttrTagProp["as"],
-    valueType: string | null,
-  ): MappedCode => {
-    if (node.kind === "AttributeTag")
-      return attrTagValue(node.tag, as, valueType);
-    if (node.kind === "AttributeTagFor") {
-      return fail(
-        "internal attribute-tag plan error: a singular value cannot contain `<for>`",
-        node,
+    if (tag.hasBody) {
+      const fn = blockFunction(tag.block.children, tag.block.params.join(", "));
+      parts.push(
+        concatMapped(
+          mapped("content", tag.nameSpan),
+          ": ",
+          !contextual && tag.block.params.length > 0
+            ? concatMapped("(", fn, ") as (...args: any[]) => any")
+            : fn,
+        ),
       );
     }
-
-    let alternate = concatMapped("undefined");
-    for (let index = node.branches.length - 1; index >= 0; index--) {
-      const branch = node.branches[index];
-      if (!branch) continue;
-      const value = singleSourceValue(branch.nodes, as, valueType);
-      alternate = branch.test
-        ? concatMapped(
-            "(",
-            mappedExpr(branch.test),
-            " ? ",
-            value,
-            " : ",
-            alternate,
-            ")",
-          )
-        : value;
-    }
-    return alternate;
-  };
-
-  const singleSourceValue = (
-    source: AttributeTagNode[],
-    as: AttrTagProp["as"],
-    valueType: string | null,
-  ): MappedCode => {
-    if (source.length === 0) return concatMapped("undefined");
-    const values = source.map((node) => singleNodeValue(node, as, valueType));
-    if (values.length === 1) return values[0] as MappedCode;
     return concatMapped(
-      "(",
-      ...values.flatMap((value, index) =>
-        index === 0 ? [value] : [" ?? ", value],
-      ),
-      ")",
+      mapped("{", tag.nameSpan),
+      " ",
+      joinParts(parts),
+      " ",
+      mapped("}", tag.nameSpan),
     );
   };
 
-  const arrayLoopValue = (
-    node: Extract<AttributeTagNode, { kind: "AttributeTagFor" }>,
-    as: AttrTagProp["as"],
-    valueType: string | null,
-  ): MappedCode => {
+  /** The statements folding `nodes` into `acc`, in tree order. */
+  const attrTagFold = (nodes: AttributeTagNode[], acc: string): MappedCode =>
+    concatMapped(...nodes.map((node) => attrTagFoldNode(node, acc)));
+
+  const attrTagFoldNode = (node: AttributeTagNode, acc: string): MappedCode => {
+    if (node.kind === "AttributeTag") {
+      return concatMapped(
+        `${acc} = ${ATTR_TAG_FOLD}(${acc}, `,
+        attrTagValue(node.tag, false),
+        "); ",
+      );
+    }
+    if (node.kind === "AttributeTagIf") {
+      const parts: (string | MappedCode)[] = [];
+      node.branches.forEach((branch, index) => {
+        const head = branch.test
+          ? concatMapped(
+              `${index === 0 ? "if" : " else if"} (`,
+              mappedExpr(branch.test),
+              ") { ",
+            )
+          : " else { ";
+        parts.push(head, attrTagFold(branch.nodes, acc), "}");
+      });
+      parts.push(" ");
+      return concatMapped(...parts);
+    }
     const source: ForHead["source"] = node.loop.source;
     if (source.kind === "range" && source.step) {
       return fail(
@@ -585,9 +562,7 @@ export function createEmitter(
         node,
       );
     }
-
     const serial = state.attrTagTemp++;
-    const result = `__mxAttrTags${serial}`;
     const sourceName = `__mxAttrTagSource${serial}`;
     const { bindings, typed } = loopHead(
       node.loop.params,
@@ -596,137 +571,70 @@ export function createEmitter(
       () => `__mxForParam${state.forParamTemp++}`,
     );
     const [first = "__mxItem", second] = bindings;
-    const body = arraySourceValue(node.nodes, as, valueType);
+    const body = attrTagFold(node.nodes, acc);
     // Under `typeCheck`, an annotated param is re-declared at the top of the
     // loop body, and the authored body stands in a block of its own.
-    const open = typed.length > 0 ? `${result}.push(...(` : "";
-    // `lead` is the mapped loop source; `head` (its text ends in `open`
-    // when params are typed) is the rest of the loop head.
-    const pushes = (
-      lead: Array<string | MappedCode>,
-      head: string,
-    ): Array<string | MappedCode> =>
+    const loopBody: Array<string | MappedCode> =
       typed.length > 0
-        ? [
-            ...lead,
-            head.slice(0, -open.length),
-            ...typed.flatMap((line) => [line, " "]),
-            `{ ${open}`,
-            body,
-            ")); } } return ",
-          ]
-        : [...lead, head, body, ")); } return "];
-
+        ? [...typed.flatMap((line) => [line, " "]), "{ ", body, "} } "]
+        : [body, "} "];
     if (source.kind === "of") {
       const head = second
         ? `for (const [${second}, ${first}] of [...${sourceName}].entries())`
         : `for (const ${first} of ${sourceName})`;
       return concatMapped(
-        ...pushes(
-          [
-            `(() => { const ${result} = []; const ${sourceName}Raw = `,
-            mappedExpr(source.list),
-          ],
-          `; const ${sourceName} = ${sourceName}Raw ? ${sourceName}Raw : []; ${head} { ${result}.push(...(`,
-        ),
-        `${result}; })()`,
+        `const ${sourceName}Raw = `,
+        mappedExpr(source.list),
+        `; const ${sourceName} = ${sourceName}Raw ? ${sourceName}Raw : []; ${head} { `,
+        ...loopBody,
       );
     }
-
     if (source.kind === "in") {
       const entry = second ? `[${first}, ${second}]` : `[${first}]`;
       return concatMapped(
-        ...pushes(
-          [
-            `(() => { const ${result} = []; const ${sourceName} = `,
-            mappedExpr(source.object),
-          ],
-          ` ?? {}; for (const ${entry} of Object.entries(${sourceName})) { ${result}.push(...(`,
-        ),
-        `${result}; })()`,
+        `const ${sourceName} = `,
+        mappedExpr(source.object),
+        ` ?? {}; for (const ${entry} of Object.entries(${sourceName})) { `,
+        ...loopBody,
       );
     }
-
     const start = `__mxAttrTagStart${serial}`;
     const bound = `__mxAttrTagBound${serial}`;
     const compare = source.inclusive ? "<=" : "<";
     return concatMapped(
-      ...pushes(
-        [
-          `(() => { const ${result} = []; const ${start} = `,
-          source.from ? mappedExpr(source.from) : "0",
-          `; const ${bound} = `,
-          mappedExpr(source.bound),
-        ],
-        `; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
-      ),
-      `${result}; })()`,
+      `const ${start} = `,
+      source.from ? mappedExpr(source.from) : "0",
+      `; const ${bound} = `,
+      mappedExpr(source.bound),
+      `; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { `,
+      ...loopBody,
     );
   };
 
-  const arrayNodeValue = (
-    node: AttributeTagNode,
-    as: AttrTagProp["as"],
-    valueType: string | null,
-  ): MappedCode => {
-    if (node.kind === "AttributeTag") {
-      return concatMapped("[", attrTagValue(node.tag, as, valueType), "]");
-    }
-    if (node.kind === "AttributeTagFor")
-      return arrayLoopValue(node, as, valueType);
-
-    let alternate = concatMapped("[]");
-    for (let index = node.branches.length - 1; index >= 0; index--) {
-      const branch = node.branches[index];
-      if (!branch) continue;
-      const value = arraySourceValue(branch.nodes, as, valueType);
-      alternate = branch.test
-        ? concatMapped(
-            "(",
-            mappedExpr(branch.test),
-            " ? ",
-            value,
-            " : ",
-            alternate,
-            ")",
-          )
-        : value;
-    }
-    return alternate;
-  };
-
-  const arraySourceValue = (
+  /**
+   * One attribute-tag name's record (spec §8): its occurrences folded, in
+   * source order, through the helper core supplies. A lone unconditional
+   * occurrence is one `__mxAttrTag` call; anything else folds from
+   * `undefined`, so a loop that runs zero times leaves the prop `undefined`.
+   */
+  function attrTagRecord(
     source: AttributeTagNode[],
-    as: AttrTagProp["as"],
-    valueType: string | null,
-  ): MappedCode => {
-    if (source.length === 0) return concatMapped("[]");
-    const values = source.map((node) => arrayNodeValue(node, as, valueType));
-    if (values.length === 1) return values[0] as MappedCode;
-    return concatMapped(
-      "[",
-      ...values.flatMap((value, index) =>
-        index === 0 ? ["...(", value, ")"] : [", ...(", value, ")"],
-      ),
-      "]",
-    );
-  };
-
-  function attrTagPropValue(
-    prop: AttrTagProp,
-    ownerType: string | null,
+    contextual: boolean,
   ): MappedCode {
-    const propType =
-      prop.declared && ownerType
-        ? `NonNullable<(${ownerType})[${quote(prop.name)}]>`
-        : null;
-    const valueType =
-      propType && prop.cardinality === "array"
-        ? `(${propType})[number]`
-        : propType;
-    return prop.cardinality === "array"
-      ? arraySourceValue(prop.source, prop.as, valueType)
-      : singleSourceValue(prop.source, prop.as, valueType);
+    const [only] = source;
+    if (source.length === 1 && only?.kind === "AttributeTag") {
+      return concatMapped(
+        `${ATTR_TAG_RECORD}(`,
+        attrTagValue(only.tag, contextual),
+        ")",
+      );
+    }
+    const acc = `__mxAttrTagAcc${state.attrTagTemp++}`;
+    return concatMapped(
+      `(() => { let ${acc}; `,
+      attrTagFold(source, acc),
+      `return ${acc}; })()`,
+    );
   }
 
   /**
@@ -1061,9 +969,8 @@ export function createEmitter(
   /** A component's props, in Marko's own convention. */
   const propsOf = (
     attrs: Attr[],
-    attrTagProps: AttrTagProp[],
+    attributeTagTree: AttributeTagNode[],
     content: Block | null,
-    ownerType: string | null,
     untypedCallee: boolean,
     contentSpan: SourceSpan | null,
   ): {
@@ -1106,14 +1013,14 @@ export function createEmitter(
       }
     }
 
-    // Cardinality and value shape come from the callee's Input, already
-    // resolved by core. The legacy flat occurrence list is retained for
-    // tooling only; v2 hosts emit exclusively from this plan.
-    for (const prop of attrTagProps) {
+    // One record per attribute-tag name, folded from the tree (spec §8);
+    // the callee's `Input` plays no part in its shape.
+    for (const name of attributeTagNames(attributeTagTree)) {
+      const source = filterAttributeTagTree(attributeTagTree, name);
       setProp(
-        prop.name,
-        attrTagPropValue(prop, ownerType),
-        attrTagNameSpan(prop.source),
+        name,
+        attrTagRecord(source, !untypedCallee),
+        attrTagNameSpan(source),
       );
     }
 
@@ -1314,8 +1221,6 @@ export function createEmitter(
       // module imported it as; everything else by its own name.
       const callee =
         target.kind === "name" ? (target.binding ?? target.name) : "";
-      const ownerType =
-        target.kind === "name" ? `__MxInputOf<typeof ${callee}>` : null;
       // The call's props object stands for the tag's attributes and body, so
       // its braces map onto the tag name, as JSX hosts report a call's props
       // errors on the name: TypeScript anchors a missing required property
@@ -1341,9 +1246,8 @@ export function createEmitter(
       })();
       const { parts, spreads } = propsOf(
         node.attrs,
-        node.attrTagProps,
+        node.attributeTagTree,
         node.content,
-        ownerType,
         node.target.kind === "dynamic",
         braceSpan,
       );
@@ -1999,7 +1903,6 @@ export function createEmitter(
           // does; dropping it here was `dynamic-tag-var-silent-drop`.
           var: tag.var,
           attributeTagTree: tag.attributeTagTree,
-          attrTagProps: tag.attrTagProps,
           args: tag.args ?? [],
           loc: tag.loc,
         });
@@ -2329,7 +2232,7 @@ function placeClientCode(state: State): ClientExports {
       "})();",
     ),
   ];
-  // `@ts-ignore` covers only the generated `namespace` line: it is not
+  // `@ts-expect-error` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
@@ -2426,7 +2329,7 @@ function reservedExport(
   const base = fileName.slice(
     Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1,
   );
-  // The self-import always resolves (to this module); `@ts-ignore` keeps a
+  // The self-import always resolves (to this module); `@ts-expect-error` keeps a
   // project without `jsx` from reporting TS6142 on it, since a `.mx` module
   // is TSX, and the namespace still reads the module's exports.
   return concatMapped(

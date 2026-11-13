@@ -326,7 +326,7 @@ describe("allowed authored parents", () => {
           attribute: { ...passthrough, parents: ["@inner"] },
         },
         undefined,
-        { ...declarations, attrTags: 2 },
+        declarations,
       ),
     ).not.toThrow();
   });

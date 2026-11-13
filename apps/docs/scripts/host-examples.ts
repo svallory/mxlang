@@ -69,7 +69,7 @@ function regionFile(compile: RegionCompile): HostExample["compile"] {
 const TEAM_JSX = [
   'name="q"',
   'id="team"',
-  'satisfies NonNullable<Parameters<typeof Table>[0]["row"]>',
+  "__mxAttrTag({ content:",
   "Nobody matches",
 ];
 

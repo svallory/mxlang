@@ -119,7 +119,7 @@ function runFixture(fixture: Fixture, mode: "dom" | "ssr"): unknown {
       // at runtime, so the two steps must agree on what that setup binds.
       moduleBindings: sourceBindings(fixture.setup ?? "").bindings,
     });
-    const imports = compiled.hoistedImports
+    const imports = [...compiled.hoistedImports, ...compiled.hoistedDefines]
       .map((entry) => entry.code)
       .join("\n");
 
@@ -155,12 +155,12 @@ describe("Solid attribute-tag round-two runtime regressions", () => {
 v: string;
 dataOnly: AttrTag;
 dataMixed: AttrTag;
-renderOnly: AttrTag<{ as: "renderable" }>;
-renderMixed: AttrTag<{ as: "renderable" }>;
-dataParamOnly: AttrTag<{ params: [value: string] }>;
-dataParamMixed: AttrTag<{ params: [value: string] }>;
-renderParamOnly: AttrTag<{ as: "renderable"; params: [value: string] }>;
-renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
+renderOnly: AttrTag;
+renderMixed: AttrTag;
+dataParamOnly: AttrTag<{ content: (value: string) => () => unknown }>;
+dataParamMixed: AttrTag<{ content: (value: string) => () => unknown }>;
+renderParamOnly: AttrTag<{ content: (value: string) => () => unknown }>;
+renderParamMixed: AttrTag<{ content: (value: string) => () => unknown }>;
 }
 <div><\${input.dataOnly.content}/>|<\${input.dataMixed.content}/>|<\${input.renderOnly}/>|<\${input.renderMixed}/>|<\${input.dataParamOnly.content}(input.v)/>|<\${input.dataParamMixed.content}(input.v)/>|<\${input.renderParamOnly}(input.v)/>|<\${input.renderParamMixed}(input.v)/></div>`,
     region: `<Row v=malicious><@dataOnly>\${malicious}</@dataOnly><@dataMixed>a\${malicious}</@dataMixed><@renderOnly>\${malicious}</@renderOnly><@renderMixed>a\${malicious}</@renderMixed><@dataParamOnly|value|>\${value}</@dataParamOnly><@dataParamMixed|value|>a\${value}</@dataParamMixed><@renderParamOnly|value|>\${value}</@renderParamOnly><@renderParamMixed|value|>a\${value}</@renderParamMixed></Row>`,
@@ -182,7 +182,7 @@ renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
   it("keeps placeholder-only Dynamic accessors reactive", () => {
     const values = runFixture(
       {
-        callee: `export interface Input { data: AttrTag; renderable: AttrTag<{ as: "renderable" }> }
+        callee: `export interface Input { data: AttrTag; renderable: AttrTag }
 <div><\${input.data.content}/><\${input.renderable}/></div>`,
         region: `<Row><@data>\${label()}</@data><@renderable>\${label()}</@renderable></Row>`,
         setup: 'const [label, setLabel] = createSignal("A");',
@@ -192,68 +192,6 @@ renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
     );
     expect(values).toEqual(["AA", "BB"]);
   });
-
-  it("gives untyped Solid built-ins renderable fallback accessors", () => {
-    const code = compileSolidMx(
-      `<div><Show when=false><@fallback>show</@fallback>x</Show><Loading><@fallback>loading</@fallback>x</Loading><Errored><@fallback|e, reset|>error</@fallback>x</Errored></div>`,
-      { filename: "builtins.solid.mx" },
-    ).code.replace(/\s+/g, " ");
-    expect(code).toContain("<Show when={false} fallback={() => <>show</>}");
-    expect(code).toContain("<Loading fallback={() => <>loading</>}");
-    expect(code).toContain(
-      "<Errored fallback={(e, reset) => () => <>error</>}",
-    );
-    expect(code).not.toContain("fallback={{ content:");
-  });
-
-  it.each(["ssr", "dom"] as const)(
-    "renders and escapes Show's untyped fallback accessor in %s mode",
-    (mode) => {
-      const result = runFixture(
-        {
-          region: `<Show when=false><@fallback>\${malicious}</@fallback><b>child</b></Show>`,
-          setup: `const malicious = ${JSON.stringify(malicious)};`,
-        },
-        mode,
-      );
-      if (mode === "ssr") {
-        expect(result as string).not.toContain("<img");
-        expect(result as string).toContain("&lt;img");
-      } else expect(result).toEqual([malicious]);
-    },
-  );
-
-  it.each(["ssr", "dom"] as const)(
-    "renders Loading's untyped fallback accessor in %s mode",
-    (mode) => {
-      const result = runFixture(
-        {
-          region: `<Loading><@fallback><span>loading fallback</span></@fallback><Pending/></Loading>`,
-          setup: `function Pending() { const [value] = createSignal(async () => await new Promise(() => {})); return <span>{value()}</span>; }`,
-        },
-        mode,
-      );
-      if (mode === "ssr")
-        expect(result as string).toContain("<span>loading fallback</span>");
-      else expect(result).toEqual(["loading fallback"]);
-    },
-  );
-
-  it.each(["ssr", "dom"] as const)(
-    "renders Errored's parameterized untyped fallback accessor in %s mode",
-    (mode) => {
-      const result = runFixture(
-        {
-          region: `<Errored><@fallback|e, reset|><span>error:\${e().message}:\${typeof reset}</span></@fallback><Boom/></Errored>`,
-          setup: `function Boom() { throw new Error("boom"); }`,
-        },
-        mode,
-      );
-      if (mode === "ssr")
-        expect(result as string).toContain("<span>error:boom:function</span>");
-      else expect(result).toEqual(["error:boom:function"]);
-    },
-  );
 
   it("escapes placeholder-only <if>/<for> bodies in SSR and preserves client text", () => {
     const fixture: Fixture = {
@@ -269,7 +207,7 @@ renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
 
   it("renders nothing for a nullish of=/in=, matching Marko, in content and attribute-tag loops", () => {
     const fixture: Fixture = {
-      callee: `export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }
+      callee: `export interface Input { item?: AttrTag<{ id: number }> }
 <div><for|it| of=input.item>[<\${it.content}/>]</for></div>`,
       region:
         "<Row><for|x| of=list><@item id=x>x</@item></for><for|k| in=obj><@item id=1>k</@item></for></Row>",
@@ -289,7 +227,7 @@ renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
 
   it("renders nothing for a falsy (non-nullish) of= attribute tag, matching Marko", () => {
     const fixture: Fixture = {
-      callee: `export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }
+      callee: `export interface Input { item?: AttrTag<{ id: number }> }
 <div><for|it| of=input.item>[<\${it.content}/>]</for></div>`,
       region: "<Row><for|x| of=list><@item id=x>x</@item></for></Row>",
       setup: "const list = false as unknown;",
@@ -299,7 +237,7 @@ renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
 
   it("applies dynamic tag arguments to parameterized content", () => {
     const fixture: Fixture = {
-      callee: `export interface Input { value: AttrTag<{ params: [label: string] }> }
+      callee: `export interface Input { value: AttrTag<{ content: (label: string) => () => unknown }> }
 <div><\${input.value.content}("called")/></div>`,
       region: `<Row><@value|label|><b>\${label}</b></@value></Row>`,
     };
@@ -307,14 +245,11 @@ renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
     expect(runFixture(fixture, "dom")).toEqual(["called"]);
   });
 
-  it("throws the shared diagnostic for an untyped data value", () => {
+  it("renders a record with attributes given to a dynamic tag as its content", () => {
     const fixture: Fixture = {
-      callee: `<div><\${input.value}/></div>`,
+      callee: `<div><\${input.value}/>:\${input.value.tone}</div>`,
       region: `<Row><@value tone="hot">x</@value></Row>`,
     };
-    expect(() => runFixture(fixture, "ssr")).toThrow(
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: exact runtime diagnostic quotes MX dynamic-tag syntax
-      "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>",
-    );
+    expect(runFixture(fixture, "dom")).toEqual(["x:hot"]);
   });
 });

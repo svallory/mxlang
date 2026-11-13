@@ -15,7 +15,6 @@ import { lookup } from "./test-targets.ts";
 
 const host: HostDeclarations = {
   name: "tag-param-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

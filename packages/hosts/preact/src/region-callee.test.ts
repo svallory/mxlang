@@ -1,88 +1,36 @@
-// biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
- * A region calling a `.preact.mx` callee's attribute tag, compiled through
- * `compilePreactRegion` directly — no `@mxlang/targets` loaded, so no
- * reader was registered for `.preact.mx`. The entry's own lookup (its
- * `targets` default) declares the `preact` file kind's `readCalleeInput`, and
- * core reads callee readers from the compile's lookup, so the callee's
- * `Input` contract still reaches the call site as a `satisfies` check.
+ * A region compile that fails still reports the callee files core read, so a
+ * watcher re-runs the region when one of them changes. Core reads a callee
+ * for whether a `/var` call returns a value.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { MxWarning } from "@mxlang/core";
-import { print } from "@mxlang/tsx-bridge";
 import { afterAll, describe, expect, it } from "vitest";
 import { compilePreactRegion } from "./index.ts";
 
-const DIR = join(import.meta.dirname, "fixtures", "region-callee");
-
-describe("a direct compilePreactRegion reads a .preact.mx callee's Input", () => {
-  it("emits the attribute-tag satisfies check against the callee", () => {
-    const file = join(DIR, "Page.preact.mx");
-    const source = `import Card from "./Card.preact.mx";
-
-export const page = (
-  <Card>
-    <@row|count|><strong>\${count.toFixed(1)}</strong></@row>
-  </Card>
-);
-`;
-    const warnings: MxWarning[] = [];
-    const printed = print(source, file, {
-      mx: true,
-      // No `targets`: the entry's own lookup is the default under test.
-      mxRegionCompile: (input) =>
-        compilePreactRegion(input.source, { ...input, warnings }) as ReturnType<
-          NonNullable<
-            NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"]
-          >
-        >,
-    }).code;
-    expect(printed).toContain(
-      'satisfies NonNullable<Parameters<typeof Card>[0]["row"]>',
-    );
-    expect(warnings).toEqual([]);
-  });
-});
-
 describe("a failed region compile still reports the dependencies it read", () => {
   const dir = mkdtempSync(join(tmpdir(), "mx-preact-deps-"));
-  const callee = join(dir, "card.mx");
-  writeFileSync(
-    callee,
-    'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n',
-  );
+  const returning = join(dir, "ret.mx");
+  writeFileSync(returning, "<return value=1/>\n");
   const caller = join(dir, "page.preact.mx");
-  const compileFailure = (source: string) => {
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("attaches them to an error raised after lowering", () => {
+    let failure: { dependencies?: string[]; message?: string } | undefined;
     try {
-      compilePreactRegion(source, {
+      compilePreactRegion('import x from "./x"\n<Ret/x/>', {
         filename: caller,
         baseOffset: 0,
         baseLine: 0,
         baseColumn: 0,
-        importSpecifiers: new Map([["Card", "./card.mx"]]),
-        importDefaultFromMarkoOrMx: new Set(["Card"]),
+        importSpecifiers: new Map([["Ret", "./ret.mx"]]),
+        importDefaultFromMarkoOrMx: new Set(["Ret"]),
       });
     } catch (error) {
-      return error as { dependencies?: string[]; message?: string };
+      failure = error as { dependencies?: string[]; message?: string };
     }
-    throw new Error("expected a compile error");
-  };
-  afterAll(() => rmSync(dir, { recursive: true, force: true }));
-
-  it("attaches the callee whose contract failed in lowering", () => {
-    const error = compileFailure(
-      "<Card><@header>a</@header><@header>b</@header></Card>",
-    );
-    expect(error.dependencies).toEqual([callee]);
-  });
-
-  it("attaches them to an error raised after lowering", () => {
-    const error = compileFailure(
-      'import x from "./x"\n<Card><@header>a</@header></Card>',
-    );
-    expect(error.message).toContain("module-level MX statements");
-    expect(error.dependencies).toEqual([callee]);
+    expect(failure?.message).toContain("module-level MX statements");
+    expect(failure?.dependencies).toEqual([returning]);
   });
 });

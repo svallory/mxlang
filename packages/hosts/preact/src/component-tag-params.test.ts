@@ -199,8 +199,7 @@ export interface Input { items: string[] }
       file: "box.tsx",
       source: `/** @jsxRuntime automatic @jsxImportSource HOSTJSX */
 export default function Box(props: { item?: any }) {
-  const items: any[] = Array.isArray(props.item) ? props.item : [props.item];
-  return <div>{items.map((i) => (typeof i === "function" ? i() : i)) as never}</div>;
+  return <div>{props.item?.map((i: any) => i.content) as never}</div>;
 }`,
     },
     caller: `import Box from "./box.tsx"

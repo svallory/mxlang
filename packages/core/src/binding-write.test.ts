@@ -53,7 +53,6 @@ const letRenderMessage = (name: string) =>
 /** A host that has `<let>` and an element for every other name. */
 const withLet: HostDeclarations = {
   name: "binding-write-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

@@ -1,19 +1,29 @@
 import { describe, expect, it } from "vitest";
 import type { AttrTag } from "./index.ts";
 
-const data: AttrTag<{ attrs: { id: number } }> = {
-  id: 1,
-  content: () => "one",
-};
-const parameterized: AttrTag<{ params: [label: string] }> = {
-  content: (label) => () => label,
-};
-const renderable: AttrTag<{ as: "renderable" }> = () => "rendered";
+type Item = { id: number };
+const one = { id: 1, content: () => "one" };
+const two = { id: 2 };
+const items = [one, two];
+const record = Object.assign(Object.create(null), one, {
+  [Symbol.iterator]: () => items[Symbol.iterator](),
+  length: 2,
+  at: (index: number) => items.at(index),
+  map: <U>(fn: (item: Item, index: number) => U) => items.map(fn),
+  filter: (fn: (item: Item, index: number) => unknown) => items.filter(fn),
+  toArray: () => items,
+});
+
+const data: AttrTag<Item> = record;
+const parameterized: AttrTag<{ content: (label: string) => () => string }> =
+  Object.assign(Object.create(null), {
+    content: (label: string) => () => label,
+  });
 
 describe("Solid AttrTag type", () => {
-  it("specialises data, params and renderable values to accessors", () => {
+  it("adds an accessor as content unless the occurrence declares one", () => {
     expect(data.content?.()).toBe("one");
-    expect(parameterized.content?.("two")()).toBe("two");
-    expect(renderable()).toBe("rendered");
+    expect(data.map((item) => item.id)).toEqual([1, 2]);
+    expect(parameterized.content("two")()).toBe("two");
   });
 });

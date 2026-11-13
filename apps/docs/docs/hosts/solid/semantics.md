@@ -56,24 +56,30 @@ Pass only strings, numbers or nodes to `${expr}`. On Solid's server renderer a r
 
 ## Attribute tags
 
-> **Being replaced.** This describes the attribute-tag shape that ships
-> today. MX is moving to Marko's attribute-tag record with extra prototype
-> members (`map`, `filter`, `length`, `at`, `toArray`) on every target, so
-> cardinality stops depending on the `Input` declaration
-> ([specification §8](/specification/) is normative).
-
-Solid's renderable is an accessor, `() => JSX.Element`, and that is what an attribute tag delivers.
+A component receives Marko's attribute-tag record, as on every value host
+([specification §8](/specification/) is normative): the first occurrence's
+attributes plus `content`, with every later occurrence reachable through
+iteration and `map`, `filter`, `length`, `at` and `toArray`. On Solid,
+`content` is an accessor, `() => JSX.Element`; with params it returns one,
+`(…params) => () => JSX.Element`.
 
 ```tsx
+import type { JSX } from "solid-js";
 import type { AttrTag } from "@mxlang/host-solid";
 
 export interface Input {
-  header: AttrTag<{ as: "renderable" }>;                    // () => Element
-  row: AttrTag<{ as: "renderable"; params: [name: string] }>; // (name) => () => Element
+  header: AttrTag;                                                // content: () => Element
+  row: AttrTag<{ content: (name: string) => () => JSX.Element }>; // (name) => () => Element
 }
 ```
 
-In TSX, render them with `{props.header()}` and `{props.row("Ada")()}`. In MX, with a dynamic tag: `<${input.header}/>` and `<${input.row("Ada")}/>`. Without `as: "renderable"` the prop is a data object, `{ ...attrs, content }`, and `content` is the accessor. The compiler reports a parameterized tag rendered without its arguments. The full contract is in [AttrTag](/language/attr-tag/).
+In TSX, render them with `{props.header.content?.()}` and
+`{props.row.content("Ada")()}`. In MX, with a dynamic tag:
+`<${input.header}/>` (a record renders its `content`) and
+`<${input.row.content("Ada")}/>`. A library component that expects a
+renderable (`<Show fallback>`, `<Suspense fallback>`) gets the record too, so
+give it `fallback=` or the record's `content`. The full contract is in
+[AttrTag](/language/attr-tag/).
 
 ## Events
 

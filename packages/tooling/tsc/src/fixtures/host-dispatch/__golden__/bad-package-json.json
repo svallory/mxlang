@@ -177,7 +177,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"./Card.mx\"\n// @ts-ignore\nimport * as __mxSelf from \"./page.mx\";\nexport declare namespace __mxClientExports {\n  export import Input = __mxSelf.Input;\n  export import render = __mxSelf.render;\n}\n\nexport interface Input {}\n\nfunction __mxTextOf(__mxValue: unknown): string {\n  return __mxValue || __mxValue === 0 ? __mxValue + \"\" : \"\";\n}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  const count = 0;\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n  __mxOut.write(\"<p>\");\n  __mxOut.write(__mxEscape(__mxTextOf(count)));\n  __mxOut.write(\"</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"./Card.mx\"\n// @ts-ignore\nimport * as __mxSelf from \"./page.mx\";\nexport declare namespace __mxClientExports {\n  export import Input = __mxSelf.Input;\n  export import render = __mxSelf.render;\n}\n\nexport interface Input {}\n\nfunction __mxTextOf(__mxValue: unknown): string {\n  return __mxValue || __mxValue === 0 ? __mxValue + \"\" : \"\";\n}\n\ntype __MxAttrTag<T> = T & { [Symbol.iterator](): Iterator<T>; readonly length: number; at(index: number): T | undefined; map<U>(fn: (item: T, index: number) => U): U[]; filter(fn: (item: T, index: number) => unknown): T[]; toArray(): T[] };\ntype __MxAttrTagMember = typeof Symbol.iterator | \"length\" | \"at\" | \"map\" | \"filter\" | \"toArray\";\nconst __mxAttrTagEmpty: never[] = [];\nconst __mxAttrTagRest = Symbol(\"Attribute Tag\");\nconst __mxAttrTagProto = Object.create(Object.prototype, {\n  length: { get(this: any): number { return 1 + this[__mxAttrTagRest].length; } },\n  toArray: { value(this: any): any[] { return [this, ...this[__mxAttrTagRest]]; } },\n  at: {\n    value(this: any, index: number): any {\n      const all = [this, ...this[__mxAttrTagRest]];\n      const at = Math.trunc(index) || 0;\n      return all[at < 0 ? at + all.length : at];\n    },\n  },\n  map: { value(this: any, fn: (item: any, index: number) => any): any[] { return [this, ...this[__mxAttrTagRest]].map((item, index) => fn(item, index)); } },\n  filter: { value(this: any, fn: (item: any, index: number) => unknown): any[] { return [this, ...this[__mxAttrTagRest]].filter((item, index) => fn(item, index)); } },\n});\nfunction* __mxAttrTagIterator(this: any): Generator<any> {\n  yield this;\n  yield* this[__mxAttrTagRest];\n}\nfunction __mxAttrTag<T = {}>(attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>): __MxAttrTag<T> {\n  (attrs as any)[Symbol.iterator] = __mxAttrTagIterator;\n  (attrs as any)[__mxAttrTagRest] = __mxAttrTagEmpty;\n  return Object.setPrototypeOf(attrs, __mxAttrTagProto);\n}\nfunction __mxAttrTags<A extends object | undefined, T extends object>(first: A, attrs: T): __MxAttrTag<T | (A extends __MxAttrTag<infer U> ? U : never)> {\n  if (first) {\n    const record: any = first;\n    if (record[__mxAttrTagRest] === __mxAttrTagEmpty) record[__mxAttrTagRest] = [attrs];\n    else record[__mxAttrTagRest].push(attrs);\n    return record;\n  }\n  return __mxAttrTag(attrs) as any;\n}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  const count = 0;\n  __mxRenderTag(__mxOut, Card)({ tab: __mxAttrTag({  }) });\n  __mxOut.write(\"<p>\");\n  __mxOut.write(__mxEscape(__mxTextOf(count)));\n  __mxOut.write(\"</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "mappings": [
           {
             "sourceOffsets": [
@@ -201,7 +201,7 @@
               41
             ],
             "generatedOffsets": [
-              1282
+              3277
             ],
             "lengths": [
               1
@@ -218,7 +218,7 @@
               46
             ],
             "generatedOffsets": [
-              1310
+              3305
             ],
             "lengths": [
               4
@@ -235,7 +235,7 @@
               46
             ],
             "generatedOffsets": [
-              1316
+              3311
             ],
             "lengths": [
               4
@@ -255,7 +255,7 @@
               53
             ],
             "generatedOffsets": [
-              1318
+              3313
             ],
             "lengths": [
               3
@@ -269,10 +269,50 @@
           },
           {
             "sourceOffsets": [
+              53
+            ],
+            "generatedOffsets": [
+              3330
+            ],
+            "lengths": [
+              3
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              53
+            ],
+            "generatedOffsets": [
+              3333
+            ],
+            "lengths": [
+              3
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
               46
             ],
             "generatedOffsets": [
-              1403
+              3336
             ],
             "lengths": [
               4
@@ -292,7 +332,7 @@
               71
             ],
             "generatedOffsets": [
-              1469
+              3402
             ],
             "lengths": [
               5
@@ -319,7 +359,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction __mxTextOf(__mxValue: unknown): string {\n  return __mxValue || __mxValue === 0 ? __mxValue + \"\" : \"\";\n}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  const count = 0;\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n  __mxOut.write(\"<p>\");\n  __mxOut.write(__mxEscape(__mxTextOf(count)));\n  __mxOut.write(\"</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction __mxTextOf(__mxValue: unknown): string {\n  return __mxValue || __mxValue === 0 ? __mxValue + \"\" : \"\";\n}\n\ntype __MxAttrTag<T> = T & { [Symbol.iterator](): Iterator<T>; readonly length: number; at(index: number): T | undefined; map<U>(fn: (item: T, index: number) => U): U[]; filter(fn: (item: T, index: number) => unknown): T[]; toArray(): T[] };\ntype __MxAttrTagMember = typeof Symbol.iterator | \"length\" | \"at\" | \"map\" | \"filter\" | \"toArray\";\nconst __mxAttrTagEmpty: never[] = [];\nconst __mxAttrTagRest = Symbol(\"Attribute Tag\");\nconst __mxAttrTagProto = Object.create(Object.prototype, {\n  length: { get(this: any): number { return 1 + this[__mxAttrTagRest].length; } },\n  toArray: { value(this: any): any[] { return [this, ...this[__mxAttrTagRest]]; } },\n  at: {\n    value(this: any, index: number): any {\n      const all = [this, ...this[__mxAttrTagRest]];\n      const at = Math.trunc(index) || 0;\n      return all[at < 0 ? at + all.length : at];\n    },\n  },\n  map: { value(this: any, fn: (item: any, index: number) => any): any[] { return [this, ...this[__mxAttrTagRest]].map((item, index) => fn(item, index)); } },\n  filter: { value(this: any, fn: (item: any, index: number) => unknown): any[] { return [this, ...this[__mxAttrTagRest]].filter((item, index) => fn(item, index)); } },\n});\nfunction* __mxAttrTagIterator(this: any): Generator<any> {\n  yield this;\n  yield* this[__mxAttrTagRest];\n}\nfunction __mxAttrTag<T = {}>(attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>): __MxAttrTag<T> {\n  (attrs as any)[Symbol.iterator] = __mxAttrTagIterator;\n  (attrs as any)[__mxAttrTagRest] = __mxAttrTagEmpty;\n  return Object.setPrototypeOf(attrs, __mxAttrTagProto);\n}\nfunction __mxAttrTags<A extends object | undefined, T extends object>(first: A, attrs: T): __MxAttrTag<T | (A extends __MxAttrTag<infer U> ? U : never)> {\n  if (first) {\n    const record: any = first;\n    if (record[__mxAttrTagRest] === __mxAttrTagEmpty) record[__mxAttrTagRest] = [attrs];\n    else record[__mxAttrTagRest].push(attrs);\n    return record;\n  }\n  return __mxAttrTag(attrs) as any;\n}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  const count = 0;\n  __mxRenderTag(__mxOut, Card)({ tab: __mxAttrTag({  }) });\n  __mxOut.write(\"<p>\");\n  __mxOut.write(__mxEscape(__mxTextOf(count)));\n  __mxOut.write(\"</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "map": null,
         "warnings": [
           "@mxlang/vite-plugin: <root>/bad-package-json/package.json:1:27: <root>/bad-package-json/package.json could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\"); no `mx.tags` or `mx.contracts` are loaded until the manifest parses"

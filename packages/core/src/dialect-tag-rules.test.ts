@@ -20,7 +20,6 @@ import { lookup, testTargetLookupWithSegments } from "./test-targets.ts";
 
 const host: HostDeclarations = {
   name: "tag-rules-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

@@ -24,7 +24,6 @@ const { parseExpression } = createRequire(import.meta.url)("@babel/parser") as {
 
 const host: HostDeclarations = {
   name: "expr-nodes-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

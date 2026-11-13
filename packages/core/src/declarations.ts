@@ -119,7 +119,10 @@ export interface HostDeclarations {
    * MX". @unstable
    */
   hostName?: string;
-  /** Attribute-tag IR/emission contract implemented by this host. */
+  /**
+   * @deprecated Ignored. Every host emits attribute tags from
+   * `attributeTagTree` as records (spec §8); core no longer gates on it.
+   */
   attrTags?: 2;
   /**
    * Whether attribute names outside Marko's grammar pass through to the

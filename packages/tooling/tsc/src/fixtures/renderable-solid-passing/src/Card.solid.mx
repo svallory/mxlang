@@ -1,8 +1,8 @@
 import type { AttrTag } from "@mxlang/host-solid";
 
 export interface Input {
-  b?: AttrTag<{ as: "renderable" }>;
-  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;
+  b?: AttrTag;
+  row?: AttrTag<{ content: (count: number) => unknown }>;
 }
 
 export default function Card(_input: Input) {

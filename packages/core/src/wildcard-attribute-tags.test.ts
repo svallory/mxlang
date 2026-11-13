@@ -14,7 +14,6 @@ const declarations: HostDeclarations = {
   tags: {},
   isElement: () => true,
   isComponent: () => false,
-  attrTags: 2,
   resolveAttributeMethod: () => true,
 };
 

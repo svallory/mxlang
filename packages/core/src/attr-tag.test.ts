@@ -7,51 +7,49 @@ import type {
   AttrTagParams,
 } from "./attr-tag.ts";
 
-type EmptyConfig = Record<never, never>;
+/**
+ * `Marko.AttrTag<T>` exactly as `marko` 6.4.4 declares it (`index.d.ts`, the
+ * global `Marko` namespace). Core does not depend on `marko`, so the type is
+ * copied here; a Marko bump that changes it must change this copy.
+ */
+type MarkoAttrTag<T> = T & {
+  [Symbol.iterator](): Iterator<T>;
+};
 
-it("types data attribute tags as attrs plus optional content", () => {
-  type Value = AttrTagOf<
-    { attrs: { title: string }; params: [count: number] },
-    string
-  >;
-  expectTypeOf<Value>().toEqualTypeOf<
+type Item = { a: number; content?: () => string };
+
+it("types the record as the first occurrence plus the iteration members", () => {
+  expectTypeOf<AttrTag<Item>>().toEqualTypeOf<
+    Item & {
+      [Symbol.iterator](): Iterator<Item>;
+      readonly length: number;
+      at(index: number): Item | undefined;
+      map<U>(fn: (item: Item, index: number) => U): U[];
+      filter(fn: (item: Item, index: number) => unknown): Item[];
+      toArray(): Item[];
+    }
+  >();
+});
+
+it("is assignable to Marko's AttrTag<T>", () => {
+  expectTypeOf<AttrTag<Item>>().toMatchTypeOf<MarkoAttrTag<Item>>();
+  // biome-ignore lint/complexity/noBannedTypes: the default, an attribute tag with no attributes
+  expectTypeOf<AttrTag>().toMatchTypeOf<MarkoAttrTag<{}>>();
+  // Marko's record lacks the prototype members, so it is not an MX record.
+  expectTypeOf<MarkoAttrTag<Item>>().not.toMatchTypeOf<AttrTag<Item>>();
+});
+
+it("keeps the deprecated config form exported and unchanged", () => {
+  expectTypeOf<
+    AttrTagOf<{ attrs: { title: string }; params: [count: number] }, string>
+  >().toEqualTypeOf<
     { title: string } & { content?: (count: number) => string }
   >();
-});
-
-it("types renderable attribute tags as a renderable or render function", () => {
-  expectTypeOf<
-    AttrTagOf<{ as: "renderable" }, string>
-  >().toEqualTypeOf<string>();
-  expectTypeOf<
-    AttrTagOf<{ as: "renderable"; params: [id: number] }, string>
-  >().toEqualTypeOf<(id: number) => string>();
-});
-
-it("exports the generic core AttrTag and its config constraint", () => {
-  expectTypeOf<AttrTag<{ attrs: { id: number } }>>().toEqualTypeOf<
-    { id: number } & { content?: unknown }
+  expectTypeOf<AttrTagParams<{ params: [id: number] }>>().toEqualTypeOf<
+    [id: number]
   >();
-  expectTypeOf<{
-    as: "data";
-    attrs: object;
-    params: readonly unknown[];
-  }>().toMatchTypeOf<AttrTagConfig>();
-});
-
-it("exports helpers for a host to specialize AttrTag", () => {
-  expectTypeOf<
-    AttrTagParams<{ params: [id: number, label?: string] }>
-  >().toEqualTypeOf<[id: number, label?: string]>();
-  expectTypeOf<AttrTagParams<EmptyConfig>>().toEqualTypeOf<[]>();
   expectTypeOf<AttrTagAttrs<{ attrs: { title: string } }>>().toEqualTypeOf<{
     title: string;
   }>();
-  expectTypeOf<AttrTagAttrs<EmptyConfig>>().toEqualTypeOf<EmptyConfig>();
-});
-
-it("keeps core AttrTag to one public type parameter", () => {
-  // @ts-expect-error the temporary Renderable parameter is gone
-  type TwoParameterAttrTag = AttrTag<EmptyConfig, string>;
-  expectTypeOf<TwoParameterAttrTag>().toMatchTypeOf<unknown>();
+  expectTypeOf<{ as: "data" }>().toMatchTypeOf<AttrTagConfig>();
 });

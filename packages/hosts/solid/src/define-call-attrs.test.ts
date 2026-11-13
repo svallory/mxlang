@@ -180,7 +180,7 @@ const CASES: Array<[string, string, string, string]> = [
   ],
   [
     "a rest param collects an attribute-tag object after the args",
-    "<define/Tagged|a, ...rest|><li>${a}:${rest[0]}:${rest[1]?.item}:${rest[1]?.content}:${Object.keys(rest[1] ?? {}).sort().join(',')}</li></define><Tagged(1, 2)><@item>I</@item>x</Tagged>",
+    "<define/Tagged|a, ...rest|><li>${a}:${rest[0]}:${rest[1]?.item.content}:${rest[1]?.content}:${Object.keys(rest[1] ?? {}).sort().join(',')}</li></define><Tagged(1, 2)><@item>I</@item>x</Tagged>",
     "",
     "<ul><li>1:2:I:x:content,item</li></ul>",
   ],

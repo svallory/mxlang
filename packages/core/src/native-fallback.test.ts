@@ -17,7 +17,6 @@ import { lookup } from "./test-targets.ts";
 
 const thirdParty: HostDeclarations = {
   name: "third-party-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

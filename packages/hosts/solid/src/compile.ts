@@ -21,6 +21,8 @@ import {
   parseExpression as parseBabelExpression,
 } from "@babel/parser";
 import {
+  ATTR_TAG_RECORD,
+  ATTR_TAG_RUNTIME,
   attachDependencies,
   type CustomTag,
   concatMapped,
@@ -37,6 +39,7 @@ import {
   printExpression,
   type TargetLookup,
   TranslateError,
+  usesAttrTagRuntime,
 } from "@mxlang/core";
 import MagicString from "magic-string";
 /** Local names for the body-channel helpers a unit imports from `solid-js`. */
@@ -497,6 +500,12 @@ function emitRegion(
   }
   // Identical text and binding in every region of a module: the parser bridge
   // collapses the repeats into one declaration.
+  if (usesAttrTagRuntime(emitted.code)) {
+    hoistedDefines.unshift({
+      code: ATTR_TAG_RUNTIME,
+      binding: ATTR_TAG_RECORD,
+    });
+  }
   if (needsAttrGuard.value || needsAttrGuard.spread) {
     hoistedDefines.unshift({
       code: ATTR_VALUE_HELPER,
@@ -757,6 +766,9 @@ export function compileSolidUnit(
       parts.unshift(
         `${TEXTAREA_DYN_SPREAD_HELPER}\n${TEXTAREA_DYN_VALUE_HELPER}\n`,
       );
+    }
+    if (usesAttrTagRuntime(emittedBody.code)) {
+      parts.unshift(`${ATTR_TAG_RUNTIME}\n`);
     }
     if (needsAttrGuard.scriptText) parts.unshift(`${SCRIPT_TEXT_HELPER}\n`);
     if (needsAttrGuard.styleText) parts.unshift(`${STYLE_TEXT_HELPER}\n`);

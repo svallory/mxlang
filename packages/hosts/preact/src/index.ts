@@ -59,9 +59,8 @@
  */
 
 import {
-  type AttrTagConfig,
-  type AttrTagOf,
   type CompileResult,
+  type AttrTag as CoreAttrTag,
   createTargetLookup,
   createTranslator,
   type RawSourceMap,
@@ -122,12 +121,19 @@ export type {
 };
 export { emitModule, emitModuleWithMappings };
 
-/** Attribute-tag value specialised to Preact's renderable child type. */
+/**
+ * The attribute-tag record a Preact component receives (spec §8): the
+ * first occurrence, carrying every later one, with `map`, `filter`,
+ * `length`, `at` and `toArray`. `T` is one occurrence's attributes; its
+ * `content` is `ComponentChildren` unless `T` declares its own, as a tag
+ * with params does (`content: (row: Row) => …`).
+ */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default (no
-  // attribute-tag config)
-  C extends AttrTagConfig = {},
-> = AttrTagOf<C, ComponentChildren>;
+  // biome-ignore lint/complexity/noBannedTypes: an attribute tag with no attributes
+  T extends object = {},
+> = CoreAttrTag<
+  "content" extends keyof T ? T : T & { content?: ComponentChildren }
+>;
 
 /**
  * This package's own target table: the one descriptor it exports. The default

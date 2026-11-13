@@ -249,12 +249,15 @@ describe("data in a dynamic tag renders nothing (Hono client and server)", () =>
       expect(r.server).toBe("body");
     }
   });
-  it("an object that carries content is Marko's data attribute tag, refused", () => {
+  it("an object that carries data as its content renders that data: nothing", () => {
+    // A dynamic tag given an object with `content` renders the `content`, as
+    // Marko does for an attribute-tag record; here that is data.
     for (const shape of ["self", "lone", "wrapped"] as Shape[]) {
       const r = at(shape, "contentData");
+      expect(r.errors).toEqual([]);
       expect(r.injected).toBe(0);
-      expect(r.client).toBe("");
-      expect(r.errors.join("\n")).toMatch(/data attribute tag/);
+      expect(r.client).toBe(wrap(shape, ""));
+      expect(r.server).toBe(wrap(shape, ""));
     }
   });
   it("an object that carries content renders nothing as a tag with arguments", () => {

@@ -120,7 +120,6 @@ function attempt(
 
 const plainHost: HostDeclarations = {
   name: "module-scope-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

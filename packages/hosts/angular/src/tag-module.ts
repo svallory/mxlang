@@ -516,7 +516,7 @@ function dynamicSlotNameOf(node: IrNode): string | null {
     !data.expr ||
     node.tag.attrs.length > 0 ||
     node.tag.children.length > 0 ||
-    node.tag.attrTagProps.length > 0
+    node.tag.attributeTagTree.length > 0
   ) {
     return null;
   }

@@ -11,7 +11,7 @@ import {
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
-  type AttrTagProp,
+  attributeTagNames,
   type ComponentTarget,
   type Ctx,
   cloneIr,
@@ -22,6 +22,7 @@ import {
   exportNameFor,
   expr,
   type ForSource,
+  filterAttributeTagTree,
   type HostDeclarations,
   hostModuleSegment,
   type Ir,
@@ -196,7 +197,6 @@ export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/host-angular",
   hostName: "Angular",
   nativeTags: WEB_ELEMENTS,
-  attrTags: 2,
   attributeArgs: "refuse",
   // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
@@ -2833,7 +2833,7 @@ class AngularEmitter implements Emitter<string> {
           // the emitted expression maps to the tag name the author wrote.
           node.target.expr.span ?? node.nameSpan,
           node.attrs,
-          node.content !== null || node.attrTagProps.length > 0,
+          node.content !== null || node.attributeTagTree.length > 0,
           node.args,
           node,
         );
@@ -2929,7 +2929,11 @@ class AngularEmitter implements Emitter<string> {
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
-    for (const prop of node.attrTagProps) {
+    for (const name of attributeTagNames(node.attributeTagTree)) {
+      const prop = {
+        name,
+        source: filterAttributeTagTree(node.attributeTagTree, name),
+      };
       this.validateAttributeTagProp(prop, node);
       this.emitAttributeTagNodes(prop.source);
     }
@@ -2980,14 +2984,15 @@ class AngularEmitter implements Emitter<string> {
     };
   }
 
+  /** One attribute-tag name's occurrences, read from the call's tree. */
   private validateAttributeTagProp(
-    prop: AttrTagProp,
+    prop: { name: string; source: AttributeTagNode[] },
     owner: { loc: Position },
   ): void {
     // The dialect's nouns only: a tag spelling (`voice.attrTag`) can throw a
     // `VoiceHookError`, which only core's lowering converts.
     const voice = voiceOfCtx(this.ctx);
-    if (prop.cardinality === "array") {
+    if (maxOccurrences(prop.source) > 1) {
       const tags: AttributeTag[] = [];
       let loopTag: AttributeTag | undefined;
       const collect = (nodes: AttributeTagNode[], inLoop = false): void => {
@@ -3021,7 +3026,7 @@ class AngularEmitter implements Emitter<string> {
           tag,
         );
       }
-      if (tag.attrTagProps.length > 0) {
+      if (tag.attributeTagTree.length > 0) {
         fail(
           `nested ${voice.attributeTags} inside \`<@${tag.name}>\` aren't supported by @mxlang/host-angular: a projection has no nested data shape`,
           tag.attributeTagTree[0] ?? tag,
@@ -3090,7 +3095,7 @@ class AngularEmitter implements Emitter<string> {
     target: Extract<ComponentTarget, { kind: "define" }>,
   ): void {
     const name = this.authored(target.name);
-    if (node.attrTagProps.length > 0) {
+    if (node.attributeTagTree.length > 0) {
       fail(
         `${voiceOfCtx(this.ctx).attributeTags} on \`<${name}>\` aren't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — call it with \`<${name}(...)/>\` instead`,
         node,
@@ -4071,7 +4076,7 @@ class AngularEmitter implements Emitter<string> {
         data.expr.code,
         data.expr.span,
         tag.attrs,
-        tag.children.length > 0 || tag.attrTagProps.length > 0,
+        tag.children.length > 0 || tag.attributeTagTree.length > 0,
         tag.args ?? [],
         node,
       );
@@ -4342,3 +4347,20 @@ export function emitTemplate(
 }
 
 export { TranslateError };
+
+/** The most occurrences one path through `nodes` can reach. */
+function maxOccurrences(nodes: AttributeTagNode[]): number {
+  let max = 0;
+  for (const node of nodes) {
+    if (node.kind === "AttributeTag") max++;
+    else if (node.kind === "AttributeTagFor") {
+      if (maxOccurrences(node.nodes) > 0) return Number.POSITIVE_INFINITY;
+    } else {
+      max += Math.max(
+        0,
+        ...node.branches.map((branch) => maxOccurrences(branch.nodes)),
+      );
+    }
+  }
+  return max;
+}

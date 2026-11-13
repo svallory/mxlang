@@ -3,10 +3,12 @@ import {
   parseExpression as parseBabelExpression,
 } from "@babel/parser";
 import {
+  ATTR_TAG_FOLD,
+  ATTR_TAG_RECORD,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
-  type AttrTagProp,
+  attributeTagNames,
   type ComponentTarget,
   type Ctx,
   cloneIr,
@@ -18,6 +20,7 @@ import {
   type Expr,
   type ForHead,
   fail as failAtNode,
+  filterAttributeTagTree,
   type HostDeclarations,
   type Ir,
   type IrNode,
@@ -927,7 +930,6 @@ export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/host-solid",
   hostName: "Solid",
   nativeTags: WEB_ELEMENTS,
-  attrTags: 2,
   attributeArgs: "refuse",
   defineCallPassesAttrs: true,
   // The ladder: the parent's contract `defaultTag`, then
@@ -2334,65 +2336,22 @@ function attributeTagRenderable(tag: AttributeTag): MappedCode {
 }
 
 /**
- * One concrete attribute-tag value checked against the callee's declared
- * type.
+ * One attribute-tag occurrence as an object: its attributes (spreads in
+ * source order), its own attribute tags as records, and its body as
+ * `content` in this host's accessor shape. A bodiless occurrence has no
+ * `content` key, as in Marko.
  *
- * The value is parenthesized before `satisfies` is applied, because
- * `satisfies` binds tighter than an arrow function: `() => x satisfies T`
- * checks the returned `x`, not the accessor. It is applied to each concrete
- * occurrence rather than to a whole singular plan for the same reason, since
- * `test ? a : undefined satisfies T` checks only `undefined`.
+ * Both braces map to the tag name, so an error on the whole object (an
+ * attribute the callee requires and the call leaves out) is reported there.
+ *
+ * `contextual` says whether the callee's declared type reaches this object:
+ * it does through a lone `__mxAttrTag({...})` in a JSX attribute, not
+ * through a fold's accumulator nor a props object built for a dynamic tag
+ * or a `<define>`. Without it a body's unannotated tag params would be an
+ * implicit `any` under strict tsc, so the body is asserted to
+ * `(...args: any[]) => any`.
  */
-function satisfying(
-  value: MappedCode,
-  valueType: string | undefined,
-  span?: AttributeTag["nameSpan"],
-): MappedCode {
-  return valueType
-    ? concatMapped(
-        "(((",
-        value,
-        ") ",
-        mapped("satisfies", span ?? null),
-        ` ${valueType}) as any)`,
-      )
-    : value;
-}
-
-/**
- * Same check for a data value, an object literal that needs no inner
- * parenthesization guard: `{ ... } satisfies T` has no arrow function or
- * ternary to disambiguate, so one wrapping pair is enough (matching
- * `@mxlang/target-html`'s `attrTagValue`).
- */
-function satisfyingData(
-  value: MappedCode,
-  valueType: string | undefined,
-  span?: AttributeTag["nameSpan"],
-): MappedCode {
-  return valueType
-    ? concatMapped(
-        "((",
-        value,
-        " ",
-        mapped("satisfies", span ?? null),
-        ` ${valueType}) as any)`,
-      )
-    : value;
-}
-
-function attributeTagValue(
-  tag: AttributeTag,
-  as: AttrTagProp["as"],
-  valueType?: string,
-): MappedCode {
-  const content = attributeTagRenderable(tag);
-  // A bodiless renderable is `undefined`, which is the absence of a value
-  // rather than a value of the declared type.
-  if (as === "renderable") {
-    return tag.hasBody ? satisfying(content, valueType, tag.nameSpan) : content;
-  }
-
+function attributeTagValue(tag: AttributeTag, contextual: boolean): MappedCode {
   const parts: Array<string | MappedCode> = [];
   for (const attr of tag.attrs) {
     if (parts.length > 0) parts.push(", ");
@@ -2404,16 +2363,95 @@ function attributeTagValue(
         attributeTagAttrValue(attr),
       );
   }
-  for (const prop of tag.attrTagProps) {
+  for (const name of attributeTagNames(tag.attributeTagTree)) {
     if (parts.length > 0) parts.push(", ");
-    parts.push(`${JSON.stringify(prop.name)}: `, attributeTagProp(prop));
+    parts.push(
+      `${JSON.stringify(name)}: `,
+      attributeTagRecord(
+        filterAttributeTagTree(tag.attributeTagTree, name),
+        contextual,
+      ),
+    );
   }
-  if (parts.length > 0) parts.push(", ");
-  parts.push("content: ", content);
-  return satisfyingData(
-    concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }"),
-    valueType,
-    tag.nameSpan,
+  if (tag.hasBody) {
+    if (parts.length > 0) parts.push(", ");
+    const content = attributeTagRenderable(tag);
+    parts.push(
+      "content: ",
+      !contextual && tag.block.hasParams
+        ? concatMapped("(", content, ") as (...args: any[]) => any")
+        : content,
+    );
+  }
+  return concatMapped(
+    mapped("{", tag.nameSpan),
+    " ",
+    ...parts,
+    " ",
+    mapped("}", tag.nameSpan),
+  );
+}
+
+/** The accumulator an attribute-tag fold writes; reserved `__mx` prefix. */
+const ATTR_TAG_ACC = "__mxAttrTagAcc";
+
+/**
+ * One attribute-tag name's record (spec §8): its occurrences folded, in
+ * source order, through the helper core supplies. A lone unconditional
+ * occurrence is one `__mxAttrTag` call; anything else folds from `undefined`
+ * inside an arrow called in place, so a loop that runs zero times leaves the
+ * prop `undefined`.
+ */
+function attributeTagRecord(
+  source: AttributeTagNode[],
+  contextual = true,
+): MappedCode {
+  const [only] = source;
+  if (source.length === 1 && only?.kind === "AttributeTag") {
+    return concatMapped(
+      `${ATTR_TAG_RECORD}(`,
+      attributeTagValue(only.tag, contextual),
+      ")",
+    );
+  }
+  return concatMapped(
+    `(() => { let ${ATTR_TAG_ACC}; `,
+    attributeTagFold(source),
+    `return ${ATTR_TAG_ACC}; })()`,
+  );
+}
+
+/** The statements folding `nodes` into the accumulator, in tree order. */
+function attributeTagFold(nodes: AttributeTagNode[]): MappedCode {
+  return concatMapped(
+    ...nodes.map((node) => {
+      if (node.kind === "AttributeTag") {
+        return concatMapped(
+          `${ATTR_TAG_ACC} = ${ATTR_TAG_FOLD}(${ATTR_TAG_ACC}, `,
+          attributeTagValue(node.tag, false),
+          "); ",
+        );
+      }
+      if (node.kind === "AttributeTagFor") {
+        return attributeTagFor(node.loop, node.nodes);
+      }
+      const parts: Array<string | MappedCode> = [];
+      node.branches.forEach((branch, at) => {
+        parts.push(
+          branch.test
+            ? concatMapped(
+                at === 0 ? "if (" : " else if (",
+                mappedExpr(branch.test),
+                ") { ",
+              )
+            : " else { ",
+          attributeTagFold(branch.nodes),
+          "}",
+        );
+      });
+      parts.push(" ");
+      return concatMapped(...parts);
+    }),
   );
 }
 
@@ -2433,38 +2471,6 @@ function firstAttributeTag(
     }
   }
   return undefined;
-}
-
-function attributeTagSingle(
-  nodes: AttributeTagNode[],
-  as: AttrTagProp["as"],
-  valueType?: string,
-): MappedCode {
-  if (nodes.length === 0) return concatMapped("undefined");
-  const node = nodes[0] as AttributeTagNode;
-  if (node.kind === "AttributeTag") {
-    return attributeTagValue(node.tag, as, valueType);
-  }
-  if (node.kind === "AttributeTagFor") {
-    return satisfying(
-      concatMapped("(", attributeTagFor(node.loop, node.nodes, as), ")[0]"),
-      valueType,
-      firstAttributeTag(node.nodes)?.nameSpan,
-    );
-  }
-  const parts: Array<string | MappedCode> = [];
-  for (const branch of node.branches) {
-    if (branch.test) {
-      parts.push(
-        mappedExpr(branch.test),
-        " ? ",
-        attributeTagSingle(branch.nodes, as, valueType),
-        " : ",
-      );
-    } else parts.push(attributeTagSingle(branch.nodes, as, valueType));
-  }
-  if (node.branches.at(-1)?.test) parts.push("undefined");
-  return concatMapped(...parts);
 }
 
 function hygienicName(
@@ -2494,93 +2500,27 @@ const RANGE_MAPPER_UNUSED = "__mxUnused";
 const rangeCounter = (params: readonly string[], body: string): string =>
   hygienicName("__mxIndex", params, body);
 
-function attributeTagArrayNode(
-  node: AttributeTagNode,
-  as: AttrTagProp["as"],
-  arrayType?: string,
-): MappedCode {
-  if (node.kind === "AttributeTag") {
-    return concatMapped("[", attributeTagValue(node.tag, as), "]");
-  }
-  if (node.kind === "AttributeTagFor") {
-    return attributeTagFor(node.loop, node.nodes, as, arrayType);
-  }
-  const parts: Array<string | MappedCode> = [];
-  for (const branch of node.branches) {
-    if (branch.test) {
-      parts.push(
-        mappedExpr(branch.test),
-        " ? ",
-        attributeTagArray(branch.nodes, as, arrayType),
-        " : ",
-      );
-    } else parts.push(attributeTagArray(branch.nodes, as, arrayType));
-  }
-  if (node.branches.at(-1)?.test) parts.push("[]");
-  return concatMapped(...parts);
-}
-
-function attributeTagArray(
-  nodes: AttributeTagNode[],
-  as: AttrTagProp["as"],
-  arrayType?: string,
-): MappedCode {
-  if (nodes.length === 0) return concatMapped("[]");
-  return concatMapped(
-    "[",
-    ...nodes.flatMap((node, index) => {
-      const prefix = index === 0 ? "" : ", ";
-      return node.kind === "AttributeTag"
-        ? [prefix, attributeTagValue(node.tag, as)]
-        : [prefix, "...", attributeTagArrayNode(node, as, arrayType)];
-    }),
-    "]",
-  );
-}
-
-function attributeTagFor(
-  loop: ForHead,
-  nodes: AttributeTagNode[],
-  as: AttrTagProp["as"],
-  arrayType?: string,
-): MappedCode {
-  const bodyText = nodes.map((node) => JSON.stringify(node)).join(" ");
+/** Attribute-tag `<for>`: one fold step per occurrence per iteration. */
+function attributeTagFor(loop: ForHead, nodes: AttributeTagNode[]): MappedCode {
   const [first = "item", second] = loop.params;
   const source = loop.source;
-  const itemIndex =
-    source.kind === "of" && second
-      ? second
-      : hygienicName("mxAttrIndex", loop.params, bodyText);
-  const body = attributeTagArray(nodes, as, arrayType);
-  const result = (iterable: string, params: string): MappedCode => {
-    if (!arrayType) {
-      return concatMapped(`${iterable}.flatMap((${params}) => `, body, ")");
-    }
-    const accumulator = hygienicName(
-      "mxAttrTags",
-      [...loop.params, itemIndex],
-      body.code,
-    );
-    return concatMapped(
-      `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat(((`,
-      body,
-      `) satisfies ${arrayType}) as any), [])`,
-    );
-  };
+  const body = attributeTagFold(nodes);
+  const loopOver = (iterable: string, pattern: string): MappedCode =>
+    concatMapped(`for (const ${pattern} of ${iterable}) { `, body, "} ");
   if (source.kind === "of") {
     const listVar = hygienicName("mxList", loop.params, source.list.code);
-    return result(
-      `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code})`,
-      `${first}, ${itemIndex}`,
-    );
+    const list = `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code})`;
+    return second
+      ? loopOver(`${list}.entries()`, `[${second}, ${first}]`)
+      : loopOver(list, first);
   }
   if (source.kind === "in") {
     const value =
       second ??
       hygienicName("value", loop.params, `${body.code} ${source.object.code}`);
-    return result(
+    return loopOver(
       `Object.entries(${source.object.code} ?? {})`,
-      `[${first}, ${value}], ${itemIndex}`,
+      `[${first}, ${value}]`,
     );
   }
 
@@ -2594,50 +2534,44 @@ function attributeTagFor(
   const value = step
     ? `(${from}) + ${counter} * (${step.code})`
     : `(${from}) + ${counter}`;
-  return result(
+  return loopOver(
     `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value})`,
-    `${first}, ${itemIndex}`,
+    first,
   );
 }
 
-function attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
-  if (prop.cardinality !== "array") {
-    const valueType =
-      owner && prop.declared
-        ? `NonNullable<Parameters<typeof ${owner}>[0][${JSON.stringify(prop.name)}]>`
-        : undefined;
-    return attributeTagSingle(prop.source, prop.as, valueType);
-  }
-  const arrayType =
-    owner && prop.declared
-      ? `NonNullable<Parameters<typeof ${owner}>[0][${JSON.stringify(prop.name)}]>`
-      : undefined;
-  const value = attributeTagArray(prop.source, prop.as, arrayType);
-  return arrayType
-    ? concatMapped("((", value, ` satisfies ${arrayType}) as any)`)
-    : value;
+/** A tree's records, one per attribute-tag name, as object entries. */
+function attributeTagEntries(tree: AttributeTagNode[]): MappedCode[] {
+  return attributeTagNames(tree).map((name) =>
+    concatMapped(
+      JSON.stringify(name),
+      ": ",
+      attributeTagRecord(filterAttributeTagTree(tree, name), false),
+    ),
+  );
 }
 
+/** A component's attribute-tag records in JSX attribute syntax. */
 function attributeTagProps(
-  props: AttrTagProp[],
-  owner?: string,
+  tree: AttributeTagNode[],
   native?: NativeAttrs,
 ): MappedCode {
   return concatMapped(
-    ...props.map((prop) => {
-      const first = firstAttributeTag(prop.source);
+    ...attributeTagNames(tree).map((name) => {
+      const source = filterAttributeTagTree(tree, name);
+      const first = firstAttributeTag(source);
       if (native && attrGuardUse) attrGuardUse.value = true;
       return concatMapped(
         " ",
-        mapped(prop.name, first?.nameSpan ?? null),
+        mapped(name, first?.nameSpan ?? null),
         "={",
         native
           ? concatMapped(
-              `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(prop.name)}, `,
-              attributeTagProp(prop, owner),
+              `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(name)}, `,
+              attributeTagRecord(source),
               `, ${nativeTagOf(native)})`,
             )
-          : attributeTagProp(prop, owner),
+          : attributeTagRecord(source),
         "}",
       );
     }),
@@ -2956,7 +2890,7 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     const attrs = renderAttrs(node.attrs, true);
-    const tags = attributeTagProps(node.attrTagProps, name);
+    const tags = attributeTagProps(node.attributeTagTree);
     const innerHtml = raw
       ? concatMapped(" innerHTML={", mappedExpr(raw.expr), "}")
       : concatMapped();
@@ -3100,11 +3034,7 @@ export class SolidEmitter implements Emitter<string> {
               ),
         );
       }
-      for (const prop of node.attrTagProps) {
-        parts.push(
-          concatMapped(JSON.stringify(prop.name), ": ", attributeTagProp(prop)),
-        );
-      }
+      parts.push(...attributeTagEntries(node.attributeTagTree));
       if (node.content) {
         parts.push(concatMapped("content: ", contentValue()));
       }
@@ -3240,12 +3170,7 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     // A dynamic target routed from a value import (`valueImportBinding` set)
-    // still names a real, in-scope import — the emitted call is
-    // `mxDyn0 = AttrCallee; ... <Dynamic component={mxDyn0} .../>`, with
-    // `AttrCallee` imported verbatim — so typed attribute-tag checking can
-    // still reference it for `Parameters<typeof AttrCallee>[0][...]`,
-    // exactly as a `kind: "name"` target does. An author's own `<${expr}/>`
-    // (no `valueImportBinding`) has no such name and stays untyped.
+    // names a real, in-scope component, never a native element.
     const owner =
       node.target.kind === "dynamic"
         ? node.target.valueImportBinding
@@ -3280,8 +3205,7 @@ export class SolidEmitter implements Emitter<string> {
     const attrs = renderAttrs(node.attrs, true, native);
     // A value-import target is a component, never a native element.
     const tags = attributeTagProps(
-      node.attrTagProps,
-      owner,
+      node.attributeTagTree,
       owner === undefined ? native : undefined,
     );
     // A function/component target called with arguments gets
@@ -3325,9 +3249,11 @@ export class SolidEmitter implements Emitter<string> {
       fallback: MappedCode | string,
     ) =>
       concatMapped(
-        `{(() => { const ${temp} = `,
+        `{(() => { let ${temp} = `,
         mappedExpr(expr),
-        `;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); `,
+        // Marko parity: an attribute-tag record (any object with `content`)
+        // renders its body, as Marko's dynamic tag reads `value.content`.
+        `; if (${temp} !== null && typeof ${temp} === "object" && typeof (${temp} as any).content === "function") ${temp} = (${temp} as any).content;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); `,
         // Marko: a runtime-resolved textarea takes `value`, never content.
         node.content && !raw
           ? `if (${value} === "textarea") throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead."); `

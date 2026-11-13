@@ -268,12 +268,11 @@ An array-valued `class=` calls `__mxClass` (`CLASS_HELPER_MEMBERS`), and an obje
 
 ### Attribute tags
 
-This host declares `attrTags: 2` and emits component projections only from
-core's resolved `attrTagProps` plan. A singular tag is an
-`<ng-container ngProjectAs="[name]">`; a singular plan under
-`<if>`/`<else if>`/`<else>` is wrapped in Angular `@if` blocks, preserving
-branch exclusivity. Arrays (including an absent declared `AttrTag[]`),
-attributes, params, and nested attribute tags are positioned errors naming
+This host emits component projections from each name's occurrences in
+`attributeTagTree`, whatever the callee declares. A lone tag is an
+`<ng-container ngProjectAs="[name]">`; mutually exclusive occurrences under
+`<if>`/`<else if>`/`<else>` are wrapped in Angular `@if` blocks, preserving
+branch exclusivity. A repeat or a looped occurrence, attributes, params, and nested attribute tags are positioned errors naming
 `@mxlang/host-angular`, because projection is keyed by selector and carries nodes,
 not an object or callback. A bodiless `<@name/>` is also an error because there
 are no nodes to project.

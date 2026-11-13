@@ -1,20 +1,17 @@
+import type { AttrTag as CoreAttrTag } from "@mxlang/core";
 import { expectTypeOf, it } from "vitest";
 import type { AttrTag } from "./index.ts";
 
-it("types data tags as attrs plus an html render function", () => {
-  expectTypeOf<
-    AttrTag<{
-      attrs: { title: string };
-      params: [count: number];
-    }>
-  >().toEqualTypeOf<
-    { title: string } & { content?: (count: number) => string }
+it("adds an html render function as content unless the occurrence declares one", () => {
+  expectTypeOf<AttrTag>().toEqualTypeOf<
+    // biome-ignore lint/complexity/noBannedTypes: an attribute tag with no attributes
+    CoreAttrTag<{} & { content?: () => string }>>();
+  expectTypeOf<AttrTag<{ title: string }>>().toEqualTypeOf<
+    CoreAttrTag<{ title: string } & { content?: () => string }>
   >();
-});
-
-it("types renderable tags as html render functions", () => {
-  expectTypeOf<AttrTag<{ as: "renderable" }>>().toEqualTypeOf<() => string>();
   expectTypeOf<
-    AttrTag<{ as: "renderable"; params: [id: number, label?: string] }>
-  >().toEqualTypeOf<(id: number, label?: string) => string>();
+    AttrTag<{ title: string; content: (count: number) => string }>
+  >().toEqualTypeOf<
+    CoreAttrTag<{ title: string; content: (count: number) => string }>
+  >();
 });

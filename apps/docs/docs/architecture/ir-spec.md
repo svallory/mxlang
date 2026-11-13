@@ -225,7 +225,7 @@ A module-level kind in a body is a malformed IR: `drive()` throws ("unexpected m
 | `span?` | Whole call. |
 | `attrs` | Props. `on*` stays `dynamic` here; never `event`. |
 | `content` | The ordinary children as a `Block`, or `null` when the call has no content (comments and empty text do not count, `hasContent`). |
-| `attributeTags`, `attributeTagTree`, `attrTagProps` | The three views of the call's attribute tags (section 8). |
+| `attributeTags`, `attributeTagTree` | The two views of the call's attribute tags (section 8). |
 | `args` | Tag arguments `<Row(a, b)/>`, in order; `[]` when none. |
 | `var?` | The `/var` binding as source text. Only ever non-null on a call whose target declares `<return>`; core rejects `/var` on any other call ("does not return a value"). |
 | `varBindings?` | Each identifier the `/var` pattern declares (`{ a, b: c }` gives `a` and `c`), as `{ name, span? }` with its authored span; empty or absent without `/var`. Populated by `lower.ts` `varBindingsOf` (on `lowerCustomTag` and `lowerComponent`) and by `template-tag.ts` for a routed template call; also on `TagCall`, so custom-tag transforms see it. It serves one invariant: an emitter that lifts bindings into one scope (a `.react.mx`/`.solid.mx` region arrow) can refuse a duplicate at the authored name. A `/var` pattern the parser cannot read fails in lowering at the parser's position instead of yielding `[]`. Optional: an emitter that ignores it needs no change. |
@@ -299,7 +299,7 @@ Pinned by `lower.test.ts` › "Import and Static are lifted out of the body to m
 | `attrs` | Lowered as on an element (`on` = `"element"`, so the host's `orderAttrs`/modifier hooks see the same input), but `on*` stays `dynamic`: only an `Element` gets `event`. |
 | `args?` | Tag arguments; set by the lowering for an authored tag (possibly `[]`), absent on a builder-made tag. An emitter reconstructing a call must forward them. |
 | `children` | Lowered body (the content left after attribute tags are taken out). |
-| `attributeTags`, `attributeTagTree`, `attrTagProps` | Section 8. |
+| `attributeTags`, `attributeTagTree` | Section 8. |
 | `params` | Tag params as source text. |
 | `var` | The `/var` binding as source text, or `null`. |
 | `data` | Whatever the host's `resolveDelegatedTag(name, node, ctx)` returned, or `undefined` with no hook. Opaque to core. |
@@ -340,33 +340,18 @@ Pinned overall by `lower.test.ts` › "Attr separates static, dynamic, bound and
 
 ## 8. Attribute tags
 
-> **Being replaced.** This section describes attribute tags as they ship
-> today. MX is moving to Marko's attribute-tag record with extra prototype
-> members ([specification §8](/specification/) is normative): cardinality
-> stops depending on the callee's `Input`, and the three views below,
-> `attrTagProps`, `callee-input.ts` (which moves to tooling) and the v2 gate
-> leave the build path. This section is rewritten with that change.
-
-A `Component` and a `DelegatedTag` (and, recursively, an `AttributeTag`) carry **three synchronized views** of their `<@name>` tags:
+A `Component` and a `DelegatedTag` (and, recursively, an `AttributeTag`) carry **two synchronized views** of their `<@name>` tags:
 
 | View | Type | Contract |
 | --- | --- | --- |
 | `attributeTags` | `AttributeTag[]` | Every occurrence, flattened, in source order. Repeats are kept (`lower.test.ts` › "Component keeps every repeated attribute tag, not just the last"). |
 | `attributeTagTree` | `AttributeTagNode[]` | The same occurrences with their `<if>`/`<for>` structure: `AttributeTag { tag }`, `AttributeTagIf { branches: [{ test?, span, nodes }], span? }` (no `test` on `<else>`), `AttributeTagFor { loop: ForHead, nodes, span? }`. Static tags and control-flow tags merge in authored order. |
-| `attrTagProps` | `AttrTagProp[]` | The emission plan, one entry per property name: `cardinality` (`"single"`/`"array"`), `as` (`"data"`/`"renderable"`), and `source` (the tree filtered to that name). |
 
-`AttributeTag` is `{ name, nameSpan, span?, attrs, block: Block, hasBody, attributeTags, attributeTagTree, attrTagProps }`. `name` excludes the `@`. `hasBody` follows `hasContent`. `content` is reserved and rejected as an attribute name.
+`AttributeTag` is `{ name, nameSpan, span?, attrs, block: Block, hasBody, attributeTags, attributeTagTree }`. `name` excludes the `@`. `hasBody` follows `hasContent`. `content` is reserved and rejected as an attribute name. `@children` collides with ordinary children when the call also has body content.
 
-How `attrTagProps` is resolved:
+Core reads nothing from the callee for attribute tags: the IR of a call is the same whatever the callee's `Input` declares ([specification §8](/specification/)). A value host emits each name's record from `attributeTagTree` (`attributeTagNames` and `filterAttributeTagTree` in `attr-tag.ts`) through the helper core supplies as text (`ATTR_TAG_RUNTIME` in `attr-tag-runtime.ts`): a lone unconditional occurrence is one `__mxAttrTag({...})` call, anything else folds from `undefined` with `__mxAttrTags`, so a branch or loop that produces no occurrence leaves the prop `undefined`. The projection hosts (Astro, Angular) read `attributeTagTree` and reject what a projection cannot carry. Pinned by `lower.test.ts` › "attribute-tag IR and validation" and `attribute-tag-contracts.test.ts`.
 
-- Against the callee's declared `Input`, read synchronously and cross-file (`callee-input.ts`). A declared `AttrTag` is `single` (at most once, never inside `<for>`), `AttrTag[]` is `array`, a required one must appear on every `<if>` path; each violation is a positioned error. A declared shape is authoritative and defaults to `as: "data"`.
-- With no declaration (untyped, unresolved, dynamic callee), cardinality comes from the occurrences (`array` if more than one or inside a `<for>`), and `as` is `renderable` only if every occurrence of that name is body-only; one occurrence with attributes or nested tags makes it `data`.
-- A required declared tag absent from the call is a positioned error ("missing required attribute tag").
-- `@children` collides with ordinary children when the call also has body content.
-
-**The v2 gate.** A host that declares `attrTags: 2` in its `HostDeclarations` must emit from `attrTagProps` and must not regroup `attributeTags` or resolve declarations itself. For a host that has not declared it, core positions an error on every construct whose shape could otherwise be dropped (attributes on attribute tags, nested attribute tags, a declared shape that differs from the flat view) — "… isn't supported by `<host>` yet". Pinned by `lower.test.ts` › "attribute-tag v2 IR and validation" and `attribute-tag-contracts.test.ts`.
-
-Builder-made tags (`ctx.build.delegatedTag`, a routed template call without a precomputed plan) get a plan with `as: "data"` and occurrence-count cardinality (`custom-tags.ts`, `template-tag.ts`).
+`AttrTagProp` (the old emission plan) and `HostDeclarations.attrTags` are still exported, deprecated, and read by nothing.
 
 ## 9. Custom tags, contracts and sugar: what reaches the IR
 
@@ -425,9 +410,9 @@ Each of these is assumed by at least one shipped emitter or tool without re-chec
 | E13 | `Component.returnsValue` is set from the callee whenever the callee declares `<return>`, `/var` or not; `/var` on a non-returning callee never reaches an emitter. The JSX hosts unwrap `{ value, output }` from it; html and astro do not (the default export is `(input) => string`, the value comes from `render`). | preact | `lower.test.ts` › "reports the value in the metadata a caller reads"; `html/src/translate.test.ts` › "binds /var to the call's render value, writing into the caller's sink" |
 | E14 | `Ir.exportName` is present whenever the compile emits a module; hosts declare the default export under it, so a self-call needs no import (§7.5-7). | html, preact, solid, angular | `lower.test.ts` › "names the export after the file"; `html/src/translate.test.ts` › "compiles a self-recursive template" |
 | E15 | `Ir.returnValue` is at most one, unconditional, top level (§7.5-5); validated in the unit's own compile. | html, preact, solid | `lower.test.ts` › "<return>" block |
-| E16 | `attrTagProps` is the plan: a `single` prop's `source` contains no `AttributeTagFor` (html fails with "internal attribute-tag plan error" otherwise); `declared` marks a plan from a declared `Input`. | html, preact, solid | `lower.test.ts` › "attribute-tag v2 IR and validation"; `attribute-tag-contracts.test.ts`; `html/src/ir-contract.test.ts` › "E16: a single attrTagProps value holding a <for> is an internal plan error" |
+| E16 | An attribute tag's IR does not depend on the callee: the same call lowers to the same `attributeTags`/`attributeTagTree` whatever the callee's `Input` declares, or when it cannot be read. | html, preact, react, hono, solid, astro, angular | `lower.test.ts` › "attribute-tag IR and validation"; `attribute-tag-contracts.test.ts` |
 | E17 | Every claimed `DelegatedTag` has the `data` its host's `resolveDelegatedTag` returned; emitters cast it and switch on `data.kind` with no null check. A host that claims a tag must supply the hook. | html, preact, solid, angular, astro | `lower.test.ts` › "DelegatedTag hands a claimed tag over with its parts lowered" |
-| E18 | A claimed dynamic `DelegatedTag` carries `args`, `children` and all three attribute-tag views, and an emitter rebuilding the call forwards them. | html (`renderDynamic`) | `lower.test.ts` › "retains arguments on a claimed dynamic DelegatedTag", "a claimed dynamic tag's DelegatedTag carries its attribute tags"; `html/src/translate.test.ts` › "forwards an attribute tag on a dynamic tag into the renderDynamic call, not `{}`" |
+| E18 | A claimed dynamic `DelegatedTag` carries `args`, `children` and both attribute-tag views, and an emitter rebuilding the call forwards them. | html (`renderDynamic`) | `lower.test.ts` › "retains arguments on a claimed dynamic DelegatedTag", "a claimed dynamic tag's DelegatedTag carries its attribute tags"; `html/src/translate.test.ts` › "forwards an attribute tag on a dynamic tag into the renderDynamic call, not `{}`" |
 | E19 | A synthesized `Import` carries `bindings[0]`, `specifier` and `resolvedPath`; Solid throws an internal error otherwise. | solid, the IR entry (skips them) | `solid/src/index.test.ts` › "hands the synthesized import back instead of rejecting it" |
 | E20 | Every source-backed node the IR entry admits carries its `span` (`Text`, `Interpolation`, `Comment`, `IfChain`, `Branch`, `For` and `paramSpans`, `Const`, `DelegatedTag` `nameSpan`/`span`, a static attribute's finite `valueSpan`). | `lowerSource` | `core/src/ir-entry/lower-source.test.ts`; `core/src/ir-entry/all-errors.test.ts` |
 | E21 | Emitters must not mutate the IR. One lowered `Ir` may be emitted more than once, and a lowering may share an object (an `Expr`, a `loc`) between two places. An emitter that rewrites `Expr.code`, `For.bindings` or a parser node takes a private copy first (`cloneIr`, `@mxlang/core`): Solid copies each `For` it rewrites, and Angular's tag module copies the whole `Ir` before `projectSlots` and `rewriteInputReads`. `rewriteCodes` still visits each shared object once, so a rewrite applied to a copy is applied once. | every host | `ir-readonly.test.ts` in html, preact (also React and Hono), solid, astro, angular (page: `angular/test/ir-readonly.test.ts`; tag module: `angular/test/ir-readonly-tag-module.test.ts`) and `lowerSource` (`core/src/ir-entry/ir-readonly.test.ts`): the IR is frozen all the way down (parser nodes included) before the emitter sees it, so a write throws; `core/src/clone-ir.test.ts` |
@@ -469,7 +454,7 @@ A host whose output has a returning unit invoked as a plain function also refuse
 
 ## 11. Stability and adding a node
 
-**Public.** `@mxlang/core` exports the IR types `Attr`, `AttributeTag`, `AttributeTagNode`, `AttrTagProp`, `Block`, `Branch`, `ComponentTarget`, `DelegatedTag`, `Expr`, `ExprShape`, `ForHead`, `ForSource`, `Ir`, `IrNode`, `Position`; `SourceSpan`, `GeneratedMapping`, `MappedCode` and the mapping helpers; `Emitter`, `drive`, `emit`; `lower`, `lowerChildren`, `expressionShape`. `AttrSugar` and `IrBase` are not exported by name (they reach consumers only inside `Attr` and each node). The IR is public and `@unstable`, as are the target contract (`target-descriptor.ts`, `target-loader.ts`, `descriptorVersion: 0`) and core's IR entry point ([`lowerSource`/`lowerFile`](/architecture/ir-entry/)); nothing is frozen before a release candidate.
+**Public.** `@mxlang/core` exports the IR types `Attr`, `AttributeTag`, `AttributeTagNode`, `AttrTagProp` (deprecated, unused), `Block`, `Branch`, `ComponentTarget`, `DelegatedTag`, `Expr`, `ExprShape`, `ForHead`, `ForSource`, `Ir`, `IrNode`, `Position`; `SourceSpan`, `GeneratedMapping`, `MappedCode` and the mapping helpers; `Emitter`, `drive`, `emit`; `lower`, `lowerChildren`, `expressionShape`. `AttrSugar` and `IrBase` are not exported by name (they reach consumers only inside `Attr` and each node). The IR is public and `@unstable`, as are the target contract (`target-descriptor.ts`, `target-loader.ts`, `descriptorVersion: 0`) and core's IR entry point ([`lowerSource`/`lowerFile`](/architecture/ir-entry/)); nothing is frozen before a release candidate.
 
 **Rules for changing the IR:**
 

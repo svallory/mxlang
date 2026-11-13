@@ -1,7 +1,7 @@
 import type { AttrTag } from "@mxlang/host-preact";
 
 export interface Input {
-  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;
+  row?: AttrTag<{ content: (count: number) => unknown }>;
 }
 
 export default function Card(_input: Input) {

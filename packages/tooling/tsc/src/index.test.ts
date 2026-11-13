@@ -182,9 +182,9 @@ describe("mx-tsc", () => {
       );
       expect(result.output).toContain('Missing ending "div" tag');
       expect(result.output).toContain(
-        "Repeated.mx(3,28): error MX_REPEATED_ATTRIBUTE_TAG",
+        "Reserved.mx(3,13): error MX_INVALID_ATTRIBUTE_TAG",
       );
-      expect(result.output).toContain("may appear at most once");
+      expect(result.output).toContain("`content` is reserved");
     },
     SPAWN_TIMEOUT_MS,
   );

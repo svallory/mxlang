@@ -47,31 +47,14 @@
         "policy": {
           "host": "react"
         },
-        "diagnostics": [
-          {
-            "severity": 2,
-            "source": "mxlang",
-            "code": "MX_UNREADABLE_CALLEE_INPUT",
-            "message": "couldn't read `<Card>`'s Input (`~/Card-react.mx` not resolvable); attribute-tag shape inferred from this call",
-            "range": {
-              "start": {
-                "line": 2,
-                "character": 1
-              },
-              "end": {
-                "line": 2,
-                "character": 5
-              }
-            }
-          }
-        ],
+        "diagnostics": [],
         "related": [],
         "dependencies": [],
         "unexpected": []
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "/** @jsxImportSource react */\nimport type { JSX as __MxJSX } from \"react/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nimport Card from \"~/Card-react.mx\"\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  } as Input & { content?: unknown };\n  return (<><Card tab={undefined} /></>);\n}\n",
+        "generated": "/** @jsxImportSource react */\nimport type { JSX as __MxJSX } from \"react/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nimport Card from \"~/Card-react.mx\"\ntype __MxAttrTag<T> = T & { [Symbol.iterator](): Iterator<T>; readonly length: number; at(index: number): T | undefined; map<U>(fn: (item: T, index: number) => U): U[]; filter(fn: (item: T, index: number) => unknown): T[]; toArray(): T[] };\ntype __MxAttrTagMember = typeof Symbol.iterator | \"length\" | \"at\" | \"map\" | \"filter\" | \"toArray\";\nconst __mxAttrTagEmpty: never[] = [];\nconst __mxAttrTagRest = Symbol(\"Attribute Tag\");\nconst __mxAttrTagProto = Object.create(Object.prototype, {\n  length: { get(this: any): number { return 1 + this[__mxAttrTagRest].length; } },\n  toArray: { value(this: any): any[] { return [this, ...this[__mxAttrTagRest]]; } },\n  at: {\n    value(this: any, index: number): any {\n      const all = [this, ...this[__mxAttrTagRest]];\n      const at = Math.trunc(index) || 0;\n      return all[at < 0 ? at + all.length : at];\n    },\n  },\n  map: { value(this: any, fn: (item: any, index: number) => any): any[] { return [this, ...this[__mxAttrTagRest]].map((item, index) => fn(item, index)); } },\n  filter: { value(this: any, fn: (item: any, index: number) => unknown): any[] { return [this, ...this[__mxAttrTagRest]].filter((item, index) => fn(item, index)); } },\n});\nfunction* __mxAttrTagIterator(this: any): Generator<any> {\n  yield this;\n  yield* this[__mxAttrTagRest];\n}\nfunction __mxAttrTag<T = {}>(attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>): __MxAttrTag<T> {\n  (attrs as any)[Symbol.iterator] = __mxAttrTagIterator;\n  (attrs as any)[__mxAttrTagRest] = __mxAttrTagEmpty;\n  return Object.setPrototypeOf(attrs, __mxAttrTagProto);\n}\nfunction __mxAttrTags<A extends object | undefined, T extends object>(first: A, attrs: T): __MxAttrTag<T | (A extends __MxAttrTag<infer U> ? U : never)> {\n  if (first) {\n    const record: any = first;\n    if (record[__mxAttrTagRest] === __mxAttrTagEmpty) record[__mxAttrTagRest] = [attrs];\n    else record[__mxAttrTagRest].push(attrs);\n    return record;\n  }\n  return __mxAttrTag(attrs) as any;\n}\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  } as Input & { content?: unknown };\n  return (<><Card tab={__mxAttrTag({  })} /></>);\n}\n",
         "mappings": [
           {
             "sourceOffsets": [
@@ -95,7 +78,7 @@
               37
             ],
             "generatedOffsets": [
-              935
+              2929
             ],
             "lengths": [
               4
@@ -112,10 +95,50 @@
               44
             ],
             "generatedOffsets": [
-              940
+              2934
             ],
             "lengths": [
               3
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              44
+            ],
+            "generatedOffsets": [
+              2951
+            ],
+            "lengths": [
+              3
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              44
+            ],
+            "generatedOffsets": [
+              2954
+            ],
+            "lengths": [
+              3
+            ],
+            "generatedLengths": [
+              1
             ],
             "data": {
               "verification": true,
@@ -130,7 +153,7 @@
         "logged": []
       },
       "vite": {
-        "code": "/** @jsxImportSource react */\n\nimport Card from \"~/Card-react.mx\"\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  } as Input & { content?: unknown };\n  return (<><Card tab={undefined} /></>);\n}\n",
+        "code": "/** @jsxImportSource react */\n\nimport Card from \"~/Card-react.mx\"\ntype __MxAttrTag<T> = T & { [Symbol.iterator](): Iterator<T>; readonly length: number; at(index: number): T | undefined; map<U>(fn: (item: T, index: number) => U): U[]; filter(fn: (item: T, index: number) => unknown): T[]; toArray(): T[] };\ntype __MxAttrTagMember = typeof Symbol.iterator | \"length\" | \"at\" | \"map\" | \"filter\" | \"toArray\";\nconst __mxAttrTagEmpty: never[] = [];\nconst __mxAttrTagRest = Symbol(\"Attribute Tag\");\nconst __mxAttrTagProto = Object.create(Object.prototype, {\n  length: { get(this: any): number { return 1 + this[__mxAttrTagRest].length; } },\n  toArray: { value(this: any): any[] { return [this, ...this[__mxAttrTagRest]]; } },\n  at: {\n    value(this: any, index: number): any {\n      const all = [this, ...this[__mxAttrTagRest]];\n      const at = Math.trunc(index) || 0;\n      return all[at < 0 ? at + all.length : at];\n    },\n  },\n  map: { value(this: any, fn: (item: any, index: number) => any): any[] { return [this, ...this[__mxAttrTagRest]].map((item, index) => fn(item, index)); } },\n  filter: { value(this: any, fn: (item: any, index: number) => unknown): any[] { return [this, ...this[__mxAttrTagRest]].filter((item, index) => fn(item, index)); } },\n});\nfunction* __mxAttrTagIterator(this: any): Generator<any> {\n  yield this;\n  yield* this[__mxAttrTagRest];\n}\nfunction __mxAttrTag<T = {}>(attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>): __MxAttrTag<T> {\n  (attrs as any)[Symbol.iterator] = __mxAttrTagIterator;\n  (attrs as any)[__mxAttrTagRest] = __mxAttrTagEmpty;\n  return Object.setPrototypeOf(attrs, __mxAttrTagProto);\n}\nfunction __mxAttrTags<A extends object | undefined, T extends object>(first: A, attrs: T): __MxAttrTag<T | (A extends __MxAttrTag<infer U> ? U : never)> {\n  if (first) {\n    const record: any = first;\n    if (record[__mxAttrTagRest] === __mxAttrTagEmpty) record[__mxAttrTagRest] = [attrs];\n    else record[__mxAttrTagRest].push(attrs);\n    return record;\n  }\n  return __mxAttrTag(attrs) as any;\n}\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  } as Input & { content?: unknown };\n  return (<><Card tab={__mxAttrTag({  })} /></>);\n}\n",
         "map": null,
         "warnings": []
       }

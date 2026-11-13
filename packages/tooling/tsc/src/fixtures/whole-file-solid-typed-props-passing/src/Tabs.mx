@@ -1,2 +1,2 @@
-export interface Input { tab: AttrTag<{ attrs: { title: string } }> }
+export interface Input { tab: AttrTag<{ title: string }> }
 <div/>

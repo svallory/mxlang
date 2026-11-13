@@ -226,69 +226,7 @@ describe("custom tag transforms", () => {
     expect(call?.content?.children.length).toBeGreaterThan(0);
   });
 
-  it("revalidates a declared singular tag duplicated by a transform", () => {
-    const directory = mkdtempSync(join(tmpdir(), "mx-transform-singular-"));
-    const filename = join(directory, "tag.mx");
-    const source = "export interface Input { item?: AttrTag }\n<div/>\n";
-    writeFileSync(filename, source);
-    const tag: CustomTag = {
-      template: { filename, source },
-      transform(call, ctx) {
-        const item = call.attributeTags[0];
-        return ctx.build.template({
-          ...call,
-          attributeTags: item ? [item, item] : [],
-        });
-      },
-    } as CustomTag;
-    try {
-      expect(() =>
-        lowerWithTags(
-          "<tag><@item/></tag>\n",
-          { tag },
-          {
-            ...fakeDeclarations(),
-            attrTags: 2,
-          },
-        ),
-      ).toThrowError("`<@item>` may appear at most once");
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-
-  it("keeps declared array cardinality when a transform filters to one", () => {
-    const directory = mkdtempSync(join(tmpdir(), "mx-transform-array-"));
-    const filename = join(directory, "tag.mx");
-    const source = "export interface Input { item?: AttrTag[] }\n<div/>\n";
-    writeFileSync(filename, source);
-    const tag: CustomTag = {
-      template: { filename, source },
-      transform(call, ctx) {
-        return ctx.build.template({
-          ...call,
-          attributeTags: call.attributeTags.slice(0, 1),
-        });
-      },
-    } as CustomTag;
-    try {
-      const ir = lowerWithTags(
-        "<tag><@item/><@item/></tag>\n",
-        { tag },
-        {
-          ...fakeDeclarations(),
-          attrTags: 2,
-        },
-      );
-      expect(find(ir.body, "Component").attrTagProps).toMatchObject([
-        { name: "item", cardinality: "array" },
-      ]);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-
-  it("rebuilds an untyped fallback shape from the transformed occurrences", () => {
+  it("rebuilds the attribute-tag tree from the transformed occurrences", () => {
     const directory = mkdtempSync(join(tmpdir(), "mx-transform-fallback-"));
     const filename = join(directory, "tag.mx");
     const source = "<div/>\n";
@@ -309,18 +247,18 @@ describe("custom tag transforms", () => {
         { tag },
         {
           ...fakeDeclarations(),
-          attrTags: 2,
         },
       );
-      expect(find(ir.body, "Component").attrTagProps).toMatchObject([
-        { name: "item", cardinality: "single", as: "renderable" },
+      expect(find(ir.body, "Component").attributeTagTree).toMatchObject([
+        { kind: "AttributeTag", tag: { name: "item", attrs: [] } },
       ]);
+      expect(find(ir.body, "Component").attributeTagTree).toHaveLength(1);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });
 
-  it("rebuilds unified nested shape and cardinality after filtering a parent occurrence", () => {
+  it("keeps the kept parent's own nested tree after filtering a parent occurrence", () => {
     const directory = mkdtempSync(join(tmpdir(), "mx-transform-nested-"));
     const filename = join(directory, "tag.mx");
     const source = "<div/>\n";
@@ -340,19 +278,19 @@ describe("custom tag transforms", () => {
         { tag },
         {
           ...fakeDeclarations(),
-          attrTags: 2,
         },
       );
       const tab = find(ir.body, "Component").attributeTags[0] as AttributeTag;
-      expect(tab.attrTagProps).toMatchObject([
-        { name: "icon", cardinality: "single", as: "renderable" },
+      expect(tab.attributeTagTree).toMatchObject([
+        { kind: "AttributeTag", tag: { name: "icon", attrs: [] } },
       ]);
+      expect(tab.attributeTagTree).toHaveLength(1);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });
 
-  it("keeps sibling parent plans isolated when a transform rebuilds them", () => {
+  it("keeps sibling parents' nested trees isolated when a transform rebuilds them", () => {
     const directory = mkdtempSync(join(tmpdir(), "mx-transform-siblings-"));
     const filename = join(directory, "tag.mx");
     const source = "<div/>\n";
@@ -369,14 +307,16 @@ describe("custom tag transforms", () => {
         { tag },
         {
           ...fakeDeclarations(),
-          attrTags: 2,
         },
       );
       const parents = find(ir.body, "Component").attributeTags;
-      expect(parents.map((parent) => parent.attrTagProps)).toMatchObject([
-        [{ name: "icon", cardinality: "single", as: "renderable" }],
-        [{ name: "icon", cardinality: "single", as: "data" }],
-      ]);
+      expect(
+        parents.map((parent) =>
+          parent.attributeTagTree.map((node) =>
+            node.kind === "AttributeTag" ? node.tag.attrs.length : -1,
+          ),
+        ),
+      ).toEqual([[0], [1]]);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -1390,10 +1330,7 @@ describe("core-owned custom tags", () => {
       63,
     ],
   ])("rejects `<@%s>` written under control flow", (name, source, column) => {
-    const policies: Policy[] = [
-      tryDeclarations,
-      { ...tryDeclarations, attrTags: 2 },
-    ];
+    const policies: Policy[] = [tryDeclarations, tryDeclarations];
     for (const declarations of policies) {
       let error: unknown;
       try {
@@ -1459,7 +1396,7 @@ describe("core-owned custom tags", () => {
     (control, source, column) => {
       let error: unknown;
       try {
-        lowerWithTags(source, {}, { ...tryDeclarations, attrTags: 2 });
+        lowerWithTags(source, {}, tryDeclarations);
       } catch (caught) {
         error = caught;
       }
@@ -1489,7 +1426,7 @@ describe("core-owned custom tags", () => {
     (_case, source, message) => {
       let error: unknown;
       try {
-        lowerWithTags(source, {}, { ...tryDeclarations, attrTags: 2 });
+        lowerWithTags(source, {}, tryDeclarations);
       } catch (caught) {
         error = caught;
       }

@@ -13,8 +13,8 @@ import {
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
-  type AttrTagProp,
   attachDependencies,
+  attributeTagNames,
   type Ctx,
   type CustomTag,
   checkReservedSource,
@@ -26,6 +26,7 @@ import {
   type Expr,
   emit,
   fail as failAt,
+  filterAttributeTagTree,
   firstAttributeTag,
   type HostDeclarations,
   type Ir,
@@ -358,7 +359,6 @@ export const astroTemplateDeclarations: HostDeclarations = {
   name: "@mxlang/host-astro",
   hostName: "Astro",
   nativeTags: WEB_ELEMENTS,
-  attrTags: 2,
   // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
@@ -775,7 +775,7 @@ export function createEmitter(
         tag,
       );
     }
-    if (tag.attrTagProps.length > 0) {
+    if (tag.attributeTagTree.length > 0) {
       fail(
         `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/host-astro: a slot is keyed by one name and has no nested data shape`,
         tag.attributeTagTree[0] ?? tag,
@@ -804,11 +804,28 @@ export function createEmitter(
       }
     }
   };
+  /** The most occurrences one path through `nodes` can reach. */
+  const maxOccurrences = (nodes: AttributeTagNode[]): number => {
+    let max = 0;
+    for (const node of nodes) {
+      if (node.kind === "AttributeTag") max++;
+      else if (node.kind === "AttributeTagFor") {
+        if (maxOccurrences(node.nodes) > 0) return Number.POSITIVE_INFINITY;
+      } else {
+        max += Math.max(
+          0,
+          ...node.branches.map((branch) => maxOccurrences(branch.nodes)),
+        );
+      }
+    }
+    return max;
+  };
+  /** One attribute-tag name's occurrences, read from the call's tree. */
   const validateAttributeTagProp = (
-    prop: AttrTagProp,
+    prop: { name: string; source: AttributeTagNode[] },
     owner: Positioned,
   ): void => {
-    if (prop.cardinality === "array") {
+    if (maxOccurrences(prop.source) > 1) {
       const tags: AttributeTag[] = [];
       let loopTag: AttributeTag | undefined;
       const collect = (nodes: AttributeTagNode[], inLoop = false): void => {
@@ -1109,7 +1126,8 @@ export function createEmitter(
           node,
         );
       }
-      const hasChildren = Boolean(node.content) || node.attrTagProps.length > 0;
+      const hasChildren =
+        Boolean(node.content) || node.attributeTagTree.length > 0;
       write(`<${name}`);
       emitAttrs(node.attrs, write, writeMapped);
       if (!hasChildren) {
@@ -1119,7 +1137,11 @@ export function createEmitter(
 
       write(">");
       if (node.content) drive(emitter, node.content.children);
-      for (const prop of node.attrTagProps) {
+      for (const name of attributeTagNames(node.attributeTagTree)) {
+        const prop = {
+          name,
+          source: filterAttributeTagTree(node.attributeTagTree, name),
+        };
         validateAttributeTagProp(prop, node);
         if (prop.source.length === 0) continue;
         const only = prop.source[0];

@@ -13,7 +13,6 @@ import { lookup } from "./test-targets.ts";
 
 const host = (script?: HostDeclarations["tags"][string]): HostDeclarations => ({
   name: "fixture-host",
-  attrTags: 2,
   tags: script ? { script } : {},
   isElement: () => true,
   isComponent: () => false,

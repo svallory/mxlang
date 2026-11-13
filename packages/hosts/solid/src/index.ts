@@ -1,6 +1,5 @@
 import {
-  type AttrTagConfig,
-  type AttrTagOf,
+  type AttrTag as CoreAttrTag,
   createTargetLookup,
   registerCalleeInputReader,
   type TargetLookup,
@@ -34,11 +33,19 @@ export {
 } from "./emitter.ts";
 export { appendSolidBuiltinImport } from "./typecheck-module.ts";
 
-/** Attribute-tag value specialised to Solid's reusable accessor renderable. */
+/**
+ * The attribute-tag record a Solid component receives (spec §8): the
+ * first occurrence, carrying every later one, with `map`, `filter`,
+ * `length`, `at` and `toArray`. `T` is one occurrence's attributes; its
+ * `content` is `() => SolidElement` unless `T` declares its own, as a tag
+ * with params does (`content: (row: Row) => …`).
+ */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default (no attribute-tag config)
-  C extends AttrTagConfig = {},
-> = AttrTagOf<C, () => SolidElement>;
+  // biome-ignore lint/complexity/noBannedTypes: an attribute tag with no attributes
+  T extends object = {},
+> = CoreAttrTag<
+  "content" extends keyof T ? T : T & { content?: () => SolidElement }
+>;
 
 registerCalleeInputReader(".solid.mx", readSolidCalleeInput);
 

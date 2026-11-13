@@ -16,7 +16,6 @@ import { lookup } from "./test-targets.ts";
 
 const elements: HostDeclarations = {
   name: "dynamic-attr-value-span-test",
-  attrTags: 2,
   tags: {},
   nativeTags: WEB_ELEMENTS,
   isElement: () => true,

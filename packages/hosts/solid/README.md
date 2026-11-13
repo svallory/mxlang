@@ -144,19 +144,16 @@ other target can express.
 | `For`, `range` with `step` | `<Repeat count={N}>{(mxIndex) => { const i = (from) + mxIndex * (step); return body; }}</Repeat>`; `N` clamped through `Number.isFinite(...) ? Math.max(0, ...) : 0` when not fully literal, so a runtime `step` of `0` renders zero rows instead of an infinite `Repeat` |
 | `DelegatedTag` `<try>` | `<Loading fallback={<@placeholder>}>children</Loading>`, wrapped in `<Errored fallback={(__mxErr, ...__mxArgs) => ((<catch-params>) => <@catch body>)(__mxErr(), ...__mxArgs)}>` when `<@catch>` is present. Solid's `Errored` fallback receives an `ErrorAccessor` function, not the error; the lowering calls it once and passes the result to an inner arrow whose parameter list is the author's `<@catch>` params verbatim (as Marko's `catch` does), so `${e.message}` works and every param form — identifiers, defaults, type annotations, destructuring, rest — stays a real parameter; a param-less `<@catch>` keeps a plain `() => body` fallback |
 | `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `:=` (bound attribute) | Errors: each names the Marko construct and points at Solid's own primitive (`createSignal`, `createEffect`, lifecycle primitives, "surrounding TypeScript module", an explicit event handler) — the reactive tags are core language, and this host does not lower them yet |
-| Dynamic tag name (`<${expr}/>` or `<${expr}(args)/>`) | Inline runtime dispatch: tag-name strings and component functions go through `<Dynamic>`; already-rendered values pass through. Arguments invoke a function target before dispatch. Data-shaped attribute tags must use `.content` |
+| Dynamic tag name (`<${expr}/>` or `<${expr}(args)/>`) | Inline runtime dispatch: tag-name strings and component functions go through `<Dynamic>`; already-rendered values pass through. Arguments invoke a function target before dispatch. An attribute-tag record renders its `content` |
 | `<define>`, `<const>`, `Hoisted`, `DocumentType` inside a JSX expression | Errors: these must be declared in the surrounding TypeScript module, which is not this emitter's territory (a `.solid.mx` file is already a TS module — that's where they belong) |
 
-A repeated `<@name>` compiles from core's resolved `attrTagProps` array plan,
-the same as every other `attrTags: 2` host: each occurrence lands in the
-emitted array in source order (`item={[() => …, () => …]}`), not last-wins.
-
-An attribute-tag renderable is always an accessor. Render a data tag with
-`<${input.item.content}/>` and a renderable tag with `<${input.item}/>`.
-Parameterized tags must receive their arguments at that dynamic call site:
-`<${input.item.content("Ada")}/>` for data, or `<${input.item("Ada")}/>` for
-renderable. Calling the tag value without its declared arguments is a
-positioned compile error. Escaped interpolations inside these accessors (and
+An attribute tag reaches the callee as Marko's record, as on every value host:
+a repeated `<@name>` folds every occurrence into it in source order, read with
+iteration, `map`, `filter`, `length`, `at` and `toArray`. `content` is always
+an accessor. Render it with `<${input.item}/>` (a record renders its
+`content`) or `<${input.item.content}/>`; a tag with params receives its
+arguments at that call site, `<${input.item.content("Ada")}/>`. Escaped
+interpolations inside these accessors (and
 inside `<if>`/`<for>` bodies) use Solid's server escape helper; the browser
 path keeps the original value so Solid can insert reactive text normally.
 

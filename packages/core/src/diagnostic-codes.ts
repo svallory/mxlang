@@ -516,14 +516,17 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
         ],
         [
           UNKNOWN_ATTRIBUTE_TAG_CODE,
-          "an attribute tag the contract or `Input` does not declare",
+          "an attribute tag the contract does not declare",
         ],
         [MISSING_ATTRIBUTE_TAG_CODE, "a required attribute tag that is absent"],
         [
           REPEATED_ATTRIBUTE_TAG_CODE,
-          "a single attribute tag given twice, or inside `<for>`",
+          "an attribute tag the contract does not make repeatable, given twice or inside `<for>`",
         ],
-        [INVALID_CALLEE_INPUT_CODE, "a callee's `Input` that cannot be read"],
+        [
+          INVALID_CALLEE_INPUT_CODE,
+          "a component's own `Input` that cannot be read",
+        ],
         [
           UNSUPPORTED_CONSTRUCT_CODE,
           "a construct the target or the product cannot express",
@@ -771,7 +774,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           LOWERCASE_BINDING_NOT_CALLED_CODE,
           "a lowercase tag naming a binding, which is not called",
         ],
-        [UNREADABLE_CALLEE_INPUT_CODE, "a callee whose `Input` cannot be read"],
+        [
+          UNREADABLE_CALLEE_INPUT_CODE,
+          "not raised: core no longer reads a callee's `Input`; kept for consumers that match on it",
+        ],
         [BODY_DROPPED_CODE, "a body passed to a tag that never reads it"],
         [
           ATTRIBUTE_TAG_DROPPED_CODE,

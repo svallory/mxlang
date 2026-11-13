@@ -196,13 +196,12 @@ without Astro mode, `.astro.mx` files are ignored.
 
 ### Attribute tags
 
-This host declares `attrTags: 2`; `.astro.mx` emits only core's resolved
-`attrTagProps` plan. A singular tag is a `<Fragment slot="name">`, and a
-singular plan under `<if>`/`<else if>`/`<else>` becomes a conditional named
-slot so Astro receives only the taken branch, including nested conditionals
-and empty branches. Arrays (including a declared
-`AttrTag[]` with no occurrences), attributes, params, and nested attribute
-tags are positioned errors naming `@mxlang/host-astro`: an Astro slot is keyed by
+`.astro.mx` reads each name's occurrences from `attributeTagTree`, whatever
+the callee declares. A lone tag is a `<Fragment slot="name">`, and mutually
+exclusive occurrences under `<if>`/`<else if>`/`<else>` become a conditional
+named slot so Astro receives only the taken branch, including nested
+conditionals and empty branches. A repeat or a looped occurrence,
+attributes, params, and nested attribute tags are positioned errors naming `@mxlang/host-astro`: an Astro slot is keyed by
 one name and carries rendered markup only. A bodiless `<@name/>` is also an
 error because there is no markup to project.
 

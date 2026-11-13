@@ -242,13 +242,28 @@ describe("generated names do not shadow authored bindings", () => {
 
 describe("attribute tags round-2 regressions (executed)", () => {
   for (const host of hosts) {
+    it(`${host}: folds static, conditional and looped occurrences into one record`, async () => {
+      const files = {
+        "main.mx":
+          'import Card from "./card.mx"\n<Card><@item a=1>x</@item><if=input.c><@item a=2/></if><for|n| of=[3, 4]><@item a=n/></for></Card>',
+        "card.mx":
+          '<p>${input.item.a}:${input.item.length}:${input.item.map((i) => i.a).join(",")}:${input.item.at(-1).a}:${input.item.toArray().filter((i) => "content" in i).length}:<${input.item}/></p>',
+      };
+      expect(await renderFixture(host, files, { c: true })).toBe(
+        "<p>1:4:1,2,3,4:4:1:x</p>",
+      );
+      expect(await renderFixture(host, files, { c: false })).toBe(
+        "<p>1:3:1,3,4:4:1:x</p>",
+      );
+    });
+
     it(`${host}: preserves falsy placeholder bodies and a zero range row`, async () => {
       const files = {
         "main.mx":
           'import Row from "./row.mx"\n<Row><@head>${input.n}</@head><@slot>${input.n}</@slot><for|i| from=0 until=1><@items>${i}</@items></for></Row>',
         "row.mx": dataRow(
-          'head: AttrTag; slot: AttrTag<{ as: "renderable" }>; items: AttrTag[]',
-          "<p>[<${input.head.content}/>][${input.head.content}][<${input.slot}/>][${input.slot}]<for|item| of=input.items><i>[<${item.content}/>][${item.content}]</i></for></p>",
+          "head: AttrTag; slot: AttrTag; items: AttrTag",
+          "<p>[<${input.head.content}/>][${input.head.content}][<${input.slot}/>][<${input.slot.content}/>]<for|item| of=input.items><i>[<${item.content}/>][${item.content}]</i></for></p>",
         ),
       };
 
@@ -273,7 +288,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
           "main.mx":
             'import Row from "./row.mx"\n<Row><@head>${input.value}</@head><@slot>${input.value}</@slot></Row>',
           "row.mx": dataRow(
-            'head: AttrTag; slot: AttrTag<{ as: "renderable" }>',
+            "head: AttrTag; slot: AttrTag",
             "<p><${input.head.content}/>|<${input.slot}/></p>",
           ),
         },
@@ -283,7 +298,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
       expect(html.match(/img src=x onerror=alert\(1\)/g)).toHaveLength(2);
     });
 
-    it(`${host}: renders a body-only fallback through an untyped MX callee`, async () => {
+    it(`${host}: renders a record through an untyped MX callee`, async () => {
       const html = await renderFixture(host, {
         "main.mx": 'import Row from "./row.mx"\n<Row><@head>H</@head></Row>',
         "row.mx": "<p><${input.head}/></p>",
@@ -291,21 +306,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
       expect(html).toBe("<p>H</p>");
     });
 
-    it(`${host}: passes a body-only fallback bare to an untyped TSX library component`, async () => {
-      const html = await renderFixture(host, {
-        "main.mx":
-          'import Boundary from "./boundary.tsx"\n<Boundary><@fallback>ready</@fallback></Boundary>',
-        "boundary.tsx": [
-          "/** @jsxImportSource HOSTJSX */",
-          "export default function Boundary(input: { fallback: unknown }) {",
-          "  return <section>{input.fallback}</section>;",
-          "}",
-        ].join("\n"),
-      });
-      expect(html).toBe("<section>ready</section>");
-    });
-
-    it(`${host}: unifies nested shape across conditional parent occurrences`, async () => {
+    it(`${host}: nests a record under each conditional parent occurrence`, async () => {
       const files = {
         "main.mx":
           'import Row from "./row.mx"\n<Row><if=input.pickBare><@tab><@icon>I</@icon></@tab></if><else><@tab><@icon k="K">J</@icon></@tab></else></Row>',
@@ -320,7 +321,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
       );
     });
 
-    it(`${host}: unifies nested shape across repeated parent occurrences`, async () => {
+    it(`${host}: nests a record under each repeated parent occurrence`, async () => {
       const html = await renderFixture(host, {
         "main.mx":
           'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon k="K">J</@icon></@tab></Row>',
@@ -330,34 +331,14 @@ describe("attribute tags round-2 regressions (executed)", () => {
       expect(html).toBe("<p>object:-:I</p><p>object:K:J</p>");
     });
 
-    it(`${host}: unifies nested one-versus-array cardinality`, async () => {
+    it(`${host}: counts nested occurrences on each parent's own record`, async () => {
       const html = await renderFixture(host, {
         "main.mx":
           'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon>J</@icon><@icon>K</@icon></@tab></Row>',
         "row.mx":
-          "<for|tab| of=input.tab><p>${String(Array.isArray(tab.icon))}:<for|icon| of=tab.icon><${icon}/></for></p></for>",
+          "<for|tab| of=input.tab><p>${tab.icon.length}:<for|icon| of=tab.icon><${icon}/></for></p></for>",
       });
-      expect(html).toBe("<p>true:I</p><p>true:JK</p>");
-    });
-
-    it(`${host}: keeps nested fallback shape isolated between sibling parent names`, async () => {
-      const html = await renderFixture(host, {
-        "main.mx":
-          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Row>',
-        "row.mx":
-          '<p>${String("content" in input.tab.icon)}|${String("content" in input.card.icon)}:${input.card.icon.k}:<${input.tab.icon}/>:<${input.card.icon.content}/></p>',
-      });
-      expect(html).toBe("<p>false|true:1:I:J</p>");
-    });
-
-    it(`${host}: keeps nested fallback cardinality isolated between sibling parent names`, async () => {
-      const html = await renderFixture(host, {
-        "main.mx":
-          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon>J</@icon><@icon>K</@icon></@card></Row>',
-        "row.mx":
-          "<p>${String(Array.isArray(input.tab.icon))}|${String(Array.isArray(input.card.icon))}:<${input.tab.icon}/>:<for|icon| of=input.card.icon><${icon}/></for></p>",
-      });
-      expect(html).toBe("<p>false|true:I:JK</p>");
+      expect(html).toBe("<p>1:I</p><p>2:JK</p>");
     });
 
     it(`${host}: keeps only each sibling parent's own nested props`, async () => {
@@ -370,36 +351,21 @@ describe("attribute tags round-2 regressions (executed)", () => {
       expect(html).toBe("<p>undefined|undefined:I:B</p>");
     });
 
-    it(`${host}: does not apply a declared sibling's nested shape to an undeclared parent`, async () => {
-      const html = await renderFixture(host, {
-        "main.mx":
-          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Row>',
-        "row.mx": [
-          'export interface Input { tab?: AttrTag<{ attrs: { icon?: AttrTag<{ as: "renderable" }> } }>; [key: string]: unknown }',
-          "<const/card=(input.card as any)/>",
-          '<p>${String("content" in card.icon)}:${card.icon.k}:<${card.icon.content}/></p>',
-        ].join("\n"),
-      });
-      expect(html).toBe("<p>true:1:J</p>");
-    });
-
-    it(`${host}: executes mixed fallback occurrences and parameterized bare tags`, async () => {
+    it(`${host}: passes records, with params, to an untyped TSX callee`, async () => {
       const html = await renderFixture(host, {
         "main.mx":
           'import Row from "./row.tsx"\n<Row><@item>A</@item><@item k="K">B</@item><@action|suffix|>go${suffix}</@action></Row>',
         "row.tsx": [
           "/** @jsxImportSource HOSTJSX */",
           "export default function Row(input: any) {",
-          '  return <><p>{typeof input.item[0]}:{input.item[0].k || "-"}:{input.item[0].content}</p><p>{typeof input.item[1]}:{input.item[1].k}:{input.item[1].content}</p><button>{input.action("!")}</button></>;',
+          '  return <><p>{input.item.length}:{input.item.map((x: any) => x.k || "-").join(",")}:{input.item.content}:{input.item.at(-1).content}</p><button>{input.action.content("!")}</button></>;',
           "}",
         ].join("\n"),
       });
-      expect(html).toBe(
-        "<p>object:-:A</p><p>object:K:B</p><button>go!</button>",
-      );
+      expect(html).toBe("<p>2:-,K:A:B</p><button>go!</button>");
     });
 
-    it(`${host}: rebuilds fallback shape after a transform filters occurrences`, async () => {
+    it(`${host}: rebuilds the record after a transform filters occurrences`, async () => {
       const html = await renderFixture(
         host,
         {
@@ -423,26 +389,8 @@ describe("attribute tags round-2 regressions (executed)", () => {
     });
   }
 
-  it("reports a positioned compile error for the old idiom on a declared data tag", () => {
-    const scratch = mkdtempSync(join(tmpdir(), "mx-declared-data-tag-r2-"));
-    try {
-      writeFileSync(
-        join(scratch, "row.mx"),
-        "export interface Input { head: AttrTag }\n<p><${input.head}/></p>",
-      );
-      expect(() =>
-        compilePreactMx(
-          'import Row from "./row.mx"\n<Row><@head>H</@head></Row>',
-          join(scratch, "main.mx"),
-        ),
-      ).toThrow(/data attribute tag/);
-    } finally {
-      rmSync(scratch, { recursive: true, force: true });
-    }
-  });
-
   it.each(["static", "for", "mixed"] as const)(
-    "react: keys %s renderable arrays without warnings",
+    "react: keys %s record content mapped to an array without warnings",
     async (shape) => {
       const bodies = {
         static: "<@slot><b>a</b></@slot><@slot><b>b</b></@slot>",
@@ -455,8 +403,8 @@ describe("attribute tags round-2 regressions (executed)", () => {
       const html = await renderFixture("react", {
         "main.mx": `import Row from "./row.mx"\n<Row>${bodies[shape]}</Row>`,
         "row.mx": dataRow(
-          'slot: AttrTag<{ as: "renderable" }>[]',
-          "<p>${input.slot}</p>",
+          "slot: AttrTag",
+          "<p>${input.slot.map((s) => s.content)}</p>",
         ),
       });
       expect(html).toMatch(/^<p><b>a<\/b><b>b<\/b>/);
@@ -472,27 +420,9 @@ describe("attribute tags round-2 regressions (executed)", () => {
       "main.mx":
         'import Row from "./row.mx"\n<Row><@item><b>a</b></@item><@item><b>b</b></@item></Row>',
       "row.mx": dataRow(
-        "item: AttrTag[]",
+        "item: AttrTag",
         "<p>${input.item.map((x) => x.content)}</p>",
       ),
-    });
-    expect(html).toBe("<p><b>a</b><b>b</b></p>");
-    expect(error).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it("react: keys an untyped renderable fallback array without warnings", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const html = await renderFixture("react", {
-      "main.mx":
-        'import Row from "./row.tsx"\n<Row><@slot><b>a</b></@slot><@slot><b>b</b></@slot></Row>',
-      "row.tsx": [
-        "/** @jsxImportSource react */",
-        "export default function Row(input: { slot: unknown }) {",
-        "  return <p>{input.slot as never}</p>;",
-        "}",
-      ].join("\n"),
     });
     expect(html).toBe("<p><b>a</b><b>b</b></p>");
     expect(error).not.toHaveBeenCalled();
@@ -507,7 +437,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
           "main.mx":
             'import Row from "./row.mx"\n<const/value="outer"/><Row><for|k, v| in=input.obj><@item>${k}:${v}</@item></for><for|k| in=input.obj><@item>${k}:${value}</@item></for><for|i| from=1 to=3><@item>${i}</@item></for><for|i| until=2><@item>u${i}</@item></for></Row>',
           "row.mx": dataRow(
-            "item: AttrTag[]",
+            "item: AttrTag",
             "<p><for|x| of=input.item>[<${x.content}/>]</for></p>",
           ),
         },
@@ -521,7 +451,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
         "main.mx":
           'import Row from "./row.mx"\n<Row><for|x| of=input.list><@item>${x}</@item></for><for|k, v| in=input.obj><@item>${k}:${v}</@item></for></Row>',
         "row.mx": dataRow(
-          "item: AttrTag[]",
+          "item: AttrTag",
           "<p><for|x| of=input.item>[<${x.content}/>]</for></p>",
         ),
       };
@@ -537,7 +467,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
         "main.mx":
           'import Row from "./row.mx"\n<Row><for|x| of=input.list><@item>${x}</@item></for></Row>',
         "row.mx": dataRow(
-          "item: AttrTag[]",
+          "item: AttrTag",
           "<p><for|x| of=input.item>[<${x.content}/>]</for></p>",
         ),
       };
@@ -566,7 +496,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
           "main.mx":
             'import Row from "./row.mx"\n<Row><if=input.mode===1><@head>one</@head></if><else if=input.mode===2><@head>two</@head></else><else><@head>three</@head></else><for|k, v| in=input.obj><if=(v > 1)><@item>${k}</@item></if></for><@tab><if=input.on><@icon>ON</@icon></if><else><@icon>OFF</@icon></else></@tab></Row>',
           "row.mx": dataRow(
-            "head: AttrTag; item: AttrTag[]; tab: AttrTag<{ attrs: { icon?: AttrTag } }>",
+            "head: AttrTag; item: AttrTag; tab: AttrTag<{ icon?: AttrTag }>",
             "<p><${input.head.content}/>|<for|x| of=input.item><${x.content}/></for>|<${input.tab.icon?.content}/></p>",
           ),
         },
@@ -580,21 +510,21 @@ describe("attribute tags round-2 regressions (executed)", () => {
         "main.mx":
           'import Row from "./row.mx"\n<Row><for|x| of=["a", "b"]><@item|suffix|>${x}${suffix}</@item></for></Row>',
         "row.mx": dataRow(
-          "item: AttrTag<{ params: [suffix: string] }>[]",
+          "item: AttrTag<{ content: (suffix: string) => unknown }>",
           '<p><for|x| of=input.item><span>${x.content("!")}</span></for></p>',
         ),
       });
       expect(html).toBe("<p><span>a!</span><span>b!</span></p>");
     });
 
-    it(`${host}: resolves and renders a TSX callee Input declaration`, async () => {
+    it(`${host}: renders records in a TSX callee that declares its Input`, async () => {
       const html = await renderFixture(host, {
         "main.mx":
           'import Row from "./row.tsx"\n<Row><@head>H</@head><for|x| of=["a", "b"]><@items|n|>${x}${n}</@items></for><@slot><i>S</i></@slot></Row>',
         "row.tsx": `/** @jsxImportSource HOSTJSX */
 import type { AttrTag } from "@mxlang/host-${host}";
-export interface Input { head: AttrTag; items: AttrTag<{ params: [n: number] }>[]; slot: AttrTag<{ as: "renderable" }> }
-export default function Row(props: Input) { return <p>{props.head.content}|{props.items.map((x, i) => x.content(i))}|{props.slot}</p>; }`,
+export interface Input { head: AttrTag; items: AttrTag<{ content: (n: number) => unknown }>; slot: AttrTag }
+export default function Row(props: Input) { return <p>{props.head.content}|{props.items.map((x, i) => x.content(i) as never)}|{props.slot.content}</p>; }`,
       });
       expect(html).toBe("<p>H|a0b1|<i>S</i></p>");
     });
@@ -609,8 +539,8 @@ export default function Row(props: Input) { return <p>{props.head.content}|{prop
         symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
         const row = `/** @jsxImportSource ${jsxSources[host]} */
 import type { AttrTag } from "@mxlang/host-${host}";
-export interface Input { items: AttrTag<{ params: [n: number] }>[] }
-export default function Row(props: Input) { return <p>{props.items.map((x, i) => x.content?.(i))}</p>; }`;
+export interface Input { items?: AttrTag<{ content: (n: number) => any }> }
+export default function Row(props: Input) { return <p>{props.items?.map((x, i) => x.content?.(i))}</p>; }`;
         writeFileSync(join(scratch, "row.tsx"), row);
         writeFileSync(
           join(scratch, "main.tsx"),
@@ -655,28 +585,28 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
   );
 
   it.each(hosts)(
-    "%s: #propsObject renders dynamic tags with a bare fallback and nested data",
+    "%s: #propsObject passes a dynamic tag the record",
     async (host) => {
       const factories = {
         preact: (props: { head: unknown; children: unknown }) =>
           preactCreateElement(
             "section",
             null,
-            props.head as never,
+            (props.head as { content: never }).content,
             props.children as never,
           ),
         react: (props: { head: unknown; children: unknown }) =>
           reactCreateElement(
             "section",
             null,
-            props.head as never,
+            (props.head as { content: never }).content,
             props.children as never,
           ),
         hono: (props: { head: unknown; children: unknown }) =>
           honoCreateElement(
             "section",
             null,
-            props.head as never,
+            (props.head as { content: never }).content,
             props.children as never,
           ),
       };
@@ -714,11 +644,9 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
   it.each(hosts)(
     "%s: a `<define>` call carries its attribute tag through instead of dropping it",
     async (host) => {
-      // `<define>` has no declared `Input`, so the untyped-callee fallback
-      // applies: `<@head>` carries no attributes, so `head` arrives
-      // renderable (the body itself), read directly with `<${head}/>`. As in
-      // Marko the call's one attributes object is the define's first param,
-      // so the define destructures it.
+      // `head` arrives as the record; `<${head}/>` renders its `content`, as
+      // in Marko. The call's one attributes object is the define's first
+      // param, so the define destructures it.
       const html = await renderFixture(host, {
         "main.mx":
           '<define/Card|{ title, head }|><div>${title}<${head}/></div></define>\n<Card title="a"><@head>H</@head></Card>',

@@ -2724,7 +2724,8 @@ as written.
 ### Attribute tags: `<@name>`
 
 A child written `<@name>…</@name>` becomes a **named prop** on the parent instead
-of ordinary children. With params, `<@name|p|>` becomes a **function** prop.
+of ordinary children. With params, `<@name|p|>`'s `content` is a function of
+them.
 Ordinary children stay the child callback. Props are emitted in a fixed order:
 the parent's own attributes in source order, then attribute tags in source order.
 
@@ -2742,7 +2743,8 @@ therefore runs unchanged.
 MX adds members on the record's **prototype**, never as own properties:
 `map`, `filter`, `length`, `at` and `toArray`. They are neither spread nor
 serialized, so own-property semantics are Marko's exactly. The `AttrTag<T>`
-type each host exports is a supertype of `Marko.AttrTag<T>`.
+type each host exports is assignable to `Marko.AttrTag<T>`: it has every
+member Marko's type has, and these.
 
 The value's shape never depends on the callee's types: core does not read the
 callee's `Input` to choose a cardinality or a shape, and the same call compiles
@@ -2752,14 +2754,9 @@ language server, the TypeScript plugin), which report a mismatch as a type
 error. A contract opt-in that makes one attribute tag a real array
 (`attributeTags.x.repeat` in a sidecar) is reserved.
 
-> **Not released yet.** The record with MX's prototype members is the
-> specified behaviour; the released hosts still emit the earlier
-> `Input`-driven arrays and `data`/`renderable` shapes.
-
 On the Solid host `content` is a reusable accessor, read with
 `<${input.head.content}/>`; a parameterized body passes arguments at that same
-dynamic call site, for example `<${input.head.content("Ada")}/>`.
-Omitting those arguments is a positioned compile error. Escaped interpolation
+dynamic call site, for example `<${input.head.content("Ada")}/>`. Escaped interpolation
 inside the accessor remains escaped during SSR and stays reactive text in the
 browser.
 
@@ -3403,7 +3400,7 @@ Naming: the host hook that claims a tag is `HostDeclarations.isDelegatedTag`, it
 
 **Recursive attribute-tag contracts (MX addition).** `CustomTagAttributeTag` accepts `attributes?: Record<string, CustomTagAttribute>`, recursive `attributeTags?: CustomTagAttributeTags` (named entries plus the optional `"*"` wildcard entries, for attribute tags), and `children?: Record<string, CustomTagChild>`, alongside `required` and `repeatable`. Each declared map closes its own set; an omitted map on an extended declaration stays open. In particular, omitted `attributeTags` accepts undeclared nested attribute tags with attributes and further nesting, recursively, rather than applying the legacy body-only restriction. The shared attribute check enforces unknown names, required attributes, scalar types, expressions, `literalOnly`, enums, and E1's `array` / `function` / `items` rules at every depth. Spreads are rejected in a closed attribute map. Defaults on attribute-tag attributes are **not applied**, and never satisfy a required attribute.
 
-The same E2 children checker runs on each attribute tag's authored body before its plain children lower. It supports the reserved `#text` class, required/repeatable paths through `<if>` / `<for>`, and nested attribute-tag levels; attribute tags themselves do not count as plain children. E3's direct-parent spelling remains `"@row"`. Attribute-tag cardinality uses the preserved control-flow tree: an exhaustive branch can satisfy `required`, a loop cannot, and a loop needs `repeatable: true`. An extended declaration can occur inside `<if>` / `<for>`; one declaring none of the three maps keeps the existing no-template rejection of attributes, nested attribute tags and controlled occurrences. Template-backed tags retain their `Input` checks and host capability gates.
+The same E2 children checker runs on each attribute tag's authored body before its plain children lower. It supports the reserved `#text` class, required/repeatable paths through `<if>` / `<for>`, and nested attribute-tag levels; attribute tags themselves do not count as plain children. E3's direct-parent spelling remains `"@row"`. Attribute-tag cardinality uses the preserved control-flow tree: an exhaustive branch can satisfy `required`, a loop cannot, and a loop needs `repeatable: true`. An extended declaration can occur inside `<if>` / `<for>`; one declaring none of the three maps keeps the existing no-template rejection of attributes, nested attribute tags and controlled occurrences. A template-backed tag's attribute tags are checked by its contract only; its template's `Input` types them for the type checker (§8).
 
 Errors stop at the first in check order, not source order: authored children are checked before attributes, with attribute-tag bodies visited depth first. A child's error (even in a nested attribute tag) can therefore precede an invalid attribute written earlier on an enclosing tag. Errors name the complete owner chain: `` `<card>`: `<@row>`: unknown attribute `bogus` `` or `` `<card>`: `<@group>`: `<@item>`: missing required child `<leaf>` ``. Unknown/typed attributes point at the attribute, array-item errors at the element, unlisted children at the child, repetition at the second occurrence (or sole loop occurrence), and missing requirements at the receiving attribute tag. Registration checks unknown keys and E1 contradictions recursively, even for unused tags. No host-specific core rule is introduced.
 
@@ -4716,10 +4713,10 @@ host, a target or a dialect.
 | `MX_INVALID_TAG_CALL` | error | a tag that cannot be called here |
 | `MX_INVALID_TAG_VAR` | error | a `/var` that cannot bind, or is read out of scope |
 | `MX_INVALID_ATTRIBUTE_TAG` | error | an attribute tag in a place or shape that is not allowed |
-| `MX_UNKNOWN_ATTRIBUTE_TAG` | error | an attribute tag the contract or `Input` does not declare |
+| `MX_UNKNOWN_ATTRIBUTE_TAG` | error | an attribute tag the contract does not declare |
 | `MX_MISSING_ATTRIBUTE_TAG` | error | a required attribute tag that is absent |
-| `MX_REPEATED_ATTRIBUTE_TAG` | error | a single attribute tag given twice, or inside `<for>` |
-| `MX_INVALID_CALLEE_INPUT` | error | a callee's `Input` that cannot be read |
+| `MX_REPEATED_ATTRIBUTE_TAG` | error | an attribute tag the contract does not make repeatable, given twice or inside `<for>` |
+| `MX_INVALID_CALLEE_INPUT` | error | a component's own `Input` that cannot be read |
 | `MX_UNSUPPORTED_CONSTRUCT` | error | a construct the target or the product cannot express |
 | `MX_INERT_TAG_SHAPE` | error | a spread, attribute or body on a tag that emits nothing; an attribute (other than its value), arguments, params, a tag variable or a `${…}` placeholder on a built-in `<script>` |
 | `MX_RESERVED_EFFECT_TAG` | error | `<effect>` on a target, which is not a tag; `<script>` runs a body after render |
@@ -4815,7 +4812,7 @@ host, a target or a dialect.
 | `MX_DEFINE_CONTENT_DROPPED` | warning | a `content` attribute on a `<define>` that has a body, which is the `content` |
 | `MX_DEFINE_EXTRA_PARAMS` | warning | a `<define>` param past the first, which the call ignores |
 | `MX_LOWERCASE_BINDING_NOT_CALLED` | warning | a lowercase tag naming a binding, which is not called |
-| `MX_UNREADABLE_CALLEE_INPUT` | warning | a callee whose `Input` cannot be read |
+| `MX_UNREADABLE_CALLEE_INPUT` | warning | not raised: core no longer reads a callee's `Input` (§8); kept for consumers that match on it |
 | `MX_BODY_DROPPED` | warning | a body passed to a tag that never reads it |
 | `MX_ATTRIBUTE_TAG_DROPPED` | warning | an attribute tag passed to a tag that never reads it |
 | `MX_IGNORED_CONFIG` | warning | a project setting the scan cannot apply and ignores |
@@ -4883,7 +4880,7 @@ return value of `render`:
 | Discovered tag, self-recursive tag, or an imported `.mx` unit known to declare `<return>` | `Name.render(props, out)`; with `/var`, `const n = Name.render(props, out)` |
 | Any other statically named tag (an imported `.mx` unit without `<return>`, a hand-written function, a `.ts` barrel re-export) | Run-time dispatch: `.render(props, out)` when the callee has it, otherwise the callee is called and its string written |
 | Dynamic tag `<${x}/>` | The same run-time dispatch; `/var` binds the `render` value (`undefined` for a callee without `.render`, and for a falsy name — `null`, `false`, `undefined`, `""`, `0` — which renders no tag, as in Marko). Called with tag arguments (`<${x}(a)/>`), a callee with `.render` receives `a` (args[0]) as its input, as Marko 6.4.4 does, and `/var` still binds its return value |
-| `<define>` call, `content`, a renderable attribute tag | Unchanged: a block is `(…params) => string`, rendered into its own sink and written |
+| `<define>` call, `content`, an attribute tag's `content` | Unchanged: a block is `(…params) => string`, rendered into its own sink and written |
 
 A hand-written `.ts` function used as a tag keeps returning a string; it never
 receives `out`. A `.mx` unit reached through a dynamic tag or a `.ts` barrel

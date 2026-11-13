@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
+  ATTR_TAG_RECORD,
   dropOwnParserPosition,
   errorDependencies,
   type HostFileKind,
@@ -1231,6 +1232,7 @@ export function attributeTagDiagnosticMappings(
   generated: string,
 ): CodeMapping[] {
   const generatedCursors = new Map<string, number>();
+  const holes = new Set<CodeMapping>();
   const tags: Array<{
     sourceStart: number;
     generatedStart: number;
@@ -1241,66 +1243,52 @@ export function attributeTagDiagnosticMappings(
     const name = match[1];
     if (!name || match.index === undefined) continue;
     const sourceStart = match.index + 1;
-    // The value is `{ ... }` while untyped. Once the host wraps it in the
-    // callee's declared type it is `{ ... } satisfies T as any` as printed
-    // into a `.solid.mx` module (an object, an array `[ ... ]` or a renderable
-    // `(fn)`), or `(({ ... } satisfies T) as any)` as the emitter writes it.
-    const probe = new RegExp(`${escapeRegExp(name)}=\\{(\\(*)`, "g");
+    // The value is one occurrence's object, `{ ... }`, as the record helper's
+    // argument (`name={__mxAttrTag({ ... })}`) or, untyped, bare. A fold
+    // (several occurrences, or one under `<if>`/`<for>`) is an IIFE whose
+    // objects are not mapped here.
+    const probe = new RegExp(
+      `${escapeRegExp(name)}=\\{(?:${ATTR_TAG_RECORD}\\()?`,
+      "g",
+    );
     probe.lastIndex = generatedCursors.get(name) ?? 0;
     const probeMatch = probe.exec(generated);
     if (!probeMatch) continue;
-    const probeStart = probeMatch.index;
-    let generatedStart = probeStart;
-    const parens = probeMatch[1]?.length ?? 0;
-    const valueStart = probeStart + probeMatch[0].length - parens;
-    const keyword = " satisfies";
-    // TypeScript reports a failed `satisfies` on the keyword, so the span
-    // reaches over it: this tag's own, not an inner one's.
-    // `((n) => ...) satisfies T` opens with two parens too, so the wrapped
-    // depth is tried first and the bare one second.
-    let keywordStart = -1;
-    for (const depth of parens >= 2 ? [2, 0] : [0]) {
-      keywordStart = satisfiesKeyword(generated, valueStart, keyword, depth);
-      if (keywordStart >= 0) break;
-    }
-    let generatedEnd: number;
-    if (keywordStart >= 0) {
-      generatedEnd = keywordStart + keyword.length;
-      // Only an object or array literal is mapped whole (its properties map
-      // exactly inside it). A renderable's body is real authored code with
-      // its own mappings, which a span over it would shadow, so only the
-      // keyword is anchored on the tag.
-      const opener = valueStart + parens;
-      const close = "{[".includes(generated[opener] ?? "")
-        ? matchingClose(generated, opener)
-        : -1;
-      if (
-        close < 0 ||
-        !/^\)*$/.test(generated.slice(close + 1, keywordStart))
-      ) {
-        generatedStart = keywordStart;
-      }
-    } else if (generated[valueStart] === "{") {
-      // Untyped object: this tag's *own* closing `}`, not an inner tag's.
-      const close = matchingClose(generated, valueStart);
-      if (close < 0) continue;
-      generatedEnd = close + 1;
-    } else {
-      continue;
-    }
+    const generatedStart = probeMatch.index;
+    const valueStart = probeMatch.index + probeMatch[0].length;
+    if (generated[valueStart] !== "{") continue;
+    // This tag's *own* closing `}`, not an inner tag's.
+    const close = matchingClose(generated, valueStart);
+    if (close < 0) continue;
+    const generatedEnd = close + 1;
     generatedCursors.set(name, generatedEnd);
-    tags.push({
+    const properties = attributePropertyMappings(
+      source,
       sourceStart,
+      generated,
       generatedStart,
       generatedEnd,
-      properties: attributePropertyMappings(
-        source,
+    );
+    // The body (`content: ...`) is authored code with mappings of its own,
+    // which the whole-object fallback would shadow: its value is punched out
+    // like a property but never mapped here. Its first and last characters
+    // stay on the tag name, so an error TypeScript reports on the whole value
+    // (a body whose params do not match the declared `content`) lands there.
+    const body = contentValueRange(generated, valueStart, close);
+    if (body && body.end - body.start > 2) {
+      const hole = fallbackSpan(
         sourceStart,
-        generated,
-        generatedStart,
-        generatedEnd,
-      ),
-    });
+        body.start + 1,
+        body.end - body.start - 2,
+      );
+      holes.add(hole);
+      properties.push(hole);
+      properties.sort(
+        (left, right) =>
+          (left.generatedOffsets[0] ?? 0) - (right.generatedOffsets[0] ?? 0),
+      );
+    }
+    tags.push({ sourceStart, generatedStart, generatedEnd, properties });
   }
 
   // Every property mapping across every tag, owner-tagged and sorted once:
@@ -1351,7 +1339,7 @@ export function attributeTagDiagnosticMappings(
       // A nested tag's own property is punched out of every ancestor's
       // fallback above, but pushed into the result only once, from its
       // owning tag's own turn through this loop.
-      if (owner === tag) mappings.push(property);
+      if (owner === tag && !holes.has(property)) mappings.push(property);
       cursor = propertyStart + propertyLength;
     }
     if (cursor < tag.generatedEnd) {
@@ -1366,9 +1354,9 @@ export function attributeTagDiagnosticMappings(
 /**
  * The index of the bracket that closes the one opened at `open` (an object
  * or array literal after an attribute tag's `name={`), found by
- * bracket-depth scanning rather than the first `} satisfies ` in the text —
- * a component nested inside this tag's body can itself take an attribute
- * tag, whose own `{ ... } satisfies ...}` prints *inside* this one and
+ * bracket-depth scanning rather than the first `}` in the text — a
+ * component nested inside this tag's body can itself take an attribute
+ * tag, whose own `{ ... }` prints *inside* this one and
  * would otherwise be mistaken for this tag's own close. Quote-aware for the
  * same reason `topLevelCommaOrEnd` is. Returns `-1` if the depth never
  * returns to 0 before the text ends (malformed input, defensively refused
@@ -1395,35 +1383,43 @@ function matchingClose(text: string, open: number): number {
 }
 
 /**
- * The index of the ` satisfies` that belongs to the value starting at `open`:
- * the first one at bracket depth `depth` (0 when the value is printed bare,
- * 2 inside the emitter's `((value) satisfies T) as any)` wrapper); anything
- * nested in the value sits deeper. Quote-aware like `matchingClose`;
- * `-1` when the value closes first.
+ * The generated range of the `content` property's value in the object literal
+ * whose braces are at `open` and `close`: a key at the object's own depth
+ * (`content:` or `"content":`), its value running to the next top-level comma
+ * or the close. `undefined` when the occurrence has no body.
  */
-function satisfiesKeyword(
+function contentValueRange(
   text: string,
   open: number,
-  keyword: string,
-  depth: number,
-): number {
-  let level = 0;
+  close: number,
+): { start: number; end: number } | undefined {
+  let depth = 0;
   let quote: string | undefined;
-  for (let i = open; i < text.length; i++) {
-    const char = text[i];
+  let keyStart = true;
+  for (let i = open + 1; i < close; i++) {
+    const char = text[i] ?? "";
     if (quote) {
       if (char === "\\") i++;
       else if (char === quote) quote = undefined;
       continue;
     }
+    if (depth === 0 && keyStart && !/\s/.test(char)) {
+      keyStart = false;
+      const key = /^(?:content|"content")\s*:/.exec(text.slice(i, close));
+      if (key) {
+        let start = i + key[0].length;
+        let end = topLevelCommaOrEnd(text, start, close);
+        while (start < end && /\s/.test(text[start] ?? "")) start++;
+        while (end > start && /\s/.test(text[end - 1] ?? "")) end--;
+        return { start, end };
+      }
+    }
     if (char === '"' || char === "'" || char === "`") quote = char;
-    else if (char === "{" || char === "(" || char === "[") level++;
-    else if (char === "}" || char === ")" || char === "]") {
-      level--;
-      if (level < 0) return -1;
-    } else if (level === depth && text.startsWith(keyword, i)) return i;
+    else if (char === "(" || char === "[" || char === "{") depth++;
+    else if (char === ")" || char === "]" || char === "}") depth--;
+    else if (char === "," && depth === 0) keyStart = true;
   }
-  return -1;
+  return undefined;
 }
 
 function escapeRegExp(text: string): string {

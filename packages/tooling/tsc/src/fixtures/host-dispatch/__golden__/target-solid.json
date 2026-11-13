@@ -283,14 +283,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import Card from \"./Card.mx\"\nexport interface Input {}\nexport default function Plain(input: Input) { return <><Card tab={undefined} /><p>plain</p></>; }",
+        "generated": "type __MxAttrTag<T> = T & { [Symbol.iterator](): Iterator<T>; readonly length: number; at(index: number): T | undefined; map<U>(fn: (item: T, index: number) => U): U[]; filter(fn: (item: T, index: number) => unknown): T[]; toArray(): T[] };\ntype __MxAttrTagMember = typeof Symbol.iterator | \"length\" | \"at\" | \"map\" | \"filter\" | \"toArray\";\nconst __mxAttrTagEmpty: never[] = [];\nconst __mxAttrTagRest = Symbol(\"Attribute Tag\");\nconst __mxAttrTagProto = Object.create(Object.prototype, {\n  length: { get(this: any): number { return 1 + this[__mxAttrTagRest].length; } },\n  toArray: { value(this: any): any[] { return [this, ...this[__mxAttrTagRest]]; } },\n  at: {\n    value(this: any, index: number): any {\n      const all = [this, ...this[__mxAttrTagRest]];\n      const at = Math.trunc(index) || 0;\n      return all[at < 0 ? at + all.length : at];\n    },\n  },\n  map: { value(this: any, fn: (item: any, index: number) => any): any[] { return [this, ...this[__mxAttrTagRest]].map((item, index) => fn(item, index)); } },\n  filter: { value(this: any, fn: (item: any, index: number) => unknown): any[] { return [this, ...this[__mxAttrTagRest]].filter((item, index) => fn(item, index)); } },\n});\nfunction* __mxAttrTagIterator(this: any): Generator<any> {\n  yield this;\n  yield* this[__mxAttrTagRest];\n}\nfunction __mxAttrTag<T = {}>(attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>): __MxAttrTag<T> {\n  (attrs as any)[Symbol.iterator] = __mxAttrTagIterator;\n  (attrs as any)[__mxAttrTagRest] = __mxAttrTagEmpty;\n  return Object.setPrototypeOf(attrs, __mxAttrTagProto);\n}\nfunction __mxAttrTags<A extends object | undefined, T extends object>(first: A, attrs: T): __MxAttrTag<T | (A extends __MxAttrTag<infer U> ? U : never)> {\n  if (first) {\n    const record: any = first;\n    if (record[__mxAttrTagRest] === __mxAttrTagEmpty) record[__mxAttrTagRest] = [attrs];\n    else record[__mxAttrTagRest].push(attrs);\n    return record;\n  }\n  return __mxAttrTag(attrs) as any;\n}\nimport Card from \"./Card.mx\"\nexport interface Input {}\nexport default function Plain(input: Input) { return <><Card tab={__mxAttrTag({  })} /><p>plain</p></>; }",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              0
+              1994
             ],
             "lengths": [
               28
@@ -307,7 +307,7 @@
               31
             ],
             "generatedOffsets": [
-              111
+              2105
             ],
             "lengths": [
               4
@@ -324,10 +324,50 @@
               38
             ],
             "generatedOffsets": [
-              116
+              2110
             ],
             "lengths": [
               3
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              38
+            ],
+            "generatedOffsets": [
+              2127
+            ],
+            "lengths": [
+              3
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              38
+            ],
+            "generatedOffsets": [
+              2130
+            ],
+            "lengths": [
+              3
+            ],
+            "generatedLengths": [
+              1
             ],
             "data": {
               "verification": true,
@@ -342,7 +382,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import Card from \"./Card.mx\"\nexport interface Input {}\nexport default function Plain(input: Input) { return <><Card tab={undefined} /><p>plain</p></>; }",
+        "code": "type __MxAttrTag<T> = T & { [Symbol.iterator](): Iterator<T>; readonly length: number; at(index: number): T | undefined; map<U>(fn: (item: T, index: number) => U): U[]; filter(fn: (item: T, index: number) => unknown): T[]; toArray(): T[] };\ntype __MxAttrTagMember = typeof Symbol.iterator | \"length\" | \"at\" | \"map\" | \"filter\" | \"toArray\";\nconst __mxAttrTagEmpty: never[] = [];\nconst __mxAttrTagRest = Symbol(\"Attribute Tag\");\nconst __mxAttrTagProto = Object.create(Object.prototype, {\n  length: { get(this: any): number { return 1 + this[__mxAttrTagRest].length; } },\n  toArray: { value(this: any): any[] { return [this, ...this[__mxAttrTagRest]]; } },\n  at: {\n    value(this: any, index: number): any {\n      const all = [this, ...this[__mxAttrTagRest]];\n      const at = Math.trunc(index) || 0;\n      return all[at < 0 ? at + all.length : at];\n    },\n  },\n  map: { value(this: any, fn: (item: any, index: number) => any): any[] { return [this, ...this[__mxAttrTagRest]].map((item, index) => fn(item, index)); } },\n  filter: { value(this: any, fn: (item: any, index: number) => unknown): any[] { return [this, ...this[__mxAttrTagRest]].filter((item, index) => fn(item, index)); } },\n});\nfunction* __mxAttrTagIterator(this: any): Generator<any> {\n  yield this;\n  yield* this[__mxAttrTagRest];\n}\nfunction __mxAttrTag<T = {}>(attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>): __MxAttrTag<T> {\n  (attrs as any)[Symbol.iterator] = __mxAttrTagIterator;\n  (attrs as any)[__mxAttrTagRest] = __mxAttrTagEmpty;\n  return Object.setPrototypeOf(attrs, __mxAttrTagProto);\n}\nfunction __mxAttrTags<A extends object | undefined, T extends object>(first: A, attrs: T): __MxAttrTag<T | (A extends __MxAttrTag<infer U> ? U : never)> {\n  if (first) {\n    const record: any = first;\n    if (record[__mxAttrTagRest] === __mxAttrTagEmpty) record[__mxAttrTagRest] = [attrs];\n    else record[__mxAttrTagRest].push(attrs);\n    return record;\n  }\n  return __mxAttrTag(attrs) as any;\n}\nimport Card from \"./Card.mx\"\nexport interface Input {}\nexport default function Plain(input: Input) { return <><Card tab={__mxAttrTag({  })} /><p>plain</p></>; }",
         "map": null,
         "warnings": []
       }

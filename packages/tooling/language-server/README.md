@@ -87,8 +87,8 @@ annotates `function Card(input: Input)`, so a wrong prop (`<Card title=1/>`
 against `title: string`) is TS2322 wherever diagnostics come from a
 virtual-code type-check (the TypeScript plugin — this server's own
 `TranslateError`-based diagnostics are compile-time only and report a
-compile-time error like an unresolved tag as before). AttrTag props are also
-checked via `satisfies` at the call site.
+compile-time error like an unresolved tag as before). An attribute-tag
+record is checked against the callee's `AttrTag` prop the same way.
 
 The resolver lives in `@mxlang/core` (`src/host-policy.ts`), shared with
 `@mxlang/typescript-plugin`; see `src/host-policy.test.ts` there for every

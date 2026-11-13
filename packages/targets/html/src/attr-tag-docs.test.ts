@@ -136,70 +136,14 @@ describe("AttrTag documentation snippets on the HTML host", () => {
 
   it.each([
     [
-      "repeated singular",
+      "control-flow mixing",
       "export interface Input { head?: AttrTag }\n<section/>",
-      "<Card><@head>A</@head><@head>B</@head></Card>",
-      "`<@head>` may appear at most once (`head` is declared `AttrTag`, not `AttrTag[]`)",
-    ],
-    [
-      "singular in a loop",
-      "export interface Input { head?: AttrTag }\n<section/>",
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in documentation source
-      "<Card><for|x| of=input.xs><@head>${x}</@head></for></Card>",
-      "`<@head>` may not appear inside `<for>` (`head` is declared `AttrTag`, not `AttrTag[]`)",
-    ],
-    [
-      "missing required",
-      "export interface Input { head: AttrTag }\n<section/>",
-      "<Card/>",
-      "missing required attribute tag `<@head>`",
-    ],
-    [
-      "required conditional",
-      "export interface Input { head: AttrTag }\n<section/>",
-      "<Card><if=input.ok><@head>A</@head></if></Card>",
-      "`<@head>` is required but not provided on every `<if>` path",
-    ],
-    [
-      "missing params",
-      "export interface Input { row: AttrTag<{ params: [item: string] }> }\n<section/>",
-      "<Card><@row>R</@row></Card>",
-      "`<@row>` declares params in `<Card>`; add `|…|`",
-    ],
-    [
-      "extra params",
-      "export interface Input { row: AttrTag }\n<section/>",
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in documentation source
-      "<Card><@row|item|>${item}</@row></Card>",
-      "`<@row>` declares no params in `<Card>`; remove `|…|`",
-    ],
-    [
-      "data rendered directly",
-      undefined,
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in documentation source
-      "export interface Input { head: AttrTag }\n<${input.head}/>",
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: diagnostic intentionally quotes Marko syntax
-      "`input.head` is a data attribute tag; render its body with `<${input.head.content}/>`",
-    ],
-    [
-      "uncalled data params",
-      undefined,
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in documentation source
-      "export interface Input { row: AttrTag<{ params: [item: string] }> }\n<${input.row.content}/>",
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: diagnostic intentionally quotes Marko syntax
-      "`input.row.content` is a parameterized attribute tag; pass its arguments with `<${input.row.content(/* arguments */)}/>`",
-    ],
-    [
-      "uncalled renderable params",
-      undefined,
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in documentation source
-      'export interface Input { row: AttrTag<{ as: "renderable"; params: [item: string] }> }\n<${input.row}/>',
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: diagnostic intentionally quotes Marko syntax
-      "`input.row` is a parameterized attribute tag; pass its arguments with `<${input.row(/* arguments */)}/>`",
+      "<Card><if=input.ok><@head/> <p>x</p></if></Card>",
+      "Cannot have attribute tags and body content under a control flow tag.",
     ],
     [
       "reserved content",
-      "export interface Input { head?: AttrTag<{ attrs: { content?: string } }> }\n<section/>",
+      "export interface Input { head?: AttrTag }\n<section/>",
       '<Card><@head content="x">H</@head></Card>',
       "`content` is reserved on an attribute tag; it names the body",
     ],

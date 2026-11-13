@@ -22,60 +22,6 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-function reactTypedCallee(dir: string): void {
-  writeFileSync(
-    join(dir, "Card.mx"),
-    'import type { AttrTag } from "@mxlang/host-react"\nexport interface Input { header: AttrTag }\n<div/>\n',
-  );
-}
-
-describe("round 2 cross-target attribute tags", () => {
-  it("reports the required header of a react-typed callee from a solid page", () => {
-    const dir = project();
-    reactTypedCallee(dir);
-    const dependencies = new Set<string>();
-    const diagnostics = diagnoseDocument(
-      'import Card from "./Card.mx"\n<Card/>\n',
-      join(dir, "page.mx"),
-      { target: "solid-jsx", host: "solid" },
-    );
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.message).toContain(
-      "missing required attribute tag `<@header>`",
-    );
-    // The existing Solid compiler returns dependencies on success, but does
-    // not attach them to failed compiles. Pin its supported return path here;
-    // changing its error contract is separate from forwarding the lookup.
-    expect(
-      diagnoseDocument(
-        'import Card from "./Card.mx"\n<Card><@header>Header</@header></Card>\n',
-        join(dir, "page.mx"),
-        { target: "solid-jsx", host: "solid" },
-        undefined,
-        "mx",
-        undefined,
-        undefined,
-        dependencies,
-      ),
-    ).toEqual([]);
-    expect(dependencies).toContain(join(dir, "Card.mx"));
-  });
-
-  it("reports the required header of a react-typed callee from a solid region", () => {
-    const dir = project();
-    reactTypedCallee(dir);
-    const diagnostics = diagnoseDocument(
-      'import Card from "./Card.mx";\nexport const view = () => <Card/>;\n',
-      join(dir, "page.solid.mx"),
-      { target: "solid-jsx", host: "solid" },
-    );
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.message).toContain(
-      "missing required attribute tag `<@header>`",
-    );
-  });
-});
-
 const languageIds = ["ngmx", "astromx"] as const;
 const filenames = ["page.mx", "X.SOLID.MX", "x.Solid.mx", "a.b.mx"] as const;
 describe("round 2 silent-kind language-id matrix", () => {

@@ -54,7 +54,6 @@ function declarations(
 ): HostDeclarations {
   return {
     tags: {},
-    attrTags: 2,
     isElement: (name) => /^[a-z]/.test(name),
     isComponent: (name, ctx) => ctx.defines.has(name),
     ...overrides,

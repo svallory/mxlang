@@ -582,6 +582,9 @@ export function calleeReturn(
   if (hostModuleSegment(basename(resolved.path), ctx.targets) !== undefined) {
     return { shape: "unknown" };
   }
+  // What `/var` may bind depends on the callee's `<return>`, so the callee is
+  // a dependency of this compile whether or not it reads.
+  recordDependencies(ctx, [resolved.path]);
   try {
     const { mtimeMs, source } = sourceSnapshot(resolved.path);
     const metadata = metadataForTemplate(ctx, {
@@ -592,9 +595,8 @@ export function calleeReturn(
     if (metadata.pending === true) return { shape: "unknown" };
     return { shape: metadata.returnsValue === true ? "returns" : "none" };
   } catch (error) {
-    // Without `/var` an unreadable or non-compiling callee is reported by
-    // `readCalleeInput` at this same call; the cause is handed back so a
-    // `/var` on it can name it too.
+    // An unreadable or non-compiling callee is reported by its own compile;
+    // the cause is handed back so a `/var` on it can name it.
     const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
     return {
       shape: "unknown",

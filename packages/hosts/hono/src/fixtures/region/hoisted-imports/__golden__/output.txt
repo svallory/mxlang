@@ -7,7 +7,9 @@ import $mx_Badge1 from "./tags/badge.mx";const __mxAttrValue = ((validate: (name
   // the symbol's description since these are plain Symbol()s (not
   // Symbol.for(...)), so identity cannot be compared across a second React
   // copy.
-  const description = marker.description;return description === "react.memo" || description === "react.forward_ref" || description === "react.lazy";}function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boolean) {if (!target) {// Marko parity: a falsy renderer (null, undefined, false, 0, the empty
+  const description = marker.description;return description === "react.memo" || description === "react.forward_ref" || description === "react.lazy";}function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boolean) {// Marko parity: an attribute-tag record (any object with `content`)
+  // renders its body, as Marko's dynamic tag reads `value.content`.
+  if (target && typeof target === "object" && !__mxIsHostComponentObject(target) && target.content) target = target.content;if (!target) {// Marko parity: a falsy renderer (null, undefined, false, 0, the empty
     // string) renders no tag of its own; the body renders independently,
     // threaded as the third-argument content or the props object's own
     // content key — and nothing at all renders for a self-closing call

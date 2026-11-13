@@ -141,7 +141,6 @@ describe("html: what the emitter assumes about the IR (ir-spec 10.2)", () => {
         content: null,
         attributeTags: [],
         attributeTagTree: [],
-        attrTagProps: [],
         args: [],
         nameSpan: null,
         loc: { line: 1, column: 0 },
@@ -176,23 +175,5 @@ describe("html: what the emitter assumes about the IR (ir-spec 10.2)", () => {
     expect(authored).toContain("i <= __mxFor1");
     expect(exclusive).toContain("i < __mxFor1");
     expect(exclusive).not.toBe(authored);
-  });
-
-  it("E16: a single attrTagProps value holding a <for> is an internal plan error", () => {
-    const source =
-      "<define/Card|x|>${x}</define>\n<Card(1)><@head>h</@head></Card>";
-    const position = { line: 2, column: 9 };
-    expect(() =>
-      emitted(source, (ir) => {
-        for (const node of all(ir.body, "Component")) {
-          const prop = node.attrTagProps[0];
-          if (!prop) continue;
-          prop.cardinality = "single";
-          prop.source = [
-            { kind: "AttributeTagFor", nodes: [], loc: position } as never,
-          ];
-        }
-      }),
-    ).toThrow("internal attribute-tag plan error");
   });
 });

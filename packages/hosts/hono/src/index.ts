@@ -1,7 +1,6 @@
 import {
-  type AttrTagConfig,
-  type AttrTagOf,
   type CompileResult,
+  type AttrTag as CoreAttrTag,
   createTargetLookup,
   type RawSourceMap,
   type TargetLookup,
@@ -47,11 +46,17 @@ export {
 } from "./dialect.ts";
 export type { CompileResult, RawSourceMap };
 
-/** Attribute-tag value specialised to Hono's renderable child type. */
+/**
+ * The attribute-tag record a Hono component receives (spec §8): the
+ * first occurrence, carrying every later one, with `map`, `filter`,
+ * `length`, `at` and `toArray`. `T` is one occurrence's attributes; its
+ * `content` is `Child` unless `T` declares its own, as a tag
+ * with params does (`content: (row: Row) => …`).
+ */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default
-  C extends AttrTagConfig = {},
-> = AttrTagOf<C, Child>;
+  // biome-ignore lint/complexity/noBannedTypes: an attribute tag with no attributes
+  T extends object = {},
+> = CoreAttrTag<"content" extends keyof T ? T : T & { content?: Child }>;
 
 /**
  * Compiles a whole-file MX template to a Hono JSX component module.

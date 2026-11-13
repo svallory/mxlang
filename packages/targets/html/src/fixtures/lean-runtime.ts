@@ -5,8 +5,6 @@
  * every run. `lean-runtime.check.ts` fails the typecheck gate if any name here
  * drifts from the real one. Test-only: excluded from the build.
  */
-import type { AttrTagAttrs, AttrTagConfig, AttrTagParams } from "@mxlang/core";
-
 // biome-ignore lint/suspicious/noShadowRestrictedNames: must match the real export name
 export declare function escape(value: unknown): string;
 
@@ -20,11 +18,17 @@ export interface BufferedOut extends Out {
 export declare function createOut(): Out;
 export declare function createBufferedOut(parent: Out): BufferedOut;
 
+type AttrTagRecord<T> = T & {
+  [Symbol.iterator](): Iterator<T>;
+  readonly length: number;
+  at(index: number): T | undefined;
+  map<U>(fn: (item: T, index: number) => U): U[];
+  filter(fn: (item: T, index: number) => unknown): T[];
+  toArray(): T[];
+};
 export type AttrTag<
   // biome-ignore lint/complexity/noBannedTypes: mirrors the public AttrTag default
-  C extends AttrTagConfig = {},
-> = C["as"] extends "renderable"
-  ? (...args: AttrTagParams<C>) => string
-  : AttrTagAttrs<C> & {
-      content?: (...args: AttrTagParams<C>) => string;
-    };
+  T extends object = {},
+> = AttrTagRecord<
+  "content" extends keyof T ? T : T & { content?: () => string }
+>;

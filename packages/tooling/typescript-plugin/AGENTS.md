@@ -314,20 +314,26 @@ typecheck inputs.
 
 ## Attribute-tag call sites and callee dependencies (phase 4a)
 
-A caller's attribute-tag value is emitted with `satisfies
-NonNullable<Parameters<typeof Callee>[0]["tag"]>`, so TypeScript checks it
-against the callee's declared `AttrTag` type. The emitted *shape* comes from
-core reading the callee's `Input`; the *types* come from TypeScript resolving
-the callee module.
+A caller's attribute-tag value is Marko's record, the same text whatever the
+callee declares (spec §8): `__mxAttrTag({...})` for a lone occurrence, a fold
+of `__mxAttrTags` steps otherwise. `__mxAttrTag` takes its `T` from the
+callee's prop (`NoInfer` on its argument), so TypeScript, resolving the callee
+module itself, checks each attribute where it is written; a missing attribute
+and a fold's mismatch are reported at the tag name, because both braces and
+the `content` key map there. Core reads nothing from the callee for this. In a
+reprinted `.solid.mx` region, `attributeTagDiagnosticMappings`
+(`src/language.ts`) finds each `name={__mxAttrTag({ ... })}` and maps every
+`"key": value` property to its authored attribute, the rest of the object to
+the tag name.
 
 **A test that reports through Volar cannot prove what the emitted
 TypeScript checks.** Volar by itself drops a diagnostic whose
 position has no mapping, and most of an attribute-tag value is generated code;
 such a diagnostic is now reported at its enclosing tag or attribute, which says little
 about *what* was wrong, so assert on the emitted text for anything about types. The Solid and Preact
-emitters once applied `satisfies` to the wrong expression (`() => x
-satisfies T`), every valid caller's virtual code carried a TS1360, and
-`mx-tsc` and the plugin service both stayed clean. `emittedDiagnostics`
+emitters once wrapped a value in a type check that bound to the wrong
+expression, every valid caller's virtual code carried a TS1360, and `mx-tsc`
+and the plugin service both stayed clean. `emittedDiagnostics`
 (`src/index.test.ts`) type-checks the emitted text itself and returns every
 diagnostic; use it for anything about the generated code's types.
 
@@ -357,7 +363,7 @@ diagnostic; use it for anything about the generated code's types.
   a dependency cycle or a pathological chain still terminates (fix for
   `compile-with-dependencies-nesting-limit`, filed from PR #149). **A real
   chain reaches this**: a callee's `AttrTag<Alias>` — the whole type
-  argument, not a nested field reference like `AttrTag<{ attrs: Alias }>` —
+  argument, not a nested field reference like `AttrTag<{ title: Alias }>` —
   can itself alias a type `import type`-ed from a further file, which
   `readCalleeInput`'s own `resolveNamedType`
   (`packages/core/src/callee-input.ts`) follows across files up to
@@ -367,14 +373,11 @@ diagnostic; use it for anything about the generated code's types.
   retry's own compile, with no further pass to read it fresh — pinned by
   `compileWithDependencies against a real readCalleeInput compile` in
   `src/index.test.ts`, driven through the real `readCalleeInput`, not a
-  synthetic callback. **The nested-field-reference shape
-  (`AttrTag<{ attrs: Alias }>`) is not subject to this at all**: measured by
-  instrumenting `compileWithDependencies` directly, a type referenced only
-  that way never enters `ctx.dependencies` in the first place — it is
-  resolved entirely through the emitted `satisfies
-  NonNullable<Parameters<typeof Callee>[0]["tag"]>` reference, which
-  TypeScript's own live module graph re-checks on every edit regardless of
-  this function (see the next bullet).
+  synthetic callback. Attribute tags no longer reach this path at all: their
+  types are checked through the emitted record against the callee's prop,
+  which TypeScript's own live module graph re-checks on every edit regardless
+  of this function (see the next bullet); `readCalleeInput` is still called
+  by Angular.
   **Reaching the cap without settling is not silent (compile-deps-cap-warning,
   fix-forward for PR #150).** When the loop falls through all
   `MAX_COMPILE_PASSES` passes still finding a new dependency set or new

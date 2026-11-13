@@ -14,12 +14,7 @@
  * here, keeping the entry graph acyclic (rev-245 BUG 1).
  */
 
-import type {
-  AttrTagAttrs,
-  AttrTagConfig,
-  AttrTagParams,
-  CompileResult,
-} from "@mxlang/core";
+import type { CompileResult, AttrTag as CoreAttrTag } from "@mxlang/core";
 import {
   createTargetLookup,
   type RawSourceMap,
@@ -46,15 +41,17 @@ export {
 export { policy, strictPolicy, TranslateError } from "./translate.ts";
 export type { CompileHtmlResult, CompileOptions, CompileResult, RawSourceMap };
 
-/** Attribute-tag value received by an `@mxlang/target-html` component. */
+/**
+ * The attribute-tag record an `@mxlang/target-html` component receives (spec §8): the
+ * first occurrence, carrying every later one, with `map`, `filter`,
+ * `length`, `at` and `toArray`. `T` is one occurrence's attributes; its
+ * `content` is `() => string` unless `T` declares its own, as a tag
+ * with params does (`content: (row: Row) => …`).
+ */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default
-  C extends AttrTagConfig = {},
-> = C["as"] extends "renderable"
-  ? (...args: AttrTagParams<C>) => string
-  : AttrTagAttrs<C> & {
-      content?: (...args: AttrTagParams<C>) => string;
-    };
+  // biome-ignore lint/complexity/noBannedTypes: an attribute tag with no attributes
+  T extends object = {},
+> = CoreAttrTag<"content" extends keyof T ? T : T & { content?: () => string }>;
 
 /**
  * This package's own target lookup: the one descriptor it exports, bound by

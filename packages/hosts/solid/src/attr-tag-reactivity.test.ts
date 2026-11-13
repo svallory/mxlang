@@ -66,13 +66,13 @@ const document = {
 globalThis.document = document;
 `;
 
-it("keeps accessor content and signal-backed arrays reactive in the client runtime", () => {
+it("keeps accessor content and a signal-backed record reactive in the client runtime", () => {
   const dir = mkdtempSync(join(packageRoot, ".attr-reactivity-"));
   try {
     const callee = join(dir, "Row.tsx");
     writeFileSync(
       callee,
-      'import type { AttrTag } from "@mxlang/host-solid"; export interface Input { item: AttrTag[] }',
+      'import type { AttrTag } from "@mxlang/host-solid"; export interface Input { item?: AttrTag }',
     );
     const compiled = compileSolidMx(
       `<Row><for|value| of=items()><@item>\${value}:\${label()}</@item></for></Row>`,
@@ -92,7 +92,7 @@ it("keeps accessor content and signal-backed arrays reactive in the client runti
       ? compiled.code.slice(1, -1)
       : compiled.code;
     const dynamicCode = `<>{${bare}}</>`;
-    const imports = compiled.hoistedImports
+    const imports = [...compiled.hoistedImports, ...compiled.hoistedDefines]
       .map((entry) => entry.code)
       .join("\n");
     const source = `
@@ -101,7 +101,7 @@ it("keeps accessor content and signal-backed arrays reactive in the client runti
       import { Dynamic, render } from "@solidjs/web";
       const [items, setItems] = createSignal(["a"]);
       const [label, setLabel] = createSignal("A");
-      function Row(input) { return <main><div>{input.item[0]?.content}{input.item[0]?.content}</div><div><Dynamic component={input.item[0]?.content}/></div><div><For each={input.item}>{item => <i>{item.content}</i>}</For></div></main>; }
+      function Row(input) { return <main><div>{input.item?.at(0)?.content}{input.item?.at(0)?.content}</div><div><Dynamic component={input.item?.at(0)?.content}/></div><div><For each={input.item?.toArray()}>{item => <i>{item.content}</i>}</For></div></main>; }
       const root = document.createElement("root");
       render(() => ${dynamicCode}, root);
       const before = root.textContent;

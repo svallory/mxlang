@@ -7,9 +7,7 @@
         },
         "diagnostics": [],
         "related": [],
-        "dependencies": [
-          "<root>/default-tag-html/tags/my-card.mx"
-        ],
+        "dependencies": [],
         "unexpected": []
       },
       "tsPlugin": {

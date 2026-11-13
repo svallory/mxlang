@@ -31,7 +31,6 @@ const label = (message: string) =>
 
 const host: HostDeclarations = {
   name: "stock-colon-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

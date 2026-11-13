@@ -1,5 +1,4 @@
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
@@ -19,7 +18,6 @@ import { lookup } from "./test-targets.ts";
 
 const claimAll: HostDeclarations = {
   name: "spans-test",
-  attrTags: 2,
   tags: {},
   isElement: () => false,
   isComponent: () => false,
@@ -29,7 +27,6 @@ const claimAll: HostDeclarations = {
 
 const elements: HostDeclarations = {
   name: "spans-test",
-  attrTags: 2,
   tags: {},
   nativeTags: WEB_ELEMENTS,
   isElement: () => true,
@@ -661,56 +658,4 @@ describe("an import's names", () => {
     expect(name && slice(own, name.localSpan)).toBe("a");
     expect(name?.localSpan?.sourceStart).toBe(14);
   });
-});
-
-describe("the range of a declared singular attribute tag inside `for`", () => {
-  // `forNameEnd`: the range ends at the `for` name, whether the loop is written
-  // with a `<` or in the indent syntax, which has none.
-  const caller = fileURLToPath(
-    new URL("./fixtures/callee-input/caller.mx", import.meta.url),
-  );
-  const open = 'import Card from "./compile-callee"\n';
-
-  function rangeOf(body: string): { start: number[]; end: number[] } {
-    let error: unknown;
-    try {
-      compileSource(
-        `${open}${body}`,
-        caller,
-        { ...elements, attrTags: 2 },
-        {
-          targets: lookup,
-          emitIr: () => "",
-        },
-      );
-    } catch (caught) {
-      error = caught;
-    }
-    const { line, column, end } = error as {
-      line: number;
-      column: number;
-      end: { line: number; column: number };
-    };
-    return { start: [line, column], end: [end.line, end.column] };
-  }
-
-  it.each([
-    ["tag syntax", "<Card><for|x| of=a><@header/></for></Card>\n", 2, 6],
-    ["indent syntax", "Card\n  for|x| of=a\n    @header\n", 3, 2],
-    [
-      "indent syntax, inside an `if`",
-      "Card\n  if=a\n    for|x| of=a\n      @header\n",
-      4,
-      4,
-    ],
-  ])(
-    "%s: ends after `for`, not after the character past it",
-    (_n, body, line, column) => {
-      const { start, end } = rangeOf(body);
-      expect(start).toEqual([line, column]);
-      expect(end[0]).toBe(line);
-      const text = `${open}${body}`.split("\n")[line - 1] as string;
-      expect(text.slice(start[1], end[1]).replace(/^</, "")).toBe("for");
-    },
-  );
 });

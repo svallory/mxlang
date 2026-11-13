@@ -79,8 +79,8 @@ Three facts worth knowing before touching it:
   the types through (it does not strip them), and vite's own transform erases
   them (`examples/counter-app/e2e/whole-file.spec.ts` builds and renders one).
   An earlier version dropped `Input` on the belief that Solid's compiler has no
-  TypeScript frontend; that was wrong. AttrTag props are additionally checked
-  through a `satisfies` assertion at the call site.
+  TypeScript frontend; that was wrong. An attribute-tag record is checked
+  against the callee's `AttrTag` prop where it is written.
 - **Every expression value is recorded as a mapping (`mappedExpr`), and a
   whole-file unit maps its module statements too** (TODO `solid-mx-tsc-silent`).
   `descriptor.mappings` is `"merge-recorded"`: the TypeScript plugin does not
@@ -197,35 +197,29 @@ Three facts worth knowing before touching it:
   run-time fact (the resolved target's type), so `#dynamicComponent` emits
   two `<Dynamic>` branches behind its existing `typeof` guard rather than
   one conditional attribute list. See spec §15 item 11 for the full detail.
-- **Attribute-tag values are accessors on Solid.** This
-  host declares `attrTags: 2` and emits only core's resolved `attrTagProps`.
-  Solid 2.0.0-rc.7 client measurements rule out an eager JSX value (one DOM
-  node moves when rendered twice) and a getter (fresh nodes, but the value
-  handed to `<Dynamic>` is not a component). The reusable renderable is
-  `() => SolidElement`: it stays live, renders more than once, works through
-  direct insertion and `<Dynamic>`, and composes inside reactive arrays.
-  Parameters add the outer render-prop function, `(p) => () => JSX`.
-  Consumers pass those parameters at the dynamic call site
-  (`<${input.item.content("Ada")}/>` for data,
-  `<${input.item("Ada")}/>` for renderable). Escaped root interpolations use
-  Solid's public server `escape` helper while retaining the original value in
-  the browser, which preserves both SSR safety and reactive DOM insertion.
-- **A declared attribute-tag value carries its type at the call site.** Each
-  concrete singular occurrence is emitted as `((value) satisfies
-  NonNullable<Parameters<typeof Callee>[0]["name"]>)`, so `mx-tsc` and the
-  tsserver plugin check it against the callee's `AttrTag`; an undeclared
-  property is emitted bare. The inner parentheses are load-bearing: every
-  Solid renderable is an accessor, and `satisfies` binds tighter than an
-  arrow function, so `() => <>B</> satisfies T` checks the returned fragment
-  against a function type and fails (TS1360). The same rule puts the check
-  on each occurrence inside a conditional plan rather than around it, since
-  `test ? a : undefined satisfies T` checks only `undefined`; a bodiless
-  renderable carries none. `compileSolidMx` also takes an optional
-  `warnings` array for core's non-fatal diagnostics. A wrong attribute
-  type is reported on the attribute itself, not the tag name (a
-  *missing* attribute still reports on the tag name, since there is no
-  attribute text to point at) — see `solid-attr-tag-attr-offset` in
-  `packages/tooling/typescript-plugin/AGENTS.md`.
+- **Attribute-tag values are Marko's record; `content` is an accessor.**
+  Each name of `attributeTagTree` is one `__mxAttrTag({...})` or a fold of
+  `__mxAttrTags` steps, whatever the callee declares (spec §8); the helper is
+  a hoisted define (binding `__mxAttrTag`), so a test harness that evaluates
+  a compiled region must include `compiled.hoistedDefines`. Solid 2.0.0-rc.7
+  client measurements rule out an eager JSX `content` (one DOM node moves
+  when rendered twice) and a getter (fresh nodes, but the value handed to
+  `<Dynamic>` is not a component). `content` is `() => SolidElement`: it stays
+  live, renders more than once, works through direct insertion and
+  `<Dynamic>`, and composes inside reactive arrays. Params add the outer
+  function, `(p) => () => JSX`, called at the dynamic call site
+  (`<${input.item.content("Ada")}/>`). A dynamic tag given a record renders its
+  `content`. Escaped root interpolations use Solid's public server `escape`
+  helper while retaining the original value in the browser, which preserves
+  both SSR safety and reactive DOM insertion.
+- **A typed callee checks the record where it is written.** `__mxAttrTag`
+  takes `T` from the callee's prop (`NoInfer` on its argument): a wrong
+  attribute type is reported on the attribute itself and a missing one on the
+  tag name (`solid-attr-tag-attr-offset` in
+  `packages/tooling/typescript-plugin/AGENTS.md`). A params body that no
+  declared type reaches (a fold, a dynamic tag's or a `<define>`'s props) is
+  cast to `(...args: any[]) => any`. `compileSolidMx` also takes an optional
+  `warnings` array for core's non-fatal diagnostics.
 - **A region receives its surrounding module imports and reports callee
   dependencies.** `compileSolidMx` seeds `ctx.importSpecifiers` from the
   parser bridge and returns `ctx.dependencies`, allowing imported callees to

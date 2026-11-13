@@ -58,7 +58,6 @@ const host: HostDeclarations = {
   isComponent: () => false,
   isDelegatedTag: () => true,
   resolveDefaultTag: () => "setter",
-  attrTags: 2,
 };
 
 type Syntax = Dialect | ReturnType<typeof defaultSyntax>;

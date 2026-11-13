@@ -262,7 +262,7 @@ function callRow(
 // --- Fixtures ------------------------------------------------------------
 
 /** A host that takes attribute tags (the `AttrTag` Input), so the callee rules apply. */
-const ATTR_TAGS = { attrTags: 2, name: "TestHost" };
+const ATTR_TAGS = { name: "TestHost" };
 
 const CARD = `export interface Input {
   head: AttrTag<{ as: "renderable" }>
@@ -291,6 +291,7 @@ const CONTRACTS = {
   leaf: { children: {} },
   wild: { children: { "*": { pattern: "^x-.*$" }, itemx: {} } },
   closed: { children: { item: {} } },
+  deck: { attributeTags: { head: { required: true } } },
 } as unknown as Record<string, CustomTag>;
 
 /** A table with block tags and filters, and no lowering for either. */
@@ -533,6 +534,23 @@ const ROWS: Row[] = [
   lowerRow("MX_TEXT_NOT_ALLOWED", "<closed>\n  hi\n</closed>\n", 2, 2, {
     customTags: CONTRACTS,
   }),
+  lowerRow("MX_MISSING_ATTRIBUTE_TAG", "<deck/>\n", 1, 0, {
+    customTags: CONTRACTS,
+  }),
+  lowerRow(
+    "MX_UNKNOWN_ATTRIBUTE_TAG",
+    "<deck>\n  <@head/>\n  <@nope/>\n</deck>\n",
+    3,
+    2,
+    { customTags: CONTRACTS },
+  ),
+  lowerRow(
+    "MX_REPEATED_ATTRIBUTE_TAG",
+    "<deck>\n  <@head/>\n  <@head/>\n</deck>\n",
+    3,
+    2,
+    { customTags: CONTRACTS },
+  ),
   lowerRow(
     "MX_STRUCTURAL_CONSTRUCT",
     "<x>\n  <if=1>\n    <y/>\n  </if>\n</x>\n",
@@ -563,12 +581,6 @@ const ROWS: Row[] = [
   lowerRow("MX_INVALID_ATTRIBUTE", "<const/x=1 y=2/>\n", 1, 1),
   lowerRow("MX_INVALID_BOUND_ATTRIBUTE", "<x a:=1/>\n", 1, 6),
   lowerRow("MX_INVALID_SHORTHAND", "<div.1/>\n", 1, 5),
-  lowerRow(
-    "MX_INVALID_TAG_CALL",
-    'export interface Input { data?: AttrTag<{ as: "data" }> }\n<${input.data}/>\n',
-    2,
-    1,
-  ),
 
   // Dialect hooks, through the `dialect` option.
   // A template parse error under a dialect's table keeps the parser's code.
@@ -760,47 +772,14 @@ const ROWS: Row[] = [
 
   // Callee `Input` rules (the callee is a file next to the caller).
   calleeRow(
-    "MX_MISSING_ATTRIBUTE_TAG",
-    { "Card.mx": CARD },
-    `${CARD_IMPORT}<Card/>\n`,
-    2,
-    1,
-  ),
-  calleeRow(
-    "MX_UNKNOWN_ATTRIBUTE_TAG",
-    { "Card.mx": CARD },
-    `${CARD_IMPORT}<Card>\n  <@head>H</@head>\n  <@nope/>\n</Card>\n`,
-    4,
-    3,
-  ),
-  calleeRow(
-    "MX_REPEATED_ATTRIBUTE_TAG",
-    { "Card.mx": CARD },
-    `${CARD_IMPORT}<Card>\n  <@head>H</@head>\n  <@head>I</@head>\n</Card>\n`,
-    4,
-    4,
-  ),
-  calleeRow(
     "MX_INVALID_ATTRIBUTE_TAG",
     { "Card.mx": CARD },
     `${CARD_IMPORT}<Card title='x'>\n  <@head>H</@head>\n  <@title>t</@title>\n</Card>\n`,
     4,
     3,
   ),
-  calleeRow(
-    "MX_INVALID_CALLEE_INPUT",
-    { "Bad.mx": BAD_CALLEE },
-    "import Bad from './Bad.mx'\n<Bad>\n  <@x/>\n</Bad>\n",
-    3,
-    4,
-  ),
-  calleeRow(
-    "MX_UNREADABLE_CALLEE_INPUT",
-    {},
-    "import X from './Missing.mx'\n<X>\n  <@x/>\n</X>\n",
-    2,
-    1,
-  ),
+  // A component's own `Input` it cannot read, at the declaration.
+  compileRow("MX_INVALID_CALLEE_INPUT", BAD_CALLEE, 1, 29),
 
   // A template tag (a custom tag with a template) called with what it drops or reserves.
   ...[
@@ -990,6 +969,16 @@ const UNREACHABLE: readonly { code: string; reason: string }[] = [
     code: "MX_TAG_TYPES_MISMATCH",
     reason:
       "only a caller of the parser API passing a `tagTypes` table that disagrees with `tagShape` produces it; lowerSource and dialects refuse `tagTypes`",
+  },
+  {
+    code: "MX_INVALID_TAG_CALL",
+    reason:
+      "raised only for a host module region calling its own file's tag and for a host-taglib tag with no template, neither of which `lowerSource`/`compileSource` reach; its attribute-tag trigger (rendering a declared data tag) went with core's read of the callee's `Input` (spec §8)",
+  },
+  {
+    code: "MX_UNREADABLE_CALLEE_INPUT",
+    reason:
+      "core no longer reads a callee's `Input` for its attribute tags (spec §8), the only read that warned when the callee could not be found; the code stays catalogued for consumers that match on it",
   },
   {
     code: "MX_INVALID_EXPRESSION",

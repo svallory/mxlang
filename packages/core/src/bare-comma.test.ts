@@ -16,7 +16,6 @@ import { lookup } from "./test-targets.ts";
 
 const host: HostDeclarations = {
   name: "bare-comma-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

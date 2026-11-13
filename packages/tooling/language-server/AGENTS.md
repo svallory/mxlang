@@ -190,7 +190,9 @@ that same document fails to compile — measured as the exact bug behind the
 "required" round's diagnosis (which itself reports "missing required
 attribute tag", a compile error) recorded zero dependencies, wiping the edge
 the earlier successful "optional" round had recorded, so the *next* callee
-edit found no caller left to re-diagnose. Fixed in `@mxlang/core`
+edit found no caller left to re-diagnose. (That round's error came from the
+callee's `Input`, which core no longer reads; the rule stands for the scan
+evidence below.) Fixed in `@mxlang/core`
 (`TranslateError.dependencies`, see `packages/core/AGENTS.md`) and forwarded
 here in `diagnoseDocument`'s `catch` block before building the diagnostic.
 
@@ -199,10 +201,9 @@ here in `diagnoseDocument`'s `catch` block before building the diagnostic.
 before compiling: the files the scan itself read (contracts modules, sidecars,
 the dialect module and dialect tag files). Recording them early retains these
 watcher edges even when compilation fails. A core `.mx` template tag file is
-listed by the scan but never read by it, so it is not a scan input: it is a
-dependency only of a caller whose compile resolved it (a callee that fails to
-compile still reports itself), so editing an unused template re-diagnoses no
-caller. Discovery errors carry partial scan evidence and the last complete
+listed by the scan but never read by it, so it is not a scan input, and a
+value host's compile never reads it either (see below), so editing a template
+re-diagnoses no caller. Discovery errors carry partial scan evidence and the last complete
 scan's inputs through `TranslateError.dependencies`, consumed by the same catch
 path. `src/contracts.test.ts` proves module-only and sidecar-only watched-file
 edits re-publish the caller's diagnostics over Bun stdio, through
@@ -211,8 +212,11 @@ the page, plus valid → invalid declaration → repair and initially-invalid
 discovery → repair. Dynamic registration includes `.js`, `.mjs` and `.cjs`; a
 real Node stdio client asserts the registered globs and drives a `.cjs` module
 edit through them. `server.test.ts` ("scan inputs are not template-body
-dependencies") pins `scanInputs`, the unused-template edit staying quiet, and
-the repair of a broken called template.
+dependencies") pins `scanInputs` and the unused-template edit staying quiet.
+An imported `.mx` callee or a called tag template is not read by its caller's
+compile at all (the attribute-tag record does not depend on the callee's
+`Input`, spec §8), so editing one re-diagnoses no caller here; its `Input`
+types the call in `mx-tsc` and the TypeScript plugin.
 Node's ESM/TS module reload still requires restart (`sync-esm-reload-node`);
 watcher scheduling does not bypass the runtime's export cache.
 

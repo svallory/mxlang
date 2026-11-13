@@ -395,29 +395,24 @@ into `<!--build -->`.
 
 ## Attribute-tag values
 
-This host declares `attrTags: 2` and emits only core's resolved
-`attrTagProps` plan. It never regroups the legacy flat `attributeTags` list.
-An untyped body-only property is renderable; attributes or
-nested tags on any occurrence keep the fallback data-shaped. Declared shapes
-remain unchanged.
-Cardinality comes from the callee's `Input`: singular values are one value or
-`undefined`, arrays are real arrays (including `[]`), and control-flow tags
-become conditional values or push loops in source order. Nested plans are
-emitted recursively.
+Every attribute tag reaches the callee as Marko's record (spec §8), whatever
+the callee's `Input` declares: `attrTagRecord` emits, per name of
+`attributeTagTree`, one `__mxAttrTag({...})` for a lone unconditional
+occurrence and otherwise an IIFE folding each occurrence with `__mxAttrTags`
+(an `<if>` becomes `if`/`else`, a `<for>` a loop), so an occurrence that never
+runs leaves the prop `undefined`. An occurrence object holds its attributes,
+its own attribute tags as records, and `content` (a thunk) only when it has a
+body. Core's `ATTR_TAG_RUNTIME` is appended once to a module that calls it.
+Under `typeCheck`, both braces and the `content` key map to the tag name, and
+a params body that no declared type reaches (a fold, an untyped callee) is
+cast to `(...args: any[]) => any` so strict tsc reports no implicit `any`.
 
-`@mxlang/target-html` exports its own `AttrTag<C>`. A renderable value is always an
-HTML block function `(...params) => string` (with `[]` when params are absent).
-A data value is `attrs & nestedProps & { content?: (...params) => string }`;
-`content` is explicitly `undefined` when the occurrence has no body. Dynamic
-tag arguments are forwarded so a callee can invoke a parameterized data
-`content` or renderable tag with `<${value}(args)/>`. Calling a data value
-itself through an untyped dynamic target fails with a diagnostic that points
-to its `content` route instead of the engine's opaque "not a function" error.
+`@mxlang/target-html` exports its own `AttrTag<T>`: the record with `content`
+typed `() => string` unless `T` declares its own. A dynamic tag given a record
+renders its `content`; tag arguments are forwarded, so a callee invokes a
+parameterized body with `<${input.row.content}(args)/>`.
 
-Declared attribute-tag values retain their contextual types through
-conditional and loop plans: emitted concrete values use `satisfies` against
-the callee's `Input` property, so tag params do not become implicit `any` when
-an array is assembled incrementally. A one-param `for in` loop destructures
+A one-param `for in` loop destructures
 only the key; it never synthesizes a local named `value` that can shadow an
 author binding (the same rule applies to ordinary content loops).
 

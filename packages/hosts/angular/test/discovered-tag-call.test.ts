@@ -108,16 +108,6 @@ describe("calling a discovered tag from a page", () => {
     }
   });
 
-  it("rejects a declared AttrTag[] even when the caller passes no occurrence", () => {
-    expect(() =>
-      compilePage("<card/>\n", {
-        "card.mx": "export interface Input { item?: AttrTag[] }\n<section/>\n",
-      }),
-    ).toThrow(
-      "array attribute tag `<@item>` isn't supported by @mxlang/host-angular",
-    );
-  });
-
   describe("a tag's exported `selector` at the call site", () => {
     const badge = (selector: string) =>
       `export const selector = ${JSON.stringify(selector)};\n<b>!</b>\n`;

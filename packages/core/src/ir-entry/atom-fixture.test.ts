@@ -236,7 +236,6 @@ describe("the `LoweredUnit` view of a dialect's node", () => {
     isComponent: () => false,
     isDelegatedTag: () => true,
     resolveDefaultTag: () => "setter",
-    attrTags: 2,
   };
 
   /** The unit the fixture's own `afterLower` was handed, besides its check. */

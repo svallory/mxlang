@@ -103,7 +103,6 @@ export function entryDeclarations(
       // matched child needs `contract:`"); kept as `@mxlang/data` named it.
       name: "tree",
       nativeTags,
-      attrTags: 2,
       builtinTags: BUILTIN_TAGS,
       // The ladder: the parent's contract `defaultTag`, then the caller's
       // `defaultTag`, then the built-in `object`.

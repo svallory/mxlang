@@ -80,7 +80,7 @@ describe("solid: a dynamic tag reads a <define> without attributes", () => {
     expect(hoistedDefines.map((entry) => entry.binding)).toEqual([
       "__mx_DefineD1",
     ]);
-    expect(code).toContain("const __mxDyn = __mx_DefineD1;");
+    expect(code).toContain("let __mxDyn = __mx_DefineD1;");
     expect(code).not.toMatch(/__mxDyn = D;/);
     expect(code).not.toContain("__mxDefineFn_");
   });
@@ -91,14 +91,14 @@ describe("solid: a dynamic tag reads a <define> without attributes", () => {
 
   it("with a body, renders the define and ignores the body, as Marko does", () => {
     const { code } = emit(`${DEFINE}<\${D}>x</>`);
-    expect(code).toContain("const __mxDyn = __mx_DefineD1;");
+    expect(code).toContain("let __mxDyn = __mx_DefineD1;");
     expect(render(`${DEFINE}<\${D}>x</>`)).toBe("<ul><i>b</i></ul>");
   });
 
   it("a conditional target reads the hoisted function in its branch", () => {
     const region = `${DEFINE}<\${input.c ? D : "span"}/>`;
     expect(emit(region, INPUT(true)).code).toContain(
-      'const __mxDyn = input.c ? __mx_DefineD1 : "span";',
+      'let __mxDyn = input.c ? __mx_DefineD1 : "span";',
     );
     expect(render(region, INPUT(true))).toBe("<ul><i>b</i></ul>");
     expect(render(region, INPUT(false))).toBe("<ul><span></span></ul>");
@@ -119,15 +119,15 @@ describe("solid: a dynamic tag reads a <define> without attributes", () => {
     const region =
       "<define/A><i>a</i></define><define/B><b>b</b></define><${A}/><${B}/>";
     const { code } = emit(region);
-    expect(code).toContain("const __mxDyn = __mx_DefineA1;");
-    expect(code).toContain("const __mxDyn = __mx_DefineB1;");
+    expect(code).toContain("let __mxDyn = __mx_DefineA1;");
+    expect(code).toContain("let __mxDyn = __mx_DefineB1;");
     expect(render(region)).toBe("<ul><i>a</i><b>b</b></ul>");
   });
 
   it("a loop param named like the define shadows it", () => {
     const { code } = emit(`${DEFINE}<for|D| of=[1]><\${D}/></for>`);
     expect(code).not.toContain("__mx_DefineD1;");
-    expect(code).toContain("const __mxDyn = D;");
+    expect(code).toContain("let __mxDyn = D;");
   });
 
   it("a read that is not a dynamic tag's target is left as written", () => {
@@ -138,7 +138,7 @@ describe("solid: a dynamic tag reads a <define> without attributes", () => {
 
   it("a name that is not a define is left alone", () => {
     const { code } = emit("<${input.D}/>");
-    expect(code).toContain("const __mxDyn = input.D;");
+    expect(code).toContain("let __mxDyn = input.D;");
   });
 
   it("a define declared after the read is refused by core", () => {

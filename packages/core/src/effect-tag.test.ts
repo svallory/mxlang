@@ -42,7 +42,6 @@ const FORMS: Array<[string, string]> = [
 /** A host that accepts every tag: nothing here may rescue `<effect>`. */
 const open: HostDeclarations = {
   name: "effect-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

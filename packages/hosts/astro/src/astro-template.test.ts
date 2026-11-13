@@ -729,27 +729,6 @@ describe("components and slots", () => {
     );
     expect(error.line).toBe(6);
   });
-
-  it("rejects a declared AttrTag[] even when no occurrence is passed", () => {
-    // TODO `test-tmpdir-leak`: the temp project is removed here, not left in
-    // the OS temp directory.
-    const dir = mkdtempSync(join(tmpdir(), "mx-astro-attr-tags-"));
-    try {
-      const card = join(dir, "Card.mx");
-      const caller = join(dir, "Caller.astro.mx");
-      writeFileSync(
-        card,
-        "export interface Input { item?: AttrTag[] }\n<section/>\n",
-      );
-      const source = 'import Card from "./Card.mx";\n<Card/>\n';
-
-      expect(() => lowerAstroMx(source, caller)).toThrow(
-        "array attribute tag `<@item>` isn't supported by @mxlang/host-astro",
-      );
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
 });
 
 describe("AttrTag type import", () => {

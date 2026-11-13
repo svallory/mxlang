@@ -1,12 +1,7 @@
 import type { MxChild } from "@mxlang/babel/mx-ast";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { strippedMethodTypeParams } from "./attr-fields.ts";
-import {
-  type AttrTagDecl,
-  type CalleeInput,
-  readCalleeInput,
-  readOwnInput,
-} from "./callee-input.ts";
+import type { AttrTagDecl, CalleeInput } from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import {
@@ -24,7 +19,7 @@ import {
 import { STATEMENT_TAGLIB, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
 import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
-import type { AttributeTag, Ir, IrNode } from "./ir.ts";
+import type { Ir, IrNode } from "./ir.ts";
 import {
   attachDependencies,
   exprOf,
@@ -841,27 +836,24 @@ describe("one fixture per IR kind", () => {
     ]);
   });
 
-  describe("attribute-tag v2 IR and validation", () => {
+  describe("attribute-tag IR and validation", () => {
     const v2 = () =>
       fakeDeclarations({
         name: "TestHost",
-        attrTags: 2,
         isComponent: (name) => name === "Panel",
       });
 
-    it("records attrs, body state, nested tree and recursive plans", () => {
-      const icon = attrTagDecl({ as: "renderable" });
-      const tab = attrTagDecl({
-        cardinality: "array",
-        as: "data",
-        hasAttrs: true,
-        nested: new Map([["icon", icon]]),
-      });
-      const ir = lowerSource(
-        '<Panel><@tab title="A"><@icon>I</@icon>Body</@tab></Panel>',
-        v2(),
-        declaredInput({ tab }),
-      );
+    it("records attrs, body state and the nested tree, reading no Input", () => {
+      // An unreadable callee `Input` changes nothing: core no longer reads it
+      // for attribute tags (spec §8), so the call lowers as if untyped.
+      const lower = (input?: CalleeInput) =>
+        lowerSource(
+          '<Panel><@tab title="A"><@icon>I</@icon>Body</@tab></Panel>',
+          v2(),
+          input,
+        );
+      const ir = lower(invalidInput([["tab", "bad tab"]]));
+      expect(ir).toEqual(lower());
       const component = find(ir.body, "Component");
       const outer = component.attributeTags[0];
       expect(outer).toMatchObject({
@@ -869,140 +861,9 @@ describe("one fixture per IR kind", () => {
         hasBody: true,
         attrs: [{ kind: "static", name: "title", value: "A" }],
         attributeTags: [{ name: "icon", hasBody: true }],
-        attrTagProps: [
-          { name: "icon", cardinality: "single", as: "renderable" },
-        ],
+        attributeTagTree: [{ kind: "AttributeTag", tag: { name: "icon" } }],
       });
       expect(component.attributeTagTree[0]?.kind).toBe("AttributeTag");
-      expect(component.attrTagProps).toMatchObject([
-        { name: "tab", cardinality: "array", as: "data" },
-      ]);
-    });
-
-    it.each([
-      ["component", "<Panel><@x/></Panel>", v2(), undefined],
-      [
-        "host tag",
-        "<signal><@x/></signal>",
-        fakeDeclarations({
-          name: "TestHost",
-          attrTags: 2,
-          isDelegatedTag: (name) => name === "signal",
-        }),
-        undefined,
-      ],
-      [
-        "discovered template tag",
-        "<panel><@x/></panel>",
-        v2(),
-        {
-          panel: {
-            template: {
-              filename: "/tmp/mx-core-test/tags/panel.mx",
-              source: "<div/>",
-            },
-          } as CustomTag,
-        },
-      ],
-    ])(
-      "raises an invalid Input at a used tag for a %s",
-      (_case, source, policy, customTags) => {
-        expect(() =>
-          lowerSource(source, policy, invalidInput(), undefined, customTags),
-        ).toThrowError(
-          "can't read `<" +
-            (_case === "component"
-              ? "Panel"
-              : _case === "host tag"
-                ? "signal"
-                : "panel") +
-            ">`'s declaration of `x` (callee.ts:1); declare this attribute tag's config literally",
-        );
-      },
-    );
-
-    it("raises only invalid declarations used at this call", () => {
-      expect(() =>
-        lowerSource(
-          "<Panel><@y/></Panel>",
-          v2(),
-          invalidInput([["x", "bad x"]]),
-        ),
-      ).not.toThrow();
-      expect(() =>
-        lowerSource(
-          "<Panel><@x/></Panel>",
-          v2(),
-          invalidInput([["x", "bad x"]]),
-        ),
-      ).toThrowError("declaration of `x` (callee.ts:1); bad x");
-    });
-
-    it("applies a whole-file parse error to every used attribute tag", () => {
-      expect(() =>
-        lowerSource(
-          "<Panel><@y/></Panel>",
-          v2(),
-          invalidInput([["<parse>", "Unexpected token (1:1)"]]),
-        ),
-      ).toThrowError(
-        // The named position is 1-based (ruling #227), like `mx-tsc`'s
-        // `file(line,column)`: a span at offset 1 of line 1 is column 2.
-        "can't read `<Panel>`'s Input (callee.ts:1:2): Unexpected token",
-      );
-    });
-
-    it("keeps multi-line static aliases in own Input, including self calls", () => {
-      const aux = ["type Cfg = {", '  as: "data";', "};"].join("\n");
-      const inputCode = "export interface Input { x?: AttrTag<Cfg> }";
-      const ctx = newCtx(
-        `${aux}\n${inputCode}`,
-        printExpression,
-        v2(),
-        undefined,
-        "test.mx",
-        lookup,
-      );
-      const ownInput = readOwnInput(ctx, inputCode, [aux]);
-      expect(() =>
-        lowerSource("<${input.x}/>", v2(), undefined, ownInput),
-      ).toThrowError("is a data attribute tag");
-      const renderable = readOwnInput(
-        newCtx(
-          `${aux.replace('"data"', '"renderable"')}\n${inputCode}`,
-          printExpression,
-          v2(),
-          undefined,
-          "test.mx",
-          lookup,
-        ),
-        inputCode,
-        [aux.replace('"data"', '"renderable"')],
-      );
-      const recursiveCtx = newCtx(
-        "<Test><@x/><@x/></Test>",
-        printExpression,
-        v2(),
-        undefined,
-        "test.mx",
-        lookup,
-      );
-      recursiveCtx.exportName = "Test";
-      recursiveCtx.ownInput = renderable;
-      expect(
-        readCalleeInput({ kind: "name", name: "Test" }, recursiveCtx).input,
-      ).toBe(renderable);
-      expect(() =>
-        lowerSource(
-          "<Test><@x/><@x/></Test>",
-          fakeDeclarations({
-            name: "TestHost",
-            attrTags: 2,
-            isComponent: (name) => name === "Test",
-          }),
-          renderable,
-        ),
-      ).toThrowError("`<@x>` may appear at most once");
     });
 
     it("raises a component's own invalid Input at its declaration", () => {
@@ -1205,7 +1066,7 @@ describe("one fixture per IR kind", () => {
       ).not.toThrow();
     });
 
-    it("keeps conditional fallback plans singular, including else-if chains", () => {
+    it("keeps a conditional tag's branches, including else-if chains", () => {
       const one = find(
         lowerSource("<Panel><if=input.a><@h/></if></Panel>", v2()).body,
         "Component",
@@ -1217,11 +1078,8 @@ describe("one fixture per IR kind", () => {
         ).body,
         "Component",
       );
-      expect(one.attrTagProps).toMatchObject([
-        { name: "h", cardinality: "single" },
-      ]);
-      expect(chain.attrTagProps).toMatchObject([
-        { name: "h", cardinality: "single" },
+      expect(one.attributeTagTree).toMatchObject([
+        { kind: "AttributeTagIf", branches: [{ nodes: [{}] }] },
       ]);
       expect(chain.attributeTagTree[0]).toMatchObject({
         kind: "AttributeTagIf",
@@ -1241,84 +1099,7 @@ describe("one fixture per IR kind", () => {
         "AttributeTagFor",
       ]);
       expect(component.attributeTags).toHaveLength(2);
-      expect(component.attrTagProps[0]).toMatchObject({
-        name: "item",
-        cardinality: "array",
-      });
     });
-
-    it.each([
-      [
-        "repeated singular",
-        "<Panel><@head>A</@head><@head>B</@head></Panel>",
-        declaredInput({ head: attrTagDecl() }),
-        "may appear at most once",
-        25,
-      ],
-      [
-        "singular in for",
-        "<Panel><for|x| of=input.xs><@head>${x}</@head></for></Panel>",
-        declaredInput({ head: attrTagDecl() }),
-        "may not appear inside `<for>`",
-        7,
-      ],
-      [
-        "params present when undeclared",
-        "<Panel><@row|value|/></Panel>",
-        declaredInput({ row: attrTagDecl() }),
-        "declares no params in `<Panel>`; remove `|…|`",
-        8,
-      ],
-      [
-        "missing required",
-        "<Panel/>",
-        declaredInput({ head: attrTagDecl({ cardinality: "required" }) }),
-        "missing required attribute tag `<@head>`",
-        1,
-      ],
-      [
-        "required conditional",
-        "<Panel><if=input.ok><@head>A</@head></if></Panel>",
-        declaredInput({ head: attrTagDecl({ cardinality: "required" }) }),
-        "required but not provided on every `<if>` path",
-        7,
-      ],
-      [
-        "closed Input",
-        "<Panel><@other/></Panel>",
-        declaredInput({}),
-        "declares no attribute tag `other`",
-        8,
-      ],
-      [
-        "plain prop",
-        "<Panel><@head/></Panel>",
-        declaredInput({}, ["head"]),
-        "declared as a plain prop",
-        8,
-      ],
-      [
-        "params missing",
-        "<Panel><@row/></Panel>",
-        declaredInput({ row: attrTagDecl({ hasParams: true }) }),
-        "declares params in `<Panel>`; add `|…|`",
-        8,
-      ],
-    ])(
-      "rejects %s with a positioned message",
-      (_case, source, input, message, column) => {
-        let error: unknown;
-        try {
-          lowerSource(source, v2(), input);
-        } catch (caught) {
-          error = caught;
-        }
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain(message);
-        expect(error).toHaveProperty("line", 1);
-        expect(error).toHaveProperty("column", column);
-      },
-    );
 
     it("uses Marko's exact control-flow mixing error", () => {
       expect(() =>
@@ -1333,434 +1114,6 @@ describe("one fixture per IR kind", () => {
         lowerSource('<Panel><@head content="x"/></Panel>', v2()),
       ).toThrowError("`content` is reserved on an attribute tag");
     });
-
-    it("rejects attrs and nested tags on a declared renderable", () => {
-      expect(() =>
-        lowerSource(
-          '<Panel><@head class="x"/></Panel>',
-          v2(),
-          declaredInput({ head: attrTagDecl() }),
-        ),
-      ).toThrowError("is renderable in `<Panel>`; it can't take attributes");
-      expect(() =>
-        lowerSource(
-          "<Panel><@head><@icon/></@head></Panel>",
-          v2(),
-          declaredInput({
-            head: attrTagDecl({
-              nested: new Map([["icon", attrTagDecl()]]),
-            }),
-          }),
-        ),
-      ).toThrowError("can't take attributes or nested attribute tags");
-    });
-
-    it("sets body-only fallback shapes to renderable without changing cardinality", () => {
-      const single = find(
-        lowerSource("<Panel><@head/></Panel>", v2()).body,
-        "Component",
-      );
-      const repeated = find(
-        lowerSource("<Panel><@head/><@head/></Panel>", v2()).body,
-        "Component",
-      );
-      const parameterized = find(
-        lowerSource("<Panel><@head|value|>${value}</@head></Panel>", v2()).body,
-        "Component",
-      );
-      expect(single.attrTagProps).toMatchObject([
-        { name: "head", cardinality: "single", as: "renderable" },
-      ]);
-      expect(repeated.attrTagProps).toMatchObject([
-        { name: "head", cardinality: "array", as: "renderable" },
-      ]);
-      expect(parameterized.attrTagProps).toMatchObject([
-        { name: "head", cardinality: "single", as: "renderable" },
-      ]);
-    });
-
-    it("uses one data fallback shape when any occurrence has attributes", () => {
-      const component = find(
-        lowerSource(
-          '<Panel><if=input.ok><@head/></if><else><@head label="x"/></else></Panel>',
-          v2(),
-        ).body,
-        "Component",
-      );
-      expect(component.attrTagProps).toMatchObject([
-        { name: "head", cardinality: "single", as: "data" },
-      ]);
-    });
-
-    it("uses a data fallback shape when an occurrence has nested tags", () => {
-      const component = find(
-        lowerSource("<Panel><@head><@icon/></@head></Panel>", v2()).body,
-        "Component",
-      );
-      expect(component.attrTagProps).toMatchObject([
-        { name: "head", cardinality: "single", as: "data" },
-      ]);
-      expect(component.attributeTags[0]?.attrTagProps).toMatchObject([
-        { name: "icon", cardinality: "single", as: "renderable" },
-      ]);
-    });
-
-    it("keeps a declared data shape for a body-only tag", () => {
-      const component = find(
-        lowerSource(
-          "<Panel><@head>H</@head></Panel>",
-          v2(),
-          declaredInput({ head: attrTagDecl({ as: "data" }) }),
-        ).body,
-        "Component",
-      );
-      expect(component.attrTagProps).toMatchObject([
-        { name: "head", cardinality: "single", as: "data" },
-      ]);
-    });
-
-    it.each([
-      [
-        "`<@head>`: attributes on attribute tags aren't",
-        '<Panel><@head class="x"/></Panel>',
-      ],
-      [
-        "attribute tags inside `<if>` aren't",
-        "<Panel><if=input.ok><@head/></if></Panel>",
-      ],
-      [
-        "`<@head>`: nested attribute tags aren't",
-        "<Panel><@head><@icon/></@head></Panel>",
-      ],
-      [
-        "attribute tags inside `<for>` aren't",
-        "<Panel><for|x| of=input.xs><@head/></for></Panel>",
-      ],
-    ])("gates %s for an unported host", (construct, source) => {
-      expect(() =>
-        lowerSource(
-          source,
-          fakeDeclarations({
-            name: "LegacyHost",
-            isComponent: (name) => name === "Panel",
-          }),
-        ),
-      ).toThrowError(`${construct} supported by LegacyHost yet`);
-    });
-
-    it("positions nested attribute-tag error at the first nested tag", () => {
-      let error: unknown;
-      try {
-        lowerSource(
-          "<Panel><@item><@icon/></@item></Panel>",
-          fakeDeclarations({
-            name: "@mxlang/legacy",
-            isComponent: (name) => name === "Panel",
-          }),
-        );
-      } catch (e) {
-        error = e;
-      }
-      expect(error).toBeInstanceOf(TranslateError);
-      const err = error as TranslateError;
-      expect(err.message).toContain("nested attribute tags");
-      expect(err.line).toBe(1);
-      expect(err.column).toBe(14); // <@icon> at column 14 (0-indexed)
-    });
-
-    it("gates a zero-occurrence declared array on a legacy host", () => {
-      let error: unknown;
-      try {
-        lowerSource(
-          "<Panel/>",
-          fakeDeclarations({
-            name: "@mxlang/legacy",
-            isComponent: (name) => name === "Panel",
-          }),
-          declaredInput({ items: attrTagDecl({ cardinality: "array" }) }),
-        );
-      } catch (caught) {
-        error = caught;
-      }
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toBe(
-        "the declared shape of `<@items>` isn't supported by @mxlang/legacy yet",
-      );
-      expect(error).toHaveProperty("line", 1);
-      expect(error).toHaveProperty("column", 1);
-    });
-
-    it("gates control-flow attribute tags on a claimed dynamic DelegatedTag", () => {
-      expect(() =>
-        lowerSource(
-          "<${input.tag}><if=input.ok><@head/></if></>",
-          fakeDeclarations({
-            name: "@mxlang/legacy",
-            isDelegatedTag: (name) => name === DYNAMIC_TAG,
-          }),
-        ),
-      ).toThrowError(
-        "attribute tags inside `<if>` aren't supported by @mxlang/legacy yet",
-      );
-    });
-
-    it("validates nested cardinality and records nested fallback plans", () => {
-      const item = attrTagDecl({
-        as: "data",
-        nested: new Map([["icon", attrTagDecl()]]),
-      });
-      expect(() =>
-        lowerSource(
-          "<Panel><@item><@icon/><@icon/></@item></Panel>",
-          v2(),
-          declaredInput({ item }),
-        ),
-      ).toThrowError("`<@icon>` may appear at most once");
-
-      const component = find(
-        lowerSource(
-          "<Panel><@item><if=input.ok><@note/></if></@item></Panel>",
-          v2(),
-          declaredInput({
-            item: attrTagDecl({ as: "data", nestedOpen: true }),
-          }),
-        ).body,
-        "Component",
-      );
-      expect(component.attributeTags[0]?.attrTagProps).toMatchObject([
-        { name: "note", cardinality: "single" },
-      ]);
-    });
-
-    it("unifies nested fallback shape across parent branches and repeats", () => {
-      const conditional = find(
-        lowerSource(
-          '<Panel><if=input.c><@tab><@icon>I</@icon>T</@tab></if><else><@tab><@icon k="1">J</@icon>U</@tab></else></Panel>',
-          v2(),
-        ).body,
-        "Component",
-      );
-      expect(
-        conditional.attributeTags.map((tab) => tab.attrTagProps),
-      ).toMatchObject([
-        [{ name: "icon", cardinality: "single", as: "data" }],
-        [{ name: "icon", cardinality: "single", as: "data" }],
-      ]);
-
-      const repeated = find(
-        lowerSource(
-          '<Panel><@tab><@icon>I</@icon></@tab><@tab><@icon k="1">J</@icon></@tab></Panel>',
-          v2(),
-        ).body,
-        "Component",
-      );
-      expect(
-        repeated.attributeTags.map((tab) => tab.attrTagProps),
-      ).toMatchObject([
-        [{ name: "icon", cardinality: "single", as: "data" }],
-        [{ name: "icon", cardinality: "single", as: "data" }],
-      ]);
-    });
-
-    it("unifies nested fallback cardinality across parent occurrences", () => {
-      const component = find(
-        lowerSource(
-          "<Panel><@tab><@icon>I</@icon></@tab><@tab><@icon>J</@icon><@icon>K</@icon></@tab></Panel>",
-          v2(),
-        ).body,
-        "Component",
-      );
-      expect(
-        component.attributeTags.map((tab) => tab.attrTagProps),
-      ).toMatchObject([
-        [{ name: "icon", cardinality: "array", as: "renderable" }],
-        [{ name: "icon", cardinality: "array", as: "renderable" }],
-      ]);
-    });
-
-    it("keeps nested fallback plans isolated between sibling parent names", () => {
-      const shape = find(
-        lowerSource(
-          '<Panel><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Panel>',
-          v2(),
-        ).body,
-        "Component",
-      );
-      expect(
-        shape.attributeTags.map((parent) => parent.attrTagProps),
-      ).toMatchObject([
-        [{ name: "icon", cardinality: "single", as: "renderable" }],
-        [{ name: "icon", cardinality: "single", as: "data" }],
-      ]);
-
-      const cardinality = find(
-        lowerSource(
-          "<Panel><@tab><@icon>I</@icon></@tab><@card><@icon>J</@icon><@icon>K</@icon></@card></Panel>",
-          v2(),
-        ).body,
-        "Component",
-      );
-      expect(
-        cardinality.attributeTags.map((parent) => parent.attrTagProps),
-      ).toMatchObject([
-        [{ name: "icon", cardinality: "single", as: "renderable" }],
-        [{ name: "icon", cardinality: "array", as: "renderable" }],
-      ]);
-
-      const names = find(
-        lowerSource(
-          "<Panel><@tab><@icon>I</@icon></@tab><@card><@badge>B</@badge></@card></Panel>",
-          v2(),
-        ).body,
-        "Component",
-      );
-      expect(
-        names.attributeTags.map((parent) => parent.attrTagProps),
-      ).toMatchObject([
-        [{ name: "icon", cardinality: "single", as: "renderable" }],
-        [{ name: "badge", cardinality: "single", as: "renderable" }],
-      ]);
-    });
-
-    it("does not leak a declared nested plan into an undeclared sibling parent", () => {
-      const tab = attrTagDecl({
-        as: "data",
-        nested: new Map([["icon", attrTagDecl({ as: "renderable" })]]),
-      });
-      const component = find(
-        lowerSource(
-          '<Panel><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Panel>',
-          v2(),
-          declaredInput({ tab }, [], true),
-        ).body,
-        "Component",
-      );
-      expect(component.attributeTags[0]?.attrTagProps).toMatchObject([
-        {
-          name: "icon",
-          cardinality: "single",
-          as: "renderable",
-          declared: true,
-        },
-      ]);
-      expect(component.attributeTags[1]?.attrTagProps).toMatchObject([
-        { name: "icon", cardinality: "single", as: "data" },
-      ]);
-      expect(component.attributeTags[1]?.attrTagProps[0]).not.toHaveProperty(
-        "declared",
-      );
-    });
-
-    it("unifies fallback shape recursively below the second level", () => {
-      const component = find(
-        lowerSource(
-          '<Panel><@tab><@group><@icon>I</@icon></@group></@tab><@tab><@group><@icon k="1">J</@icon></@group></@tab></Panel>',
-          v2(),
-        ).body,
-        "Component",
-      );
-      const groups = component.attributeTags.map(
-        (tab) => tab.attributeTags[0] as AttributeTag,
-      );
-      expect(groups.map((group) => group.attrTagProps)).toMatchObject([
-        [{ name: "icon", cardinality: "single", as: "data" }],
-        [{ name: "icon", cardinality: "single", as: "data" }],
-      ]);
-    });
-
-    it("keeps a declared nested plan authoritative across parent occurrences", () => {
-      const tab = attrTagDecl({
-        cardinality: "array",
-        as: "data",
-        nested: new Map([
-          ["icon", attrTagDecl({ cardinality: "array", as: "renderable" })],
-        ]),
-      });
-      const component = find(
-        lowerSource(
-          "<Panel><@tab><@icon>I</@icon></@tab><@tab><@icon>J</@icon><@icon>K</@icon></@tab></Panel>",
-          v2(),
-          declaredInput({ tab }),
-        ).body,
-        "Component",
-      );
-      for (const occurrence of component.attributeTags) {
-        expect(occurrence.attrTagProps[0]).toMatchObject({
-          name: "icon",
-          cardinality: "array",
-          as: "renderable",
-          declared: true,
-        });
-      }
-    });
-
-    it("gates a declared data shape and diagnoses data rendering in the callee", () => {
-      const input = declaredInput({ head: attrTagDecl({ as: "data" }) });
-      expect(() =>
-        lowerSource(
-          "<Panel><@head/></Panel>",
-          fakeDeclarations({
-            name: "LegacyHost",
-            isComponent: (name) => name === "Panel",
-          }),
-          input,
-        ),
-      ).toThrowError("declared shape of `<@head>`");
-      expect(() =>
-        lowerSource("<${input.head}/>", v2(), undefined, input),
-      ).toThrowError(
-        "`input.head` is a data attribute tag; render its body with `<${input.head.content}/>`",
-      );
-    });
-
-    it("rejects a declared parameterized tag used without arguments", () => {
-      const input = declaredInput({
-        data: attrTagDecl({ as: "data", hasParams: true }),
-        renderable: attrTagDecl({ as: "renderable", hasParams: true }),
-      });
-      expect(() =>
-        lowerSource("<${input.data.content}/>", v2(), undefined, input),
-      ).toThrowError(
-        "`input.data.content` is a parameterized attribute tag; pass its arguments with `<${input.data.content(/* arguments */)}/>`",
-      );
-      expect(() =>
-        lowerSource("<${input.renderable}/>", v2(), undefined, input),
-      ).toThrowError(
-        "`input.renderable` is a parameterized attribute tag; pass its arguments with `<${input.renderable(/* arguments */)}/>`",
-      );
-      expect(() =>
-        lowerSource(
-          '<${input.data.content}("d")/><${input.renderable}("r")/>',
-          v2(),
-          undefined,
-          input,
-        ),
-      ).not.toThrow();
-    });
-
-    it.each([
-      ["data content", "input.data.content"],
-      ["renderable", "input.renderable"],
-    ])(
-      "rejects a declared parameterized %s placeholder used without arguments",
-      (_shape, expression) => {
-        const input = declaredInput({
-          data: attrTagDecl({ as: "data", hasParams: true }),
-          renderable: attrTagDecl({ as: "renderable", hasParams: true }),
-        });
-        let error: unknown;
-        try {
-          lowerSource(`<div>\${${expression}}</div>`, v2(), undefined, input);
-        } catch (caught) {
-          error = caught;
-        }
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain(
-          `\`${expression}\` is a parameterized attribute tag; pass its arguments with \`<\${${expression}(/* arguments */)}/>\``,
-        );
-        expect(error).toMatchObject({ line: 1, column: 7 });
-      },
-    );
 
     it("marks an unimported AttrTag reference for a host type import", () => {
       expect(
@@ -1819,40 +1172,6 @@ describe("one fixture per IR kind", () => {
         expect(lowerSource(source, v2()).needsAttrTagImport).toBe(expected);
       },
     );
-
-    it("resolves discovered template-tag plans by resolved path", () => {
-      const filename = "/tmp/mx-core-test/tags/panel.mx";
-      let target: import("./ir.ts").ComponentTarget | undefined;
-      const input = declaredInput({ h: attrTagDecl() });
-      const templateTag: CustomTag = {
-        template: {
-          filename,
-          source: "<${input.h}/>",
-        },
-      } as CustomTag;
-      const ir = lowerSource(
-        "<panel><if=input.ok><@h/></if></panel>",
-        v2(),
-        (resolvedTarget) => {
-          target = resolvedTarget;
-          return input;
-        },
-        undefined,
-        { panel: templateTag },
-      );
-      const component = find(ir.body, "Component");
-      expect(component.attributeTagTree[0]?.kind).toBe("AttributeTagIf");
-      expect(component.attrTagProps).toMatchObject([
-        { name: "h", cardinality: "single", as: "renderable" },
-      ]);
-      // The seam is invoked with the discovered unit's path, not only its
-      // generated import binding. Task 1a consumes this target shape.
-      expect(target).toEqual({
-        kind: "name",
-        name: "panel",
-        resolvedPath: filename,
-      });
-    });
 
     it("enforces template sidecar repeatability before Input cardinality", () => {
       const templateTag: CustomTag = {
@@ -1976,10 +1295,7 @@ describe("a dynamic tag's bare shape", () => {
   it("rejects arguments combined with a plain attribute with a positioned diagnostic (Marko's own rule, MX's own wording)", () => {
     let error: unknown;
     try {
-      lowerSource(
-        '<${input.fn}("A") foo="bar"/>',
-        fakeDeclarations({ attrTags: 2 }),
-      );
+      lowerSource('<${input.fn}("A") foo="bar"/>', fakeDeclarations());
     } catch (caught) {
       error = caught;
     }
@@ -2000,7 +1316,7 @@ describe("a dynamic tag's bare shape", () => {
   ])(
     "allows arguments combined with %s, matching Marko's lenient dynamic-tag rule",
     (_case, source) => {
-      const ir = lowerSource(source, fakeDeclarations({ attrTags: 2 }));
+      const ir = lowerSource(source, fakeDeclarations());
       const component = find(ir.body, "Component");
       expect(component.target).toMatchObject({ kind: "dynamic" });
       expect(component.args).toMatchObject([{ code: '"A"' }]);
@@ -2329,7 +1645,6 @@ describe("CDATA sections and XML declarations", () => {
   it("rejects one inside an attribute tag body", () => {
     const component = fakeDeclarations({
       name: "TestHost",
-      attrTags: 2,
       isComponent: (name) => name === "Panel",
     });
     expect(() =>
@@ -3587,7 +2902,6 @@ describe("<for by=> loop-param scope", () => {
 describe("duplicate attributes resolve last-wins", () => {
   const panel = fakeDeclarations({
     name: "TestHost",
-    attrTags: 2,
     isComponent: (name) => name === "Panel",
   });
 
@@ -4049,9 +3363,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
   ])(
     "rejects a non-contract binding before it can be discarded: %s",
     (source, line, column) => {
-      expect(() =>
-        lowerSource(source, fakeDeclarations({ attrTags: 2 })),
-      ).toThrow(
+      expect(() => lowerSource(source, fakeDeclarations())).toThrow(
         expect.objectContaining({
           message:
             "Attributes may only be bound to identifiers or member expressions",
@@ -5299,7 +4611,6 @@ function toMxShape(source: string): (body: Node[]) => void {
 describe("hybrid attribute tags, MX-shaped (PR 4 slice 1)", () => {
   const panel = (overrides: Partial<Policy> = {}) =>
     fakeDeclarations({
-      attrTags: 2,
       isComponent: (name) => name === "Panel",
       ...overrides,
     });
@@ -5365,21 +4676,6 @@ describe("hybrid attribute tags, MX-shaped (PR 4 slice 1)", () => {
     ],
   ])("lowers %s to the IR the Marko shape lowers to", (_label, source) => {
     expect(mx(source, panel())).toEqual(lowerSource(source, panel()));
-  });
-
-  it("positions the nested-attribute-tag gate at the nested tag", () => {
-    const source = "<Panel><@item><@icon/></@item></Panel>";
-    const legacy = panel({ attrTags: undefined, name: "@mxlang/legacy" });
-    let error: unknown;
-    try {
-      mx(source, legacy);
-    } catch (e) {
-      error = e;
-    }
-    expect(error).toBeInstanceOf(TranslateError);
-    const err = error as TranslateError;
-    expect(err.message).toContain("nested attribute tags");
-    expect([err.line, err.column]).toEqual([1, 14]);
   });
 
   it("hands an element's hook its first attribute tag", () => {
@@ -5700,7 +4996,6 @@ describe("hybrid text, placeholders, comments and payloads, MX-shaped (PR 4 slic
     ["a comment beside text and a placeholder", "<p>a <!-- c --> ${b}</p>"],
   ])("lowers %s to the IR the Marko shape lowers to", (_label, source) => {
     const policy = fakeDeclarations({
-      attrTags: 2,
       isComponent: (name) => name === "Panel",
     });
     expect(mx(source, policy)).toEqual(lowerSource(source, policy));
@@ -5945,7 +5240,6 @@ describe("hybrid tags, MX-shaped (PR 4 slice 3)", () => {
     ["a /var on a dynamic tag (refused)", "<${C}/n start=1/>"],
   ])("lowers %s as the Marko shape does", (_label, source) => {
     const policy = fakeDeclarations({
-      attrTags: 2,
       isComponent: (name) => name === "Panel",
     });
     const [mx, marko] = both(source, policy);
@@ -6029,7 +5323,6 @@ describe("hybrid tags, MX-shaped (PR 4 slice 3)", () => {
     "refuses a reserved name in %s as the Marko shape does",
     (_label, source) => {
       const policy = fakeDeclarations({
-        attrTags: 2,
         isComponent: (name) => name === "Panel",
       });
       const [mx, marko] = both(source, policy);
@@ -6040,7 +5333,6 @@ describe("hybrid tags, MX-shaped (PR 4 slice 3)", () => {
 
   describe("refuses MX type arguments and type parameters", () => {
     const policy = fakeDeclarations({
-      attrTags: 2,
       isComponent: (name) => name === "Panel",
     });
     const typeArgs = {

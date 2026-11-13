@@ -173,8 +173,7 @@ describe("a tag a translator taglib registers", () => {
     const tagModule = join(dir, "tags", "badge.mx");
     writeFileSync(tagModule, "<span>${input.label}</span>\n");
     const page = join(dir, "page.mx");
-    // `attrTags: 2` so an attribute tag reaches the `Input` check.
-    const hooked: Policy = { ...policy(() => tagModule), attrTags: 2 };
+    const hooked: Policy = policy(() => tagModule);
     const run = (source: string, declarations = hooked): Ir => {
       let ir: Ir | null = null;
       compileSource(source, page, declarations, {

@@ -1,7 +1,7 @@
 import type { AttrTag } from "@mxlang/host-solid";
 
 export interface Input {
-  item: AttrTag<{ as: "renderable" }>;
+  item: AttrTag;
 }
 
 export default function AttrCallee(_input: Input) {

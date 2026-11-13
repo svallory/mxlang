@@ -8,10 +8,6 @@
  */
 
 import { attrLabel } from "./attr-label.ts";
-import {
-  fallbackAttrTagShape,
-  unifyNestedAttrTagPlanGroups,
-} from "./attr-tag.ts";
 import { callNameEnd, positionAt } from "./contract-facts.ts";
 import {
   type ClaimedFields,
@@ -64,7 +60,6 @@ import type {
   Attr,
   AttributeTag,
   AttributeTagNode,
-  AttrTagProp,
   Block,
   Branch,
   Expr,
@@ -371,8 +366,6 @@ export interface TagCall {
   attributeTags: AttributeTag[];
   /** Preserved control-flow shape for a template-backed component call. */
   attributeTagTree?: AttributeTagNode[];
-  /** Callee-aware property plan for a template-backed component call. */
-  attrTagProps?: AttrTagProp[];
   params: string[];
   var: string | null;
   /**
@@ -496,39 +489,10 @@ function attributeTagOccurrenceRange(
   return { min, max, inFor };
 }
 
-function filterAttributeTagTreeByName(
-  nodes: readonly AttributeTagNode[],
-  name: string,
-): AttributeTagNode[] {
-  const filtered: AttributeTagNode[] = [];
-  for (const node of nodes) {
-    if (node.kind === "AttributeTag") {
-      if (node.tag.name === name) filtered.push(node);
-      continue;
-    }
-    if (node.kind === "AttributeTagIf") {
-      const branches = node.branches.map((branch) => ({
-        ...branch,
-        nodes: filterAttributeTagTreeByName(branch.nodes, name),
-      }));
-      if (branches.some((branch) => branch.nodes.length > 0)) {
-        filtered.push({ ...node, branches });
-      }
-      continue;
-    }
-    const nested = filterAttributeTagTreeByName(node.nodes, name);
-    if (nested.length > 0) filtered.push({ ...node, nodes: nested });
-  }
-  return filtered;
-}
-
-function rebuildAttributeTagPlan(
-  owner: string,
+function rebuildAttributeTagTree(
   originalTree: readonly AttributeTagNode[],
-  originalProps: readonly AttrTagProp[],
   tags: readonly AttributeTag[],
-  voice: Voice = MX_VOICE,
-): Pick<TagCall, "attributeTagTree" | "attrTagProps"> {
+): Pick<TagCall, "attributeTagTree"> {
   const remaining = new Map<AttributeTag, number>();
   for (const tag of tags) remaining.set(tag, (remaining.get(tag) ?? 0) + 1);
   const kept = new Map<AttributeTag, number>();
@@ -548,50 +512,7 @@ function rebuildAttributeTagPlan(
       attributeTagTree.push({ kind: "AttributeTag", tag, loc: tag.loc });
     }
   }
-  unifyNestedAttrTagPlanGroups(tags);
-
-  const declarations = new Map(
-    originalProps
-      .filter(({ declared }) => declared)
-      .map(({ name, cardinality, as }) => [name, { cardinality, as }]),
-  );
-  const names = [...new Set(tags.map((tag) => tag.name))];
-  const attrTagProps = names.map((name): AttrTagProp => {
-    const declaration = declarations.get(name);
-    const range = attributeTagOccurrenceRange(attributeTagTree, name);
-    if (declaration?.cardinality === "single") {
-      const occurrences = tags.filter((tag) => tag.name === name);
-      if (range.inFor) {
-        failAt(
-          REPEATED_ATTRIBUTE_TAG_CODE,
-          owner,
-          `${voice.attrTag(name)} may not appear inside ${voice.tag("for")} (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
-          occurrences[0]?.loc ?? { line: 0, column: 0 },
-          nameEndOf(occurrences[0]),
-          voice,
-        );
-      }
-      if (range.max > 1) {
-        failAt(
-          REPEATED_ATTRIBUTE_TAG_CODE,
-          owner,
-          `${voice.attrTag(name)} may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
-          (occurrences[1] ?? occurrences[0])?.loc ?? { line: 0, column: 0 },
-          nameEndOf(occurrences[1] ?? occurrences[0]),
-          voice,
-        );
-      }
-    }
-    return {
-      name,
-      cardinality:
-        declaration?.cardinality ??
-        (range.max <= 1 && !range.inFor ? "single" : "array"),
-      as: declaration?.as ?? fallbackAttrTagShape(tags, name),
-      source: filterAttributeTagTreeByName(attributeTagTree, name),
-    };
-  });
-  return { attributeTagTree, attrTagProps };
+  return { attributeTagTree };
 }
 
 const transformVoices = new WeakMap<TransformContext, Voice>();
@@ -1357,19 +1278,6 @@ export function buildersFor(
         tag,
         loc: tag.loc,
       }));
-      const attrTagProps = [
-        ...new Set(attributeTags.map((tag) => tag.name)),
-      ].map((attributeName) => ({
-        name: attributeName,
-        cardinality:
-          attributeTags.filter((tag) => tag.name === attributeName).length > 1
-            ? ("array" as const)
-            : ("single" as const),
-        as: "data" as const,
-        source: attributeTagTree.filter(
-          (item) => item.tag.name === attributeName,
-        ),
-      }));
       return {
         kind: "DelegatedTag",
         tag: {
@@ -1382,7 +1290,6 @@ export function buildersFor(
           children,
           attributeTags,
           attributeTagTree,
-          attrTagProps,
           params: [],
           bindings: [],
           var: null,
@@ -4187,7 +4094,6 @@ function contractOnlyDelegatedTag(
       attributeTags: call.attributeTags,
       attributeTagTree:
         call.attributeTagTree ?? directAttributeTagTree(call.attributeTags),
-      attrTagProps: call.attrTagProps ?? [],
       params: call.params,
       // The body's block read the call's params; without a body, the param
       // text is parsed (unknown only when it is no param list).
@@ -4283,23 +4189,11 @@ export function transformCustomTag(
     withDefaults.attributeTagTree ??
       directAttributeTagTree(withDefaults.attributeTags),
   );
-  const originalAttrTagProps = (withDefaults.attrTagProps ?? []).map(
-    ({ name, cardinality, as, source, declared }) => ({
-      name,
-      cardinality,
-      as,
-      declared,
-      source: cloneAttributeTagTree(source),
-    }),
-  );
   const normalizeTemplateCall = (routedCall: TagCall): TagCall => ({
     ...routedCall,
-    ...rebuildAttributeTagPlan(
-      call.name,
+    ...rebuildAttributeTagTree(
       originalAttributeTagTree,
-      originalAttrTagProps,
       routedCall.attributeTags,
-      voice,
     ),
   });
   const builders = buildersFor(

@@ -3,8 +3,8 @@
     "id": "attr-tags",
     "group": "Markup",
     "title": "Attribute tags",
-    "text": "A prop that holds markup is written as markup, inside the call. Pipes make it a function of its parameters.",
-    "jsx": "badge={<span className=\"badge\">New</span>}\nprice={(amount) => (\n  <b className=\"sale\">{money(amount)}</b>\n)}"
+    "text": "A prop that holds markup is written as markup, inside the call; the callee gets a record whose content is that markup. Pipes make it a function of its parameters.",
+    "jsx": "badge={{ content: <span className=\"badge\">New</span> }}\nprice={{ content: (amount) => (\n  <b className=\"sale\">{money(amount)}</b>\n) }}"
   },
   {
     "id": "sugar",

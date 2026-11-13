@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 12;
+export const IR_VERSION = 13;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -522,7 +522,6 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
   children: IrNode[];
   attributeTags: AttributeTag[];
   attributeTagTree: AttributeTagNode[];
-  attrTagProps: AttrTagProp[];
   params: string[];
   /**
    * Every name the params bind, from Babel's binding analysis, for a host
@@ -567,7 +566,6 @@ export interface AttributeTag extends IrBase {
   hasBody: boolean;
   attributeTags: AttributeTag[];
   attributeTagTree: AttributeTagNode[];
-  attrTagProps: AttrTagProp[];
 }
 
 export interface ForHead {
@@ -602,6 +600,11 @@ export type AttributeTagNode =
       span?: SourceSpan;
     } & IrBase);
 
+/**
+ * @deprecated The cardinality/shape plan is gone: every attribute tag is
+ * emitted as a record folded from `attributeTagTree` (spec §8). No IR node
+ * carries this type any more; unused by MX.
+ */
 export interface AttrTagProp {
   name: string;
   cardinality: "single" | "array";
@@ -761,7 +764,6 @@ export type IrNode =
       content: Block | null;
       attributeTags: AttributeTag[];
       attributeTagTree: AttributeTagNode[];
-      attrTagProps: AttrTagProp[];
       /** Tag arguments, `<Row(a, b)/>`, for a positional `<define>` call. */
       args: Expr[];
       /**

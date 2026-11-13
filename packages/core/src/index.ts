@@ -15,13 +15,22 @@ export {
   rewriteAccessorReads,
   rewriteReadsInCode,
 } from "./accessor-reads.ts";
-export type {
-  AttrTag,
-  AttrTagAttrs,
-  AttrTagConfig,
-  AttrTagOf,
-  AttrTagParams,
+export {
+  type AttrTag,
+  type AttrTagAttrs,
+  type AttrTagConfig,
+  type AttrTagOf,
+  type AttrTagParams,
+  attributeTagNames,
+  filterAttributeTagTree,
 } from "./attr-tag.ts";
+export {
+  ATTR_TAG_FOLD,
+  ATTR_TAG_RECORD,
+  ATTR_TAG_RUNTIME,
+  ATTR_TAG_RUNTIME_NAMES,
+  usesAttrTagRuntime,
+} from "./attr-tag-runtime.ts";
 export {
   ATTRIBUTE_SPREAD_EXPRESSION,
   ATTRIBUTE_VALUE_EXPRESSION,

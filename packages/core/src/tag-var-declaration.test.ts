@@ -7,7 +7,6 @@ import { lookup } from "./test-targets.ts";
 
 const host: HostDeclarations = {
   name: "tag-var-test",
-  attrTags: 2,
   namedCallInputArgument: true,
   tags: {},
   isElement: (name) => name !== "foo",

@@ -1447,59 +1447,165 @@ describe("class and style take Marko's structured values", () => {
   });
 });
 
-describe("attribute-tag v2 values (executed)", () => {
-  it("renders declared data and renderable tags through their callee forms", async () => {
+describe("attribute-tag records (executed)", () => {
+  /** A `.ts` callee that reports what it received for `<@item>`. */
+  const PROBE = [
+    "export default function Card(input: any): string {",
+    "  const item = input.item;",
+    '  if (item === undefined) return "none";',
+    "  return JSON.stringify({",
+    "    first: item.a,",
+    "    all: [...item].map((each: any) => each.a),",
+    "    length: item.length,",
+    "    last: item.at(-1).a,",
+    "    map: item.map((each: any) => each.a),",
+    "    keys: Object.keys(item),",
+    "    restKeys: item.toArray().slice(1).map((each: any) => Object.keys(each)),",
+    "    body: item.content(),",
+    "    json: JSON.stringify(item),",
+    "  });",
+    "}",
+  ].join("\n");
+  const CALL =
+    'import Card from "./card.ts"\n<Card><@item a=1>x</@item><if=input.c><@item a=2/></if><for|n| of=input.ns><@item a=n/></for></Card>';
+
+  it("passes Marko's record: the first occurrence, carrying every later one", async () => {
+    const html = await renderModules(
+      { "card.ts": PROBE, "entry.mx": CALL },
+      "entry.mx",
+      { c: true, ns: [3, 4] },
+    );
+    expect(JSON.parse(html)).toEqual({
+      first: 1,
+      all: [1, 2, 3, 4],
+      length: 4,
+      last: 4,
+      map: [1, 2, 3, 4],
+      keys: ["a", "content"],
+      restKeys: [["a"], ["a"], ["a"]],
+      body: "x",
+      json: '{"a":1}',
+    });
+  });
+
+  it("passes the first occurrence alone when no other runs, and undefined for none", async () => {
+    const html = await renderModules(
+      { "card.ts": PROBE, "entry.mx": CALL },
+      "entry.mx",
+      { c: false, ns: [] },
+    );
+    expect(JSON.parse(html)).toMatchObject({
+      first: 1,
+      all: [1],
+      length: 1,
+      last: 1,
+      keys: ["a", "content"],
+      restKeys: [],
+    });
+    const none = await renderModules(
+      {
+        "card.ts": PROBE,
+        "entry.mx":
+          'import Card from "./card.ts"\n<Card><if=input.c><@item a=2/></if><for|n| of=input.ns><@item a=n/></for></Card>',
+      },
+      "entry.mx",
+      { c: false, ns: [] },
+    );
+    expect(none).toBe("none");
+  });
+
+  it("renders a record's content through a dynamic tag", async () => {
+    const html = await renderModules(
+      {
+        "card.mx": "<div><${input.head}/></div>",
+        "entry.mx":
+          'import Card from "./card.mx"\n<Card><@head>hi</@head></Card>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div>hi</div>");
+  });
+
+  it("makes a nested attribute tag a record on its parent's record", async () => {
+    const html = await renderModules(
+      {
+        "card.ts": [
+          "export default function Card(input: any): string {",
+          "  return input.row.map((row: any) =>",
+          '    `${row.a}:${row.cell ? row.cell.map((cell: any) => cell.b).join("+") + "/" + row.cell.length : "-"}`,',
+          '  ).join(",");',
+          "}",
+        ].join("\n"),
+        "entry.mx": [
+          'import Card from "./card.ts"',
+          "<Card>",
+          "  <@row a=1><@cell b=1/><for|n| of=[2, 3]><@cell b=n/></for></@row>",
+          "  <@row a=2/>",
+          "</Card>",
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("1:1+2+3/3,2:-");
+  });
+
+  it("compiles a call byte-identically whatever the callee declares", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-attr-input-"));
+    try {
+      const entry = join(dir, "entry.mx");
+      const call = src(
+        'import Card from "./card.mx"\n<Card><@item a=1>x</@item><for|n| of=input.ns><@item a=n/></for></Card>',
+      );
+      const against = (callee: string) => {
+        writeFileSync(join(dir, "card.mx"), src(callee));
+        return compile(call, entry).code;
+      };
+      const untyped = against("<div/>");
+      expect(
+        against(
+          "export interface Input { item?: AttrTag<{ a: number }>[] }\n<div/>",
+        ),
+      ).toBe(untyped);
+      expect(
+        against(
+          "export interface Input { item: AttrTag<{ a: number }> }\n<div/>",
+        ),
+      ).toBe(untyped);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("types a params body under strict tsc, folded or alone", async () => {
     const html = await renderModules(
       {
         "callee.mx": [
           "export interface Input {",
-          '  head?: AttrTag<{ as: "renderable" }>;',
-          "  row?: AttrTag<{ attrs: { label: string }; params: [suffix: string] }>;",
+          "  row?: AttrTag<{ id: number; content: (suffix: string) => string }>;",
+          "  head: AttrTag<{ content: (suffix: string) => string }>;",
           "}",
-          '<section><${input.head}/><if=input.row><b>${input.row.label}:<${input.row.content}("!")/></b></if></section>',
+          '<${input.head.content}("?")/><for|row| of=input.row><p>${row.id}:<${row.content}("!")/></p></for>',
         ].join("\n"),
         "entry.mx": [
           'import Callee from "./callee.mx"',
-          '<Callee><@head>H</@head><@row|suffix| label="R">${suffix}</@row></Callee>',
+          "export interface Input { rows: number[]; show: boolean }",
+          "<Callee><@head|suffix|>${suffix.toUpperCase()}</@head><if=input.show><@row|suffix| id=0>${suffix.toUpperCase()}</@row></if><for|n| of=input.rows><@row|suffix| id=n>${suffix}</@row></for></Callee>",
         ].join("\n"),
       },
       "entry.mx",
+      { rows: [7], show: true },
+      true,
     );
-    expect(html).toBe("<section>H<b>R:!</b></section>");
-  });
-
-  it("merges static, if/else and for occurrences into a real array", async () => {
-    const html = await renderModules(
-      {
-        "list.ts": [
-          "export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }",
-          "export default function List(input: Input): string {",
-          '  return input.item.map((item) => `<i>${item.id}:${item.content?.()}</i>`).join("");',
-          "}",
-        ].join("\n"),
-        "entry.mx": [
-          'import List from "./list.ts"',
-          "<List>",
-          "  <@item id=0>S</@item>",
-          "  <if=input.on><@item id=1>I</@item></if>",
-          "  <else><@item id=2>E</@item></else>",
-          "  <for|n| of=input.values><@item id=n>${n}</@item></for>",
-          "</List>",
-        ].join("\n"),
-      },
-      "entry.mx",
-      { on: true, values: [3, 4] },
-    );
-    expect(html).toBe("<i>0:S</i><i>1:I</i><i>3:3</i><i>4:4</i>");
-  });
+    expect(html).toBe("?<p>0:!</p><p>7:!</p>");
+    // A tsc subprocess; see the lean runtime stub. Scoped headroom.
+  }, 15_000);
 
   it("renders nothing for a nullish of=/in=, matching Marko, in content and attribute-tag loops", async () => {
     const html = await renderModules(
       {
         "list.ts": [
-          "export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }",
-          "export default function List(input: Input): string {",
-          '  return input.item.map((item) => `<i>${item.id}:${item.content?.()}</i>`).join("");',
+          "export default function List(input: any): string {",
+          '  return input.item === undefined ? "" : "some";',
           "}",
         ].join("\n"),
         "entry.mx": [
@@ -1523,9 +1629,8 @@ describe("attribute-tag v2 values (executed)", () => {
       const html = await renderModules(
         {
           "list.ts": [
-            "export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }",
-            "export default function List(input: Input): string {",
-            '  return input.item.map((item) => `<i>${item.id}:${item.content?.()}</i>`).join("");',
+            "export default function List(input: any): string {",
+            '  return input.item === undefined ? "" : "some";',
             "}",
           ].join("\n"),
           "entry.mx": [
@@ -1543,13 +1648,12 @@ describe("attribute-tag v2 values (executed)", () => {
     }
   });
 
-  it("executes else-if, for-in, inclusive to, and exclusive until plans", async () => {
+  it("folds else-if, for-in, inclusive to and exclusive until in source order", async () => {
     const html = await renderModules(
       {
         "list.ts": [
-          "export interface Input { item: AttrTag<{ attrs: { id: string | number } }>[] }",
-          "export default function List(input: Input): string {",
-          '  return input.item.map((item) => `<i>${item.id}</i>`).join("");',
+          "export default function List(input: any): string {",
+          '  return input.item.map((item: any) => `<i>${item.id}</i>`).join("");',
           "}",
         ].join("\n"),
         "entry.mx": [
@@ -1576,9 +1680,8 @@ describe("attribute-tag v2 values (executed)", () => {
     const html = await renderModules(
       {
         "list.ts": [
-          'export interface Input { item: AttrTag<{ as: "renderable" }>[] }',
-          "export default function List(input: Input): string {",
-          '  return input.item.map((item) => item()).join("");',
+          "export default function List(input: any): string {",
+          '  return input.item.map((item: any) => item.content()).join("");',
           "}",
         ].join("\n"),
         "entry.mx": [
@@ -1594,59 +1697,15 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("<b>outer:a</b><b>outer:b</b>outer:aouter:b");
   });
 
-  it("preserves declared param types through looped array emission under strict tsc", async () => {
-    const html = await renderModules(
-      {
-        "callee.mx": [
-          "export interface Input {",
-          "  row: AttrTag<{ attrs: { id: number }; params: [suffix: string] }>[];",
-          "}",
-          '<for|row| of=input.row><p>${row.id}:<${row.content}("!")/></p></for>',
-        ].join("\n"),
-        "entry.mx": [
-          'import Callee from "./callee.mx"',
-          "export interface Input { rows: number[]; show: boolean }",
-          "<Callee><if=input.show><@row|suffix| id=0>${suffix.toUpperCase()}</@row></if><for|n| of=input.rows><@row|suffix| id=n>${suffix.toUpperCase()}</@row></for></Callee>",
-        ].join("\n"),
-      },
-      "entry.mx",
-      { rows: [7], show: true },
-      true,
-    );
-    expect(html).toBe("<p>0:!</p><p>7:!</p>");
-    // A tsc subprocess over ~200 files (mostly @types/node): ~1 s alone,
-    // 1.4-2.3 s in the root run after the lean runtime stub, but the sibling
-    // tsc-backed tests in other packages reach 4-5 s under load. Scoped headroom.
-  }, 15_000);
-
-  it("passes an empty array when a declared repeated tag has no occurrences", async () => {
-    const html = await renderModules(
-      {
-        "list.ts": [
-          "export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }",
-          "export default function List(input: Input): string {",
-          "  return `items:${input.item.length}`;",
-          "}",
-        ].join("\n"),
-        "entry.mx": 'import List from "./list.ts"\n<List/>',
-      },
-      "entry.mx",
-    );
-    expect(html).toBe("items:0");
-  });
-
-  it("emits nested data tags recursively through two levels", async () => {
+  it("emits nested records through two levels", async () => {
     const html = await renderModules(
       {
         "tree.mx": [
           "export interface Input {",
-          "  group?: AttrTag<{ attrs: {",
+          "  group?: AttrTag<{",
           "    title: string;",
-          "    item: AttrTag<{ attrs: {",
-          "      label: string;",
-          '      icon?: AttrTag<{ as: "renderable" }>;',
-          "    } }>[];",
-          "  } }>;",
+          "    item: AttrTag<{ label: string; icon?: AttrTag }>;",
+          "  }>;",
           "}",
           "<if=input.group>",
           "  <h1>${input.group.title}</h1>",
@@ -1663,74 +1722,20 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("<h1>G</h1><p>A:I</p><p>B:J</p>");
   });
 
-  it("unifies nested shape across conditional parent occurrences", async () => {
-    const sources = {
-      "row.mx":
-        '<p>${typeof input.tab.icon}:${input.tab.icon.k || "-"}:<${input.tab.icon.content}/></p>',
-      "entry.mx":
-        'import Row from "./row.mx"\n<Row><if=input.pickBare><@tab><@icon>I</@icon></@tab></if><else><@tab><@icon k="K">J</@icon></@tab></else></Row>',
-    };
-    expect(await renderModules(sources, "entry.mx", { pickBare: true })).toBe(
-      "<p>object:-:I</p>",
-    );
-    expect(await renderModules(sources, "entry.mx", { pickBare: false })).toBe(
-      "<p>object:K:J</p>",
-    );
-  });
-
-  it("unifies nested shape across repeated parent occurrences", async () => {
+  it("gives each parent occurrence its own nested records", async () => {
     const html = await renderModules(
       {
         "row.mx":
-          '<for|tab| of=input.tab><p>${typeof tab.icon}:${tab.icon.k || "-"}:<${tab.icon.content}/></p></for>',
+          '<for|tab| of=input.tab><p>${tab.icon.length}:${tab.icon.k || "-"}:<for|icon| of=tab.icon><${icon}/></for></p></for>',
         "entry.mx":
-          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon k="K">J</@icon></@tab></Row>',
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon k="K">J</@icon><@icon>L</@icon></@tab></Row>',
       },
       "entry.mx",
     );
-    expect(html).toBe("<p>object:-:I</p><p>object:K:J</p>");
+    expect(html).toBe("<p>1:-:I</p><p>2:K:JL</p>");
   });
 
-  it("unifies nested one-versus-array cardinality", async () => {
-    const html = await renderModules(
-      {
-        "row.mx":
-          "<for|tab| of=input.tab><p>${Array.isArray(tab.icon)}:<for|icon| of=tab.icon><${icon}/></for></p></for>",
-        "entry.mx":
-          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon>J</@icon><@icon>K</@icon></@tab></Row>',
-      },
-      "entry.mx",
-    );
-    expect(html).toBe("<p>true:I</p><p>true:JK</p>");
-  });
-
-  it("keeps nested fallback shape isolated between sibling parent names", async () => {
-    const html = await renderModules(
-      {
-        "row.mx":
-          "<p>${typeof input.tab.icon}|${typeof input.card.icon}:${input.card.icon.k}:<${input.tab.icon}/>:<${input.card.icon.content}/></p>",
-        "entry.mx":
-          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Row>',
-      },
-      "entry.mx",
-    );
-    expect(html).toBe("<p>function|object:1:I:J</p>");
-  });
-
-  it("keeps nested fallback cardinality isolated between sibling parent names", async () => {
-    const html = await renderModules(
-      {
-        "row.mx":
-          "<p>${String(Array.isArray(input.tab.icon))}|${String(Array.isArray(input.card.icon))}:<${input.tab.icon}/>:<for|icon| of=input.card.icon><${icon}/></for></p>",
-        "entry.mx":
-          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon>J</@icon><@icon>K</@icon></@card></Row>',
-      },
-      "entry.mx",
-    );
-    expect(html).toBe("<p>false|true:I:JK</p>");
-  });
-
-  it("keeps only each sibling parent's own nested props", async () => {
+  it("keeps sibling parents' nested records apart", async () => {
     const html = await renderModules(
       {
         "row.mx":
@@ -1743,23 +1748,7 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("<p>undefined|undefined:I:B</p>");
   });
 
-  it("does not apply a declared sibling's nested shape to an undeclared parent", async () => {
-    const html = await renderModules(
-      {
-        "row.mx": [
-          'export interface Input { tab?: AttrTag<{ attrs: { icon?: AttrTag<{ as: "renderable" }> } }>; [key: string]: unknown }',
-          "<const/card=(input.card as any)/>",
-          "<p>${typeof card.icon}:${card.icon.k}:<${card.icon.content}/></p>",
-        ].join("\n"),
-        "entry.mx":
-          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Row>',
-      },
-      "entry.mx",
-    );
-    expect(html).toBe("<p>object:1:J</p>");
-  });
-
-  it("uses the data fallback for an untyped dynamic callee", async () => {
+  it("passes the record to an untyped dynamic callee", async () => {
     const html = await renderModules(
       {
         "entry.mx": '<${input.callee}><@slot label="F">fallback</@slot></>',
@@ -1773,44 +1762,12 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("F:fallback");
   });
 
-  it("uses the data fallback for an untyped static callee", async () => {
-    const html = await renderModules(
-      {
-        "panel.ts": [
-          "export default function Panel(input: any): string {",
-          "  return `${input.header.label}:${input.header.content?.()}`;",
-          "}",
-        ].join("\n"),
-        "entry.mx": [
-          'import Panel from "./panel.ts"',
-          '<Panel><@header label="S">static</@header></Panel>',
-        ].join("\n"),
-      },
-      "entry.mx",
-    );
-    expect(html).toBe("S:static");
-  });
-
-  it("renders a body-only fallback through an untyped MX callee", async () => {
-    const html = await renderModules(
-      {
-        "panel.mx": "<div><${input.header}/></div>",
-        "entry.mx": [
-          'import Panel from "./panel.mx"',
-          "<Panel><@header>Hi</@header></Panel>",
-        ].join("\n"),
-      },
-      "entry.mx",
-    );
-    expect(html).toBe("<div>Hi</div>");
-  });
-
-  it("passes a body-only fallback bare to an untyped TSX library component", async () => {
+  it("passes the record to a hand-written TSX component", async () => {
     const html = await renderModules(
       {
         "boundary.tsx": [
-          "export default function Boundary(input: { fallback: () => string }): string {",
-          "  return `<section>${input.fallback()}</section>`;",
+          "export default function Boundary(input: { fallback: { content: () => string } }): string {",
+          "  return `<section>${input.fallback.content()}</section>`;",
           "}",
         ].join("\n"),
         "entry.mx": [
@@ -1823,23 +1780,12 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("<section>ready</section>");
   });
 
-  it("positions a declared data tag's direct-render error at compile time", () => {
-    expect(() =>
-      compile(
-        src("export interface Input { header?: AttrTag }\n<${input.header}/>"),
-        file,
-      ),
-    ).toThrow(
-      "`input.header` is a data attribute tag; render its body with `<${input.header.content}/>`",
-    );
-  });
-
-  it("sets data content to undefined when the tag has no body", async () => {
+  it("gives a bodiless occurrence no content", async () => {
     const html = await renderModules(
       {
         "callee.mx": [
-          "export interface Input { badge?: AttrTag<{ attrs: { label: string } }> }",
-          "<if=input.badge><p>${input.badge.label}:${String(input.badge.content)}</p></if>",
+          "export interface Input { badge?: AttrTag<{ label: string }> }",
+          '<if=input.badge><p>${input.badge.label}:${String("content" in input.badge)}</p></if>',
         ].join("\n"),
         "entry.mx": [
           'import Callee from "./callee.mx"',
@@ -1848,14 +1794,12 @@ describe("attribute-tag v2 values (executed)", () => {
       },
       "entry.mx",
     );
-    expect(html).toBe("<p>empty:undefined</p>");
+    expect(html).toBe("<p>empty:false</p>");
   });
 
   it("imports the html-specialized AttrTag type when Input uses it", () => {
     const code = compile(
-      src(
-        'export interface Input { slot?: AttrTag<{ as: "renderable" }> }\n<div/>',
-      ),
+      src("export interface Input { slot?: AttrTag }\n<div/>"),
       file,
     ).code;
     expect(code).toContain(
@@ -2150,8 +2094,8 @@ describe("dynamic tags", () => {
         "entry.mx":
           'import { comp } from "./comp.ts"\n<${comp}("x", 2)><@head>H</@head></>',
         "comp.ts": [
-          "export function comp(a: string, b: number, extra?: { head?: () => string }) {",
-          '  return `[${a}-${b}-${extra?.head?.() ?? "none"}]`;',
+          "export function comp(a: string, b: number, extra?: { head?: { content?: () => string } }) {",
+          '  return `[${a}-${b}-${extra?.head?.content?.() ?? "none"}]`;',
           "}",
         ].join("\n"),
       },
@@ -2425,26 +2369,34 @@ describe("value import used as a tag", () => {
     expect(html).toBe("<span>comp:1</span>");
   });
 
-  it("an object with a content property throws the data-attribute-tag guard", async () => {
-    // Not a new divergence: `renderDynamic`'s object branch is the same
-    // guard a `<${x}>` data attribute tag already hits.
-    // Marko itself would unwrap `.content` and find no real renderer there
-    // either, silently rendering nothing — but MX's guard is deliberately
-    // loud for this shape everywhere it's reachable, dynamic-tag or not.
+  it("an object with a content property renders its content, as Marko does", async () => {
+    // Marko's `normalizeDynamicRenderer` unwraps `.content`, which is how a
+    // callee's `<${input.head}/>` renders an attribute-tag record (spec §8).
+    const html = await renderModules(
+      {
+        "entry.mx": 'import { Obj } from "./target.ts"\n<Obj/>',
+        "target.ts": [
+          "export const Obj = {",
+          '  content: () => "x",',
+          "};",
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("x");
+  });
+
+  it("an object without content throws the bodiless attribute-tag guard", async () => {
     await expect(
       renderModules(
         {
           "entry.mx": 'import { Obj } from "./target.ts"\n<Obj/>',
-          "target.ts": [
-            "export const Obj = {",
-            '  content: () => "x",',
-            "};",
-          ].join("\n"),
+          "target.ts": "export const Obj = { label: 1 };",
         },
         "entry.mx",
       ),
     ).rejects.toThrow(
-      "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with",
+      "MX: this value is an attribute tag with no body; only one with a body (`content`) renders as a tag",
     );
   });
 

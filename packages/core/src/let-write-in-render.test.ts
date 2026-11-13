@@ -24,7 +24,6 @@ const message = (name: string) =>
 /** A host that has `<let>` (and a delegated `<widget>` that takes arguments). */
 const withLet: HostDeclarations = {
   name: "let-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

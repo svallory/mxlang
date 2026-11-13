@@ -29,6 +29,7 @@
 
 import * as babelParser from "@babel/parser";
 import {
+  ATTR_TAG_RUNTIME,
   ATTRIBUTE_VALUE_EXPRESSION,
   annotationOf,
   attrByName,
@@ -53,6 +54,7 @@ import {
   sliceLoc,
   unresolvedCustomTagMessage,
   unwrapStatementBlock,
+  usesAttrTagRuntime,
   voiceOfCtx,
 } from "@mxlang/core";
 import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
@@ -681,7 +683,7 @@ function clientProjection(
   // to it, so the server view reads the name as `undefined` (`var` line) and
   // client code keeps every meaning of the export (value, type, namespace).
   // An alias keeps its `import` keyword on a line of its own under
-  // `@ts-ignore`: the alias is not erasable syntax, and the ignore must not
+  // `@ts-expect-error`: the alias is not erasable syntax, and the ignore must not
   // reach the name, where an unknown or unused name is reported.
   const valueImport = (statement: Node, serial: number): void => {
     const from = text(statement.source);
@@ -1366,7 +1368,6 @@ export const DEFAULT_TAG = "div";
 export const policy: Policy = {
   name: "@mxlang/target-html",
   nativeTags: WEB_ELEMENTS,
-  attrTags: 2,
   defineCallPassesAttrs: true,
   namedCallInputArgument: true,
   // The ladder: the parent's contract `defaultTag`, then
@@ -1609,6 +1610,9 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 // they bind \`unknown\`, and \`any\` stays \`any\`.
 const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: __MxDynamicProps<T>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
 function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
+  // Marko parity: an attribute-tag record (any object with \`content\`)
+  // renders its body, as Marko's dynamic tag reads \`value.content\`.
+  if (__mxTarget && typeof __mxTarget === "object" && __mxTarget.content) __mxTarget = __mxTarget.content;
   if (!__mxTarget) {
     // Marko parity: a falsy renderer (null, undefined, false,
     // 0, "") renders no tag of its own; content renders independently.
@@ -1639,7 +1643,7 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
     return;
   }
   if (typeof __mxTarget === "object") {
-    throw new TypeError("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>");
+    throw new TypeError("MX: this value is an attribute tag with no body; only one with a body (\`content\`) renders as a tag");
   }
   if (__mxArgs) {
     // Marko 6.3.51 calls a template with its args, so args[0] is its input.
@@ -1831,6 +1835,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxTextOf("), TEXT_OF],
     [code.includes("__mxEscapeScript("), ESCAPE_SCRIPT],
     [code.includes("__mxEscapeStyle("), ESCAPE_STYLE],
+    [usesAttrTagRuntime(code), ATTR_TAG_RUNTIME],
     [dynamic, DYNAMIC_PROPS],
     [dynamic, RENDER_DYNAMIC],
     [code.includes("__mxRenderTag("), RENDER_CALL],

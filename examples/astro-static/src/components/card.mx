@@ -3,13 +3,13 @@ import type { AttrTag } from "@mxlang/host-astro";
 export interface Input {
   title: string;
   content: () => string;
-  footer?: AttrTag<{ as: "renderable" }>;
+  footer?: AttrTag;
 }
 
 <article class="card">
   <h2>${input.title}</h2>
   <div class="card-body">$!{input.content()}</div>
   <if=input.footer>
-    <footer class="card-footer">$!{input.footer()}</footer>
+    <footer class="card-footer">$!{input.footer.content?.()}</footer>
   </if>
 </article>

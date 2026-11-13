@@ -13,7 +13,6 @@ import { lookup } from "./test-targets.ts";
 
 const claimAll: HostDeclarations = {
   name: "attr-tag-comments-test",
-  attrTags: 2,
   tags: {},
   isElement: () => false,
   isComponent: () => false,

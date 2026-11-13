@@ -245,7 +245,6 @@ describe("the `<effect>` error offers the rename to `<script>`", () => {
 /** A host that accepts every tag: nothing here may rescue `<effect>`. */
 const open: HostDeclarations = {
   name: "fixes-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,

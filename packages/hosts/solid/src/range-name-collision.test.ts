@@ -46,12 +46,14 @@ function codegen(
   setup: string,
   generate: "ssr" | "dom",
 ): string {
-  const { code, hoistedImports } = compileSolidMx(mxFragment, {
+  const { code, hoistedImports, hoistedDefines } = compileSolidMx(mxFragment, {
     filename: "fixture.solid.mx",
     moduleBindings: sourceBindings(setup).bindings,
     unknownModuleBindings: unknownSourceBindings(setup),
   });
-  const imports = hoistedImports.map((entry) => entry.code).join("\n");
+  const imports = [...hoistedImports, ...hoistedDefines]
+    .map((entry) => entry.code)
+    .join("\n");
   const jsxSource = `${imports}\nimport { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${code}</ul>;\n}\n`;
   const out = transformSync(jsxSource, {
     filename: "fixture.tsx",

@@ -416,7 +416,6 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
       isElement: () => true,
       isComponent: () => false,
       isDelegatedTag: () => true,
-      attrTags: 2,
       resolveDefaultTag: () => "div",
       ...extra,
     });

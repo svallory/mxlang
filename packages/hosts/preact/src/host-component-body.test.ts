@@ -144,7 +144,11 @@ const EMITTED: Array<[string, string, string]> = [
   [
     "a host component with an attribute tag: the tag's body is MX's own",
     `${BOX}<Box><@a>${D}{input.count}</@a>${D}{input.count}</Box>`,
-    callOf("Box", "() => input.count", '"a": <>{input.count}{null}</>, '),
+    callOf(
+      "Box",
+      "() => input.count",
+      '"a": __mxAttrTag({ content: <>{input.count}{null}</> }), ',
+    ),
   ],
   [
     "tag params with a lone placeholder: the render prop returns it bare",

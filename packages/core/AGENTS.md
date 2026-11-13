@@ -29,21 +29,17 @@ host-specific resolve-time decision goes in `DelegatedTag.data` through
 
 Five facts worth knowing before editing it:
 
-- **Attribute-tag IR has three synchronized views.** `Component` and a dynamic
-  `DelegatedTag` keep `attributeTags`, the flat
-  source-order occurrence list used by existing emitters and tooling; add
-  `attributeTagTree` to preserve nested `<if>`/`<for>` structure; and resolve
-  `attrTagProps`, the cardinality/shape emission plan. `AttributeTag` carries
-  the same three fields recursively, plus its own lowered `attrs` and
-  `hasBody`. A host declaring `attrTags: 2` emits from `attrTagProps` only and
-  does not regroup the flat list or resolve declarations itself. Until a host
-  declares that capability, core positions an error on every construct whose
-  v2 shape could otherwise be silently dropped.
-  For an untyped, unresolved or dynamic callee, the fallback plan uses
-  `renderable` when every occurrence of that property is body-only; one
-  occurrence with attributes or nested tags makes the whole property `data`.
-  Cardinality is still derived independently from paths and loops. A declared
-  `Input` remains authoritative and defaults to `data`. A claimed dynamic
+- **Attribute-tag IR has two synchronized views, and no plan.** `Component`
+  and a dynamic `DelegatedTag` keep `attributeTags`, the flat source-order
+  occurrence list, and `attributeTagTree`, the same occurrences with their
+  `<if>`/`<for>` structure; `AttributeTag` carries both recursively, plus its
+  own lowered `attrs` and `hasBody`. Core reads nothing from the callee for
+  attribute tags (spec §8): a value host emits each name's record from
+  `attributeTagTree` (`attributeTagNames`/`filterAttributeTagTree` in
+  `attr-tag.ts`) through `ATTR_TAG_RUNTIME` (`attr-tag-runtime.ts`), the
+  helper text it appends once per module. `AttrTagProp` and
+  `HostDeclarations.attrTags` are deprecated, exported, and read by nothing.
+  A claimed dynamic
   `DelegatedTag` also retains its tag arguments in `args`; an
   emitter must forward them when it reconstructs a `Component` call. For a
   named custom tag, Marko's own call shapes are exclusive: arguments cannot
@@ -160,7 +156,8 @@ Five facts worth knowing before editing it:
   told it to retry with an override in scope. Measured through the
   typescript-plugin's source reader on a callee held only by the editor: the
   first pass reports the probed candidates, and the second pass resolves the
-  callee through the override and emits the typed `satisfies` value.
+  callee through the override. (Attribute tags no longer read the callee;
+  `readCalleeInput` is still used by Angular.)
   **A failed compile must still report every callee it resolved before the
   error was raised.** `compile.ts`'s `Program.exit` now saves `ctx.dependencies`
   in a `finally` around `lower()`, and `compileSource` decorates a thrown

@@ -1,9 +1,9 @@
 import type { ComponentChildren } from "preact";
 
-function Card(props: { header?: ComponentChildren; footer?: { content?: ComponentChildren; align: string }; children?: ComponentChildren }) {
+function Card(props: { header?: { content?: ComponentChildren }; footer?: { content?: ComponentChildren; align: string }; children?: ComponentChildren }) {
   return (
     <div class="card">
-      <h2>${props.header}</h2>
+      <h2>${props.header?.content}</h2>
       ${props.children}
       <if=props.footer><small data-align=props.footer.align>${props.footer.content}</small></if>
     </div>

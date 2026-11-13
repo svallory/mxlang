@@ -1142,23 +1142,6 @@ export function routeTemplateCall(
       tag: attributeTag,
       loc: attributeTag.loc,
     }));
-  const attrTagProps =
-    call.attrTagProps ??
-    [
-      ...new Set(call.attributeTags.map((attributeTag) => attributeTag.name)),
-    ].map((name) => ({
-      name,
-      cardinality:
-        call.attributeTags.filter((attributeTag) => attributeTag.name === name)
-          .length > 1
-          ? ("array" as const)
-          : ("single" as const),
-      as: "data" as const,
-      source: attributeTagTree.filter(
-        (item) => item.kind === "AttributeTag" && item.tag.name === name,
-      ),
-    }));
-
   return [
     {
       kind: "Component",
@@ -1171,7 +1154,6 @@ export function routeTemplateCall(
       content: call.content,
       attributeTags: call.attributeTags,
       attributeTagTree,
-      attrTagProps,
       args: [],
       // Carried to the emitters because the `{ value, output }` shape is
       // invisible at the call site: a host cannot compile the callee to find

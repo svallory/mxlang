@@ -1,7 +1,8 @@
 import type { AttrTag } from "@mxlang/host-hono";
+import type { Child } from "hono/jsx";
 
 export interface Input {
-  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;
+  row?: AttrTag<{ content: (count: number) => Child }>;
 }
 
 export default function Card(_input: Input) {

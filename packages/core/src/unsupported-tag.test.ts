@@ -17,7 +17,6 @@ function host(
   return {
     name: "@fake/host",
     ...(hostName === undefined ? {} : { hostName }),
-    attrTags: 2,
     tags,
     isElement: () => true,
     isComponent: () => false,

@@ -1,196 +1,115 @@
 ---
 title: "AttrTag"
-description: "Declare named blocks with explicit cardinality, data or renderable values, parameters, nesting, and host-specific content types."
+description: "The attribute-tag record a component receives: Marko's record, with map, filter, length, at and toArray, typed by AttrTag<T>."
 ---
 
 # AttrTag
 
-> **Being replaced.** This guide describes the `AttrTag` config that ships
-> today. MX is moving to Marko's attribute-tag record with extra prototype
-> members ([specification §8](/specification/) is normative). The guide is
-> rewritten together with that change, because the test suite compiles its
-> examples.
-
 An attribute tag is a named block inside a component call. `<@tab>` becomes
 the `tab` property received by the component, while ordinary children remain
-the component's `content` (or JSX `children`). The callee owns the contract:
-its exported `Input` marks attribute-tag properties with `AttrTag`.
+the component's `content` (or JSX `children`).
 
-`AttrTag` is ambient inside `.mx` files. Generated code imports the specialized
-type from the active host package. In hand-written TypeScript or TSX, import it
-from that package yourself, such as `@mxlang/target-html`, `@mxlang/host-preact`,
-`@mxlang/host-react`, `@mxlang/host-hono`, `@mxlang/host-solid`, `@mxlang/host-astro`, or
-`@mxlang/host-angular`. The generic `AttrTag`, `AttrTagOf`, and `AttrTagConfig` are
-also exported by `@mxlang/core` for host authors.
+Every value host (HTML, Preact, React, Hono, Solid) passes the callee
+Marko's attribute-tag record ([specification §8](/specification/) is
+normative):
 
-## The config
+- One `<@tab label="A">Body</@tab>` gives an object holding its attributes as
+  own properties (`label`) plus `content`, the body.
+- A repeated `<@tab>` gives the **first** occurrence's object; every later
+  occurrence is reachable from it. A property read (`input.tab.label`) reads
+  the first occurrence; iteration (`for of`, `[...input.tab]`) yields every
+  occurrence in source order.
+- An attribute tag the call never writes is `undefined`.
 
-`AttrTag<C>` takes one config object. `AttrTagConfig` is the constraint:
-`{ as?: "data" | "renderable"; attrs?: object; params?: readonly unknown[] }`.
+MX adds five members on the record's prototype: `map`, `filter` (both return
+plain arrays; the callback gets `(item, index)`), `length`, `at` (a negative
+index counts from the end, as `Array.prototype.at`) and `toArray`. They are
+not own properties, so a spread or `JSON.stringify` never sees them, and
+Marko-written callee code runs unchanged.
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `as` | `"data"` | Chooses the value the callee receives. |
-| `attrs` | `{}` | Declares attributes accepted on `<@name>` and any nested `AttrTag` properties. |
-| `params` | `[]` | A tuple of parameters declared between pipes, such as `[row: Row, index: number]`. |
+The value never depends on the callee's types. The same call compiles to the
+same output whatever the callee declares: one occurrence, several, inside
+`<if>` or `<for>`, it is always the record.
 
-The config must be syntactically readable. Literal object types and resolvable
-type aliases work; conditional, mapped, intersection, and otherwise evaluated
-configs do not. `params` must be a tuple, not `string[]`. The resulting errors
-are `declare this attribute tag's config literally` and
-`attribute tag params must be a tuple type`.
+## Typing it: `AttrTag<T>`
 
-## Cardinality belongs to the property
+`AttrTag<T>` is the record's type: `T`, the attributes of one occurrence, plus
+`[Symbol.iterator]`, `length`, `at`, `map`, `filter` and `toArray`. It is
+assignable to Marko's `Marko.AttrTag<T>`.
 
-Cardinality is not a config field:
+`AttrTag` is ambient inside `.mx` files. Generated code imports it from the
+active host package. In hand-written TypeScript or TSX, import it from that
+package yourself, such as `@mxlang/target-html`, `@mxlang/host-preact`,
+`@mxlang/host-react`, `@mxlang/host-hono` or `@mxlang/host-solid`. A host's
+`AttrTag<T>` adds that host's `content` type unless `T` declares its own;
+the generic `AttrTag<T>` from `@mxlang/core` adds none.
 
-| Declaration | Accepted calls | Received value |
-| --- | --- | --- |
-| `head?: AttrTag<C>` | zero or one `<@head>` | `undefined` or one value |
-| `head: AttrTag<C>` | exactly one `<@head>` on every path | one value |
-| `head: AttrTag<C>[]` | zero or more, including inside `<for>` | always a real array, including `[]` |
-
-The compiler reports these exact messages:
-
-| Violation | Message |
+| Declaration | Meaning |
 | --- | --- |
-| A singular tag occurs twice | `` `<@head>` may appear at most once (`head` is declared `AttrTag`, not `AttrTag[]`) `` |
-| A singular tag is inside `<for>` | `` `<@head>` may not appear inside `<for>` (`head` is declared `AttrTag`, not `AttrTag[]`) `` |
-| A required tag is absent | `` missing required attribute tag `<@head>` `` |
-| A required tag is missing from any conditional path | `` `<@head>` is required but not provided on every `<if>` path `` |
+| `head?: AttrTag` | An optional body-only tag. |
+| `head: AttrTag` | A tag the caller must write. |
+| `tab: AttrTag<{ label: string }>` | A tag with a `label` attribute; zero, one or many occurrences all type the same. |
+| `row: AttrTag<{ content: (row: Row) => … }>` | A tag whose body takes params, `<@row|row|>`. |
 
-An optional singular tag may occur once in every mutually exclusive
-`<if>`/`<else-if>`/`<else>` branch because only one branch is selected. A
-required singular needs a final `else` or another occurrence outside the
-conditional so that every path supplies it.
+The callee's `Input` types the record for the type checker and the editor
+tools (`mx-tsc`, the language server, the TypeScript plugin): a call that
+does not match it is a type error there, not a compile error. A custom tag's
+sidecar contract (`attributeTags`, with `required` and `repeatable`) is still
+checked by the compiler.
 
-## Data and renderable values
+## The body: `content`
 
-The default, `as: "data"`, receives an object shaped as
-`{ ...attrs, ...nestedTags, content }`. `content` is optional because a data tag
-may be bodiless. Render its body with `<${input.head.content}/>`; rendering the
-object itself as `<${input.head}/>` is an error with the exact fix-it:
-`` `input.head` is a data attribute tag; render its body with
-`<${input.head.content}/>` ``.
+`content` is the body, in the host's shape (table below). Render it with
+`<${input.head.content}/>`, or render the record itself, `<${input.head}/>`:
+a dynamic tag given a record renders its `content`, as Marko does. A record
+whose tag had no body (`<@head/>`) has no `content` and renders as an error at
+run time.
 
-`as: "renderable"` receives the body itself and is rendered with
-`<${input.head}/>` (or the host's native equivalent). It cannot declare
-`attrs`, accept authored attributes, or contain nested attribute tags: a bare
-renderable has nowhere to carry that data. React elements, for example, are
-not mutable records. The declaration error is exactly
-`renderable attribute tags can't take attributes; declare as: "data"`.
-
-At runtime, passing a real data value to a dynamic renderer is guarded too:
-`MX: this value is a data attribute tag ({ ...attrs, content }); render its
-body with <${x.content}/>`.
-
-## Params make render functions
-
-`params` describes the names and types that must appear between pipes at the
-call site. In data mode the function is stored in `.content`; in renderable
-mode the property itself is the function.
-
-| Declaration | Caller | Callee |
-| --- | --- | --- |
-| `row: AttrTag<{ params: [row: Row] }>` | `<@row|row|>…</@row>` | `<${input.row.content(item)}/>` |
-| `row: AttrTag<{ as: "renderable"; params: [row: Row] }>` | `<@row|row|>…</@row>` | `<${input.row(item)}/>` |
-
-The caller gets `` `<@row>` declares params in `<Table>`; add `|…|` `` when it
-omits pipes, and `` `<@row>` declares no params in `<Table>`; remove `|…|` ``
-when it invents them. Rendering a known parameterized value without calling it
-is also rejected, for example: `` `input.row.content` is a parameterized
-attribute tag; pass its arguments with
-`<${input.row.content(/* arguments */)}/>` ``.
-
-Solid adds one layer: its renderable is an accessor. A parameterized data tag
-there is `(p) => () => JSX.Element`, so call it and then render the returned
-accessor: `<${input.row.content(item)}/>`.
-
-## Control flow and nesting
-
-Attribute tags may sit inside `<if>` and `<for>` directly under a component
-call. A control-flow body must contain attribute tags or ordinary content, not
-both; mixing them produces exactly `Cannot have attribute tags and body content
-under a control flow tag.` An array declaration is required for a tag that can
-repeat or appears in a loop.
-
-Nested attribute tags are declared recursively inside `attrs`. Cardinality,
-shape, params, conditionals, loops, and errors apply again at every level. All
-occurrences of the same property get one stable nested plan: if one `<@tab>`
-has an attributed `<@icon>`, every `tab.icon` occurrence is data-shaped; if one
-occurrence repeats `<@icon>`, every `tab.icon` is an array. Sibling properties
-with the same nested name are independent.
+With params, `<@row|row, index|>…</@row>` makes `content` a function of them:
+the callee passes the arguments as tag arguments,
+`<${input.row.content}(row, index)/>`. On Solid, `content` is an accessor, so
+a parameterized one is called where it renders,
+`<${input.row.content(row, index)}/>`.
 
 `content` is reserved as an authored attribute because it already names the
 body. The exact diagnostic is `` `content` is reserved on an attribute tag; it
 names the body ``.
 
-## How the caller finds `Input`
+## Control flow and nesting
 
-The caller reads the callee's type syntax without running a TypeScript program:
+Attribute tags may sit inside `<if>` and `<for>` directly under a component
+call; each occurrence a branch or an iteration produces joins the record in
+source order. A control-flow body must contain attribute tags or ordinary
+content, not both; mixing them produces exactly `Cannot have attribute tags
+and body content under a control flow tag.`
 
-- `Input` in the same `.mx` file and an exported `Input` in imported `.mx`,
-  `.ts`, `.tsx`, or `.solid.mx` files are supported. Script components must
-  export the name `Input`; `Props`, a function parameter annotation, and an
-  unexported interface are intentionally ignored.
-- Type aliases and imported aliases are followed, including nested `AttrTag`
-  configs. Resolution tries the tool's synchronous `resolveImport` hook first,
-  then relative files and package resolution.
-- If an import cannot be resolved, compilation continues with the fallback and
-  warns: `` couldn't read `<Card>`'s Input (`@app/Card` not resolvable);
-  attribute-tag shape inferred from this call ``. Bundlers and editor tooling
-  use `resolveImport` for aliases so they do not need that fallback.
-- A resolved component with an unknown extension is untyped unless its host
-  registered a reader. It is not parsed as TypeScript or MX by guesswork.
-
-For an untyped, unresolved, or dynamic callee, MX infers cardinality and shape
-from the whole call. A property is singular when at most one occurrence can be
-selected on a path, and an array when it repeats or appears in `<for>`. It is a bare renderable when none of its occurrences has
-attributes or nested tags. If any occurrence has either, every occurrence is
-data-shaped. This keeps library patterns such as
-`<Suspense><@fallback>Loading…</@fallback>…</Suspense>` working. A declared
-`Input` remains authoritative and still defaults to data.
-
-## Tooling when a callee's `Input` changes
-
-A caller's attribute tags are checked against the callee's `Input`, so
-changing a component's `Input` changes what its callers must write. Each tool
-picks the change up differently:
-
-- **`mx-tsc`** compiles every file from disk on each run, so it always checks
-  against the current `Input`.
-- **The language server** (`@mxlang/language-server`) re-diagnoses every open
-  caller of a file that changed: on an edit to an open callee, on a save, and
-  on a change made outside the editor (another editor, a checkout, a
-  generator).
-- **The TypeScript plugin** (`@mxlang/typescript-plugin`) re-checks a caller
-  at once when the callee's *types* change, for example when an attribute
-  becomes required, and it reads an open callee's unsaved text. What the
-  caller was *compiled to* is refreshed only when the caller itself changes.
-  If a callee's change alters the shape MX emits for the call (a callee that
-  could not be read before now exists, or an inferred shape is now declared),
-  the caller keeps the earlier shape and its warnings until you edit it.
+Nested attribute tags are records on their parent's record, by the same rule:
+`<@tab><@icon>📁</@icon>Files</@tab>` gives `input.tab.icon`, a record.
 
 ## Host values and limits
 
-| Host | `content` / renderable | Notes |
+| Host | `content` | Notes |
 | --- | --- | --- |
 | HTML | `() => string`; with params, `(...p) => string` | A thunk, not an already-rendered string. |
-| Preact | `ComponentChildren`; params return `ComponentChildren` | Data objects and real arrays are ordinary JSX props. |
-| React | `ReactNode`; params return `ReactNode` | Same structural lowering as Preact. |
-| Hono | `Child`; params return `Child` | Same structural lowering as Preact. |
+| Preact | `ComponentChildren`; params return `ComponentChildren` | The record is an ordinary JSX prop. |
+| React | `ReactNode`; params return `ReactNode` | Same lowering as Preact. |
+| Hono | `Child`; params return `Child` | Same lowering as Preact. |
 | Solid | reusable `() => SolidElement`; params produce `(…p) => () => SolidElement` | Render the accessor with a dynamic tag or Solid's `<Dynamic>`. |
-| Astro | named-slot `() => string` thunk, exposed directly for renderable and as `.content` for data | Projection only. Arrays, attrs, params, nested tags, and bodiless tags are errors. |
-| Angular | content projection; no class value (`AttrTag<C>` is `never`) | `${input.x()}`, `${input.x.content()}`, `<${input.x.content}/>` and renderable `<${input.x}/>` become `<ng-content>`. Other value reads are errors. Arrays, attrs, params, nested tags, and bodiless tags are errors. |
+| Astro | named-slot `() => string` thunk, exposed directly and as `.content` | Projection only. Repeats, attrs, params, nested tags, and bodiless tags are errors. |
+| Angular | content projection; no class value (`AttrTag` is `never`) | `${input.x()}`, `${input.x.content()}`, `<${input.x.content}/>` and `<${input.x}/>` become `<ng-content>`. Other value reads are errors. Repeats, attrs, params, nested tags, and bodiless tags are errors. |
 
 Astro and Angular support mutually exclusive conditional projections, because
-only one projection is emitted. They cannot represent repeated/looped values.
+only one projection is emitted. They cannot represent repeated or looped
+values.
+
+An own attribute named like a prototype member (`<@item length=3>`) shadows
+it on that occurrence, as any own property shadows its prototype's.
 
 ## Hand-written JSX and TSX components
 
 A hand-written component called from MX exports `Input`, imports `AttrTag` from
-its host package, and reads the same shapes. Here a Preact component receives
-a data object, its `.content`, and an array:
+its host package, and reads the record. Here a Preact component maps over
+every `<@tab>`:
 
 <!-- attr-tag-example: handwritten-preact preact Tabs.tsx -->
 ```tsx
@@ -198,7 +117,7 @@ import type { AttrTag } from "@mxlang/host-preact";
 
 export interface Input {
   title: string;
-  tab: AttrTag<{ attrs: { label: string } }>[];
+  tab: AttrTag<{ label: string }>;
 }
 
 export default function Tabs(props: Input) {
@@ -233,12 +152,12 @@ types.
 These examples are extracted from this page, compiled as real multi-file
 programs, and rendered in the HTML and Preact test suites.
 
-### Tabs: a repeated data tag
+### Tabs: a repeated tag
 
 <!-- attr-tag-example: tabs both Tabs.mx -->
 ```mx
 export interface Input {
-  tab: AttrTag<{ attrs: { label: string; selected?: boolean } }>[];
+  tab: AttrTag<{ label: string; selected?: boolean }>;
 }
 
 <nav>
@@ -265,13 +184,13 @@ import Tabs from "./Tabs.mx"
 </Tabs>
 ```
 
-### Layout: renderable slots
+### Layout: rendering a record
 
 <!-- attr-tag-example: layout both Layout.mx -->
 ```mx
 export interface Input {
-  header: AttrTag<{ as: "renderable" }>;
-  footer?: AttrTag<{ as: "renderable" }>;
+  header: AttrTag;
+  footer?: AttrTag;
 }
 
 <header><${input.header}/></header>
@@ -290,19 +209,19 @@ import Layout from "./Layout.mx"
 </Layout>
 ```
 
-### Table: a row render function
+### Table: a body with params
 
 <!-- attr-tag-example: table both Table.mx -->
 ```mx
 export type Row = { name: string };
 export interface Input {
   rows: Row[];
-  row: AttrTag<{ as: "renderable"; params: [row: Row, index: number] }>;
+  row: AttrTag<{ content: (row: Row, index: number) => unknown }>;
 }
 
 <table><tbody>
   <for|row, index| of=input.rows>
-    <${input.row(row, index)}/>
+    <${input.row.content}(row, index)/>
   </for>
 </tbody></table>
 ```
@@ -323,12 +242,7 @@ import Table from "./Table.mx"
 <!-- attr-tag-example: nested both Tabs.mx -->
 ```mx
 export interface Input {
-  tab: AttrTag<{
-    attrs: {
-      label: string;
-      icon?: AttrTag<{ as: "renderable" }>;
-    };
-  }>[];
+  tab: AttrTag<{ label: string; icon?: AttrTag }>;
 }
 
 <ul><for|tab| of=input.tab>
@@ -352,18 +266,12 @@ import Tabs from "./Tabs.mx"
 
 | Question | Marko 6 | MX |
 | --- | --- | --- |
-| Repeated value | One iterable `attrTag`/`attrTags` record; a single tag is iterable too. | The `Input` property chooses one value or a real array. |
-| Attributes on repeats | Direct property reads expose the first occurrence's attributes; iteration reaches every occurrence. | Every array item owns its own attrs, nested tags, and `content`. |
+| The value | One iterable `attrTag`/`attrTags` record; a single tag is iterable too. | The same record, plus `map`, `filter`, `length`, `at` and `toArray` on its prototype. |
 | Unused attributes | The compiler can tree-shake attributes the callee never reads. | Every authored attribute is passed. |
-| No declaration | Marko's runtime shape applies. | MX uses a bare renderable for body-only occurrences, data when any occurrence carries attrs/nested tags, and infers single versus array separately. |
+| Typing | `Marko.AttrTag<T>` | `AttrTag<T>`, assignable to `Marko.AttrTag<T>`. |
 
-For Marko authors migrating a component, declare every named block in
-`Input`. Use `AttrTag[]` anywhere Marko code iterated a tag, replace direct
-body rendering of a data tag with `.content`, and choose `as: "renderable"`
-only for body-only render-prop APIs. Code that relied on the first repeated
-tag's attributes should instead select an explicit array item. Do not remove
-"unused" authored attributes expecting Marko's tree-shaking; MX intentionally
-passes them through.
+Do not remove "unused" authored attributes expecting Marko's tree-shaking; MX
+intentionally passes them through.
 
 See [Attribute tags and tag params](/language/attribute-tags-and-params/) for
 the syntax overview and [Errors](/language/errors/#errors-attribute-tag-errors) for

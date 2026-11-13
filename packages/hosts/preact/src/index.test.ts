@@ -699,9 +699,9 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     expect(html).toBe("<div><em></em></div>");
   });
 
-  it("passes body-only fallback attribute tags bare through a dynamic call", async () => {
+  it("passes a dynamic call the record", async () => {
     const html = await renderCompiled("<${input.tag}><@head>H</@head></>", {
-      tag: (props: { head: unknown }) => props.head,
+      tag: (props: { head: { content: unknown } }) => props.head.content,
     });
     expect(html).toBe("H");
   });
@@ -749,8 +749,8 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     const html = await renderCompiled(
       '<${input.render}("x", 2)><@head>H</@head></>',
       {
-        render: (a: string, b: number, extra?: { head?: unknown }) =>
-          h("b", null, `${a}-${b}-`, extra?.head as never),
+        render: (a: string, b: number, extra?: { head?: { content: never } }) =>
+          h("b", null, `${a}-${b}-`, extra?.head?.content),
       },
     );
     expect(html).toBe("<b>x-2-H</b>");
@@ -1094,14 +1094,12 @@ describe("attribute tag values (executed)", () => {
     }
   }
 
-  it("body-only fallback single and array values use the renderable shape", async () => {
+  it("passes one record whether a tag occurs once or more", async () => {
     const html = await renderCompiled(
       'import Row from "./row.mx"\n<Row><@item>solo</@item><@many>a</@many><@many>b</@many></Row>',
-      '<div>single=${String(!Array.isArray(input.item))} array=${String(Array.isArray(input.many))} entries=${String(input.many.every((item) => !(typeof item === "object" && item !== null && "content" in item)))}</div>',
+      "<div>${input.item.length}:${input.many.length}:${String(Array.isArray(input.many))}:${String(input.many.at(0) === input.many)}</div>",
     );
-    expect(html).toContain("single=true");
-    expect(html).toContain("array=true");
-    expect(html).toContain("entries=true");
+    expect(html).toBe("<div>1:2:false:true</div>");
   });
 
   it("renders a parameterized placeholder body through data content", async () => {
@@ -1115,19 +1113,19 @@ describe("attribute tag values (executed)", () => {
     expect(html).toBe("<p><span>safe</span></p>");
   });
 
-  it("emits declared data, array, renderable, params and bodyless shapes", async () => {
+  it("renders records with attributes, repeats, params and no body", async () => {
     const html = await renderCompiled(
       [
         'import Row from "./row.mx"',
         '<Row><@head tone="hot">H</@head><@item id=1>A</@item><@item id=2>B</@item><@slot>S</@slot><@render|label|><b>${label}</b></@render><@empty/></Row>',
       ].join("\n"),
       [
-        'export interface Input { head: AttrTag<{ attrs: { tone: string } }>; item: AttrTag<{ attrs: { id: number } }>[]; none: AttrTag[]; slot: AttrTag<{ as: "renderable" }>; render: AttrTag<{ as: "renderable"; params: [label: string] }>; empty: AttrTag }',
-        '<section data-tone=input.head.tone><${input.head.content}/><for|item| of=input.item><i data-id=item.id><${item.content}/></i></for><${input.slot}/><${input.render("P")}/><u>${input.none.length}:${String(input.empty.content === undefined)}</u></section>',
+        "export interface Input { head: AttrTag<{ tone: string }>; item: AttrTag<{ id: number }>; none?: AttrTag; slot: AttrTag; render: AttrTag<{ content: (label: string) => unknown }>; empty: AttrTag }",
+        '<section data-tone=input.head.tone><${input.head.content}/><for|item| of=input.item><i data-id=item.id><${item.content}/></i></for><${input.slot}/><${input.render.content}("P")/><u>${String(input.none === undefined)}:${String(input.empty.content === undefined)}</u></section>',
       ].join("\n"),
     );
     expect(html).toBe(
-      '<section data-tone="hot">H<i data-id="1">A</i><i data-id="2">B</i>S<b>P</b><u>0:true</u></section>',
+      '<section data-tone="hot">H<i data-id="1">A</i><i data-id="2">B</i>S<b>P</b><u>true:true</u></section>',
     );
   });
 

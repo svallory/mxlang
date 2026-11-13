@@ -13,7 +13,6 @@ import { lookup } from "./test-targets.ts";
 
 const elements: HostDeclarations = {
   name: "import-declaration-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: (name, ctx) => ctx.defines.has(name),

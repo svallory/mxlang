@@ -426,7 +426,11 @@ function hoistRegionImports(file: File, filename: string): void {
   program.body.splice(
     defineInsertIndex + 1,
     0,
-    ...parsedDefines.map((one) => detachLocations(one.program.body[0])),
+    // A host helper may be several declarations (the attribute-tag record
+    // helper declares a type, constants and functions); every one is kept.
+    ...parsedDefines.flatMap((one) =>
+      one.program.body.map((statement) => detachLocations(statement)),
+    ),
   );
 }
 

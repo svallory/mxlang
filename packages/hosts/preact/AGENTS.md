@@ -45,28 +45,22 @@ Six facts worth knowing before editing it:
   ("Unable to find entry point for custom tag `<Name>`.") through the same
   `lower.ts` hook `@mxlang/target-html`/`@mxlang/host-solid` already use. `@mxlang/host-react`
   and `@mxlang/host-hono` share this fix through `createJsxDeclarations`.
-- **Attribute tags emit from core's `attrTagProps` plan**,
-  never by regrouping the flat occurrence list. `data` values are
-  `{ ...attrs, ...nestedProps, content }`; `renderable` values are the body;
-  repeated values are real arrays; conditionals are ternaries and loops use
-  `.flatMap`. On Preact, `content` is `ComponentChildren` and is a render
-  function when params are declared.
-  Untyped body-only props therefore arrive bare; one
-  attributed or nested occurrence makes the whole fallback property data.
-- **A declared attribute-tag value carries its type at the call site.** Each
-  concrete singular occurrence is emitted as `((value) satisfies
-  NonNullable<Parameters<typeof Callee>[0]["name"]>)`, as arrays already
-  were typed, so `mx-tsc` and the tsserver plugin check a wrong or missing
-  attribute against the callee's `AttrTag`. An undeclared property is emitted
-  bare. The object's `{` is mapped to the tag name and each key and value to
-  its authored span, which is what places those diagnostics.
-  The inner parentheses are load-bearing: `satisfies` binds tighter than an
-  arrow function and a conditional, so `(p) => x satisfies T` checks `x` and
-  `test ? a : undefined satisfies T` checks `undefined`. That is also why
-  the check sits on each occurrence inside a conditional plan, never around
-  the plan, and why a bodiless renderable (`undefined`) carries none. A
-  wrong value is reported twice: once by `satisfies` at the attribute, once
-  by the JSX prop at the tag name.
+- **Attribute tags are Marko's record** (spec §8), emitted per name of
+  `attributeTagTree` whatever the callee declares: one `__mxAttrTag({...})`
+  for a lone unconditional occurrence, otherwise an IIFE folding each
+  occurrence with `__mxAttrTags` (`<if>` as `if`/`else`, `<for>` as a loop).
+  An occurrence object holds its attributes, its own attribute tags as
+  records, and `content` (`ComponentChildren`, or a render function with
+  params) only when it has a body; several occurrences key their bodies.
+  `__mxDynamic` renders a record's `content`.
+- **A typed callee checks the record where it is written.** `__mxAttrTag`
+  takes `T` from the callee's prop (`NoInfer` on its argument), so `mx-tsc`
+  and the tsserver plugin report a wrong attribute at that attribute and a
+  missing one at the tag name: both braces and the `content` key map to the
+  tag name, each key and value to its authored span. A fold has no declared
+  type until its result reaches the prop, so its error is on the tag name. A
+  params body that no declared type reaches (a fold, a dynamic tag's or a
+  `<define>`'s props) is cast to `(...args: any[]) => any`.
 - **`warnings` collects non-fatal diagnostics.** `compilePreactMx` (and the
   React and Hono wrappers over it) take an optional `warnings` array that
   core fills; tooling reports it, a build may ignore it.

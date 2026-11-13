@@ -45,10 +45,9 @@ describe("mx-tsc", () => {
     SPAWN_TIMEOUT_MS,
   );
 
-  // A bad attribute-tag value is checked once, by the `satisfies` the emitter
-  // wraps it in; the enclosing call must not check the same value again (the
-  // `satisfies` expression keeps the value's own type, so the callee's prop
-  // would re-report it, once at the tag and once unmapped).
+  // A bad attribute-tag value is checked once, where the record helper takes
+  // its argument; the enclosing call must not check the same value again
+  // (once at the tag and once unmapped).
   it.each([
     ["html", "attr-tag-html-failing", "mx", "(3,13)", "(3,9)"],
     ["preact", "attr-tag-preact-failing", "mx", "(3,13)", "(3,9)"],
@@ -70,13 +69,15 @@ describe("mx-tsc", () => {
   );
 
   // Every value shape (declared in `Shapes`), one bad occurrence per file:
-  // exactly one diagnostic, at the authored attribute or tag.
+  // exactly one diagnostic, at the authored attribute or tag. A repeated tag
+  // folds its occurrences into one record that no declared type reaches
+  // before the prop, so its error is on the tag name, not the attribute.
   const shapes = [
     ["Extra", "TS2353", ["(3,25)", "(3,45)"]],
     ["Nested", "TS2322", ["(3,31)", "(3,31)"]],
-    ["NestedMissing", "TS1360", ["(3,11)", "(3,31)"]],
-    ["Array", "TS2322", ["(3,16)", "(3,36)"]],
-    ["Renderable", "TS1360", ["(3,11)", "(3,31)"]],
+    ["NestedMissing", "TS2345", ["(3,11)", "(3,31)"]],
+    ["Repeated", "TS2322", ["(3,11)", "(3,31)"]],
+    ["Renderable", "TS2322", ["(3,11)", "(3,31)"]],
   ] as const;
   it.each(
     ["html", "preact", "solid"].flatMap((host, hostIndex) =>

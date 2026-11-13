@@ -251,7 +251,6 @@ describe("generated names do not shadow authored bindings", () => {
                     attrs: [],
                     attributeTags: [],
                     attributeTagTree: [],
-                    attrTagProps: [],
                     content: null,
                     returnsValue: true,
                     var: call.var ?? undefined,
@@ -268,21 +267,32 @@ describe("generated names do not shadow authored bindings", () => {
 });
 
 describe("Solid SSR render: attribute-tag values", () => {
-  it("executes fallback data values, arrays, bodyless content and Dynamic", () => {
-    const html = renderApp(
-      `<Row><@head kind="heading">H</@head><@item id=0>0</@item><@item id=2>2</@item><@empty present/></Row>`,
-      `function Row(input) { return <section><Dynamic component={input.head.content}/><div>{input.head.content}{input.head.content}</div><For each={input.item}>{(item) => <i>{item.content}</i>}</For><u>{String(input.empty.content === undefined)}</u></section>; }`,
+  it("folds static, conditional and looped occurrences into one record", () => {
+    const row = `function Row(input) { return <section>{input.item.a}|{input.item.length}|{input.item.map((i) => i.a).join(",")}|{input.item.at(-1).a}|{JSON.stringify(input.item)}|{Object.keys(input.item).join(",")}|<Dynamic component={input.item.content}/>|{String(input.none === undefined)}</section>; }`;
+    const source = `<Row><@item a=1>x</@item><if=c><@item a=2/></if><for|n| of=list><@item a=n/></for></Row>`;
+    expect(
+      renderApp(source, `const c = true; const list = [3, 4]; ${row}`),
+    ).toBe(
+      '<ul><section>1|4|1,2,3,4|4|{"a":1}|a,content|x|true</section></ul>',
     );
-    expect(html).toBe(
-      "<ul><section>H<div>HH</div><i>0</i><i>2</i><u>true</u></section></ul>",
+    expect(renderApp(source, `const c = false; const list = []; ${row}`)).toBe(
+      '<ul><section>1|1|1|1|{"a":1}|a,content|x|true</section></ul>',
     );
   });
 
-  it("executes declared shapes, params, control flow and nested tags", () => {
+  it("renders a record given to a dynamic tag as its content", () => {
+    const html = renderApp(
+      `<define/Card|{ head }|><b><\${head}/></b></define><Card><@head>H</@head></Card>`,
+      "",
+    );
+    expect(html).toBe("<ul><b>H</b></ul>");
+  });
+
+  it("executes records with attributes, params, control flow and nested tags", () => {
     const html = renderDeclaredAttrTags(
       `<Row><if=ok><@head tone="hot">A</@head></if><else><@head tone="cold">B</@head></else><@item id=0>S</@item><for|value| of=values><@item id=value>\${value}</@item></for><@slot>R</@slot><@render|label|><b>\${label}</b></@render><@tab title="T"><@icon label="star">I</@icon></@tab></Row>`,
-      `{ head: AttrTag<{ attrs: { tone: string } }>; item: AttrTag<{ attrs: { id: number } }>[]; slot: AttrTag<{ as: "renderable" }>; render: AttrTag<{ as: "renderable"; params: [label: string] }>; tab: AttrTag<{ attrs: { title: string; icon: AttrTag<{ attrs: { label: string } }> } }> }`,
-      `const ok = false; const values = [1, 2]; function Row(input) { return <article data-tone={input.head.tone}><Dynamic component={input.head.content}/><For each={input.item}>{(item) => <i data-id={item.id}>{item.content}</i>}</For><Dynamic component={input.slot}/><Dynamic component={input.render("P")}/><strong>{input.tab.title}:{input.tab.icon.label}:<Dynamic component={input.tab.icon.content}/></strong></article>; }`,
+      `{ head: AttrTag<{ tone: string }>; item: AttrTag<{ id: number }>; slot: AttrTag; render: AttrTag<{ content: (label: string) => () => unknown }>; tab: AttrTag<{ title: string; icon: AttrTag<{ label: string }> }> }`,
+      `const ok = false; const values = [1, 2]; function Row(input) { return <article data-tone={input.head.tone}><Dynamic component={input.head.content}/><For each={input.item.toArray()}>{(item) => <i data-id={item.id}>{item.content}</i>}</For><Dynamic component={input.slot.content}/><Dynamic component={input.render.content("P")}/><strong>{input.tab.title}:{input.tab.icon.label}:<Dynamic component={input.tab.icon.content}/></strong></article>; }`,
     );
     expect(html).toBe(
       '<ul><article data-tone="cold">B<i data-id="0">S</i><i data-id="1">1</i><i data-id="2">2</i>R<b>P</b><strong>T:star:I</strong></article></ul>',
@@ -726,7 +736,7 @@ describe("Solid SSR render: dynamic tag", () => {
   it("accepts arguments combined with an attribute tag (Marko parity)", () => {
     const html = renderApp(
       `<\${input.render}("x", 2)><@head>H</@head></>`,
-      `const input = { render: (a: string, b: number) => (extra?: { head?: unknown }) => <em>{a}-{b}-{extra?.head as never}</em> };`,
+      `const input = { render: (a: string, b: number) => (extra?: { head?: { content: unknown } }) => <em>{a}-{b}-{extra?.head?.content as never}</em> };`,
     );
     expect(html).toContain("x-2-H");
   });

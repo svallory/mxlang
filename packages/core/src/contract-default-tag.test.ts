@@ -181,7 +181,6 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
     const policy: Policy = {
       tags: {},
       isElement: () => true,
-      attrTags: 2,
       isDelegatedTag: () => true,
       isComponent: (name) => name in tags,
       ...options.policy,
@@ -321,7 +320,6 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
   ): string {
     const policy: Policy = {
       tags: {},
-      attrTags: 2,
       isDelegatedTag: () => true,
       isElement: () => true,
       isComponent: (name) => name in tags,

@@ -19,6 +19,8 @@
 
 import { readFileSync } from "node:fs";
 import {
+  ATTR_TAG_RECORD,
+  ATTR_TAG_RUNTIME,
   type CompileResult,
   type CustomTag,
   compileSource,
@@ -36,6 +38,7 @@ import {
   moduleExportName,
   type TargetLookup,
   TranslateError,
+  usesAttrTagRuntime,
 } from "@mxlang/core";
 import {
   JSX_ATTRIBUTE_SPREAD_EXPRESSION,
@@ -200,6 +203,8 @@ export function attributeHelpers(
       binding: "__mxAttrSpread",
       code: `const __mxAttrSpread = ${JSX_ATTRIBUTE_SPREAD_EXPRESSION};`,
     });
+  if (usesAttrTagRuntime(text))
+    helpers.push({ binding: ATTR_TAG_RECORD, code: ATTR_TAG_RUNTIME });
   if (text.includes("__mxScriptText("))
     helpers.push({
       binding: "__mxScriptText",
@@ -354,6 +359,9 @@ const MX_IS_HOST_COMPONENT_OBJECT = `function __mxIsHostComponentObject(value: a
  * the synthesized props object.
  */
 const MX_DYNAMIC_FN = `function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boolean) {
+  // Marko parity: an attribute-tag record (any object with \`content\`)
+  // renders its body, as Marko's dynamic tag reads \`value.content\`.
+  if (target && typeof target === "object" && !__mxIsHostComponentObject(target) && target.content) target = target.content;
   if (!target) {
     // Marko parity: a falsy renderer (null, undefined, false, 0, the empty
     // string) renders no tag of its own; the body renders independently,

@@ -133,32 +133,32 @@ const CASES: Array<[string, string, string]> = [
   [
     "an <@item> body that is a define call (a prop value)",
     `${DEFINE}${IMP}<Bar><@item><Foo/></@item></Bar>`,
-    "return (<><Bar item={__mxDef_Foo()} /></>);",
+    "return (<><Bar item={__mxAttrTag({ content: __mxDef_Foo() })} /></>);",
   ],
   [
     "an <@item> body that is a dynamic tag",
     `${IMP}<const/X=input.x/>\n<Bar><@item><${"$"}{X}/></@item></Bar>`,
-    "return (<><Bar item={__mxDynamic(X, {  })} /></>);",
+    "return (<><Bar item={__mxAttrTag({ content: __mxDynamic(X, {  }) })} /></>);",
   ],
   [
     "an <@item> body that is a define call, inside an <if>",
     `${DEFINE}${IMP}<Bar><if=input.a><@item><Foo/></@item></if></Bar>`,
-    "return (<><Bar item={input.a ? __mxDef_Foo() : undefined} /></>);",
+    'return (<><Bar item={(() => { let __mxAttrTagAcc; if (input.a) { __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: <__mxFragment key={"" + "0" + ":" + "0"}>{__mxDef_Foo()}</__mxFragment> }); } return __mxAttrTagAcc; })()} /></>);',
   ],
   [
     "an <@item> body that is a define call, passed to a define (an object property)",
     `${DEFINE}<define/Box|{ item }|><${"$"}{item}/></define>\n<Box><@item><Foo/></@item></Box>`,
-    'return (<>{__mxDef_Box({ "item": __mxDef_Foo() })}</>);',
+    'return (<>{__mxDef_Box({ "item": __mxAttrTag({ content: __mxDef_Foo() }) })}</>);',
   ],
   [
     "an <@item> body that is a define call, passed to a dynamic tag",
     `${DEFINE}<const/X=input.x/>\n<${"$"}{X}><@item><Foo/></@item></>`,
-    'return (<>{__mxDynamic(X, { "item": __mxDef_Foo() })}</>);',
+    'return (<>{__mxDynamic(X, { "item": __mxAttrTag({ content: __mxDef_Foo() }) })}</>);',
   ],
   [
     "an <@item|x|> body that is a define call (an arrow body, not a block)",
     `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item></Bar>`,
-    "return (<><Bar item={(x) => __mxDef_Foo()} /></>);",
+    "return (<><Bar item={__mxAttrTag({ content: (x) => __mxDef_Foo() })} /></>);",
   ],
 ];
 
@@ -193,17 +193,17 @@ const UNCHANGED: Array<[string, string, string]> = [
   [
     "a repeated <@item> keeps the call as the child of its keyed fragment",
     `${DEFINE}${IMP}<Bar><@item><Foo/></@item><@item><Foo/></@item></Bar>`,
-    'return (<><Bar item={[<__mxFragment key={"0"}>{__mxDef_Foo()}</__mxFragment>, <__mxFragment key={"1"}>{__mxDef_Foo()}</__mxFragment>]} /></>);',
+    'return (<><Bar item={(() => { let __mxAttrTagAcc; __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: <__mxFragment key={"" + "0"}>{__mxDef_Foo()}</__mxFragment> }); __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: <__mxFragment key={"" + "1"}>{__mxDef_Foo()}</__mxFragment> }); return __mxAttrTagAcc; })()} /></>);',
   ],
   [
     "a repeated <@item|x|> keeps the call as the child of its keyed fragment",
     `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item><@item|x|><Foo/></@item></Bar>`,
-    'return (<><Bar item={[(x) => <__mxFragment key={"0"}>{__mxDef_Foo()}</__mxFragment>, (x) => <__mxFragment key={"1"}>{__mxDef_Foo()}</__mxFragment>]} /></>);',
+    'return (<><Bar item={(() => { let __mxAttrTagAcc; __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: ((x) => <__mxFragment key={"" + "0"}>{__mxDef_Foo()}</__mxFragment>) as (...args: any[]) => any }); __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: ((x) => <__mxFragment key={"" + "1"}>{__mxDef_Foo()}</__mxFragment>) as (...args: any[]) => any }); return __mxAttrTagAcc; })()} /></>);',
   ],
   [
     "an <@item> body that is an imported component",
     `${IMP}import Baz from "./baz.mx"\n<Bar><@item><Baz/></@item></Bar>`,
-    "return (<><Bar item={<Baz />} /></>);",
+    "return (<><Bar item={__mxAttrTag({ content: <Baz /> })} /></>);",
   ],
 ];
 
@@ -314,6 +314,12 @@ describe("hono: the bare define call renders the HTML the HTML target renders fo
         `${DEFINE}<define/Bar|{ item }|><section><${"$"}{item}/></section></define>\n<Bar><@item><Foo/></@item></Bar>`,
         {},
         "<section><p>inner</p></section>",
+      ],
+      [
+        "static, conditional and looped <@item>s folded into one record",
+        `<define/Card|{ item }|><p>${"$"}{item.a}:${"$"}{item.length}:${"$"}{item.map((i) => i.a).join(",")}:<${"$"}{item}/></p></define>\n<Card><@item a=1>x</@item><if=input.c><@item a=2/></if><for|n| of=[3, 4]><@item a=n/></for></Card>`,
+        { c: true },
+        "<p>1:4:1,2,3,4:x</p>",
       ],
       [
         "a <@catch|e|> body that is a define call",

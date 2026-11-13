@@ -1,12 +1,18 @@
+import type { AttrTag as CoreAttrTag } from "@mxlang/core";
 import type { ComponentChildren } from "preact";
 import { expectTypeOf, it } from "vitest";
 import type { AttrTag } from "./index.ts";
 
-it("specialises AttrTag content to Preact children", () => {
+it("adds Preact children as content unless the occurrence declares one", () => {
+  expectTypeOf<AttrTag<{ title: string }>>().toEqualTypeOf<
+    CoreAttrTag<{ title: string } & { content?: ComponentChildren }>
+  >();
+  expectTypeOf<AttrTag<{ title: string }>["content"]>().toEqualTypeOf<
+    ComponentChildren | undefined
+  >();
   expectTypeOf<
-    AttrTag<{ as: "renderable" }>
-  >().toEqualTypeOf<ComponentChildren>();
-  expectTypeOf<
-    AttrTag<{ attrs: { title: string }; params: [id: number] }>["content"]
-  >().toEqualTypeOf<((id: number) => ComponentChildren) | undefined>();
+    AttrTag<{ content: (id: number) => ComponentChildren }>
+  >().toEqualTypeOf<
+    CoreAttrTag<{ content: (id: number) => ComponentChildren }>
+  >();
 });

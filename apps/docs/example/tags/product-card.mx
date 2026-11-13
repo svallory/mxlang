@@ -6,10 +6,10 @@ export interface Input {
   product: Product;
   currency: string;
   featured?: boolean;
-  /** A named prop: the caller writes `<@badge>…</@badge>`. */
-  badge?: AttrTag<{ as: "renderable" }>;
-  /** A named prop that is itself a render function of `amount`. */
-  price?: AttrTag<{ as: "renderable"; params: [amount: number] }>;
+  /** An attribute tag: the caller writes `<@badge>…</@badge>`. */
+  badge?: AttrTag;
+  /** An attribute tag whose body takes `amount`: `<@price|amount|>`. */
+  price?: AttrTag<{ content: (amount: number) => unknown }>;
 }
 
 <article class={ card: true, featured: input.featured } id=`product-${input.product.id}`>
@@ -19,5 +19,5 @@ export interface Input {
   <p.tags>
     <for|tag| of=input.product.tags><span>#${tag}</span></for>
   </p>
-  <${input.price}(input.product.price)/>
+  <${input.price?.content}(input.product.price)/>
 </article>

@@ -494,7 +494,7 @@ describe("Solid language plugin", {
     [
       "single-line region",
       [
-        "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+        "export interface Input { tab: AttrTag<{ title: string }> }",
         'export const el = <button title="a">x</button>;',
         'export const broken: number = "text";',
       ],
@@ -502,7 +502,7 @@ describe("Solid language plugin", {
     [
       "multi-line region",
       [
-        "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+        "export interface Input { tab: AttrTag<{ title: string }> }",
         "export const el = (",
         '  <button title="a">',
         "    x",
@@ -1345,7 +1345,7 @@ describe("MX language plugin", {
       [`${directory}/Card.mx`]:
         "export interface Input { title: string; count?: number }\n<div>${input.title}${input.count ?? 0}</div>",
       [`${directory}/Tabs.mx`]:
-        "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }\n<div/>",
+        "export interface Input { tab: AttrTag<{ title: string }> }\n<div/>",
       [`${directory}/Plain.mx`]: "<div>plain</div>",
       [`${directory}/Wrong.mx`]: wrongSource,
       [`${directory}/WrongOptional.mx`]:
@@ -1841,10 +1841,10 @@ describe("MX language plugin", {
         host === "solid"
           ? [
               'import type { AttrTag } from "@mxlang/host-solid";',
-              "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+              "export interface Input { tab: AttrTag<{ title: string }> }",
               "export default function Card(_input: Input) { return null; }",
             ].join("\n")
-          : "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }\n<div/>";
+          : "export interface Input { tab: AttrTag<{ title: string }> }\n<div/>";
       const wrongSource = `import Card from "./Card${extension}"\n<Card><@tab title=1/></Card>`;
       const missingSource = `import Card from "./Card${extension}"\n<Card><@tab/></Card>`;
       const files = {
@@ -1874,7 +1874,7 @@ describe("MX language plugin", {
           diagnostic.code,
           diagnostic.start,
         ]),
-      ).toEqual([[1360, missingSource.indexOf("tab")]]);
+      ).toEqual([[2345, missingSource.indexOf("tab")]]);
     },
   );
 
@@ -1884,7 +1884,7 @@ describe("MX language plugin", {
     const consumer = "/project/index.ts";
     const card = [
       'import type { AttrTag } from "@mxlang/host-solid";',
-      "export interface Input { tab: AttrTag<{ attrs: { first: string; title: string; last: string } }> }",
+      "export interface Input { tab: AttrTag<{ first: string; title: string; last: string }> }",
       "export default function Card(_input: Input) { return null; }",
     ].join("\n");
     const callerSource =
@@ -1934,7 +1934,7 @@ describe("MX language plugin", {
       const consumer = "/project/index.ts";
       const card = [
         'import type { AttrTag } from "@mxlang/host-solid";',
-        "export interface Input { tab: AttrTag<{ attrs: { title: string; after: string } }> }",
+        "export interface Input { tab: AttrTag<{ title: string; after: string }> }",
         "export default function Card(_input: Input) { return null; }",
       ].join("\n");
       // `after=1` (a number literal against a declared `string`) is
@@ -1974,7 +1974,7 @@ describe("MX language plugin", {
     const consumer = "/project/index.ts";
     const card = [
       'import type { AttrTag } from "@mxlang/host-solid";',
-      "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+      "export interface Input { tab: AttrTag<{ title: string }> }",
       "export default function Card(_input: Input) { return null; }",
     ].join("\n");
     const callerSource = [
@@ -2022,12 +2022,12 @@ describe("MX language plugin", {
     const consumer = "/project/index.ts";
     const card = [
       'import type { AttrTag } from "@mxlang/host-solid";',
-      "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+      "export interface Input { tab: AttrTag<{ title: string }> }",
       "export default function Card(_input: Input) { return null; }",
     ].join("\n");
     const modal = [
       'import type { AttrTag } from "@mxlang/host-solid";',
-      "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+      "export interface Input { tab: AttrTag<{ title: string }> }",
       "export default function Modal(_input: Input) { return null; }",
     ].join("\n");
     const callerSource = [
@@ -2071,7 +2071,7 @@ describe("MX language plugin", {
     const consumer = "/project/index.ts";
     const inner = [
       'import type { AttrTag } from "@mxlang/host-solid";',
-      "export interface Input { sub: AttrTag<{ attrs: { title: string } }> }",
+      "export interface Input { sub: AttrTag<{ title: string }> }",
       "export default function Inner(_input: Input) { return null; }",
     ].join("\n");
     const outer = [
@@ -2122,7 +2122,7 @@ describe("MX language plugin", {
       const caller = `${directory}/BrokenCaller${extension}`;
       const consumer = `${directory}/broken-index.ts`;
       const input =
-        "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }";
+        "export interface Input { tab: AttrTag<{ title: string }> }";
       const card =
         host === "solid"
           ? [
@@ -2171,9 +2171,9 @@ describe("MX language plugin", {
     const caller = `${directory}/MutableCaller.mx`;
     const consumer = `${directory}/mutable-index.ts`;
     const optional =
-      "export interface Input { tab: AttrTag<{ attrs: { title?: string } }> }\n<div/>";
+      "export interface Input { tab: AttrTag<{ title?: string }> }\n<div/>";
     const required =
-      "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }\n<div/>";
+      "export interface Input { tab: AttrTag<{ title: string }> }\n<div/>";
     const callerSource =
       'import Card from "./MutableCard.mx"\n<Card><@tab/></Card>';
     // Not `indexOf("tab")`: that is the `tab` inside `MutableCard`.
@@ -2207,12 +2207,12 @@ describe("MX language plugin", {
 
       project.setFile(callee, required);
 
-      expect(callerErrors(project)).toEqual([{ code: 1360, start: tagName }]);
+      expect(callerErrors(project)).toEqual([{ code: 2345, start: tagName }]);
     });
 
     it("re-checks the caller when the callee's attribute types loosen again", () => {
       const project = projectWith(required);
-      expect(callerErrors(project)).toEqual([{ code: 1360, start: tagName }]);
+      expect(callerErrors(project)).toEqual([{ code: 2345, start: tagName }]);
 
       project.setFile(callee, optional);
 
@@ -2225,52 +2225,11 @@ describe("MX language plugin", {
 
       project.setFile(callee, required);
       project.service.getSemanticDiagnostics(callee);
-      expect(callerErrors(project)).toEqual([{ code: 1360, start: tagName }]);
+      expect(callerErrors(project)).toEqual([{ code: 2345, start: tagName }]);
 
       project.setFile(callee, optional);
       project.service.getSemanticDiagnostics(callee);
       expect(callerErrors(project)).toEqual([]);
-    });
-
-    // The documented limitation. A type change reaches the caller through
-    // TypeScript's own module graph, but what the caller *compiled to* (here
-    // the shape inferred while the callee did not exist, and the warning
-    // that came with it) is only replaced when the caller is compiled again.
-    it("keeps what the caller compiled to until the caller itself is compiled again", () => {
-      const lateCallee = `${directory}/LateCard.mx`;
-      const lateCaller = `${directory}/LateCaller.mx`;
-      const lateConsumer = `${directory}/late-index.ts`;
-      const lateSource =
-        'import Card from "./LateCard.mx"\n<Card><@tab/></Card>';
-      const project = createMutablePluginService(
-        {
-          [lateCaller]: lateSource,
-          [lateConsumer]: 'import "./LateCaller.mx";',
-        },
-        [lateConsumer],
-      );
-      const warnings = () =>
-        project.service
-          .getSyntacticDiagnostics(lateCaller)
-          .filter(
-            (diagnostic) =>
-              (diagnostic.code as unknown) === "MX_UNREADABLE_CALLEE_INPUT",
-          )
-          .map((diagnostic) => diagnostic.messageText);
-      project.service.getSemanticDiagnostics(lateConsumer);
-      expect(warnings()).toEqual([
-        expect.stringContaining("attribute-tag shape inferred"),
-      ]);
-
-      project.setFile(lateCallee, required);
-      project.service.getSemanticDiagnostics(lateCaller);
-      expect(warnings()).toEqual([
-        expect.stringContaining("attribute-tag shape inferred"),
-      ]);
-
-      project.setFile(lateCaller, lateSource);
-      project.service.getSemanticDiagnostics(lateCaller);
-      expect(warnings()).toEqual([]);
     });
   });
 
@@ -2280,8 +2239,9 @@ describe("MX language plugin", {
     // follows across files (confirmed at
     // packages/core/src/callee-input.test.ts:234; a *nested* field
     // reference, `AttrTag<{ attrs: Alias }>`, is not followed the same way
-    // and is covered by TypeScript's own live module graph through the
-    // emitted `satisfies` clause instead -- see this package's AGENTS.md).
+    // and is covered by TypeScript's own live module graph, which types the
+    // emitted record against the callee's prop -- see this package's
+    // AGENTS.md).
     const dir = mkdtempSync(join(tmpdir(), "mx-compile-deps-nesting-"));
     afterEach(() => {
       resetCalleeInputCache();
@@ -3539,17 +3499,17 @@ describe("declared attribute-tag values in the emitted TypeScript", {
   const solidCard = [
     'import type { AttrTag } from "@mxlang/host-solid";',
     "export interface Input {",
-    '  b?: AttrTag<{ as: "renderable" }>;',
-    '  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;',
-    "  tab?: AttrTag<{ attrs: { title: string } }>;",
+    "  b?: AttrTag;",
+    "  row?: AttrTag<{ content: (count: number) => unknown }>;",
+    "  tab?: AttrTag<{ title: string }>;",
     "}",
     "export default function RenderCard(_input: Input) { return null; }",
   ].join("\n");
   const preactCard = [
     "export interface Input {",
-    '  b?: AttrTag<{ as: "renderable" }>;',
-    '  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;',
-    "  tab?: AttrTag<{ attrs: { title: string } }>;",
+    "  b?: AttrTag;",
+    "  row?: AttrTag<{ content: (count: number) => unknown }>;",
+    "  tab?: AttrTag<{ title: string }>;",
     "}",
     "<div/>",
   ].join("\n");
@@ -3611,12 +3571,12 @@ describe("declared attribute-tag values in the emitted TypeScript", {
       `${preactDirectory}/RenderCaller.mx`,
     ],
   ])(
-    "accepts every valid %s caller of a declared renderable, params and data tag",
+    "accepts every valid %s caller of a declared body-only, params and attribute tag",
     (host, files, caller) => {
       const checked = emittedDiagnostics(files, caller, host);
 
-      // Every value carries the check, so an empty list is not vacuous.
-      expect(checked.code.match(/\bsatisfies\b/g)).toHaveLength(5);
+      // The call's props type checks each record; the rejecting rows below
+      // show the same check reports a wrong value.
       expect(checked.diagnostics).toEqual([]);
     },
   );
@@ -3659,8 +3619,7 @@ describe("declared attribute-tag values in the emitted TypeScript", {
     const caller = Object.keys(files)[1] as string;
     const checked = emittedDiagnostics(files, caller, host);
 
-    // One mistake, one report: `satisfies` rejects the value at the
-    // attribute, and the JSX prop does not check the same value again.
+    // One mistake, one report, from the JSX prop checking the record.
     expect(checked.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
       2322,
     ]);
@@ -4352,7 +4311,7 @@ describe("an MX caller types a call the way html's runtime makes it (astro-mx-to
     "export interface Input {",
     "  title: string;",
     "  content: () => string;",
-    "  footer?: AttrTag<{ attrs: { size: number } }>;",
+    "  footer?: AttrTag<{ size: number }>;",
     "}",
     // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
     "<article><h2>${input.title}</h2>$!{input.content()}</article>",

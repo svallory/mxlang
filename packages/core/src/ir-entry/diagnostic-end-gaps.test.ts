@@ -3,7 +3,6 @@
  * that keep an end inside its own file (see `diagnostic-end.test.ts` for the
  * general rule: `end` is exclusive and in the file of the start).
  *
- * - a callee `Input` rule broken by a repeated attribute tag ends at the name;
  * - an unnamed tag (`<#a/>`) ends after its head, not at its `<`;
  * - an attribute with a parenthesised value ends after the `)`, on any line;
  * - `positionError` keeps an end from another file out, and never ends a range
@@ -12,15 +11,14 @@
  * The scan's own range (`ScanDiagnostic.end`) is pinned in
  * `reserved-tags.test.ts`.
  */
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { compileSource, type HostOptions } from "../compile.ts";
 import { endErrorAt, newCtx, positionError, TranslateError } from "../core.ts";
 import type { Policy } from "../declarations.ts";
 import type { Attr, DelegatedTag } from "../ir.ts";
-import { lookup, testTargetLookup } from "../test-targets.ts";
+import { lookup } from "../test-targets.ts";
 import { type IrDiagnostic, lowerSource, type Spanned } from "./index.ts";
 
 let root = "";
@@ -38,86 +36,6 @@ function range(d: IrDiagnostic | undefined) {
     end: d?.end && [d.end.line, d.end.column, d.end.offset],
   };
 }
-
-describe("a repeated attribute tag against a callee's Input ends at its name", () => {
-  const CARD = `export interface Input {
-  head: AttrTag<{ as: "renderable" }>
-}
-<div/>
-`;
-
-  /** The errors `compileSource` throws for `source` next to a `Card.mx` callee. */
-  function compileErrors(source: string) {
-    const dir = realpathSync(mkdtempSync(join(root, "d-")));
-    writeFileSync(join(dir, "Card.mx"), CARD);
-    try {
-      compileSource(
-        source,
-        join(dir, "page.mx"),
-        {
-          tags: {},
-          isElement: () => true,
-          isComponent: (name: string, ctx: { defines: Set<string> }) =>
-            ctx.defines.has(name),
-          attrTags: 2,
-          name: "TestHost",
-        } as unknown as Policy,
-        {
-          targets: testTargetLookup(),
-          customTags: {},
-          tagDiscoveryDirs: [],
-          emitIr: () => "",
-          warnings: [],
-        } as unknown as HostOptions,
-      );
-    } catch (cause) {
-      const error = cause as TranslateError;
-      return [...(error.errors?.length ? error.errors : [error])];
-    }
-    throw new Error("compileSource did not throw");
-  }
-
-  const shown = (e: TranslateError) => ({
-    code: e.diagnosticCode,
-    line: e.line,
-    column: e.column,
-    end: e.end,
-  });
-
-  it("the second `<@head>` ends after `head`", () => {
-    const errors = compileErrors(
-      "import Card from './Card.mx'\n<Card>\n  <@head>H</@head>\n  <@head>I</@head>\n</Card>\n",
-    );
-    expect(errors.map(shown)).toEqual([
-      {
-        code: "MX_REPEATED_ATTRIBUTE_TAG",
-        line: 4,
-        column: 4,
-        end: { line: 4, column: 8 },
-      },
-    ]);
-    expect(errors[0]?.message).toBe(
-      "`<@head>` may appear at most once (`head` is declared `AttrTag`, not `AttrTag[]`)",
-    );
-  });
-
-  it("a `<@head>` inside `<for>` ends after the `<for`", () => {
-    const errors = compileErrors(
-      "import Card from './Card.mx'\n<Card>\n  <for|i| of=[1]>\n    <@head>H</@head>\n  </for>\n</Card>\n",
-    );
-    expect(errors.map(shown)).toEqual([
-      {
-        code: "MX_REPEATED_ATTRIBUTE_TAG",
-        line: 3,
-        column: 2,
-        end: { line: 3, column: 6 },
-      },
-    ]);
-    expect(errors[0]?.message).toBe(
-      "`<@head>` may not appear inside `<for>` (`head` is declared `AttrTag`, not `AttrTag[]`)",
-    );
-  });
-});
 
 describe("an unnamed tag's whole-tag range covers its head", () => {
   const CLOSED = { card: { children: { item: {} } } };

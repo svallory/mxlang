@@ -22,7 +22,6 @@ const READONLY = "MX_READONLY_BINDING_WRITE";
 /** A host that has `<let>` and an element for every other name. */
 const withLet: HostDeclarations = {
   name: "element-body-scope-test",
-  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,
