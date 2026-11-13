@@ -294,6 +294,14 @@ ${contentNormalization("body", 10)}
   }) as F;
   Object.defineProperty(wrapped, "name", { value: name, configurable: true });
   Object.defineProperty(wrapped, "length", { value: fn.length, configurable: true });
+  // Rendered as an element (a dynamic tag's attribute form), the framework
+  // calls a component with a second argument of its own (Preact's context);
+  // Marko passes the input alone (\`Row.content({ x: 1 })\`), so the dynamic
+  // route renders this one-argument form. A string key, not a symbol: each
+  // module inlines its own helpers and a define value can cross modules.
+  const component = (props: any) => wrapped(props);
+  Object.defineProperty(component, "name", { value: name, configurable: true });
+  Object.defineProperty(wrapped, "__mxDefineComponent", { value: component });
   return wrapped;
 }`;
 
@@ -398,7 +406,9 @@ const MX_DYNAMIC_FN = `function __mxDynamic(target: any, payload: any, content?:
     typeof target === "function" ||
     __mxIsHostComponentObject(target)
   ) {
-    const Tag: any = target;
+    // A define's one-argument form (\`__mxDefine\`), so its 2nd param is not
+    // the framework's second component argument.
+    const Tag: any = target.__mxDefineComponent ?? target;
     const { content: bodyContent, ...rest } = props;
     if (takesParams) {
       if (typeof target === "string") throw new Error("MX: tag params |…| cannot be passed to a native element: a string target has nothing to call its body");

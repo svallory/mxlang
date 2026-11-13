@@ -283,6 +283,24 @@ describe("a <define> used as a dynamic target (mx-jsx-define-as-dynamic-target-e
       ),
     ).toBe("<li>hi</li>");
   });
+
+  // Stock Marko 6.4.4: `<${Row} x=1/>` is `Row.content({ x: 1 })` and
+  // `<${Row}(1, 2)/>` is `Row.content(1, 2)`.
+  it.each([
+    [
+      "<define/Row|a, b|>[${typeof b}]</define>\n<const/R = Row/>\n<${R} x=1/>",
+      "[undefined]",
+    ],
+    [
+      '<define/Row|a, b|>[${a}|${b}]</define>\n<const/R = Row/>\n<${R}("p", "q")/>',
+      "[p|q]",
+    ],
+  ])(
+    "%s: a 2nd param comes only from the argument form",
+    async (source, html) => {
+      expect(await renderPair(source, {}, WRAP, true)).toBe(html);
+    },
+  );
 });
 
 describe("a /var in a dynamic-tag body is its own scope", () => {
