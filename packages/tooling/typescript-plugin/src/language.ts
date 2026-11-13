@@ -1054,33 +1054,32 @@ export function compileWithDependencies<
 
   let dependencies = previousDependencies;
   let sources = dependencySources(readSource, dependencies, new Map());
+  // Every compile, a failed one included, counts against the one cap.
+  let passes = 0;
   // A failed compile names the callees it read too (`dependencies` on the
-  // error): when the host holds a buffer for one this pass did not read, the
-  // compile runs again over it, so a callee fixed but not yet saved clears
-  // the caller's error. Otherwise the error stands.
-  let retries = 0;
+  // error). Core read each one it was given no text for from disk, so the
+  // compile runs again only when the host holds a buffer for one that differs
+  // from its disk content: a callee fixed but not yet saved then clears the
+  // caller's error. Otherwise (the caller's own error, say) the error stands
+  // after one compile.
   const run = (): T => {
     for (;;) {
+      passes++;
       try {
         return withCalleeInputSources(sources, compile);
       } catch (error) {
+        if (passes >= MAX_COMPILE_PASSES) throw error;
         const failed = errorDependencies(error);
-        if (
-          ++retries >= MAX_COMPILE_PASSES ||
-          failed.length === 0 ||
-          sameDependencies(dependencies, failed)
-        )
-          throw error;
-        const next = dependencySources(readSource, failed, sources);
-        if (sameSources(sources, next)) throw error;
+        const unsaved = unsavedSources(readSource, failed, sources);
+        if (unsaved.size === 0) throw error;
         dependencies = failed;
-        sources = next;
+        sources = new Map([...sources, ...unsaved]);
       }
     }
   };
   let result = run();
 
-  for (let pass = 1; pass < MAX_COMPILE_PASSES; pass++) {
+  while (passes < MAX_COMPILE_PASSES) {
     if (sameDependencies(dependencies, result.dependencies)) return result;
     const nextSources = dependencySources(
       readSource,
@@ -1141,6 +1140,33 @@ function sameSources(
     if (right.get(fileName) !== source) return false;
   }
   return true;
+}
+
+/**
+ * The host text of each of `dependencies` the last compile was given no text
+ * for and read from disk, where that text differs from the file on disk.
+ */
+function unsavedSources(
+  readSource: DependencySourceReader,
+  dependencies: readonly string[],
+  given: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const unsaved = new Map<string, string>();
+  for (const dependency of dependencies) {
+    if (given.has(dependency)) continue;
+    const source = readSource(dependency);
+    if (source !== undefined && source !== diskText(dependency))
+      unsaved.set(dependency, source);
+  }
+  return unsaved;
+}
+
+function diskText(fileName: string): string | undefined {
+  try {
+    return readFileSync(fileName, "utf8");
+  } catch {
+    return undefined;
+  }
 }
 
 /** Builds the accumulated source-override map for one pass: every previous pass's sources, plus a fresh read for each of `dependencies`. */

@@ -468,7 +468,7 @@ export function startWatch(
           tagChanges.add(p);
           continue;
         }
-        if (!p.endsWith(".mx")) {
+        if (!p.toLowerCase().endsWith(".mx")) {
           // A non-.mx change inside a watched directory that isn't a known
           // tag dependency (e.g. a new sidecar this pass hasn't recorded a
           // dependency on yet) can change routing — a full rebuild covers

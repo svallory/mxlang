@@ -422,6 +422,19 @@ describe("mxRegionCompile", () => {
       });
     });
 
+    it.each([
+      ["a positioned error", new FakeTranslateError("x", 5, 2)],
+      ["a plain Error", new Error("plain")],
+    ])(
+      "carries the callee files %s read onto the raised error",
+      (_, hostError) => {
+        const raised = thrownBy(
+          Object.assign(hostError, { dependencies: ["/project/Card.mx"] }),
+        );
+        expect(raised.dependencies).toEqual(["/project/Card.mx"]);
+      },
+    );
+
     it("positions a plain Error at the region's start, not V8's throw site", () => {
       // An ordinary `Error` carries V8's `line`, which points inside the
       // *host's* module. Trusting it reported a line in neither file.

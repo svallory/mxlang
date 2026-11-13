@@ -11,7 +11,6 @@
 import {
   attachDependencies,
   type CustomTag,
-  errorDependencies,
   type Ir,
   lower,
   type MxWarning,
@@ -1597,21 +1596,14 @@ export function compileNgMx(
   // `noImplicitAny`. The fix is landing in the parser; the annotation is
   // correct either way and can stay.
   let deferred: AuthoredImportError | undefined;
-  // The parser rethrows a region's error as its own positioned
-  // `SyntaxError`, which keeps the message but not the callee files the
-  // failed lowering read; they are put back on it below.
-  let failedDependencies: string[] | undefined;
   const regionCompile: MxRegionCompile = (input: MxRegionCompileInput) => {
     let region: LoweredRegion;
     try {
       region = lowerRegion(input.source, filename, input, options);
     } catch (error) {
-      if (!(error instanceof AuthoredImportError)) {
-        // The last region error is the one the parse reports; an earlier
-        // speculative attempt's list must not stand in for it.
-        failedDependencies = [...errorDependencies(error)];
-        throw error;
-      }
+      // The parser rethrows it as its own `SyntaxError`, carrying the
+      // callee files the failed lowering read.
+      if (!(error instanceof AuthoredImportError)) throw error;
       // No module AST yet to position it against: let the parse finish with
       // an empty stand-in, then throw at the import (below).
       deferred ??= error;
@@ -1635,9 +1627,6 @@ export function compileNgMx(
   try {
     file = parseNgMx(source, filename, options, regionCompile);
   } catch (error) {
-    if (failedDependencies?.length && error instanceof Error)
-      (error as { dependencies?: string[] }).dependencies ??=
-        failedDependencies;
     throw withLineColumn(error);
   }
 

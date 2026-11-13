@@ -101,6 +101,33 @@ describe("startWatch incremental rebuilds", () => {
     expect(bAfter).toBe(bBefore);
   });
 
+  it("recompiles a changed upper-case `.MX` page only, not the whole project", async () => {
+    // `b.mx` warns on every compile, so a full rebuild shows up as its line.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/*"] } },
+      }),
+      "src/A.MX": "<div>A1</div>",
+      "src/b.mx": "<div>{{ x }}</div>",
+    });
+
+    const lines: string[] = [];
+    handle = startWatch(projectDir, {
+      debounceMs: 10,
+      onLine: (l) => lines.push(l),
+    });
+    await handle.onIdle;
+    lines.length = 0;
+
+    writeFileSync(join(projectDir, "src/A.MX"), "<div>A2</div>", "utf8");
+    await handle.onIdle;
+
+    expect(readFileSync(join(projectDir, "src/A.html"), "utf8")).toContain(
+      "A2",
+    );
+    expect(lines.filter((l) => l.includes("b.mx"))).toEqual([]);
+  });
+
   it("recompiles the dependent page when its called tag template changes, and leaves an unrelated page's output untouched", async () => {
     // A tag *template* (a .mx file under tags/), not a sidecar .tag.ts:
     // core's own README notes that under Vitest, editing a sidecar's hook

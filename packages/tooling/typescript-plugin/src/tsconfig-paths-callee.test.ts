@@ -419,6 +419,27 @@ describe("every pipeline's plugin reads an aliased callee's Input", () => {
     },
   );
 
+  it("the whole-file .mx plugin on the solid host", () => {
+    const { dir, file, resolveImport } = project(
+      "page.mx",
+      'import Card from "~/Card.mx";\n\n<Card><@tab/></Card>\n',
+    );
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ mx: { host: "solid" } }),
+    );
+    try {
+      expect(
+        codesFrom(createMxLanguagePlugin(ts, { resolveImport }), file),
+      ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
+      expect(codesFrom(createMxLanguagePlugin(ts), file)).toEqual([
+        "MX_UNREADABLE_CALLEE_INPUT",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("the .ng.mx plugin", () => {
     const { dir, file, resolveImport } = project(
       "x.component.ng.mx",

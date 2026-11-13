@@ -122,7 +122,7 @@ function expandInclude(
       cwd: projectDir,
       exclude: ["**/node_modules/**"],
     })) {
-      if (!file.endsWith(".mx")) continue;
+      if (!file.toLowerCase().endsWith(".mx")) continue;
       const resolved = resolve(projectDir, file);
       // Before the host-module diagnostic: a match outside the project is not
       // a project file, so it gets no diagnostic either.

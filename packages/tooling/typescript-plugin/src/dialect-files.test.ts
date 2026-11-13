@@ -527,6 +527,8 @@ describe("the dialect language plugin", () => {
 });
 
 describe("external files", () => {
+  // `B.MX` is left out: TypeScript matches extensions case-sensitively, so
+  // an upper-case `.MX` file never joins the program.
   it("tsserver is told about a dialect's files and no other foreign file", () => {
     const project = probeProject();
     const found = [
@@ -545,7 +547,6 @@ describe("external files", () => {
       project.path("a.probe"),
       project.path("a.probe.mx"),
       project.path("a.mx"),
-      project.path("B.MX"),
     ]);
   });
 });

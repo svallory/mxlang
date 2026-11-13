@@ -353,12 +353,21 @@ export function mxParseElementAt(
     // and position-check raises use. Rethrowing raw would escape the
     // positioned-`SyntaxError` contract `toSyntaxError` relies on, and would
     // break `tryParse`'s speculative-parse discipline for a non-`Error`.
-    throw raiseAndThrow(parser, MxErrors.HostError, startLoc, {
-      message:
-        typeof error?.message === "string" && error.message
-          ? error.message
-          : String(err),
-    });
+    throw carryDiagnostic(
+      () =>
+        raiseAndThrow(parser, MxErrors.HostError, startLoc, {
+          message:
+            typeof error?.message === "string" && error.message
+              ? error.message
+              : String(err),
+        }),
+      // Only the callee files: a fallback error's other fields name no
+      // position in the user's file.
+      {
+        dependencies: (error as { dependencies?: unknown } | null)
+          ?.dependencies,
+      },
+    );
   }
 
   noteSiblingRoot(parser, source, end);

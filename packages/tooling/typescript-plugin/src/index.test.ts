@@ -2420,6 +2420,51 @@ describe("MX language plugin", {
       expect(result.pass).toBe(2);
     });
 
+    it("compiles once for a caller's own error when the host's callee text is its disk text", () => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-deps-retry-"));
+      try {
+        const callee = join(dir, "Card.mx");
+        writeFileSync(callee, "export interface Input {}\n<div/>\n");
+        const error = Object.assign(new SyntaxError("caller's own error"), {
+          dependencies: [callee],
+        });
+        let compiles = 0;
+        expect(() =>
+          compileWithDependencies(
+            (fileName) => readFileSync(fileName, "utf8"),
+            [],
+            () => {
+              compiles++;
+              throw error;
+            },
+          ),
+        ).toThrow(error);
+        expect(compiles).toBe(1);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("counts failed compiles against the same pass cap as the others", () => {
+      // Every compile reports a callee the host holds unsaved text for: a
+      // failed one through its error, a successful one through its result.
+      let compiles = 0;
+      compileWithDependencies(
+        () => "unsaved",
+        [],
+        () => {
+          compiles++;
+          const dependency = `/project/Callee${compiles}.mx`;
+          if (compiles % 2 === 1)
+            throw Object.assign(new SyntaxError("contract failed"), {
+              dependencies: [dependency],
+            });
+          return { dependencies: [dependency] };
+        },
+      );
+      expect(compiles).toBe(8);
+    });
+
     it("rethrows a failed compile when the host holds none of its callees", () => {
       const error = Object.assign(new SyntaxError("contract failed"), {
         dependencies: ["/project/Card.mx"],

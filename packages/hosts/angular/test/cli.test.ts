@@ -257,6 +257,23 @@ describe("build: tag routing", () => {
     expect(existsSync(join(projectDir, "src/pages/home.html"))).toBe(true);
   });
 
+  it("routes an upper-case `.MX` tag and an included `.MX` page by the same case rule", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/pages/*"] } },
+      }),
+      "src/pages/Home.MX": "<div>home</div>",
+      "src/tags/Badge.MX": "<span>${input.text}</span>",
+    });
+
+    const result = build(projectDir);
+
+    expect(result.errors).toEqual([]);
+    const module = readFileSync(join(projectDir, "src/tags/Badge.ts"), "utf8");
+    expect(module).toContain('selector: "mx-badge"');
+    expect(existsSync(join(projectDir, "src/pages/Home.html"))).toBe(true);
+  });
+
   it("warns once when include and the tag index both claim a path", () => {
     writeProject({
       "package.json": JSON.stringify({

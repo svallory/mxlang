@@ -186,7 +186,10 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         pluginModule.getExternalFiles?.(project, updateLevel) ?? []
       ).filter(
         (fileName) =>
-          fileName.toLowerCase().endsWith(".mx") ||
+          // Case-sensitive, as TypeScript's own extension match is: an
+          // upper-case `.MX` file never joins a program, so it is not one of
+          // the project's files either.
+          fileName.endsWith(".mx") ||
           isNgMx(fileName) ||
           fileName.endsWith(".astro") ||
           isDialectFile(fileName),

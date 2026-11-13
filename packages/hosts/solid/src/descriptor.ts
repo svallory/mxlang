@@ -43,8 +43,9 @@ const descriptor: TargetDescriptor = {
     const { compileSolidUnit } =
       require("./compile.ts") as typeof import("./compile.ts");
     return {
-      // `vite-plugin/src/index.ts` and the editors call `compileSolidUnit`
-      // with these three fields and no `resolveImport`.
+      // `vite-plugin/src/index.ts`, the editors and `mx-tsc` call this with
+      // their own `resolveImport`, so a tsconfig `paths` or Vite alias reaches
+      // a whole-file Solid page's callee imports as on every other target.
       // Solid's placeholder `map` has an optional `file`, core's `RawSourceMap`
       // a required one; no tool reads `map.file`, so the result is cast rather
       // than rewritten (its bytes must stay what the tools get today).
@@ -55,6 +56,7 @@ const descriptor: TargetDescriptor = {
           defaultTag: options.defaultTag,
           warnings: options.warnings,
           targets: options.targets ?? targets(),
+          resolveImport: options.resolveImport,
         }) as TargetCompileResult,
     };
   },
