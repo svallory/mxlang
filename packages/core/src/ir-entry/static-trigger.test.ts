@@ -353,6 +353,21 @@ describe("the matching is the template scanner's", () => {
     });
   });
 
+  describe("an assignment's target is a row", () => {
+    it.each([
+      ["f(x)\n~zz = 1", ["sigil", "~zz"]],
+      ["&zz += 1", ["member", "&zz"]],
+      ["[&a, &b] = xs", ["member", "&a"]],
+      ["({ &zz } = o)", ["member", "&zz"]],
+    ])("%j", (text, expected) => {
+      expect(hit(text)).toEqual(expected);
+    });
+    // Controls: the same patterns in a declaration bind, so no row.
+    it.each(["const { @zz } = o", "const [&a] = xs"])("%j", (text) => {
+      expect(hit(text)).toBeUndefined();
+    });
+  });
+
   describe("of several rows, the first decided as a row is reported", () => {
     it.each([
       ["const a = ~aa, b = &bb", ["sigil", "~aa"]],
@@ -442,9 +457,6 @@ describe("the matching is the template scanner's", () => {
 
   describe("a name a declaration binds is no row", () => {
     const dollar = [row("dollar", "$", "\\$[a-z]+")];
-    it.each(["const { @zz } = o"])("%j", (text) => {
-      expect(hit(text)).toBeUndefined();
-    });
     it.each([
       "interface $zz {}",
       "type $zz = 1",

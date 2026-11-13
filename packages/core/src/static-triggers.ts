@@ -23,9 +23,9 @@
  * the placement when no row is found), and a candidate is a row
  * where an expression starts at its first character: the innermost node
  * starting there is an expression, a referenced one when it is an
- * identifier (Babel's `isReferenced`; under a TypeScript parent only an
- * `expression`, an enum initializer or a computed key), and not inside a
- * TypeScript type. A unary `~zz` at a statement
+ * identifier (Babel's `isReferenced`, or an assignment's target; under a
+ * TypeScript parent only an `expression`, an enum initializer or a computed
+ * key), and not inside a TypeScript type. A unary `~zz` at a statement
  * start (after a block's `}`, after a line break that ends a statement) is
  * one; a binary operator (`a\n&mask`), a private name, a type, an object key
  * and a binding are not. Comments, strings, regular expressions and
@@ -251,7 +251,10 @@ function rowStarts(file: Ast, wanted: ReadonlySet<number>): Set<number> {
       if (parent?.type.startsWith("TS") && !isTsReference(node, parent)) {
         return false;
       }
-      return t.isReferenced(node, parent, grandparent);
+      return (
+        t.isReferenced(node, parent, grandparent) ||
+        isAssignmentTarget(node, ancestors)
+      );
     }
     return true;
   };
@@ -300,6 +303,48 @@ function rowStarts(file: Ast, wanted: ReadonlySet<number>): Set<number> {
     ancestors.pop();
   }
   return found;
+}
+
+/**
+ * Whether `node` is written to by an assignment (`x = 1`, `x += 1`,
+ * `[a, b] = xs`, `({ a } = o)`, `for (x of xs)`): Babel's `isReferenced`
+ * says no there, and its `isBinding` says yes for a declaration and an
+ * assignment alike. The pattern ancestors are climbed to the nearest
+ * non-pattern node, which is an assignment's or a `for … in/of` head's
+ * `left` (not a declaration's) for an assignment target; a declaration's
+ * pattern ends at a declarator, a parameter list or a catch clause.
+ */
+function isAssignmentTarget(node: Ast, ancestors: readonly Ast[]): boolean {
+  let child = node;
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const parent = ancestors[i] as Ast;
+    switch (parent.type) {
+      case "ArrayPattern":
+      case "ObjectPattern":
+      case "RestElement":
+        break;
+      case "ObjectProperty":
+        // A property's value inside an object pattern.
+        if (
+          parent.value !== child ||
+          ancestors[i - 1]?.type !== "ObjectPattern"
+        )
+          return false;
+        break;
+      case "AssignmentPattern":
+        if (parent.left !== child) return false;
+        break;
+      case "AssignmentExpression":
+        return parent.left === child;
+      case "ForInStatement":
+      case "ForOfStatement":
+        return parent.left === child;
+      default:
+        return false;
+    }
+    child = parent;
+  }
+  return false;
 }
 
 /** `text` with each hit in `hits` replaced by its stand-in (same length). */
