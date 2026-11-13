@@ -138,7 +138,7 @@ Conventional commits: `type(scope): summary`, with a body that says what changed
 
 ## Changelog fragments
 
-A PR that touches `packages/*/src` or `packages/*/package.json` adds a fragment `changes/<branch-slug>.md` (front matter `packages: [short-names]`, `kind: Added | Changed | Fixed | Removed`; body = the changelog entry); CI fails without one unless the PR body has a `no-changelog: <reason>` line. `bun run changelog:assemble [--release <version>]` folds fragments into each package's `## Unreleased` section — never edit a package CHANGELOG directly on a PR.
+A PR that touches `packages/*/src` or a package's own `package.json` (`packages/<pkg>/package.json`, or `packages/<group>/<pkg>/package.json` when that directory owns a CHANGELOG.md) adds a fragment `changes/<branch-slug>.md` (front matter `packages: [short-names]`, `kind: Added | Changed | Fixed | Removed`; body = the changelog entry); CI fails without one unless the PR body has a `no-changelog: <reason>` line. `bun run changelog:assemble [--release <version> [--packages <name,name>]]` folds fragments into the top of each package's `## Unreleased` section (newest batch first, one line per entry, slug order within a batch); `--release` renames `## Unreleased` to the version, in every package or only those `--packages` names (folding is never restricted) — never edit a package CHANGELOG directly on a PR.
 
 ## Architecture
 

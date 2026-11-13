@@ -6,8 +6,14 @@
 // `bun run changelog:assemble` folds every fragment into the `## Unreleased`
 // section of each package CHANGELOG it names (creating the section when the
 // file has none), in deterministic slug order, then deletes the fragment.
+// New entries go at the TOP of the section, one line each with no blank
+// line between them; a run's batch keeps slug order and sits above every
+// older entry, so the section reads newest batch first.
 // `--release <version>` additionally renames `## Unreleased` to
-// `## <version> — <date>` in every package CHANGELOG that has one.
+// `## <version> — <date>` in every package CHANGELOG that has one;
+// `--packages core,data` (only with `--release`) restricts that rename to the
+// named packages, for a release that ships only some of them. Fragment
+// folding is never restricted.
 //
 // Idempotent: a second run with no fragments left changes nothing.
 
@@ -160,10 +166,18 @@ export function assertFragmentPackages(
 
 const unreleasedHeading = "## Unreleased";
 
-// Appends one entry line at the end of the `## Unreleased` section, creating
-// the section right under the file's `#` title when the file has none. Never
-// reformats existing lines: it only inserts.
-export function appendEntry(text: string, entry: string): string {
+// Inserts `entries` (in the order given, one line each, no blank line between
+// them) at the top of the `## Unreleased` section, creating the section right
+// under the file's `#` title when the file has none. The blank lines directly
+// under the heading become one; every existing line from the section's first
+// non-blank line on is kept untouched. An empty section (the next `## `
+// heading or the end of the file follows) gets one blank line after the
+// entries.
+export function prependEntries(
+  text: string,
+  entries: readonly string[],
+): string {
+  if (entries.length === 0) return text;
   const lines = text.split("\n");
   const headingIndex = lines.findIndex(
     (line) => line.trim() === unreleasedHeading,
@@ -182,31 +196,23 @@ export function appendEntry(text: string, entry: string): string {
       "",
       unreleasedHeading,
       "",
-      entry,
+      ...entries,
       "",
       ...rest,
     ].join("\n");
   }
-  let sectionEnd = lines.length;
-  for (let i = headingIndex + 1; i < lines.length; i++) {
-    if (/^## /.test(lines[i])) {
-      sectionEnd = i;
-      break;
-    }
+  let firstContent = headingIndex + 1;
+  while (firstContent < lines.length && lines[firstContent].trim() === "") {
+    firstContent++;
   }
-  let lastContent = sectionEnd;
-  while (
-    lastContent > headingIndex + 1 &&
-    lines[lastContent - 1].trim() === ""
-  ) {
-    lastContent--;
-  }
+  const empty =
+    firstContent === lines.length || /^## /.test(lines[firstContent]);
   return [
-    ...lines.slice(0, lastContent),
+    ...lines.slice(0, headingIndex + 1),
     "",
-    entry,
-    "",
-    ...lines.slice(sectionEnd),
+    ...entries,
+    ...(empty ? [""] : []),
+    ...lines.slice(firstContent),
   ].join("\n");
 }
 
@@ -224,6 +230,61 @@ export function renameUnreleased(
   return lines.join("\n");
 }
 
+function assertKnownPackages(
+  names: readonly string[],
+  packages: ReadonlyMap<string, string>,
+): void {
+  const unknown = names.filter((name) => !packages.has(name));
+  if (unknown.length > 0) {
+    throw new FragmentError(
+      `--packages names ${unknown.map((name) => `\`${name}\``).join(", ")}, which has no CHANGELOG.md (known: ${[...packages.keys()].sort().join(", ")})`,
+    );
+  }
+}
+
+export const usage =
+  "usage: bun run changelog:assemble [--release <version> [--packages <name,name>]]";
+
+export interface AssembleArgs {
+  release?: string;
+  packages?: string[];
+}
+
+// The CLI's argument parser, pure so it is testable without a spawn. Throws
+// a FragmentError (the CLI exits 2 with its message) on a missing value, an
+// unknown argument, `--packages` without `--release`, or a package name with
+// no CHANGELOG.md among `packages`.
+export function parseAssembleArgs(
+  args: readonly string[],
+  packages: ReadonlyMap<string, string>,
+): AssembleArgs {
+  const parsed: AssembleArgs = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--release" || arg === "--packages") {
+      const value = args[i + 1];
+      if (!value || value.startsWith("--")) {
+        throw new FragmentError(`${arg} needs a value\n${usage}`);
+      }
+      if (arg === "--release") parsed.release = value;
+      else {
+        parsed.packages = value
+          .split(",")
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0);
+      }
+      i++;
+    } else {
+      throw new FragmentError(`unknown argument: ${arg}\n${usage}`);
+    }
+  }
+  if (parsed.packages && !parsed.release) {
+    throw new FragmentError(`--packages needs --release\n${usage}`);
+  }
+  if (parsed.packages) assertKnownPackages(parsed.packages, packages);
+  return parsed;
+}
+
 export interface AssembleResult {
   appended: number;
   renamedFiles: string[];
@@ -232,7 +293,13 @@ export interface AssembleResult {
 
 export function assembleChangelog(
   repoRoot: string,
-  opts: { release?: string; date?: string; changesPath?: string } = {},
+  opts: {
+    release?: string;
+    date?: string;
+    changesPath?: string;
+    /** With `release`, rename only these packages' headings (short names). */
+    packages?: readonly string[];
+  } = {},
 ): AssembleResult {
   const changesDir = opts.changesPath ?? join(repoRoot, "changes");
   const fragments: Fragment[] = readFragmentFiles(changesDir).map(
@@ -240,6 +307,7 @@ export function assembleChangelog(
   );
 
   const packages = discoverPackages(repoRoot);
+  if (opts.packages) assertKnownPackages(opts.packages, packages);
   // Per package, entries in slug order.
   const byPackage = new Map<string, string[]>();
   for (const fragment of fragments) {
@@ -258,18 +326,19 @@ export function assembleChangelog(
     a.localeCompare(b),
   )) {
     const changelogPath = packages.get(name) as string;
-    let text = readFileSync(changelogPath, "utf8");
-    for (const entry of entries) {
-      text = appendEntry(text, entry);
-      appended++;
-    }
+    // The whole batch in one call: inserting entry by entry would reverse it.
+    const text = prependEntries(readFileSync(changelogPath, "utf8"), entries);
+    appended += entries.length;
     writeFileSync(changelogPath, text);
   }
 
   const renamedFiles: string[] = [];
   if (opts.release) {
     const date = opts.date ?? new Date().toISOString().slice(0, 10);
-    for (const changelogPath of [...packages.values()].sort()) {
+    const targets = opts.packages
+      ? opts.packages.map((name) => packages.get(name) as string)
+      : [...packages.values()];
+    for (const changelogPath of [...new Set(targets)].sort()) {
       const text = readFileSync(changelogPath, "utf8");
       const renamed = renameUnreleased(text, opts.release, date);
       if (renamed !== text) {
@@ -291,29 +360,21 @@ export function assembleChangelog(
 }
 
 if (import.meta.main) {
-  const args = process.argv.slice(2);
-  let release: string | undefined;
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--release") {
-      release = args[i + 1];
-      if (!release) {
-        console.error(
-          "usage: bun run changelog:assemble [--release <version>]",
-        );
-        process.exit(2);
-      }
-      i++;
-    } else {
-      console.error(`unknown argument: ${args[i]}`);
-      process.exit(2);
-    }
+  let args: AssembleArgs;
+  try {
+    args = parseAssembleArgs(process.argv.slice(2), discoverPackages(root));
+  } catch (error) {
+    if (!(error instanceof FragmentError)) throw error;
+    console.error(error.message);
+    process.exit(2);
   }
-  const result = assembleChangelog(root, { release });
+  const { release, packages } = args;
+  const result = assembleChangelog(root, { release, packages });
   for (const slug of result.consumedFragments) {
     console.log(`[changelog] consumed fragment ${slug}`);
   }
   console.log(
-    `[changelog] appended ${result.appended} entr${result.appended === 1 ? "y" : "ies"}`,
+    `[changelog] added ${result.appended} entr${result.appended === 1 ? "y" : "ies"}`,
   );
   if (release) {
     console.log(
