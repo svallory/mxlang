@@ -294,7 +294,8 @@ export interface ModuleStatementNames {
    */
   readonly declarations: readonly {
     readonly name: string;
-    readonly kind: DeclarationKind;
+    /** Never `typeImport`: a type-only import declares no value. */
+    readonly kind: Exclude<DeclarationKind, "typeImport">;
     readonly ambient: boolean;
   }[];
 }
