@@ -101,6 +101,29 @@ const classText = (value: unknown): string | null => {
 };
 
 /**
+ * Copies an object rest the way JavaScript's destructuring does: the own
+ * enumerable keys of `object` less `keys`. `null` and `undefined` throw a
+ * `TypeError`, as destructuring them does.
+ */
+const rest = <T extends object, K extends keyof T>(
+  object: T,
+  keys: readonly K[],
+): Omit<T, K> => {
+  if (object === null || object === undefined) {
+    throw new TypeError(
+      "Cannot destructure '" +
+        String(object) +
+        "' as it is " +
+        String(object) +
+        ".",
+    );
+  }
+  const copy: Partial<T> = { ...object };
+  for (const key of keys) delete copy[key];
+  return copy as Omit<T, K>;
+};
+
+/**
  * Base class carrying the event invoker members.
  *
  * @example
@@ -150,6 +173,14 @@ export class MxHandlers {
    * @internal Called by generated templates; not part of the authoring API.
    */
   readonly __mxClass = classText;
+
+  /**
+   * Copies an object rest in a `<const>` pattern, for
+   * `@let rest = __mxRest(obj, ["a"]);`.
+   *
+   * @internal Called by generated templates; not part of the authoring API.
+   */
+  readonly __mxRest = rest;
 }
 
 /**
@@ -201,5 +232,13 @@ export function MxHandlersMixin<
      * @internal Called by generated templates; not part of the authoring API.
      */
     readonly __mxClass = classText;
+
+    /**
+     * Copies an object rest in a `<const>` pattern, for
+     * `@let rest = __mxRest(obj, ["a"]);`.
+     *
+     * @internal Called by generated templates; not part of the authoring API.
+     */
+    readonly __mxRest = rest;
   };
 }

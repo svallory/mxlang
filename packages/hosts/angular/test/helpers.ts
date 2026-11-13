@@ -198,3 +198,73 @@ export const presentBinding = (n: number): string => {
   const v = attrName(n);
   return `${v} != null && ${v} !== false`;
 };
+
+/** Core's member fixture dialect, which a vocabulary project's dialect package re-exports. */
+const MEMBER_DIALECT = join(
+  import.meta.dirname,
+  "../../../core/src/fixtures/syntax/member-fixture.ts",
+);
+
+/**
+ * A temp project whose dialect package claims `.member.mx` and speaks of
+ * "options" (`messageVocabulary.attribute`), with a `tags/Card.mx` stub, so a
+ * test reads a message in a dialect's words. One per test file: it lives
+ * until the file is done. `compileInVocabulary` compiles a page in it.
+ */
+export function vocabularyProject(): string {
+  const dir = mkdtempSync(join(tmpdir(), "mx-ng-vocab-"));
+  tagProjects.push(dir);
+  const dialect = join(dir, "node_modules", "member-dialect");
+  mkdirSync(dialect, { recursive: true });
+  writeFileSync(
+    join(dialect, "package.json"),
+    JSON.stringify({
+      name: "member-dialect",
+      mx: {
+        dialect: {
+          id: "member",
+          name: "Fixture",
+          extensions: [".member.mx"],
+          module: "./index.cjs",
+        },
+      },
+    }),
+  );
+  writeFileSync(
+    join(dialect, "index.cjs"),
+    `const member = require(${JSON.stringify(MEMBER_DIALECT)});
+module.exports = {
+  ...member,
+  default: {
+    ...member.default,
+    messageVocabulary: { attribute: { one: "option", many: "options" } },
+  },
+};\n`,
+  );
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "app",
+      devDependencies: { "member-dialect": "0.0.0" },
+    }),
+  );
+  mkdirSync(join(dir, "tags"));
+  writeFileSync(join(dir, "tags", "Card.mx"), "<span>x</span>\n");
+  return dir;
+}
+
+/** The message `source` fails with, compiled as `page.member.mx` in a `vocabularyProject`. */
+export function vocabularyError(dir: string, source: string): string {
+  const filePath = join(dir, "page.member.mx");
+  try {
+    compile(source, filePath, {
+      customTags: getCustomTags(filePath, {
+        host: "angular",
+        targets: angularOwnTargets,
+      }),
+    });
+  } catch (error) {
+    return (error as Error).message;
+  }
+  throw new Error(`expected ${source} to fail`);
+}

@@ -836,7 +836,11 @@ placeholder is stringified as in any text, then the whole body is escaped for
 style context (`</style`, any case, becomes `\3C/style`), never HTML-escaped.
 The html target, the JSX hosts, Solid and Astro write a real `<style>` (the JSX
 hosts and Solid hand the body over as raw HTML, Astro as `set:html` on an
-`is:inline` element); Angular keeps its own handling of `<style>`.
+`is:inline` element). Angular refuses `<html-style>`, as it refuses
+`<html-script>`, positioned at the tag name: its template compiler lifts every
+`<style>` out of the template into the component's styles, dropping the
+element and its attributes (such as `media`) and scoping the CSS, so the style
+cannot reach the page as written.
 
 An `<html-script>` takes no event handler and no method attribute: `onClick=fn`, `onclick() { … }` and `foo() { … }` are refused on the html target, Preact, React and Hono, positioned at the attribute, because a script element never fires or calls one (Angular refuses `<html-script>` outright). Solid does not refuse them yet (TODO `solid-html-script-event-attr`). A string value (`onclick="…"`) is an ordinary attribute.
 
@@ -4006,7 +4010,7 @@ rewritten to `${…}` only when it parses as JS with no Angular pipe
 the text node's own source span (also in concise mode).
 
 It never fires in an attribute value, a `${…}` placeholder (so `${"{{"}` writes
-a real literal `{{`), an HTML comment, `<script>`/`<style>`/`<html-style>` content (`<html-script>` is refused on Angular, so its body is never scanned), or on a lone `{`/`}`
+a real literal `{{`), an HTML comment, `<script>`/`<style>` content (`<html-script>` and `<html-style>` are refused on Angular, so their bodies are never scanned), or on a lone `{`/`}`
 or an `@` in prose (`user@host`, "the @if keyword", "Ping me @if (now) only"):
 `{{` needs its closing `}}`, and `@name` needs real block syntax after the
 keyword: a balanced `(…)` then `{` (`@if`, `@for`, `@switch`, `@case`,

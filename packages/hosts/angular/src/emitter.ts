@@ -111,6 +111,9 @@ function unknownTagMessage(name: string, ctx: Ctx): string {
 const HTML_SCRIPT_MESSAGE =
   '`<html-script>` cannot be emitted into an Angular template: Angular\'s template compiler removes every `<script>` element, so the script would never reach the page. Load it from `index.html` or the `scripts` array of `angular.json`, or create it in the component with the DOM API (`document.createElement("script")`).';
 
+const HTML_STYLE_MESSAGE =
+  "`<html-style>` cannot be emitted into an Angular template: Angular's template compiler lifts every `<style>` element out of the template into the component's styles, dropping the element and its attributes (such as `media`) and scoping the CSS to the component's view, so the style cannot reach the page as written. Put the CSS in the component's `styles` or `styleUrls`, or in a global stylesheet listed in the `styles` array of `angular.json`.";
+
 const MODULE_LEVEL_MESSAGE =
   "cannot be emitted into an Angular template: an Angular template has no module scope. Move it into the component's TypeScript file, or use `.ng.mx` (step 2), where MX emits the module for you.";
 
@@ -404,11 +407,14 @@ export const EVENT_HELPER_ADVICE_CODE = "angular.event-helper-advice";
 export const REFINE_HELPER_ADVICE_CODE = "angular.refine-helper-advice";
 /** Warning code for the `__mxClass` advice a page gets when its template holds an array `class=`. */
 export const CLASS_HELPER_ADVICE_CODE = "angular.class-helper-advice";
+/** Warning code for the `__mxRest` advice a page gets when its template holds an object rest in a `<const>` pattern. */
+export const REST_HELPER_ADVICE_CODE = "angular.rest-helper-advice";
 /** Every code of a warning that tells a page to add helper members to its class. */
 export const HELPER_ADVICE_CODES: readonly string[] = [
   EVENT_HELPER_ADVICE_CODE,
   REFINE_HELPER_ADVICE_CODE,
   CLASS_HELPER_ADVICE_CODE,
+  REST_HELPER_ADVICE_CODE,
 ];
 
 // A1:112-113's exact wording, one per directive — "class" takes "object or
@@ -511,11 +517,29 @@ export const CLASS_HELPER_NAMES = CLASS_HELPER_MEMBERS.map(
   (member) => /readonly (\w+)/.exec(member)?.[1] as string,
 );
 
-/** Every member name a component may need from `MxHandlers`, event invokers, `__mxSet` and `__mxClass`. */
+/**
+ * The member an object rest in a `<const>` pattern calls:
+ * `<const/{ a, ...rest }=obj/>` binds `@let rest = __mxRest(obj, ["a"]);`.
+ * A template expression has no spread, so the copy is made here, as
+ * JavaScript's destructuring makes it: the own enumerable keys of `object`
+ * (`{ ...object }`) less the keys the pattern names. `null` and `undefined`
+ * throw a `TypeError`, as destructuring them does. Separate from the other
+ * groups: a template needs it only when it holds an object rest.
+ */
+export const REST_HELPER_MEMBERS = [
+  '  protected readonly __mxRest = <T extends object, K extends keyof T>(object: T, keys: readonly K[]): Omit<T, K> => { if (object === null || object === undefined) throw new TypeError("Cannot destructure \'" + String(object) + "\' as it is " + String(object) + "."); const copy: Partial<T> = { ...object }; for (const key of keys) delete copy[key]; return copy as Omit<T, K>; };',
+];
+const REST_HELPER_MARKER = "__mxRest(";
+export const REST_HELPER_NAMES = REST_HELPER_MEMBERS.map(
+  (member) => /readonly (\w+)/.exec(member)?.[1] as string,
+);
+
+/** Every member name a component may need from `MxHandlers`: event invokers, `__mxSet`, `__mxClass` and `__mxRest`. */
 export const ALL_HELPER_NAMES = [
   ...EVENT_HELPER_NAMES,
   ...REFINE_HELPER_NAMES,
   ...CLASS_HELPER_NAMES,
+  ...REST_HELPER_NAMES,
 ];
 
 /** The helper members `text` (an emitted template) calls, one class-body line each. */
@@ -524,6 +548,7 @@ export function helperMembersFor(text: string): string[] {
     ...(text.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_MEMBERS : []),
     ...(text.includes(`${REFINE_GET_MARKER}(`) ? REFINE_HELPER_MEMBERS : []),
     ...(text.includes(CLASS_HELPER_MARKER) ? CLASS_HELPER_MEMBERS : []),
+    ...(text.includes(REST_HELPER_MARKER) ? REST_HELPER_MEMBERS : []),
   ];
 }
 
@@ -533,6 +558,7 @@ export function helperNamesFor(text: string): string[] {
     ...(text.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_NAMES : []),
     ...(text.includes(`${REFINE_GET_MARKER}(`) ? REFINE_HELPER_NAMES : []),
     ...(text.includes(CLASS_HELPER_MARKER) ? CLASS_HELPER_NAMES : []),
+    ...(text.includes(REST_HELPER_MARKER) ? REST_HELPER_NAMES : []),
   ];
 }
 
@@ -544,6 +570,8 @@ const EVENT_HELPER_ADVICE = `this template binds an event handler; add these mem
 const REFINE_HELPER_ADVICE = `this template binds a refined bound attribute (\`v:fn:=q\`); add these members to the component class: ${REFINE_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION}.`;
 
 const CLASS_HELPER_ADVICE = `this template binds \`class\` to an array value; add this member to the component class: ${CLASS_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION}.`;
+
+const REST_HELPER_ADVICE = `this template binds an object rest (\`<const/{ a, ...rest }=obj/>\`); add this member to the component class: ${REST_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION}.`;
 
 interface HandlerNode {
   type: string;
@@ -902,12 +930,6 @@ interface RefineContext {
   source: string;
   /** Is `name` a template variable here (a `@for` param, a `@let`, a `<define>` param)? */
   isLocal(name: string): boolean;
-  /**
-   * What `name` is when it is a template variable that can never hold a
-   * signal (a `@for` index, a `<for>` range number), read from the IR scope it
-   * was declared in; `undefined` for anything that might hold one.
-   */
-  neverSignal(name: string): string | undefined;
 }
 
 /**
@@ -943,16 +965,6 @@ function writeRefinedWrite(
   };
   const shape = handlerShape(value.code);
   if (shape.form === "bare" && context?.isLocal(value.code)) {
-    const never = context.neverSignal(value.code);
-    if (never) {
-      // Angular's own `[(v)]` rejects this ("Cannot use a non-signal variable
-      // 'i' in a two-way binding expression"), so the refined form does too,
-      // at the attribute, rather than compiling to a `.set` that throws.
-      fail(
-        `a refined bound attribute (\`${attr.name}:${refinement.code}:=${value.code}\`) cannot write \`${value.code}\`: it is ${never}, which is never a signal, so there is nothing to set. Bind a component member, or a variable that holds a signal`,
-        attr,
-      );
-    }
     out.writeMapped(esc(value.code), value.span);
     out.writeMapped(".set", value.span);
     out.write("(");
@@ -1796,7 +1808,8 @@ interface PatternLet {
  * `c = root.b.c === undefined ? 1 : root.b.c`. A default applies for
  * `undefined` only, as in JavaScript. An array pattern reads by index and an
  * array rest (`[x, ...r]`) by `slice`, so those need an array. An object rest
- * has no expression form and is refused at the `<const>`.
+ * (`{ a, ...rest }`) has no expression form, so it calls the `__mxRest`
+ * member (`REST_HELPER_MEMBERS`) with the keys the pattern names before it.
  */
 function lowerConstPattern(
   pattern: string,
@@ -1843,6 +1856,12 @@ function lowerConstPattern(
     out.push({ name, generated: true, code: value });
     return name;
   };
+  function unreadable(): never {
+    fail(
+      `\`<const/${pattern}>\` binds a form this host cannot read as a template expression. Bind the value to a name and read its fields.`,
+      node,
+    );
+  }
   const bind = (n: PatternNode, value: string): void => {
     switch (n.type) {
       case "Identifier":
@@ -1867,10 +1886,19 @@ function lowerConstPattern(
       case "ObjectPattern": {
         const props = n.properties ?? [];
         const from = props.length > 1 ? hold(value) : value;
+        // The keys named before a rest, which the rest leaves out.
+        const keys: string[] = [];
         for (const property of props) {
-          if (property.type === "RestElement" || !property.value) {
-            fail(PATTERN_REST_MESSAGE, at((property.start ?? 1) - 1));
+          if (property.type === "RestElement") {
+            const argument = property.argument;
+            if (argument?.type !== "Identifier") unreadable();
+            bind(
+              argument,
+              `${REST_HELPER_MARKER}${from}, [${keys.map((k) => JSON.stringify(k)).join(", ")}])`,
+            );
+            continue;
           }
+          if (!property.value) unreadable();
           const key = property.key;
           if (
             property.computed ||
@@ -1881,6 +1909,9 @@ function lowerConstPattern(
               at((property.start ?? 1) - 1),
             );
           }
+          const keyText =
+            key.type === "Identifier" ? (key.name ?? "") : String(key.value);
+          keys.push(keyText);
           const step =
             key.type === "Identifier"
               ? `.${key.name}`
@@ -1903,18 +1934,12 @@ function lowerConstPattern(
         return;
       }
       default:
-        fail(
-          `\`<const/${pattern}>\` binds a form this host cannot read as a template expression. Bind the value to a name and read its fields.`,
-          node,
-        );
+        unreadable();
     }
   };
   bind(target, root);
   return out;
 }
-
-const PATTERN_REST_MESSAGE =
-  "an object rest (`{ a, ...rest }`) in a `<const>` pattern has no Angular template equivalent: a template expression cannot copy the remaining fields of an object. Name each field you need (`{ a, b }`), or bind the object to a name and read `.field` from it.";
 
 /**
  * How many times each name is declared in `body`: a `<const>`, a `<define>`
@@ -2263,7 +2288,7 @@ class AngularEmitter implements Emitter<string> {
    * Read by a refined bound attribute, which must not write `this.<name>`
    * for a name that is not a component member.
    */
-  private scopes: Map<string, string | undefined>[] = [new Map()];
+  private scopes: Set<string>[] = [new Set()];
 
   /**
    * The `<define>`s declared in each of `scopes`' levels, by name, with the
@@ -2272,20 +2297,9 @@ class AngularEmitter implements Emitter<string> {
    */
   private defineScopes: Map<string, number>[] = [new Map()];
 
-  /**
-   * Run `body` with `names` in scope. `neverSignal` maps a name to what it is
-   * (`` a `@for` index ``) when it can never hold a signal; the others might.
-   */
-  private inScope(
-    names: Iterable<string>,
-    body: () => void,
-    neverSignal: Record<string, string> = {},
-  ): void {
-    const scope = new Map<string, string | undefined>();
-    for (const name of names) scope.set(name, neverSignal[name]);
-    for (const [name, what] of Object.entries(neverSignal))
-      scope.set(name, what);
-    this.scopes.push(scope);
+  /** Run `body` with `names` in scope. */
+  private inScope(names: Iterable<string>, body: () => void): void {
+    this.scopes.push(new Set(names));
     this.defineScopes.push(new Map());
     try {
       body();
@@ -2328,15 +2342,6 @@ class AngularEmitter implements Emitter<string> {
     return {
       source: this.ctx.source,
       isLocal: (name) => scopes.some((scope) => scope.has(name)),
-      // The innermost declaration wins: a signal-holding variable shadowing an
-      // index is the one the write reaches.
-      neverSignal: (name) => {
-        for (let i = scopes.length - 1; i >= 0; i--) {
-          const scope = scopes[i];
-          if (scope?.has(name)) return scope.get(name);
-        }
-        return undefined;
-      },
     };
   }
   private firstLoc: Position | undefined;
@@ -2556,7 +2561,7 @@ class AngularEmitter implements Emitter<string> {
     warn(this.ctx, { message, ...loc, code } as MxWarning);
   }
 
-  /** Nesting depth inside `<style>`/`<script>` (and `<html-style>`/`<html-script>`), whose text the literal-syntax lint skips. */
+  /** Nesting depth inside `<style>`/`<script>`, whose text the literal-syntax lint skips (`<html-style>`/`<html-script>` are refused before it matters). */
   private codeDepth = 0;
   /**
    * Depth of open `<svg>` elements. Marko's taglib resolves `<switch>` to
@@ -2656,15 +2661,21 @@ class AngularEmitter implements Emitter<string> {
     // `<html-script>` emitted as the element it names would either reach
     // ngtsc as an unknown element or, written as `<script>`, vanish without a
     // word. Neither is a script on the page; refuse it here, once, with the
-    // ways Angular does load one.
-    if (node.name === "html-script") {
+    // ways Angular does load one. Its compiler likewise lifts every `<style>`
+    // out of the template into the component's styles (`parseTemplate` gives
+    // no node, and the text in `styles`), dropping the element and its
+    // attributes, so an `<html-style>` is refused the same way.
+    if (node.name === "html-script" || node.name === "html-style") {
       const loc = node.nameSpan
         ? {
             ...node.loc,
             ...lineColumnAt(this.ctx.source, node.nameSpan.sourceStart),
           }
         : node.loc;
-      fail(HTML_SCRIPT_MESSAGE, { loc });
+      fail(
+        node.name === "html-script" ? HTML_SCRIPT_MESSAGE : HTML_STYLE_MESSAGE,
+        { loc },
+      );
     }
     // Marko recognizes SVG <switch>, not a control-flow switch. Angular's
     // HTML template has no <switch> at all, so outside an `<svg>` context the
@@ -2777,11 +2788,7 @@ class AngularEmitter implements Emitter<string> {
     }
     // `<style>`/`<script>` bodies are code, not template text: braces and
     // `@` there are CSS/JS, so the literal-syntax lint skips them.
-    const code =
-      node.name === "style" ||
-      node.name === "script" ||
-      node.name === "html-style" ||
-      node.name === "html-script";
+    const code = node.name === "style" || node.name === "script";
     if (code) this.codeDepth++;
     if (node.name === "svg") this.svgDepth++;
     for (const child of node.children) this.emitNode(child);
@@ -2965,6 +2972,9 @@ class AngularEmitter implements Emitter<string> {
     prop: AttrTagProp,
     owner: { loc: Position },
   ): void {
+    // The dialect's nouns only: a tag spelling (`voice.attrTag`) can throw a
+    // `VoiceHookError`, which only core's lowering converts.
+    const voice = voiceOfCtx(this.ctx);
     if (prop.cardinality === "array") {
       const tags: AttributeTag[] = [];
       let loopTag: AttributeTag | undefined;
@@ -2982,14 +2992,14 @@ class AngularEmitter implements Emitter<string> {
       };
       collect(prop.source);
       fail(
-        `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/host-angular: a projection is keyed by name`,
+        `array ${voice.attributeTag} \`<@${prop.name}>\` isn't supported by @mxlang/host-angular: a projection is keyed by name`,
         loopTag ?? tags[1] ?? tags[0] ?? owner,
       );
     }
     this.visitAttributeTags(prop.source, (tag) => {
       if (tag.attrs.length > 0) {
         fail(
-          `attributes on \`<@${tag.name}>\` aren't supported by @mxlang/host-angular: a projection carries nodes, not data`,
+          `${voice.attributes} on \`<@${tag.name}>\` aren't supported by @mxlang/host-angular: a projection carries nodes, not data`,
           tag.attrs[0] as Attr,
         );
       }
@@ -3001,13 +3011,13 @@ class AngularEmitter implements Emitter<string> {
       }
       if (tag.attrTagProps.length > 0) {
         fail(
-          `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/host-angular: a projection has no nested data shape`,
+          `nested ${voice.attributeTags} inside \`<@${tag.name}>\` aren't supported by @mxlang/host-angular: a projection has no nested data shape`,
           tag.attributeTagTree[0] ?? tag,
         );
       }
       if (!tag.hasBody) {
         fail(
-          `<@${tag.name}/> has no body; @mxlang/host-angular projects attribute-tag bodies by name`,
+          `<@${tag.name}/> has no body; @mxlang/host-angular projects ${voice.attributeTagCompound} bodies by name`,
           tag,
         );
       }
@@ -3045,7 +3055,7 @@ class AngularEmitter implements Emitter<string> {
       }
       if (node.kind === "AttributeTagFor") {
         fail(
-          "attribute tags inside `<for>` aren't supported by @mxlang/host-angular: repeated projections cannot share one name",
+          `${voiceOfCtx(this.ctx).attributeTags} inside \`<for>\` aren't supported by @mxlang/host-angular: repeated projections cannot share one name`,
           node,
         );
       }
@@ -3070,7 +3080,7 @@ class AngularEmitter implements Emitter<string> {
     const name = this.authored(target.name);
     if (node.attrTagProps.length > 0) {
       fail(
-        `attribute tags on \`<${name}>\` aren't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — call it with \`<${name}(...)/>\` instead`,
+        `${voiceOfCtx(this.ctx).attributeTags} on \`<${name}>\` aren't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — call it with \`<${name}(...)/>\` instead`,
         node,
       );
     }
@@ -3524,11 +3534,10 @@ class AngularEmitter implements Emitter<string> {
         this.out.write(`@let ${field} = ${row}.${field}; `);
       }
       this.inScope(
-        [...node.bindings, row],
+        second ? [...node.bindings, row, second] : [...node.bindings, row],
         () => {
           for (const child of node.children) this.emitNode(child);
         },
-        second ? { [second]: "a `@for` index" } : {},
       );
       this.out.write(" }");
       return;
@@ -3558,13 +3567,9 @@ class AngularEmitter implements Emitter<string> {
     const rowNode = node.paramNodes[0];
     const row = this.aliasName(rowNode, "$item");
     this.out.write(`@for (${row} of [${values.join(", ")}]; track $index) { `);
-    this.inScope(
-      [...node.bindings, row],
-      () => {
-        for (const child of node.children) this.emitNode(child);
-      },
-      { [row]: "a `<for>` range number" },
-    );
+    this.inScope([...node.bindings, row], () => {
+      for (const child of node.children) this.emitNode(child);
+    });
     this.out.write(" }");
   }
 
@@ -3616,7 +3621,7 @@ class AngularEmitter implements Emitter<string> {
         "MX_UNSUPPORTED_CONSTRUCT",
       );
     }
-    this.scopes.at(-1)?.set(name, undefined);
+    this.scopes.at(-1)?.add(name);
     this.out.write(`@let ${name} = { `);
     node.attrs.forEach((attr, i) => {
       if (i > 0) this.out.write(", ");
@@ -3745,9 +3750,18 @@ class AngularEmitter implements Emitter<string> {
       return name;
     };
     const root = temp();
+    const lets = lowerConstPattern(written, root, node, temp, start);
+    if (lets.some((bound) => bound.code.includes(REST_HELPER_MARKER))) {
+      this.warnOnce(
+        "restHelper",
+        REST_HELPER_ADVICE,
+        node.loc,
+        REST_HELPER_ADVICE_CODE,
+      );
+    }
     return [
       { ...node, name: root },
-      ...lowerConstPattern(written, root, node, temp, start).map(
+      ...lets.map(
         (bound): Extract<IrNode, { kind: "Const" }> => ({
           kind: "Const",
           loc: node.loc,
@@ -4007,7 +4021,7 @@ class AngularEmitter implements Emitter<string> {
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
-    this.scopes.at(-1)?.set(node.name, undefined);
+    this.scopes.at(-1)?.add(node.name);
     const letStart = this.out.length;
     this.out.write(`@let ${node.name}`);
     // Only `@let name` is anchored: that is where NG8112 starts. The ` = `, the

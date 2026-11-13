@@ -15,7 +15,11 @@ import { getCustomTags } from "@mxlang/core";
 import { afterAll, describe, expect, it } from "vitest";
 import { angularOwnTargets } from "../src/own-targets.ts";
 import { compileTagModule } from "../src/tag-module.ts";
-import { assertAngularParses, assertModuleTypechecks } from "./helpers.ts";
+import {
+  assertAngularParses,
+  assertModuleTypechecks,
+  vocabularyProject,
+} from "./helpers.ts";
 
 /**
  * A temp project, removed when this file is done.
@@ -366,6 +370,22 @@ describe("compileTagModule: content projection", () => {
       compileTag("<div>${input.item()}${input.item()}</div>\n"),
     ).toThrow(
       "a repeated attribute tag cannot be emitted as Angular content projection, which matches each selector once. Take the items as an input array and render them with `<for>`.",
+    );
+  });
+
+  it("names the repeated attribute tag in a dialect's words", () => {
+    const dir = vocabularyProject();
+    const source = "<div>${input.item()}${input.item()}</div>\n";
+    const path = join(dir, "tags", "list.member.mx");
+    writeFileSync(path, source);
+    expect(() =>
+      compileTagModule(source, path, {
+        customTags: getCustomTags(path, {
+          targets: angularOwnTargets,
+        }) as never,
+      }),
+    ).toThrow(
+      "a repeated option tag cannot be emitted as Angular content projection, which matches each selector once. Take the items as an input array and render them with `<for>`.",
     );
   });
 
@@ -780,6 +800,30 @@ describe("compileTagModule: array class", () => {
     expect(result.code).not.toContain("NgClass");
     expect(warnings.filter((w) => w.message.includes("__mxClass"))).toEqual([]);
     assertModuleTypechecks(result.code, "tone-box.ts");
+  });
+});
+
+describe("compileTagModule: object rest", () => {
+  it("writes __mxRest into the generated class and drops the advice", () => {
+    const dir = scratchProject();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
+    const source =
+      "export interface Input { o: { a: string; b: string } }\n<const/{ a, ...rest }=input.o/>${a}${rest.b}\n";
+    const path = join(dir, "tags", "rest-box.mx");
+    writeFileSync(path, source);
+    const warnings: { message: string }[] = [];
+    const result = compileTagModule(source, path, {
+      customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
+      warnings: warnings as never,
+    });
+
+    expect(result.code).toContain("protected readonly __mxRest = ");
+    expect(templateOf(result.code)).toContain(
+      '@let rest = __mxRest(__mxPattern, ["a"]);',
+    );
+    expect(warnings.filter((w) => w.message.includes("__mxRest"))).toEqual([]);
+    assertModuleTypechecks(result.code, "rest-box.ts");
   });
 });
 

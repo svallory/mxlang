@@ -953,6 +953,26 @@ describe("compileNgMx: array class", () => {
   });
 });
 
+describe("compileNgMx: object rest", () => {
+  it("writes __mxRest into the decorated class and drops the advice", () => {
+    const warnings: { message: string }[] = [];
+    const result = compileNgMx(
+      componentFile(
+        "<div><const/{ a, ...rest }=o/>${a}${rest.b}</div>",
+        "\n  o = { a: 1, b: 2 };\n",
+      ),
+      "/p/x.component.ng.mx",
+      { warnings: warnings as never },
+    );
+    expect(result.code).toContain("protected readonly __mxRest = ");
+    expect(emittedTemplate(result.code)).toBe(
+      '<div>@let __mxPattern = o;@let a = __mxPattern.a;@let rest = __mxRest(__mxPattern, ["a"]);{{ a }}{{ rest.b }}</div>',
+    );
+    expect(warnings.filter((w) => w.message.includes("__mxRest"))).toEqual([]);
+    assertModuleTypechecks(result.code, "x.component.ts");
+  });
+});
+
 describe("compileNgMx: event handlers", () => {
   it("writes the event invoker members into the decorated class and drops the advice", () => {
     const warnings: { message: string }[] = [];

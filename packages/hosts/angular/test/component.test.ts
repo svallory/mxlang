@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   angularAstSnapshot,
   assertAngularParses,
@@ -7,7 +7,47 @@ import {
   compileWithTags,
   emit,
   emitWithTags,
+  vocabularyError,
+  vocabularyProject,
 } from "./helpers.ts";
+
+describe("attribute-tag messages in a dialect's words", () => {
+  // The dialect calls an attribute an "option"; the tag spellings stay MX's.
+  let dir: string;
+  beforeAll(() => {
+    dir = vocabularyProject();
+  });
+
+  it.each([
+    [
+      "an array",
+      "<Card>\n<@item>A</@item>\n<@item>B</@item>\n</Card>",
+      "array option tag `<@item>` isn't supported by @mxlang/host-angular: a projection is keyed by name",
+    ],
+    [
+      "a looped tag",
+      "<Card>\n<for|item| of=items>\n<@row>${item}</@row>\n</for>\n</Card>",
+      "array option tag `<@row>` isn't supported by @mxlang/host-angular: a projection is keyed by name",
+    ],
+    [
+      "attributes",
+      '<Card>\n<@header tone="loud">H</@header>\n</Card>',
+      "options on `<@header>` aren't supported by @mxlang/host-angular: a projection carries nodes, not data",
+    ],
+    [
+      "nesting",
+      "<Card>\n<@header><@icon>I</@icon></@header>\n</Card>",
+      "nested option tags inside `<@header>` aren't supported by @mxlang/host-angular: a projection has no nested data shape",
+    ],
+    [
+      "no body",
+      "<Card>\n<@header/>\n</Card>",
+      "<@header/> has no body; @mxlang/host-angular projects option-tag bodies by name",
+    ],
+  ])("%s", (_label, source, message) => {
+    expect(vocabularyError(dir, source)).toBe(message);
+  });
+});
 
 describe("Component name target", () => {
   it("emits mx- + kebab-cased selector, with a step-1 import warning", () => {

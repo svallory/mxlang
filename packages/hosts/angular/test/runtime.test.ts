@@ -58,6 +58,10 @@ describe("the runtime module's shape", () => {
   it("marks the members @internal", () => {
     expect(runtimeSource).toMatch(/@internal[\s\S]*__mxOn\b/);
     expect(runtimeSource).toMatch(/@internal[\s\S]*__mxOnAt\b/);
+    // Both classes, base and mixin.
+    expect(
+      runtimeSource.match(/@internal[^/]*\*\/\s*readonly __mxRest\b/g),
+    ).toHaveLength(2);
   });
 
   // Needs `bun run build` first, like the other dist-resolving suites.
@@ -91,6 +95,7 @@ describe("the runtime module's shape", () => {
       expect(dts).not.toMatch(/\b(protected|private)\b/);
       expect(dts).toContain("__mxOn");
       expect(dts).toContain("__mxOnAt");
+      expect(dts).toContain("__mxRest");
     });
   });
 });

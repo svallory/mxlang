@@ -113,13 +113,12 @@ describe("a bound attribute's refinement (angular)", () => {
   });
 
   // Angular's own `[(v)]="i"` on a `@for` index is a compile error ("Cannot use
-  // a non-signal variable 'i' in a two-way binding expression"), so the refined
-  // form is one too, at the attribute, decided from the IR scope the variable
-  // was declared in: an index or a range number is never a signal.
-  // Core refuses `:=` on a plain `<for>` parameter before the emitter sees it,
-  // so the emitter's own "never a signal" refusal for an index or a range
-  // number is unreachable from authored source: the rows below pin the core
-  // refusal for the same inputs.
+  // a non-signal variable 'i' in a two-way binding expression"). Core refuses
+  // `:=` on a plain `<for>` parameter (an item, an index, a range number)
+  // before the emitter runs, so the rows below pin core's refusal at the
+  // attribute; the emitter itself has no refusal of its own. A field
+  // destructured out of a `@for` item does reach the emitter, which writes it
+  // with `.set()`.
   describe("a variable that is never a signal", () => {
     function failure(mx: string) {
       try {

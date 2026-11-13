@@ -323,6 +323,19 @@ describe("a diagnostic about a <const> destructuring pattern names what the auth
     expect(found[0]).not.toContain("__mx");
   });
 
+  it("NG8112 on an unused object rest names it as written, renamed or not", () => {
+    const template =
+      "<main><const/{ ...rest }={ a: 1 }/>${rest.a}<div><const/{ a, ...rest }={ a: 2, b: 3 }/>${a}</div></main>";
+    const compiled = compileNgMx(ngMx(template), "/p/x.component.ng.mx");
+    expect(compiled.code).toContain(
+      '@let __mxConst_rest1 = __mxRest(__mxPattern1, ["a"]);',
+    );
+    const found = messages(template, UNUSED_LET);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("@let rest is declared");
+    expect(found[0]).not.toContain("__mx");
+  });
+
   it("NG8112 on an empty pattern prints the pattern, not the generated holder", () => {
     const found = messages(
       "<section><const/{}={ a: 1 }/></section>",

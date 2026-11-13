@@ -13,7 +13,10 @@
  * packages/stock-marko probe`), except a computed key (`{ [k]: v }`: "Only
  * identifier and string literal keys are supported when destructuring"),
  * which MX refuses at the key. The rendered values are JavaScript's
- * destructuring semantics, which Marko emits as written.
+ * destructuring semantics, which Marko emits as written. An object rest
+ * (`{ a, ...rest }`) has no template expression, so it binds
+ * `__mxRest(<object>, [<keys named before it>])`, the member the page class
+ * gets from `MxHandlers` here.
  *
  * Render rows run the emitted template through TestBed (JIT, dev mode, jsdom),
  * first render and after an update.
@@ -25,7 +28,10 @@ import {
   BrowserTestingModule,
   platformBrowserTesting,
 } from "@angular/platform-browser/testing";
+import ts from "typescript";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { REST_HELPER_MEMBERS } from "../src/emitter.ts";
+import { MxHandlers, MxHandlersMixin } from "../src/runtime.ts";
 import { assertAngularParses, compileMx, emit } from "./helpers.ts";
 
 beforeAll(() => {
@@ -37,8 +43,13 @@ beforeAll(() => {
 
 afterEach(() => TestBed.resetTestingModule());
 
-class Probe {
+class Probe extends MxHandlers {
   x = signal(7);
+  reads = 0;
+  get counted(): { a: number; b: number } {
+    this.reads += 1;
+    return { a: 1, b: 2 };
+  }
 }
 
 let counter = 0;
@@ -129,6 +140,46 @@ describe("the emitted template", () => {
       "a name read outside the body is renamed with its reads",
       "<div><const/{ a, b }=input.o/>${a}${b}</div>${b}",
       "<div>@let __mxPattern = input.o;@let a = __mxPattern.a;@let __mxConst_b = __mxPattern.b;{{ a }}{{ __mxConst_b }}</div>{{ b }}",
+    ],
+    [
+      "an object rest",
+      "<const/{ a, ...rest }=input.o/>${a}${rest.b}",
+      '@let __mxPattern = input.o;@let a = __mxPattern.a;@let rest = __mxRest(__mxPattern, ["a"]);{{ a }}{{ rest.b }}',
+    ],
+    [
+      "an object rest after a string key",
+      '<const/{ a, "b-c": c, ...rest }=input.o/>${rest.d}',
+      '@let __mxPattern = input.o;@let a = __mxPattern.a;@let c = __mxPattern["b-c"];@let rest = __mxRest(__mxPattern, ["a", "b-c"]);{{ rest.d }}',
+    ],
+    [
+      "an object rest alone",
+      "<const/{ ...rest }=input.o/>${rest.a}",
+      "@let __mxPattern = input.o;@let rest = __mxRest(__mxPattern, []);{{ rest.a }}",
+    ],
+    [
+      "an object rest in an element body",
+      "<div>\n  <const/{ a, ...rest }=input.o/>${a}\n</div>",
+      '<div>@let __mxPattern = input.o;@let a = __mxPattern.a;@let rest = __mxRest(__mxPattern, ["a"]);{{ a }}</div>',
+    ],
+    [
+      "an object rest in a nested pattern",
+      "<main>\n<div>\n  <const/{ a: { ...rest } }=input.o/>${rest}\n</div></main>",
+      "<main><div>@let __mxPattern = input.o;@let rest = __mxRest(__mxPattern.a, []);{{ rest }}</div></main>",
+    ],
+    [
+      "an object rest in a nested pattern beside a name holds the field once",
+      "<const/{ a: { b, ...r } }=input.o/>${b}${r.c}",
+      '@let __mxPattern = input.o;@let __mxPattern1 = __mxPattern.a;@let b = __mxPattern1.b;@let r = __mxRest(__mxPattern1, ["b"]);{{ b }}{{ r.c }}',
+    ],
+    [
+      "an object rest in a multi-line pattern",
+      "<div>\n  <const/{\n    a,\n    ...rest\n  }=input.o/>${a}\n</div>",
+      '<div>@let __mxPattern = input.o;@let a = __mxPattern.a;@let rest = __mxRest(__mxPattern, ["a"]);{{ a }}</div>',
+    ],
+    [
+      "an object rest that collides is renamed with its reads",
+      "<const/{ a, ...rest }=input.o/><div><const/{ ...rest }=input.p/>${rest.x}</div>${rest.y}",
+      '@let __mxPattern = input.o;@let a = __mxPattern.a;@let rest = __mxRest(__mxPattern, ["a"]);<div>@let __mxPattern1 = input.p;@let __mxConst_rest = __mxRest(__mxPattern1, []);{{ __mxConst_rest.x }}</div>{{ rest.y }}',
     ],
   ];
   for (const [label, source, expected] of ROWS) {
@@ -230,6 +281,36 @@ describe("the rendered values", () => {
       "8",
       "10",
     ],
+    [
+      "an object rest keeps the fields not named",
+      "<const/{ a, ...rest }={ a: x(), b: 2, c: x() }/>${a}-${rest.b}-${rest.c}-${rest.a === undefined}",
+      "7-2-7-true",
+      "9-2-9-true",
+    ],
+    [
+      "an object rest leaves out a string key",
+      '<const/{ "b-c": c, ...rest }={ "b-c": 1, d: x() }/>${c}-${rest.d}-${rest["b-c"] === undefined}',
+      "1-7-true",
+      "1-9-true",
+    ],
+    [
+      "an object rest alone",
+      "<const/{ ...rest }={ a: x() }/>${rest.a}",
+      "7",
+      "9",
+    ],
+    [
+      "an object rest in a nested pattern",
+      "<const/{ a: { ...r } }={ a: { b: x() } }/>${r.b}",
+      "7",
+      "9",
+    ],
+    [
+      "an object rest in an element body",
+      "<div><const/{ a, ...rest }={ a: 1, b: x() }/>${rest.b}</div>",
+      "<div>7</div>",
+      "<div>9</div>",
+    ],
   ];
   for (const [label, source, first, updated] of CASES) {
     it(label, () => {
@@ -240,6 +321,83 @@ describe("the rendered values", () => {
       expect(html().replace(/ /g, "")).toBe(updated.replace(/ /g, ""));
     });
   }
+});
+
+describe("an object rest", () => {
+  it("reads a getter initializer as often as a plain <const> does", () => {
+    const plain = mount("<const/o=counted/>${o.a}${o.b}");
+    const rest = mount("<const/{ a, ...rest }=counted/>${a}${rest.b}");
+    expect(rest.html()).toBe("12");
+    expect(plain.page.reads).toBeGreaterThan(0);
+    expect(rest.page.reads).toBe(plain.page.reads);
+  });
+
+  it("throws a TypeError for null, as destructuring does", () => {
+    expect(() => mount("<const/{ ...rest }=null/>${rest}")).toThrow(
+      "Cannot destructure 'null' as it is null.",
+    );
+  });
+
+  it("warns once that the page class needs __mxRest", () => {
+    const { warnings } = compileMx(
+      "<const/{ a, ...r }=input.o/><const/{ ...s }=input.p/>${a}${r}${s}",
+    );
+    expect(
+      warnings
+        .filter((w) => w.code === "angular.rest-helper-advice")
+        .map((w) => [w.line, w.column]),
+    ).toEqual([[1, 0]]);
+  });
+});
+
+describe("the __mxRest members agree", () => {
+  // The text injected into a component, the `MxHandlers` base and the
+  // `MxHandlersMixin` class must copy a rest identically.
+  type Rest = (object: object, keys: readonly PropertyKey[]) => unknown;
+  const injected = (() => {
+    const js = ts.transpileModule(
+      `class Injected {\n${REST_HELPER_MEMBERS.join("\n")}\n}`,
+      { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+    ).outputText;
+    return new (new Function(`${js}; return Injected;`)())() as {
+      __mxRest: Rest;
+    };
+  })();
+  const helpers: Array<[string, Rest]> = [
+    ["injected", injected.__mxRest],
+    ["MxHandlers", new MxHandlers().__mxRest as Rest],
+    ["MxHandlersMixin", new (MxHandlersMixin(class {}))().__mxRest as Rest],
+  ];
+  const symbol = Symbol("s");
+  const hidden = Object.defineProperty({ a: 1, b: 2 }, "h", {
+    value: 3,
+    enumerable: false,
+  });
+
+  it.each(helpers)("%s copies JavaScript's rest", (_name, rest) => {
+    expect(rest({ a: 1, b: 2, c: 3 }, ["a", "c"])).toEqual({ b: 2 });
+    expect(rest({ a: 1 }, [])).toEqual({ a: 1 });
+    expect(rest({ a: 1 }, ["z"])).toEqual({ a: 1 });
+    // Own keys only: an inherited field is not copied.
+    expect(
+      rest(Object.assign(Object.create({ inh: 1 }), { own: 1 }), []),
+    ).toEqual({ own: 1 });
+    // Enumerable keys only, symbols included.
+    expect(rest(hidden, ["a"])).toEqual({ b: 2 });
+    expect(rest({ [symbol]: 1, a: 2 }, ["a"])).toEqual({ [symbol]: 1 });
+    // A copy: the source is left as it was.
+    const source = { a: 1, b: 2 };
+    expect(rest(source, ["a"])).not.toBe(source);
+    expect(source).toEqual({ a: 1, b: 2 });
+  });
+
+  it.each(helpers)("%s throws for null and undefined", (_name, rest) => {
+    for (const value of [null, undefined]) {
+      expect(() => rest(value as unknown as object, [])).toThrow(
+        new TypeError(`Cannot destructure '${value}' as it is ${value}.`),
+      );
+    }
+  });
 });
 
 describe("a form Angular cannot express is refused at the <const>", () => {
@@ -253,29 +411,8 @@ describe("a form Angular cannot express is refused at the <const>", () => {
   }
 
   // [label, source, message needle, line, column]: the position is the
-  // refused part of the pattern (`...rest`, `[k]`), not the tag.
+  // refused part of the pattern (`[k]`), not the tag.
   const ROWS: Array<[string, string, string, number, number]> = [
-    [
-      "an object rest",
-      "<const/{ a, ...rest }=input.o/>${a}",
-      "object rest",
-      1,
-      12,
-    ],
-    [
-      "an object rest in an element body",
-      "<div>\n  <const/{ a, ...rest }=input.o/>${a}\n</div>",
-      "object rest",
-      2,
-      14,
-    ],
-    [
-      "an object rest in a nested pattern",
-      "<main>\n<div>\n  <const/{ a: { ...rest } }=input.o/>${rest}\n</div></main>",
-      "object rest",
-      3,
-      16,
-    ],
     [
       "a computed key",
       "<const/{ [input.k]: v }=input.o/>${v}",
@@ -296,13 +433,6 @@ describe("a form Angular cannot express is refused at the <const>", () => {
       "only an identifier or a string literal key",
       1,
       9,
-    ],
-    [
-      "an object rest in a multi-line pattern",
-      "<div>\n  <const/{\n    a,\n    ...rest\n  }=input.o/>${a}\n</div>",
-      "object rest",
-      4,
-      4,
     ],
     [
       "a computed key in a nested pattern",

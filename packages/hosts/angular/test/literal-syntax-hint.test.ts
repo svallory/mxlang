@@ -256,25 +256,21 @@ describe("literal Angular syntax in a template", () => {
   });
 
   describe("html-script / html-style bodies", () => {
-    it.each([
-      ["html style", "<html-style>.a{} @if (x) { }</html-style>"],
-      ["concise style", "html-style -- .a{} @if (x) { }"],
-    ])("%s stays silent", (_n, src) => {
-      expect(lit(src)).toEqual([]);
-    });
-    // `<html-script>` is refused on Angular (its template compiler removes
-    // every `<script>`), so its body never reaches the literal-syntax check.
+    // `<html-script>` and `<html-style>` are refused on Angular (its template
+    // compiler removes every `<script>` and lifts every `<style>` into the
+    // component's styles), so their bodies never reach the literal-syntax
+    // check.
     it.each([
       ["html script", "<html-script>var t = '{{ y }}';</html-script>"],
       ["html script @", "<html-script>var a = 'x@if (a) { }';</html-script>"],
       ["concise script", "html-script -- var t = '{{ y }}';"],
+      ["html style", "<html-style>.a{} @if (x) { }</html-style>"],
+      ["concise style", "html-style -- .a{} @if (x) { }"],
     ])("%s is refused, not hinted", (_n, src) => {
       expect(() => lit(src)).toThrow(/cannot be emitted into an Angular/);
     });
-    it("text after the tag still warns", () => {
-      expect(
-        lit("<div><html-style>.a{}</html-style>{{ x }}</div>"),
-      ).toHaveLength(1);
+    it("text after a <style> still warns", () => {
+      expect(lit("<div><style>.a{}</style>{{ x }}</div>")).toHaveLength(1);
     });
   });
 

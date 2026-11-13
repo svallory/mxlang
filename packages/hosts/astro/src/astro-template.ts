@@ -421,11 +421,11 @@ export const astroTemplateDeclarations: HostDeclarations = {
       attr,
     );
   },
-  rejectElementAttributeTags: (name, node) => {
+  rejectElementAttributeTags: (name, node, ctx) => {
     const first = firstAttributeTag(node);
     const slot = String(first?.name?.value ?? "").replace(/^@/, "");
     fail(
-      `attribute tags (\`<@${slot}>\`) lower to Astro named slots, which only a component accepts; \`<${name}>\` is an HTML element`,
+      `${voiceOfCtx(ctx).attributeTags} (\`<@${slot}>\`) lower to Astro named slots, which only a component accepts; \`<${name}>\` is an HTML element`,
       first ?? node,
     );
   },

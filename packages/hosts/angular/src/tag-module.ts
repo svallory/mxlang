@@ -26,6 +26,7 @@ import {
   type Position,
   type TargetLookup,
   TranslateError,
+  voiceOfCtx,
   warn,
 } from "@mxlang/core";
 import { directivesFor } from "./directives.ts";
@@ -1187,7 +1188,7 @@ function projectSlots(body: IrNode[], ctx: Ctx): Set<string> {
       if (slot) {
         if (slotLoc.has(slot) && slot !== "content") {
           throw new TranslateError(
-            "a repeated attribute tag cannot be emitted as Angular content projection, which matches each selector once. Take the items as an input array and render them with `<for>`.",
+            `a repeated ${voiceOfCtx(ctx).attributeTag} cannot be emitted as Angular content projection, which matches each selector once. Take the items as an input array and render them with \`<for>\`.`,
             node.loc.line,
             node.loc.column,
             node.loc.file,

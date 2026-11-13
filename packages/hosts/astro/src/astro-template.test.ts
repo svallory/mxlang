@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
   AstroTemplateError,
   ATTRIBUTE_OUT_SOURCE,
+  astroTemplateDeclarations,
   lowerAstroMx,
 } from "./astro-template.ts";
 
@@ -672,6 +673,27 @@ describe("components and slots", () => {
       "attributes on `<@header>` aren't supported by @mxlang/host-astro",
     );
     expect(error.line).toBe(6);
+  });
+
+  it("rejects an attribute tag on an HTML element in MX's words", () => {
+    const error = errorFor("<div>\n<@header>H</@header>\n</div>");
+    expect(error.message).toBe(
+      "attribute tags (`<@header>`) lower to Astro named slots, which only a component accepts; `<div>` is an HTML element",
+    );
+  });
+
+  it("names attribute tags on an HTML element through the dialect's voice", () => {
+    const node = { attributeTags: [{ name: { value: "@header" } }] };
+    const ctx = { voice: { attributeTags: "options" } };
+    expect(() =>
+      astroTemplateDeclarations.rejectElementAttributeTags?.(
+        "div",
+        node as never,
+        ctx as never,
+      ),
+    ).toThrow(
+      "options (`<@header>`) lower to Astro named slots, which only a component accepts; `<div>` is an HTML element",
+    );
   });
 
   it("rejects nested attribute tags with a positioned host error", () => {

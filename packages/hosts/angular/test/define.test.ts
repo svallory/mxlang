@@ -1,6 +1,11 @@
 import { parseTemplate } from "@angular/compiler";
 import { describe, expect, it } from "vitest";
-import { assertAngularParses, emit } from "./helpers.ts";
+import {
+  assertAngularParses,
+  emit,
+  vocabularyError,
+  vocabularyProject,
+} from "./helpers.ts";
 
 describe("Define", () => {
   it("emits an ng-template with a let- param", () => {
@@ -113,6 +118,17 @@ describe("Define", () => {
       ),
     ).toThrow(
       /attribute tags on `<Card>` aren't supported by @mxlang\/host-angular/,
+    );
+  });
+
+  it("names the attribute tags on a `<define>` call in a dialect's words", () => {
+    expect(
+      vocabularyError(
+        vocabularyProject(),
+        '<define/Row|title, head|>${title}</define><Row title="a"><@head>H</@head></Row>',
+      ),
+    ).toBe(
+      "option tags on `<Row>` aren't supported by @mxlang/host-angular: a `<define>` call is projected with `ngTemplateOutletContext`, a positional argument object, not content projection — call it with `<Row(...)/>` instead",
     );
   });
 });
