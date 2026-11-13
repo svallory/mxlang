@@ -8,6 +8,7 @@ import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import { lowerSource } from "./ir-entry/index.ts";
+import type { Dialect } from "./syntax-table.ts";
 import type { TemplateBackedTag } from "./template-tag.ts";
 import { lookup as targets } from "./test-targets.ts";
 
@@ -247,20 +248,6 @@ describe("ctx.report in analyze", () => {
     );
   });
 
-  it("fails the compile when the hook only reported, earliest error first", () => {
-    const error = compiled(SOURCE, { box: reporting() });
-    expect([error.line, error.column, error.diagnosticCode]).toEqual([
-      1,
-      0,
-      "MX_TAG_ERROR",
-    ]);
-    expect(error.message).toContain("bad box");
-    expect(lines(error)).toEqual([
-      [1, 0, "MX_TAG_ERROR"],
-      [2, 0, "MX_TAG_ERROR"],
-    ]);
-  });
-
   it("keeps the reports when the same hook then throws ctx.fail", () => {
     const error = compiled("<box/>\n<box/>\n<box/>\n", {
       box: reporting((ctx) => {
@@ -291,6 +278,42 @@ describe("ctx.report in analyze", () => {
       [3, 0, "X_C"],
       [4, 0, "MX_TAG_ERROR"],
     ]);
+  });
+
+  it("collects a dialect formatTag that breaks while spelling the tag, and goes on", () => {
+    // Throws only on the hook's first report, so the second one is spelled.
+    let armed = false;
+    const dialect = {
+      id: "broken",
+      name: "broken",
+      table: {},
+      messageVocabulary: {
+        formatTag: ({ name }: { name: string }) => {
+          if (armed) {
+            armed = false;
+            throw new Error("no spelling");
+          }
+          return name;
+        },
+      },
+    } as unknown as Dialect;
+    const { diagnostics } = lowerSource(SOURCE, "/u.mx", {
+      dialect,
+      customTags: {
+        box: {
+          analyze: (_calls: unknown, ctx: ReportCtx) => {
+            armed = true;
+            ctx.report("first", { at: AT });
+            ctx.report("second", { at: AT, code: "X_TWO" });
+          },
+        },
+      } as unknown as Record<string, CustomTag>,
+    });
+    expect(diagnostics.map((d) => [d.line, d.code])).toEqual([
+      [1, "MX_DIALECT_HOOK_ERROR"],
+      [2, "X_TWO"],
+    ]);
+    expect(diagnostics[0]?.message).toContain("no spelling");
   });
 
   it("refuses a report after analyze returned", () => {

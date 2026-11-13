@@ -3836,15 +3836,15 @@ export function runAnalyzeHooks(
     const tagCalls = calls.get(name) ?? [];
     const first = tagCalls[0];
     if (!first) continue;
-    // A bare `analyze` failure has no one call to blame, so it is positioned
-    // at the tag's first call in the file — the earliest place an author can
-    // start reading to understand what the whole set looked like.
     // `report`'s errors, in call order; `open` is false once `analyze` ended,
     // so a report from a stored context cannot be silently dropped.
     const reported: TranslateError[] = [];
     let open = true;
     const analyzeContext: AnalyzeContext = {
       store: storeFor(ctx, name),
+      // A bare `analyze` failure has no one call to blame, so it is positioned
+      // at the tag's first call in the file — the earliest place an author can
+      // start reading to understand what the whole set looked like.
       fail: (message, options) =>
         failFromHook(
           ctx,
