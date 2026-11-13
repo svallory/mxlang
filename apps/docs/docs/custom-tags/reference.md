@@ -49,6 +49,12 @@ export interface TagStore {
   set<T>(key: string, value: T): void;
 }
 
+/** The second argument of `fail` and `report`; a bare `Position` is `{ at }`. */
+export interface ContractFailOptions {
+  at?: Position | SourceSpan;
+  code?: string;
+}
+
 export interface AnalyzeContext {
   store: TagStore;
   fail(message: string, options?: ContractFailOptions | Position): never;
