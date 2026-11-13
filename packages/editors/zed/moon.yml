@@ -8,3 +8,14 @@ tasks:
     args: ["--noEmit"]
     inputs:
       - "tsconfig.json"
+
+  # The Rust unit tests of src/lib.rs (the TypeScript-plugin JSON per
+  # target server), on the host target. CI runs the same command in the
+  # zed-extension-compile-check job.
+  test:
+    command: "cargo"
+    args: ["test"]
+    inputs:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "src/**/*"

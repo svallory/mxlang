@@ -355,6 +355,13 @@ jobs:
           fetch-depth: 0
       - name: rustup target add wasm32-wasip1
         run: rustup target add wasm32-wasip1
+      # src/lib.rs's unit tests (the TypeScript-plugin JSON per target
+      # server) on the host target. Before the compile check, so a failure
+      # of check-grammar-revs.sh (which that script runs first) never hides
+      # them.
+      - name: cargo test
+        working-directory: packages/editors/zed
+        run: cargo test
       - name: zed-compile-check.sh
         working-directory: packages/editors/zed
         run: ./scripts/zed-compile-check.sh

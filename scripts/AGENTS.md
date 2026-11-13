@@ -74,7 +74,8 @@ by workspace-relative path):
 - `examples/todomvc` — e2e only
 - `packages/editors/zed` — grammar and Rust extension (registers
   `@mxlang/language-server`), both build-verified in CI
-  (`zed-compile-check`, `zed-compile-check`)
+  (`zed-compile-check`, `zed-compile-check`); the extension's Rust unit
+  tests run there too (`cargo test`, also the package's moon `test` task)
 - `apps/docs` — docs site: built in verify
 
 Any new package without test wiring must be added to the exception list

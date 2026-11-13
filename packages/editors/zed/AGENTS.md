@@ -103,7 +103,8 @@ server (task `zed-ts-plugin-via-vtsls`): `language_server_additional_workspace_c
 for target `vtsls` (`vtsls.tsserver.globalPlugins`) and
 `language_server_additional_initialization_options` for target
 `typescript-language-server` (`plugins`), both built by plain functions with a
-`#[cfg(test)]` module (`cargo test` in this directory) pinning the exact JSON.
+`#[cfg(test)]` module (`cargo test` in this directory, the moon `test` task,
+and a step of CI's `zed-extension-compile-check` job) pinning the exact JSON.
 The plugin is not on any registry, so it is used only from the project's own
 `node_modules` (location = worktree root, detected with the same
 `read_text_file` check); without it the hooks return `None`. When Zed calls
