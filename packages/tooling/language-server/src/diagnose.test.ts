@@ -1915,7 +1915,7 @@ describe("a diagnostic's range ends where core says it ends", () => {
 // A failed compile still reports the callees it read, whatever error class
 // carries them: a region and an `.ng.mx` failure reach the server as the
 // parser's `SyntaxError`, not a `TranslateError`.
-describe("a failed compile's dependencies", () => {
+describe("a compile's dependencies", () => {
   const CONTRACT =
     'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n';
   const CALL = "<Card><@header>a</@header><@header>b</@header></Card>";

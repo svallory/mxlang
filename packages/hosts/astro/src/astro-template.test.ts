@@ -1187,6 +1187,22 @@ describe("a fence default import of a .mx file reaches core", () => {
     });
   });
 
+  it("positions a lowercase binding's warning at the fence import", () => {
+    // `<section>` is the native element, so core warns that the import is not
+    // called and names where the fence bound it: line 2, past the `---`.
+    withCallee((_callee, page) => {
+      const warnings: MxWarning[] = [];
+      lowerAstroMx(
+        '---\nimport section from "./Card.mx";\n---\n<section/>\n',
+        page,
+        { warnings },
+      );
+      expect(warnings.map((warning) => warning.message)).toEqual([
+        "`<section>` is the native element; the `section` imported at 2:1 is not called. Rename it `Section` or write `<${section}>`",
+      ]);
+    });
+  });
+
   it.each([["./Card.astro"], ["./Card.marko"]])(
     "leaves a default import from %s as it was",
     (specifier) => {
