@@ -1,6 +1,7 @@
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { failedModuleStub } from "./failed-module-stub.ts";
+import { createPluginService } from "./fixtures/plugin-service.ts";
 
 /** Type-check `consumer` against `stub` in memory; returns consumer error codes. */
 function consumerCodes(stub: string, consumer: string): number[] {
@@ -237,5 +238,34 @@ describe("failedModuleStub", () => {
     expect(
       consumerCodes(stub, 'import { Named } from "./stub.ts";\nvoid Named;'),
     ).not.toEqual([]);
+  });
+});
+
+// ts-plugin-tsserver-test-timeouts: the row builds the plugin's language
+// service (1.2-2.0 s in a full gate); see statement-positions.test.ts.
+describe("a failed template's client importer", { timeout: 60_000 }, () => {
+  it("reads the stub's reserved export: no cascade into the importer", () => {
+    const bad = "/project/bad.mx";
+    const page = "/project/page.mx";
+    const consumer = "/project/index.ts";
+    const svc = createPluginService(
+      {
+        [consumer]: 'import "./page.mx";\n',
+        [bad]: "client export const x = 1;\n<await=value>oops</await>\n",
+        [page]:
+          'client import { x } from "./bad.mx";\nclient const n: number = x;\n<div/>\n',
+      },
+      [consumer],
+    );
+    svc.getSemanticDiagnostics(consumer);
+    expect(
+      [
+        ...svc.getSyntacticDiagnostics(page),
+        ...svc.getSemanticDiagnostics(page),
+      ].map((diagnostic) => diagnostic.code),
+    ).toEqual([]);
+    expect(svc.getSyntacticDiagnostics(bad).map((d) => d.code)).toEqual([
+      "MX_UNSUPPORTED_CONSTRUCT",
+    ]);
   });
 });

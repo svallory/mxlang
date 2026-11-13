@@ -129,6 +129,20 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
       ...compilerOptionsDiagnostics(),
       ...ambientTypeDiagnostics(typescript, ambientErrors),
     ];
+    // An html `.mx` module's reserved export (`__mxClientExports`, which a
+    // `client import` reads) is generated, never a name to offer.
+    const completionsAtPosition =
+      info.languageService.getCompletionsAtPosition.bind(info.languageService);
+    info.languageService.getCompletionsAtPosition = (...args) => {
+      const completions = completionsAtPosition(...args);
+      if (!completions) return completions;
+      return {
+        ...completions,
+        entries: completions.entries.filter(
+          (entry) => entry.name !== "__mxClientExports",
+        ),
+      };
+    };
     // Beneath Volar's proxy, so a diagnostic Volar cannot map is moved onto
     // the nearest mapped span before it would be dropped.
     // Volar proxies `info.languageService` right after this callback returns.

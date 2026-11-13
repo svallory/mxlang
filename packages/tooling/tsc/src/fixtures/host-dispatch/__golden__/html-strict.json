@@ -13,14 +13,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nCard.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport * as __mxSelf from \"./Card.mx\";\nexport declare namespace __mxClientExports {\n  export import Input = __mxSelf.Input;\n  export import render = __mxSelf.render;\n}\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nCard.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              110
+              279
             ],
             "lengths": [
               49
@@ -76,7 +76,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\nexport declare namespace __mxClientExports {\n  export const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n}\n",
         "mappings": [],
         "compileDiagnostics": [
           {
@@ -138,7 +138,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\nexport declare namespace __mxClientExports {\n  export const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n}\n",
         "mappings": [],
         "compileDiagnostics": [
           {
@@ -183,7 +183,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Plain(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPlain.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n  __mxOut.write(\"<p>plain</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Plain, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Plain as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"./Card.mx\"\nimport * as __mxSelf from \"./plain.mx\";\nexport declare namespace __mxClientExports {\n  export import Input = __mxSelf.Input;\n  export import render = __mxSelf.render;\n}\n\nexport interface Input {}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Plain(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPlain.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n  __mxOut.write(\"<p>plain</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Plain, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Plain as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "mappings": [
           {
             "sourceOffsets": [
@@ -207,7 +207,7 @@
               31
             ],
             "generatedOffsets": [
-              997
+              1166
             ],
             "lengths": [
               4
@@ -224,7 +224,7 @@
               31
             ],
             "generatedOffsets": [
-              1003
+              1172
             ],
             "lengths": [
               4
@@ -244,7 +244,7 @@
               38
             ],
             "generatedOffsets": [
-              1005
+              1174
             ],
             "lengths": [
               3
@@ -261,7 +261,7 @@
               31
             ],
             "generatedOffsets": [
-              1090
+              1259
             ],
             "lengths": [
               4

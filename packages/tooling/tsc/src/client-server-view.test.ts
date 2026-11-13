@@ -132,13 +132,18 @@ describe("mx-tsc types a client name as undefined for the server view", {
       "client let q = 1;\n<div/>\nclient const g = () => q.toFixed(1);\n",
     "edge-return-nested.mx":
       "client { const f = () => { return 1 }; const n: number = f(); }\n<div/>\n",
-    // Known limit: a `client import` of another page's client export is
-    // reported (TS2694 from the client view's alias), because the page's one
-    // projection is its server module. This test flips when a client import
-    // of a client export is supported: then the import is
-    // clean and `n` is checked against `number`.
-    "limit-client-import.mx":
+    // A `client import` of another page's export reads that page's reserved
+    // `__mxClientExports`: a client export keeps its type, a `static` export
+    // and a client type stay importable, and an unknown name is reported.
+    "client-import.mx":
       'client import { x } from "./ca.mx";\nclient const n: number = x;\n<div/>\n',
+    "client-import-wrong.mx":
+      'client import { x } from "./ca.mx";\nclient const n: string = x;\n<div/>\n',
+    "client-import-typo.mx": 'client import { nope } from "./ca.mx";\n<div/>\n',
+    "client-import-static.mx":
+      'client import { fx, stx } from "./ca.mx";\nclient const b: number = fx() + stx;\n<div/>\n',
+    "client-import-type.mx":
+      'client import { P } from "./ct.mx";\nclient const p: P = { n: "s" };\n<div/>\n',
     // A type that names a client value is typed in the client scope; one that
     // does not stays at module level.
     "type-class.mx":
@@ -338,11 +343,32 @@ describe("mx-tsc types a client name as undefined for the server view", {
     expect(found[0]).toMatch(/^limit-namespace\.mx\(2,39\): error TS18048/);
   });
 
-  it("limit-client-import.mx: KNOWN LIMIT, a client import of a client export is TS2694", () => {
-    const found = lines("limit-client-import.mx");
+  it.each(["client-import.mx", "client-import-static.mx"])(
+    "%s: a client import of a .mx export is clean",
+    (file) => {
+      expect(lines(file)).toEqual([]);
+    },
+  );
+
+  it("client-import-wrong.mx: a client export keeps its type through the import", () => {
+    expect(lines("client-import-wrong.mx")).toEqual([
+      "client-import-wrong.mx(2,14): error TS2322: Type 'number' is not assignable to type 'string'.",
+    ]);
+  });
+
+  it("client-import-typo.mx: an unknown name is TS2694 at the specifier", () => {
+    const found = lines("client-import-typo.mx");
     expect(found).toHaveLength(1);
     expect(found[0]).toMatch(
-      /^limit-client-import\.mx\(1,17\): error TS2694: Namespace '"[^']*\/ca\.mx"' has no exported member 'x'/,
+      /^client-import-typo\.mx\(1,17\): error TS2694: .*'nope'/,
+    );
+  });
+
+  it("client-import-type.mx: a client type export is checked through the import", () => {
+    const found = lines("client-import-type.mx");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(
+      /^client-import-type\.mx\(2,23\): error TS2322: Type 'string' is not assignable to type 'number'\.$/,
     );
   });
 

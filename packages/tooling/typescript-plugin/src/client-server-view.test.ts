@@ -202,17 +202,31 @@ describe("importing a client export", { timeout: 60_000 }, () => {
     expect(errorsOf({ [FILE]: source, [CA]: CA_SOURCE }, FILE)).toEqual([]);
   });
 
-  // Known limit: a `client import` of another page's client export is
-  // reported, because the page's one projection is its server module; the
-  // client view's alias reports it as an unknown member of the module
-  // (TS2694), at the specifier. This test flips when a client import of
-  // a client export is supported: the import is then clean.
-  it("KNOWN LIMIT: a client import of a client export is TS2694", () => {
+  // A `client import` of a `.mx` specifier reads the page's reserved
+  // `__mxClientExports`, which holds its client exports.
+  it("a client import of a client export is clean", () => {
     const source = 'client import { x } from "./ca.mx";\n<div/>\n';
+    expect(errorsOf({ [FILE]: source, [CA]: CA_SOURCE }, FILE)).toEqual([]);
+  });
+
+  it("a client import of an unknown name is TS2694 at the name", () => {
+    const source = 'client import { nope } from "./ca.mx";\n<div/>\n';
     const found = errorsOf({ [FILE]: source, [CA]: CA_SOURCE }, FILE);
     expect(found).toHaveLength(1);
     expect(found[0]?.code).toBe(2694);
-    expect(found[0]?.start).toBe(source.indexOf("x }"));
+    expect(found[0]?.start).toBe(source.indexOf("nope"));
+  });
+
+  it("does not offer the reserved export as a completion", () => {
+    const path = "/project/other.ts";
+    const source = 'import {  } from "./ca.mx";\n';
+    const svc = service({ [path]: source, [CA]: CA_SOURCE });
+    const names = (
+      svc.getCompletionsAtPosition(path, source.indexOf("{ ") + 2, {})
+        ?.entries ?? []
+    ).map((entry) => entry.name);
+    expect(names).toContain("sx");
+    expect(names).not.toContain("__mxClientExports");
   });
 });
 

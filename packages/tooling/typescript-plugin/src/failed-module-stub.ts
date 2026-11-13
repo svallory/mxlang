@@ -23,6 +23,9 @@ import type * as ts from "typescript";
  * limit: a callback passed to a method of a stubbed value gets TS7006 under
  * `noImplicitAny` (true of `any` too).
  *
+ * Each name is declared again in `__mxClientExports`, the reserved export a
+ * compiled html module carries for its `client import`ers.
+ *
  * The stub carries no source mappings, so no diagnostic is ever reported inside
  * it. Do not revert this to `""`.
  */
@@ -41,11 +44,12 @@ const STAR_REEXPORT = new RegExp(
 const IDENT_ONLY = new RegExp(`^${IDENT}$`, "u");
 // Words that cannot be a binding name. Contextual keywords (`get`, `set`,
 // `type`, `from`, `of`, `async`, …) are legal names and are kept. The two
-// helper names are filtered so an export cannot collide with them.
+// helper names and the reserved export are filtered so an export cannot
+// collide with them.
 const RESERVED = new Set(
   (
     "break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static implements interface package private protected public await " +
-    "__mx$failed$ __Mx$Any$"
+    "__mx$failed$ __Mx$Any$ __mxClientExports"
   ).split(" "),
 );
 
@@ -255,11 +259,15 @@ export function failedModuleStub(
     "export default __mx$failed$;",
     `type __Mx$Any$ = ${CALLABLE};`,
   ];
+  const members: string[] = [];
   for (const [name, kind] of namedExports(typescript, source)) {
-    lines.push(
-      `export declare const ${name}: ${kind === "callable" ? "__Mx$Any$" : "any"}; export type ${name}<${PARAMS}> = any;`,
-    );
+    const member = `export const ${name}: ${kind === "callable" ? "__Mx$Any$" : "any"}; export type ${name}<${PARAMS}> = any;`;
+    lines.push(`export declare ${member.slice("export ".length)}`);
+    members.push(`  ${member}`);
   }
+  // A compiled html module's reserved export, which a `client import` of a
+  // `.mx` specifier reads: the same names, so its importers do not cascade.
+  lines.push("export declare namespace __mxClientExports {", ...members, "}");
   for (const match of source.matchAll(STAR_REEXPORT)) {
     lines.push(`${match[0].trim()};`);
   }

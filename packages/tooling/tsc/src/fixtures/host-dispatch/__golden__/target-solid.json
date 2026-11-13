@@ -91,7 +91,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\nexport declare namespace __mxClientExports {\n  export const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n}\n",
         "mappings": [],
         "compileDiagnostics": [
           {
@@ -239,7 +239,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\nexport declare namespace __mxClientExports {\n  export const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n}\n",
         "mappings": [],
         "compileDiagnostics": [
           {
