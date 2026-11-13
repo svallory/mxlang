@@ -5395,7 +5395,9 @@ value, else the dialect's field, else `true`. A dialect whose front end passes
 `stripTypes: false` sets it, so its hooks see the same nodes in the editor and
 `mx-tsc` as in its build. It takes effect through `lowerSource` only
 (`compileSource` and the host compilers keep their own `stripTypes`). A value
-other than a boolean is a shape error: `` `stripTypes` must be a boolean ``.
+other than a boolean is a shape error at the key: `` `<path>stripTypes` must be
+a boolean `` (for example `` `dialect.stripTypes` must be a boolean `` for a
+`dialect` option).
 
 **A dialect owns its emit.** Building a file calls its dialect's emit, so a
 dialect's files are built by the dialect and by nothing else; no tool picks a
