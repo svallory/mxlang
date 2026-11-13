@@ -53,6 +53,7 @@ import {
   type Ir,
   type IrNode,
   type MappedCode,
+  type MappingUse,
   type ModuleStatementNames,
   mapped,
   mappedExpr,
@@ -1063,8 +1064,8 @@ export function createEmitter(
     attrTagProps: AttrTagProp[],
     content: Block | null,
     ownerType: string | null,
-    untypedCallee = false,
-    contentSpan: { sourceStart: number; sourceEnd: number } | null = null,
+    untypedCallee: boolean,
+    contentSpan: SourceSpan | null,
   ): {
     parts: MappedCode[];
     spreads: string[];
@@ -1082,8 +1083,10 @@ export function createEmitter(
       name: string,
       value: string | MappedCode,
       span: { sourceStart: number; sourceEnd: number } | null = null,
+      use?: MappingUse,
     ): void => {
-      parts.push(concatMapped(mapped(propKey(name), span), ": ", value));
+      const key = mapped(propKey(name), span);
+      parts.push(concatMapped(use ? withUse(key, use) : key, ": ", value));
     };
 
     for (const attr of attrs) {
@@ -1122,21 +1125,24 @@ export function createEmitter(
       // params from (`__mxRenderDynamic` takes `Record<string, any>`), so an
       // unannotated param would be an implicit `any` under strict tsc. The cast
       // is the contextual type: the params are `any`, as the callee is unknown.
+      //
       // The key stands for the authored body, so it maps onto the span the
       // call's props braces take (the tag name): a callee whose input
       // declares no `content` (TS2353) is the author's error, reported where
-      // a missing prop is. Verification only: hover, navigation and
-      // completion on the tag name stay the name's own.
-      parts.push(
-        concatMapped(
-          withUse(mapped(propKey("content"), contentSpan), {
-            verification: true,
-          }),
-          ": ",
-          untypedCallee && content.hasParams
-            ? concatMapped("(", fn, ") as (...args: any[]) => any")
-            : fn,
-        ),
+      // a missing prop is. `verification` only, so hover, navigation and
+      // completion on the tag name stay the name's own. Known limit: the
+      // pinned Volar (2.4.28) enables code actions from `verification` too
+      // (`isCodeActionsEnabled` is `!!verification`), so a TypeScript quick
+      // fix on the key maps onto the tag name: TS2561's "Change spelling to
+      // 'contents'" would rewrite the tag name. No `use` here can keep the
+      // diagnostic and drop the fix.
+      setProp(
+        "content",
+        untypedCallee && content.hasParams
+          ? concatMapped("(", fn, ") as (...args: any[]) => any")
+          : fn,
+        contentSpan,
+        { verification: true },
       );
     }
 
