@@ -2162,7 +2162,10 @@ function attributeTagValue(tag: AttributeTag, contextual: boolean): MappedCode {
   );
 }
 
-/** The `add` callback of an attribute-tag fold's builder; reserved `__mx` prefix. */
+/**
+ * The builder's `add` callback, or the accumulator of the non-contextual
+ * IIFE fold; reserved `__mx` prefix.
+ */
 const ATTR_TAG_ACC = "__mxAttrTagAcc";
 
 /**

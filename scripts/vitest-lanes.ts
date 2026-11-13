@@ -64,6 +64,7 @@ export const CORE_ISOLATED_FILES: readonly string[] = [
 export const SLOW_LANE_FILES: Readonly<Record<string, readonly string[]>> = {
   "packages/tooling/tsc": [
     "src/build-cache-build.test.ts",
+    "src/tsconfig-paths-watch.test.ts",
     "src/watch.test.ts",
     "src/watch-ambient-types.test.ts",
     "src/watch-mx-diagnostics.test.ts",

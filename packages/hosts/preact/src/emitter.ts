@@ -957,10 +957,13 @@ function identifierNames(text: string): Set<string> {
   return new Set(text.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []);
 }
 
-/** A loop-counter name that cannot shadow anything the body already uses. */
-/** The `add` callback of an attribute-tag fold's builder; reserved `__mx` prefix. */
+/**
+ * The builder's `add` callback, or the accumulator of the non-contextual
+ * IIFE fold; reserved `__mx` prefix.
+ */
 const ATTR_TAG_ACC = "__mxAttrTagAcc";
 
+/** A loop-counter name that cannot shadow anything the body already uses. */
 function hygienicName(base: string, params: string[], body: string): string {
   const used = identifierNames(`${params.join(" ")} ${body}`);
   if (!used.has(base)) return base;

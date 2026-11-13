@@ -147,6 +147,77 @@ describe("attributeTagDiagnosticMappings over a fold builder", () => {
       [opening(source, "item", 1), nth(generated, " item={", 1) + 1],
     ]);
   });
+
+  // The builder's statements before its first `add` are the `<if>`'s and the
+  // `<for>`'s own code: only the prop name maps to the tag name.
+  it.each([
+    [
+      "<if=cond>",
+      "<A><if=cond><@item x=1/></if><@item x=2/></A>",
+      '<A item={__mxAttrTagsOf((__mxAttrTagAcc) => { if (cond) { __mxAttrTagAcc({ "x": 1 }); } __mxAttrTagAcc({ "x": 2 }); }, true)}/>',
+      "cond",
+    ],
+    [
+      "<for of=src>",
+      "<A><for|v| of=src><@item x=v/></for></A>",
+      '<A item={__mxAttrTagsOf((__mxAttrTagAcc) => { for (const v of src) { __mxAttrTagAcc({ "x": v }); } })}/>',
+      "src",
+    ],
+  ])(
+    "leaves the fold's %s code to its own mappings",
+    (_, source, generated, code) => {
+      const at = generated.indexOf(code);
+      const covering = attributeTagDiagnosticMappings(source, generated).filter(
+        (mapping) =>
+          mapping.lengths[0] === 0 &&
+          (mapping.generatedOffsets[0] as number) <= at &&
+          at <
+            (mapping.generatedOffsets[0] as number) +
+              (mapping.generatedLengths?.[0] as number),
+      );
+      expect(covering).toEqual([]);
+      expect(objectStarts(source, generated)[0]).toEqual([
+        opening(source, "item", 1),
+        nth(generated, "item={", 1),
+      ]);
+    },
+  );
+
+  // A nested call passing another value as a prop of the same name
+  // (`<B item=...>`) is no record: it is passed over, and the outer second
+  // occurrence still takes the outer builder's `add`.
+  it("passes over a same-name prop of a nested call that is no record", () => {
+    const source =
+      "<A><@item id=1><B item=(() => 1)()/></@item><@item id=2/></A>";
+    const generated =
+      '<A item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ "id": 1, "content": <B item={(() => { return 1; })()}/> }); __mxAttrTagAcc({ "id": 2 }); }, true)}/>';
+    expect(attributeTargets(source, generated)).toContainEqual([
+      "id=2",
+      nth(generated, `"id": 2`, 1),
+    ]);
+  });
+
+  // A fold no declared type reaches is an arrow called in place; its steps
+  // are the occurrences, and a nested one's steps (another name, the same
+  // accumulator) are never the outer fold's.
+  it("walks an in-place fold and skips a nested one", () => {
+    const source =
+      "<A><@item id=1><B><@entry k=3/><@entry k=4/></B></@item><@item id=2/></A>";
+    const fold = (body: string) =>
+      `(() => { let __mxAttrTagAcc; ${body} return __mxAttrTagAcc; })()`;
+    const step = (attrs: string) =>
+      `__mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { ${attrs} });`;
+    const inner = fold(`${step('"k": 3')} ${step('"k": 4')}`);
+    const generated = `<A item={${fold(
+      `${step(`"id": 1, "content": <B entry={${inner}}/>`)} ${step('"id": 2')}`,
+    )}}/>`;
+    expect(attributeTargets(source, generated)).toEqual([
+      ["id=1", nth(generated, `"id": 1`, 1)],
+      ["k=3", nth(generated, `"k": 3`, 1)],
+      ["k=4", nth(generated, `"k": 4`, 1)],
+      ["id=2", nth(generated, `"id": 2`, 1)],
+    ]);
+  });
 });
 
 /**

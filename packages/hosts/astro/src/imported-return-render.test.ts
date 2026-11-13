@@ -97,34 +97,41 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
   // A fence default import of a `.mx` file reaches core, which reads the
   // callee's `<return>`; the Astro host then refuses `/var` with its own
   // message, since `.astro.mx` cannot bind one (the fence runs before the
-  // template). It points at the `/n` binding (line 4, column 9), not at
-  // the tag.
-  it("still refuses /var on the imported call, positioned", () => {
-    let error:
-      | (Error & {
-          line?: number;
-          column?: number;
-          end?: { line: number; column: number };
-        })
-      | undefined;
-    try {
-      lowerAstroMx(
-        '---\nimport Counter from "./counter.mx";\n---\n<Counter/n start=1/><p>{n}</p>',
-        join(dir, "page.astro.mx"),
+  // template). It underlines the binding, not the tag: from its first
+  // identifier to the end of its last one.
+  it.each([
+    ["a name", "n", { line: 4, column: 9 }, { line: 4, column: 10 }],
+    [
+      "a destructuring",
+      "{ count, inc }",
+      { line: 4, column: 11 },
+      { line: 4, column: 21 },
+    ],
+  ])(
+    "still refuses /var on the imported call, positioned at %s",
+    (_, binding, start, end) => {
+      let error:
+        | (Error & {
+            line?: number;
+            column?: number;
+            end?: { line: number; column: number };
+          })
+        | undefined;
+      try {
+        lowerAstroMx(
+          `---\nimport Counter from "./counter.mx";\n---\n<Counter/${binding} start=1/><p>x</p>`,
+          join(dir, "page.astro.mx"),
+        );
+      } catch (caught) {
+        error = caught as Error;
+      }
+      expect(error?.message).toBe(
+        '`/var` on `<Counter>` can\'t bind in `.astro.mx`: Astro runs the `---` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. `import Counter from "./Counter.mx"; import { createOut } from "@mxlang/host-astro/runtime"; const value = Counter.render({ ... }, createOut());`, and use `value` in the template.',
       );
-    } catch (caught) {
-      error = caught as Error;
-    }
-    expect(error?.message).toBe(
-      '`/var` on `<Counter>` can\'t bind in `.astro.mx`: Astro runs the `---` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. `import Counter from "./Counter.mx"; import { createOut } from "@mxlang/host-astro/runtime"; const value = Counter.render({ ... }, createOut());`, and use `value` in the template.',
-    );
-    expect({ line: error?.line, column: error?.column }).toEqual({
-      line: 4,
-      column: 9,
-    });
-    // The whole binding is underlined: `n` ends at column 10.
-    expect(error?.end).toEqual({ line: 4, column: 10 });
-  });
+      expect({ line: error?.line, column: error?.column }).toEqual(start);
+      expect(error?.end).toEqual(end);
+    },
+  );
 
   // `emitTemplate(ir)` has no source to resolve the binding's offset against,
   // so the same refusal keeps the tag's own position.
