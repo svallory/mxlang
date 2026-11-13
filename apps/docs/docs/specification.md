@@ -2738,7 +2738,10 @@ iteration (`for of`, `[...x || []]`) yields every occurrence in source order
 while a property read (`x.title`) reads the first. An absent attribute tag is
 `undefined`. Nested attribute tags are records on their parent's record, by
 the same rule. Marko-written callee code (spread, `for of`, property reads)
-therefore runs unchanged.
+therefore runs unchanged. A dynamic tag given a record renders its `content`;
+given a record with no `content` (a bodiless `<@name/>`) it renders nothing of
+its own, only the call's own body, as Marko 6.4.4's `normalizeDynamicRenderer`
+does for an object with no renderer.
 
 MX adds members on the record's **prototype**, never as own properties:
 `map`, `filter`, `length`, `at` and `toArray`. They are neither spread nor

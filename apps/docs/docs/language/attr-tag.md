@@ -62,8 +62,8 @@ checked by the compiler.
 `content` is the body, in the host's shape (table below). Render it with
 `<${input.head.content}/>`, or render the record itself, `<${input.head}/>`:
 a dynamic tag given a record renders its `content`, as Marko does. A record
-whose tag had no body (`<@head/>`) has no `content` and renders as an error at
-run time.
+whose tag had no body (`<@head/>`) has no `content`, so a dynamic tag given it
+renders nothing of its own (only the call's own body, if any), as Marko does.
 
 With params, `<@row|row, index|>…</@row>` makes `content` a function of them:
 the callee passes the arguments as tag arguments,
