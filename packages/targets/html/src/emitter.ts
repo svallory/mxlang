@@ -2232,7 +2232,7 @@ function placeClientCode(state: State): ClientExports {
       "})();",
     ),
   ];
-  // `@ts-expect-error` covers only the generated `namespace` line: it is not
+  // `@ts-ignore` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
@@ -2329,7 +2329,7 @@ function reservedExport(
   const base = fileName.slice(
     Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1,
   );
-  // The self-import always resolves (to this module); `@ts-expect-error` keeps a
+  // The self-import always resolves (to this module); `@ts-ignore` keeps a
   // project without `jsx` from reporting TS6142 on it, since a `.mx` module
   // is TSX, and the namespace still reads the module's exports.
   return concatMapped(

@@ -2386,18 +2386,27 @@ describe("value import used as a tag", () => {
     expect(html).toBe("x");
   });
 
-  it("an object without content throws the bodiless attribute-tag guard", async () => {
-    await expect(
-      renderModules(
-        {
-          "entry.mx": 'import { Obj } from "./target.ts"\n<Obj/>',
-          "target.ts": "export const Obj = { label: 1 };",
-        },
-        "entry.mx",
-      ),
-    ).rejects.toThrow(
-      "MX: this value is an attribute tag with no body; only one with a body (`content`) renders as a tag",
+  it("an object that is no template is a falsy renderer: only the body renders, matching Marko", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { Obj } from "./target.ts"\n<Obj/>|<Obj label=2>body</Obj>',
+        "target.ts": "export const Obj = { label: 1 };",
+      },
+      "entry.mx",
     );
+    expect(html).toBe("|body");
+  });
+
+  it("a bodiless attribute-tag record renders nothing as a dynamic tag, matching Marko", async () => {
+    const html = await renderModules(
+      {
+        "card.mx": "<p>[<${input.empty}/>][<${input.empty}>b</>]</p>",
+        "entry.mx": 'import Card from "./card.mx"\n<Card><@empty a=1/></Card>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<p>[][b]</p>");
   });
 
   it("undefined renders only the tag's body content, matching Marko (fixed: html used to drop the body entirely)", async () => {

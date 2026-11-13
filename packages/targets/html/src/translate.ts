@@ -683,7 +683,7 @@ function clientProjection(
   // to it, so the server view reads the name as `undefined` (`var` line) and
   // client code keeps every meaning of the export (value, type, namespace).
   // An alias keeps its `import` keyword on a line of its own under
-  // `@ts-expect-error`: the alias is not erasable syntax, and the ignore must not
+  // `@ts-ignore`: the alias is not erasable syntax, and the ignore must not
   // reach the name, where an unknown or unused name is reported.
   const valueImport = (statement: Node, serial: number): void => {
     const from = text(statement.source);
@@ -1610,9 +1610,11 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 // they bind \`unknown\`, and \`any\` stays \`any\`.
 const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: __MxDynamicProps<T>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
 function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
-  // Marko parity: an attribute-tag record (any object with \`content\`)
-  // renders its body, as Marko's dynamic tag reads \`value.content\`.
-  if (__mxTarget && typeof __mxTarget === "object" && __mxTarget.content) __mxTarget = __mxTarget.content;
+  // Marko parity (6.4.4 \`normalizeDynamicRenderer\`): an object that is no
+  // compiled template renders its \`content\`, so an attribute-tag record
+  // renders its body, and one with no body (\`<@x/>\`) is a falsy renderer
+  // that renders nothing of its own.
+  if (__mxTarget && typeof __mxTarget === "object" && typeof __mxTarget.render !== "function") __mxTarget = __mxTarget.content;
   if (!__mxTarget) {
     // Marko parity: a falsy renderer (null, undefined, false,
     // 0, "") renders no tag of its own; content renders independently.
@@ -1641,9 +1643,6 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
     // Marko 6.4.4's html/dynamic-tag.ts voidElementsReg, case-sensitive.
     __mxSink.write(/^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(__mxTarget) ? __mxOut : __mxOut + "</" + __mxTarget + ">");
     return;
-  }
-  if (typeof __mxTarget === "object") {
-    throw new TypeError("MX: this value is an attribute tag with no body; only one with a body (\`content\`) renders as a tag");
   }
   if (__mxArgs) {
     // Marko 6.3.51 calls a template with its args, so args[0] is its input.

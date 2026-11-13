@@ -288,6 +288,14 @@ describe("Solid SSR render: attribute-tag values", () => {
     expect(html).toBe("<ul><b>H</b></ul>");
   });
 
+  it("renders nothing for a bodiless record given to a dynamic tag, matching Marko", () => {
+    const html = renderApp(
+      `<define/Card|{ empty }|><b>[<\${empty}/>][<\${empty}>b</>]</b></define><Card><@empty a=1/></Card>`,
+      "",
+    );
+    expect(html).toBe("<ul><b>[][b]</b></ul>");
+  });
+
   it("executes records with attributes, params, control flow and nested tags", () => {
     const html = renderDeclaredAttrTags(
       `<Row><if=ok><@head tone="hot">A</@head></if><else><@head tone="cold">B</@head></else><@item id=0>S</@item><for|value| of=values><@item id=value>\${value}</@item></for><@slot>R</@slot><@render|label|><b>\${label}</b></@render><@tab title="T"><@icon label="star">I</@icon></@tab></Row>`,
