@@ -459,45 +459,6 @@ export interface ClientProjection {
 }
 
 /**
- * The names the module's own statements (imports, `static`/`server`/`export`
- * code) declare. A `client` statement's hoisted `var q;` is dropped for a name
- * in this set: `function q(){}` beside `var q;` is TS2300 (duplicate
- * identifier), and a `namespace q` merges with the function, not with a `var`.
- * Text that does not parse declares nothing here (core has already read it).
- */
-export function moduleDeclaredNames(codes: string[]): Set<string> {
-  const names = new Set<string>();
-  for (const code of codes) {
-    let body: Node[];
-    try {
-      body = babelParser.parse(code, {
-        sourceType: "module",
-        allowAwaitOutsideFunction: true,
-        allowImportExportEverywhere: true,
-        allowReturnOutsideFunction: true,
-        allowSuperOutsideMethod: true,
-        allowUndeclaredExports: true,
-        allowNewTargetOutsideFunction: true,
-        plugins: [
-          "objectRestSpread",
-          "classProperties",
-          "explicitResourceManagement",
-          ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
-        ],
-      }).program.body;
-    } catch {
-      continue;
-    }
-    for (const name of clientDeclaredNames(
-      body.filter((statement) => !isTypeOnlyNamespace(statement)),
-    )) {
-      names.add(name);
-    }
-  }
-  return names;
-}
-
-/**
  * A `namespace` holding only types (or `declare`s, or such namespaces) is
  * erased by TypeScript: it declares no run-time name, so it cannot clash with
  * a `var` (TypeScript's "instantiated" rule).
