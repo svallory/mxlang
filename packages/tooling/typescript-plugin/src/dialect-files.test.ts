@@ -20,6 +20,7 @@ import {
   createDialectLanguagePlugin,
   dialectFileExtensions,
 } from "./dialect-language.ts";
+import { plainDiagnostics } from "./fixtures/plugin-service.ts";
 import pluginFactory from "./index.ts";
 
 /**
@@ -167,8 +168,12 @@ describe("dialect files through the TypeScript plugin", () => {
     const project = probeProject({ "dialect.cjs": PROBE_FIX_DIALECT_MODULE });
     const file = project.path("page.probe");
     const service = createService(project.dir, { [file]: PROBE_FIX_SOURCE });
-    const [diagnostic] = service.getSyntacticDiagnostics(file);
-    expect(diagnostic).toMatchObject({ start: 3, length: 4 });
+    const diagnostics = service.getSyntacticDiagnostics(file);
+    const [diagnostic] = diagnostics;
+    expect(plainDiagnostics(diagnostics)[0]).toMatchObject({
+      start: 3,
+      length: 4,
+    });
     expect(diagnostic?.code).toBe("PROBE_FIXABLE");
 
     const fixes = service.getCodeFixesAtPosition(
@@ -447,7 +452,9 @@ describe("dialect files through the TypeScript plugin", () => {
       [plain]: PROBE_SOURCES.noRules,
     });
     // `<input>` is a void element under MX's rules: no syntax error.
-    expect(service.getSyntacticDiagnostics(plain)).toEqual([]);
+    expect(plainDiagnostics(service.getSyntacticDiagnostics(plain))).toEqual(
+      [],
+    );
     const broken = project.path("broken.mx");
     const brokenService = createService(project.dir, { [broken]: "<div>\n" });
     expect(

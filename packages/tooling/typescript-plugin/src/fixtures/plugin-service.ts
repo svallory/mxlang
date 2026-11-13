@@ -195,3 +195,36 @@ export function createMutablePluginService(
     },
   };
 }
+
+/** A `ts.Diagnostic` as plain fields: what a test asserts on. */
+export interface PlainDiagnostic {
+  code: number;
+  start: number | undefined;
+  length: number | undefined;
+  /** `messageText` flattened, chain lines joined by `\n`. */
+  message: string;
+  source?: string | undefined;
+  category?: ts.DiagnosticCategory;
+}
+
+/**
+ * `diagnostics` as plain fields, for an assertion: `code`, `start`,
+ * `length` and the flattened `message`, plus `source` and `category` only
+ * when `extra` names them. A raw `ts.Diagnostic` carries its `file`, a
+ * `SourceFile` tied to the whole program, which vitest serializes when the
+ * assertion fails and which can exhaust the worker's memory; `file`,
+ * `relatedInformation` and every other object field are never copied.
+ */
+export function plainDiagnostics(
+  diagnostics: readonly ts.Diagnostic[],
+  extra: readonly ("source" | "category")[] = [],
+): PlainDiagnostic[] {
+  return diagnostics.map((diagnostic) => ({
+    code: diagnostic.code,
+    start: diagnostic.start,
+    length: diagnostic.length,
+    message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    ...(extra.includes("source") ? { source: diagnostic.source } : {}),
+    ...(extra.includes("category") ? { category: diagnostic.category } : {}),
+  }));
+}

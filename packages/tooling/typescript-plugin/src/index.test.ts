@@ -48,7 +48,10 @@ import {
   createAmxLanguagePlugin,
 } from "./amx-language.ts";
 import { createAstroLanguagePlugin } from "./astro-language.ts";
-import { createMutablePluginService as makePluginService } from "./fixtures/plugin-service.ts";
+import {
+  createMutablePluginService as makePluginService,
+  plainDiagnostics,
+} from "./fixtures/plugin-service.ts";
 import { createConfiguredLanguagePlugins } from "./index.ts";
 import {
   compileWithDependencies,
@@ -374,7 +377,9 @@ describe("Solid language plugin", {
     const diagnostics = service.getSyntacticDiagnostics(fileName);
 
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]).toMatchObject({
+    expect(
+      plainDiagnostics(diagnostics, ["source", "category"])[0],
+    ).toMatchObject({
       start: source.indexOf("<button"),
       source: "solidmx",
       code: 80001,
@@ -407,7 +412,7 @@ describe("Solid language plugin", {
     expect(diagnostics.some((diagnostic) => diagnostic.code === 2307)).toBe(
       false,
     );
-    expect(diagnostics).toEqual(
+    expect(plainDiagnostics(diagnostics)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 2322,
@@ -428,7 +433,9 @@ describe("Solid language plugin", {
       },
       [consumer],
     );
-    expect(clean.getSemanticDiagnostics(consumer)).toEqual([]);
+    expect(plainDiagnostics(clean.getSemanticDiagnostics(consumer))).toEqual(
+      [],
+    );
     expect(service.getSemanticDiagnostics(consumer).map((d) => d.code)).toEqual(
       diagnostics.map((d) => d.code),
     );
@@ -3059,7 +3066,9 @@ describe("MX language plugin", {
     const diagnostics = service.getSyntacticDiagnostics(fileName);
 
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]).toMatchObject({
+    expect(
+      plainDiagnostics(diagnostics, ["source", "category"])[0],
+    ).toMatchObject({
       start: source.indexOf("<await"),
       // The whole `<await`, and MX's own code in place of 80001.
       length: "<await".length,
@@ -3140,7 +3149,9 @@ describe("MX language plugin", {
     service.getSemanticDiagnostics(consumer);
     const diagnostics = service.getSyntacticDiagnostics(fileName);
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]).toMatchObject({
+    expect(
+      plainDiagnostics(diagnostics, ["source", "category"])[0],
+    ).toMatchObject({
       start: source.indexOf("<for"),
       length: "<for".length,
       source: "solidmx",
@@ -4885,7 +4896,7 @@ describe(".ng.mx language plugin", () => {
     const { diagnostics } = diagnosticsOf(
       component("<p>${n}</p>", "n: number = 1;"),
     );
-    expect(diagnostics).toEqual([]);
+    expect(plainDiagnostics(diagnostics)).toEqual([]);
   });
 
   it("positions a class-body type error in the .ng.mx", () => {
@@ -5105,7 +5116,9 @@ describe(".ng.mx language plugin", () => {
           (d) => d.source === "angular" && d.code === -998002,
         );
         expect(attributeError?.start).toBe(source.indexOf("lable=title"));
-        expect(service.getSyntacticDiagnostics(tag)).toEqual([]);
+        expect(plainDiagnostics(service.getSyntacticDiagnostics(tag))).toEqual(
+          [],
+        );
       } finally {
         project.close();
         vi.useRealTimers();
@@ -5521,7 +5534,11 @@ describe("host-policy diagnostics through tsserver", {
         JSON.stringify({ mx: { host: "solid", target: "html" } }),
       );
       const diagnostics = hostPolicyDiagnostics(dir, fileName);
-      expect(diagnostics.find((d) => d.code === 80003)).toMatchObject({
+      expect(
+        plainDiagnostics(diagnostics, ["category"]).find(
+          (d) => d.code === 80003,
+        ),
+      ).toMatchObject({
         start: 0,
         category: ts.DiagnosticCategory.Error,
       });
@@ -5543,16 +5560,21 @@ describe("host-policy diagnostics through tsserver", {
     );
     writeFileSync(join(dir, "package.json"), '{ "mx": { "target": "html" } }');
     p.touch();
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
   });
 
   it("puts an unknown mx.host on the .mx file at 1:1, as a warning in the LS's text", () => {
     const dir = packageDir(UNKNOWN);
 
-    const [diagnostic, ...rest] = hostPolicyDiagnostics(dir, "page.mx");
+    const diagnostics = hostPolicyDiagnostics(dir, "page.mx");
+    const [diagnostic] = diagnostics;
+    const [plain, ...rest] = plainDiagnostics(diagnostics, [
+      "source",
+      "category",
+    ]);
 
     expect(rest).toEqual([]);
-    expect(diagnostic).toMatchObject({
+    expect(plain).toMatchObject({
       start: 0,
       length: 0,
       source: "mx",
@@ -5587,7 +5609,7 @@ describe("host-policy diagnostics through tsserver", {
   it("reports nothing for a valid host", () => {
     const dir = packageDir(FIXED);
 
-    expect(hostPolicyDiagnostics(dir, "page.mx")).toEqual([]);
+    expect(plainDiagnostics(hostPolicyDiagnostics(dir, "page.mx"))).toEqual([]);
   });
 
   it("reports on a .ng.mx too (a24: the unknown host sits beside Angular files)", () => {
@@ -5607,11 +5629,14 @@ describe("host-policy diagnostics through tsserver", {
   it("reports on a .solid.mx, with that file kind's source", () => {
     const dir = packageDir(UNKNOWN);
 
-    const diagnostic = hostPolicyDiagnostics(dir, "page.solid.mx").find(
-      (d) => d.code === 80003,
-    );
+    const diagnostics = hostPolicyDiagnostics(dir, "page.solid.mx");
+    const diagnostic = diagnostics.find((d) => d.code === 80003);
 
-    expect(diagnostic).toMatchObject({
+    expect(
+      plainDiagnostics(diagnostics, ["source", "category"]).find(
+        (d) => d.code === 80003,
+      ),
+    ).toMatchObject({
       source: "solidmx",
       category: ts.DiagnosticCategory.Warning,
       start: 0,
@@ -5639,14 +5664,14 @@ describe("host-policy diagnostics through tsserver", {
     writeFileSync(join(dir, "package.json"), FIXED);
     p.touch();
 
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
   });
 
   it("says the host config changed when a fixed config changes the target, until the .mx is edited", () => {
     const dir = packageDir('{ "name": "t" }');
     writeFileSync(join(dir, ".mxrc.yaml"), "host: html\n");
     const p = project(dir, "page.mx");
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
 
     writeFileSync(join(dir, ".mxrc.yaml"), "host: preact\n");
     const stale = p.diagnostics();
@@ -5656,7 +5681,7 @@ describe("host-policy diagnostics through tsserver", {
     ]);
     expect(stale[0]?.code).toBe(80001);
     p.touch();
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
   });
 
   it("says so too when the target failed to load and the config is then fixed", () => {
@@ -5671,7 +5696,7 @@ describe("host-policy diagnostics through tsserver", {
       "the host config changed since this file was compiled; edit it to recompile",
     ]);
     p.touch();
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
   });
 
   it("says nothing when an unknown target (compiled under the fallback) is fixed to html", () => {
@@ -5681,20 +5706,20 @@ describe("host-policy diagnostics through tsserver", {
 
     writeFileSync(join(dir, "package.json"), FIXED);
 
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
   });
 
   it("drops the host-changed error when the config goes back to what the file was compiled under", () => {
     const dir = packageDir('{ "name": "t" }');
     writeFileSync(join(dir, ".mxrc.yaml"), "host: html\n");
     const p = project(dir, "page.mx");
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
 
     writeFileSync(join(dir, ".mxrc.yaml"), "host: preact\n");
     expect(p.diagnostics()).toHaveLength(1);
     writeFileSync(join(dir, ".mxrc.yaml"), "host:  html\n");
 
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
   });
 
   it("clears the warning once a .mxrc.yaml alone is fixed (every config spelling is watched)", () => {
@@ -5705,7 +5730,7 @@ describe("host-policy diagnostics through tsserver", {
 
     writeFileSync(join(dir, ".mxrc.yaml"), "host: html\n");
 
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
   });
 
   it("clears the warning once package.json alone is fixed, without editing the .mx", () => {
@@ -5715,7 +5740,7 @@ describe("host-policy diagnostics through tsserver", {
 
     writeFileSync(join(dir, "package.json"), FIXED);
 
-    expect(p.diagnostics()).toEqual([]);
+    expect(plainDiagnostics(p.diagnostics())).toEqual([]);
   });
 });
 

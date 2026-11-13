@@ -2,7 +2,10 @@ import * as core from "@mxlang/core";
 import { builtinLookup } from "@mxlang/targets";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { createMutablePluginService } from "./fixtures/plugin-service.ts";
+import {
+  createMutablePluginService,
+  plainDiagnostics,
+} from "./fixtures/plugin-service.ts";
 import { createHtmlMappings } from "./mx-language.ts";
 
 const prefix = "export interface Input { a: string; b: boolean }\n";
@@ -94,10 +97,16 @@ describe("tag types in the mapping re-lower", { timeout: 60_000 }, () => {
         expect(diagnosticSet(service.getSyntacticDiagnostics(file))).toEqual(
           [],
         );
-        expect(service.getSemanticDiagnostics(file)).toEqual([]);
+        expect(plainDiagnostics(service.getSemanticDiagnostics(file))).toEqual(
+          [],
+        );
         expect(mappings(source, compiled).length).toBeGreaterThan(0);
-        expect(service.getSyntacticDiagnostics(rawFile)).toEqual([]);
-        expect(service.getSemanticDiagnostics(rawFile)).toEqual([]);
+        expect(
+          plainDiagnostics(service.getSyntacticDiagnostics(rawFile)),
+        ).toEqual([]);
+        expect(
+          plainDiagnostics(service.getSemanticDiagnostics(rawFile)),
+        ).toEqual([]);
 
         // A genuine semantic error must survive the mapping pass and point at
         // the authored property, not generated scaffolding or the tag head.

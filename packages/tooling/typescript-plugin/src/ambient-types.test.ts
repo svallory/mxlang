@@ -13,6 +13,7 @@ import {
   ambientTypeFiles,
   withAmbientTypes,
 } from "./ambient-types.ts";
+import { plainDiagnostics } from "./fixtures/plugin-service.ts";
 
 // `packages/hosts/astro` has `astro` installed, as an Astro project does.
 const astroProject = join(import.meta.dirname, "../../../hosts/astro");
@@ -286,13 +287,14 @@ describe("ambientTypeFiles, a host returning no iterable of files", () => {
 
 describe("ambientTypeDiagnostics", () => {
   it("is a file-less error carrying the message", () => {
-    const [diagnostic] = ambientTypeDiagnostics(ts, ["host x: threw: boom"]);
+    const diagnostics = ambientTypeDiagnostics(ts, ["host x: threw: boom"]);
+    const [diagnostic] = diagnostics;
 
-    expect(diagnostic).toMatchObject({
-      file: undefined,
+    expect(diagnostic?.file).toBeUndefined();
+    expect(diagnostic?.messageText).toBe("host x: threw: boom");
+    expect(plainDiagnostics(diagnostics, ["category"])[0]).toMatchObject({
       category: ts.DiagnosticCategory.Error,
       code: 80004,
-      messageText: "host x: threw: boom",
     });
     expect(ts.flattenDiagnosticMessageText(diagnostic?.messageText, "\n")).toBe(
       "host x: threw: boom",

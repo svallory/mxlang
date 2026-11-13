@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { clearScanCache } from "@mxlang/core";
 import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
-import { createMutablePluginService } from "./fixtures/plugin-service.ts";
+import {
+  createMutablePluginService,
+  plainDiagnostics,
+} from "./fixtures/plugin-service.ts";
 import { createMxLanguagePlugin } from "./mx-language.ts";
 
 const dirs: string[] = [];
@@ -59,14 +62,20 @@ describe("Angular page dispatch", () => {
       try {
         for (const source of ["<p>Hello</p>", "<div>", "<let/count=0/>"]) {
           setFile(page, source);
-          expect(service.getSyntacticDiagnostics(page)).toEqual([]);
-          expect(service.getSemanticDiagnostics(page)).toEqual([]);
+          expect(
+            plainDiagnostics(service.getSyntacticDiagnostics(page)),
+          ).toEqual([]);
+          expect(
+            plainDiagnostics(service.getSemanticDiagnostics(page)),
+          ).toEqual([]);
           const compiled = service.getProgram()?.getSourceFile(page);
           expect(compiled).toBeDefined();
           if (!compiled) throw new Error("missing page script");
           expect(ts.isExternalModule(compiled)).toBe(false);
         }
-        expect(service.getSyntacticDiagnostics(control)).toEqual([]);
+        expect(
+          plainDiagnostics(service.getSyntacticDiagnostics(control)),
+        ).toEqual([]);
         expect(
           service.getSemanticDiagnostics(control).map((d) => d.code),
         ).toEqual([2322]);

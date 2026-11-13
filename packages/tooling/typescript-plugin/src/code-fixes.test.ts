@@ -11,7 +11,10 @@ import { astroTemplateDeclarations } from "@mxlang/host-astro/template";
 import type ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 import { applicableFixes, mxCodeFixes } from "./code-fixes.ts";
-import { createMutablePluginService } from "./fixtures/plugin-service.ts";
+import {
+  createMutablePluginService,
+  plainDiagnostics,
+} from "./fixtures/plugin-service.ts";
 import type { MxCompileDiagnostic } from "./language.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -60,8 +63,9 @@ describe("the `<effect>` rename fix as a tsserver code fix", () => {
 
   it("returns the one fix, whose edits rename both names in the .mx file", () => {
     const { service, page } = htmlPage(SOURCE);
-    const [diagnostic] = service.getSyntacticDiagnostics(page);
-    expect(diagnostic).toMatchObject({
+    const diagnostics = service.getSyntacticDiagnostics(page);
+    const [diagnostic] = diagnostics;
+    expect(plainDiagnostics(diagnostics)[0]).toMatchObject({
       start: SOURCE.indexOf("effect"),
       length: "effect".length,
       code: CODE,

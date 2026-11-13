@@ -1,6 +1,7 @@
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { AMX_LANGUAGE_ID, createAmxLanguagePlugin } from "./amx-language.ts";
+import { plainDiagnostics } from "./fixtures/plugin-service.ts";
 
 const CANT_RETURN_OUTSIDE_FUNCTION = 1108;
 
@@ -162,7 +163,7 @@ describe("fence top-level return vs TS1108 (astro-template projection)", () => {
       fenceReturnDiagnostic(source.indexOf("return;")),
     ]);
 
-    expect(filtered).toEqual([]);
+    expect(plainDiagnostics(filtered)).toEqual([]);
   });
 
   it("still reports a real type error in the same fence", () => {

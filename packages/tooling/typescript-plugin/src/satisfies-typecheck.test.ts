@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   createMutablePluginService,
   createPluginService,
+  plainDiagnostics,
 } from "./fixtures/plugin-service.ts";
 
 /**
@@ -279,7 +280,7 @@ describe("satisfies in the type-check module", () => {
     // tag and used to break the whole file (TS1002/TS1005/TS17002 with no
     // semantic diagnostics at all). The cast is stripped (unchecked) and
     // the rest of the file still reports a real type error placed after it.
-    expect(service.getSyntacticDiagnostics(file)).toEqual([]);
+    expect(plainDiagnostics(service.getSyntacticDiagnostics(file))).toEqual([]);
     const diagnostics = service.getSemanticDiagnostics(file);
     const missing = diagnostics.find((diagnostic) => diagnostic.code === 2339);
     // TS 2339 lands on the property name, placed after the stripped cast.
