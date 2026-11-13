@@ -2311,7 +2311,7 @@ function placeClientCode(state: State): ClientExports {
       "})();",
     ),
   ];
-  // `@ts-expect-error` covers only the generated `namespace` line: it is not
+  // `@ts-ignore` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
@@ -2361,6 +2361,21 @@ interface ClientExports {
  * type-check module, so an unknown name is reported at the importer's
  * specifier, never at generated text. Nothing here is mapped.
  */
+const MEMBER_NAME = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
+// Words a namespace member cannot be named (`export const class`), strict
+// mode's included: an `export { a as "x-y" }` or `export { a as class }` name
+// has no member spelling, so it is left out of the reserved export.
+const RESERVED_WORDS = new Set(
+  "break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static implements interface package private protected public await".split(
+    " ",
+  ),
+);
+
+/** Can `name` be a member of the reserved namespace? */
+function memberName(name: string): boolean {
+  return MEMBER_NAME.test(name) && !RESERVED_WORDS.has(name);
+}
+
 function reservedExport(
   state: State,
   exports: ClientExports,
@@ -2369,13 +2384,13 @@ function reservedExport(
 ): MappedCode {
   const self = [
     ...new Set([...moduleExports, ...exports.types, "Input", "render"]),
-  ];
+  ].filter(memberName);
   const taken = new Set(self);
   const members = self.map(
     (name) => `${INDENT}export import ${name} = __mxSelf.${name};`,
   );
   for (const { local, exported } of exports.values) {
-    if (taken.has(exported)) continue;
+    if (taken.has(exported) || !memberName(exported)) continue;
     taken.add(exported);
     members.push(
       `${INDENT}export const ${exported}: Awaited<typeof __mxClientView.__mxScope>[${JSON.stringify(local)}];`,

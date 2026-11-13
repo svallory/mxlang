@@ -263,6 +263,9 @@ same namespace. Known limits:
    `.ts` files); completions are filtered by the tsserver plugin only.
 9. A `.mx` compiled by another host has no reserved export, so an html
    `client import` of it by a `.mx` specifier is TS2694.
+10. A string-named or reserved-word export (`export { a as "my-name" }`,
+    `export { a as class }`) has no member spelling, so it is not in the
+    namespace and a `client import` cannot read it (TS2694).
 
 The runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a

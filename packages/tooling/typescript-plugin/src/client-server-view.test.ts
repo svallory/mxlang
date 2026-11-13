@@ -220,6 +220,9 @@ describe("importing a client export", { timeout: 60_000 }, () => {
     expect(found).toHaveLength(1);
     expect(found[0]?.code).toBe(2694);
     expect(found[0]?.start).toBe(source.indexOf("nope"));
+    expect(
+      ts.flattenDiagnosticMessageText(found[0]?.messageText ?? "", "\n"),
+    ).toContain(".__mxClientExports' has no exported member 'nope'");
   });
 
   it("does not offer the reserved export as a completion", () => {

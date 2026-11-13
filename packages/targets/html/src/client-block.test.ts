@@ -618,6 +618,15 @@ describe("html typeCheck: the server view and the client code of a `client` stat
     expect(code).not.toContain("__mxSelf");
   });
 
+  it("leaves a string-named export out of the reserved export: a member cannot carry it", () => {
+    const { code } = project(
+      'static const a = 1;\nstatic export { a as "my-name" };\nclient const b = 2;\nclient export { b as "x-y" };\n<div/>\n',
+    );
+    expect(code).toContain("export declare namespace __mxClientExports {");
+    expect(code).not.toContain("my-name =");
+    expect(code).not.toContain("const x-y");
+  });
+
   it("keeps a client export out of the module's exports", () => {
     const { code } = project(
       "client export const x = 1;\nclient export function f() {}\n<div/>\n",

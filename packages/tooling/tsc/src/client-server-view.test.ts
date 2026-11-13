@@ -142,6 +142,12 @@ describe("mx-tsc types a client name as undefined for the server view", {
     "client-import-typo.mx": 'client import { nope } from "./ca.mx";\n<div/>\n',
     "client-import-static.mx":
       'client import { fx, stx } from "./ca.mx";\nclient const b: number = fx() + stx;\n<div/>\n',
+    "client-import-static-wrong.mx":
+      'client import { stx } from "./ca.mx";\nclient const s: string = stx;\n<div/>\n',
+    "ce.mx":
+      "client export enum E { A }\nclient export class K { k = 1 }\n<div/>\n",
+    "client-import-enum-class.mx":
+      'client import { E, K } from "./ce.mx";\nclient const k: K = new K();\nclient const e: E = E.A;\nclient const bad: E = "s";\n<div/>\n',
     "client-import-type.mx":
       'client import { P } from "./ct.mx";\nclient const p: P = { n: "s" };\n<div/>\n',
     // A type that names a client value is typed in the client scope; one that
@@ -360,7 +366,21 @@ describe("mx-tsc types a client name as undefined for the server view", {
     const found = lines("client-import-typo.mx");
     expect(found).toHaveLength(1);
     expect(found[0]).toMatch(
-      /^client-import-typo\.mx\(1,17\): error TS2694: .*'nope'/,
+      /^client-import-typo\.mx\(1,17\): error TS2694: Namespace '"[^']*\/ca\.mx"\.__mxClientExports' has no exported member 'nope'/,
+    );
+  });
+
+  it("client-import-static-wrong.mx: a static export keeps its type through the self-import", () => {
+    expect(lines("client-import-static-wrong.mx")).toEqual([
+      "client-import-static-wrong.mx(2,14): error TS2322: Type 'number' is not assignable to type 'string'.",
+    ]);
+  });
+
+  it("client-import-enum-class.mx: a client enum and class are types through the import", () => {
+    const found = lines("client-import-enum-class.mx");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(
+      /^client-import-enum-class\.mx\(4,14\): error TS2322: Type '"s"' is not assignable to type 'E'\.$/,
     );
   });
 

@@ -679,7 +679,7 @@ function clientProjection(
   // to it, so the server view reads the name as `undefined` (`var` line) and
   // client code keeps every meaning of the export (value, type, namespace).
   // An alias keeps its `import` keyword on a line of its own under
-  // `@ts-expect-error`: the alias is not erasable syntax, and the ignore must not
+  // `@ts-ignore`: the alias is not erasable syntax, and the ignore must not
   // reach the name, where an unknown or unused name is reported.
   const valueImport = (statement: Node, serial: number): void => {
     const from = text(statement.source);
