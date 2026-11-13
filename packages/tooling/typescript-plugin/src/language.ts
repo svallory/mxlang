@@ -1233,10 +1233,23 @@ export function attributeTagDiagnosticMappings(
   generated: string,
 ): CodeMapping[] {
   const generatedCursors = new Map<string, number>();
-  // A fold being walked, per name: its builder's `add` callback and the end
-  // of the builder's body. Each later source occurrence of the name is the
-  // next `add({ ... })` call before that end.
-  const folds = new Map<string, { add: string; end: number }>();
+  // The folds being walked, per name, innermost last: each builder's `add`
+  // callback and the end of its body. A nested call can fold the same name
+  // inside an occurrence of an outer fold (`<A><@item><B><@item/><@item/></B>
+  // </@item><@item/></A>`), and Preact and Solid give every builder the same
+  // `add` name, so an occurrence is the *earliest* of the innermost open
+  // fold's next `add(` before its end and the next `name={` of a new call.
+  const folds = new Map<string, Array<{ step: RegExp; end: number }>>();
+  const probes = new Map<string, RegExp>();
+  const steps = new Map<string, RegExp>();
+  const stepFor = (add: string) => {
+    let step = steps.get(add);
+    if (!step) {
+      step = new RegExp(`\\b${escapeRegExp(add)}\\(`, "g");
+      steps.set(add, step);
+    }
+    return step;
+  };
   const holes = new Set<CodeMapping>();
   const tags: Array<{
     sourceStart: number;
@@ -1254,25 +1267,33 @@ export function attributeTagDiagnosticMappings(
     // `name={__mxAttrTagsOf((add) => { ... add({ ... }); ... })}`, whose
     // occurrences are its `add` calls in source order.
     const cursor = generatedCursors.get(name) ?? 0;
-    const fold = folds.get(name);
+    const open = folds.get(name) ?? [];
+    folds.set(name, open);
+    let stepMatch: RegExpExecArray | null = null;
+    while (open.length > 0) {
+      const fold = open[open.length - 1] as { step: RegExp; end: number };
+      fold.step.lastIndex = cursor;
+      stepMatch = fold.step.exec(generated);
+      if (stepMatch && stepMatch.index < fold.end) break;
+      stepMatch = null;
+      open.pop();
+    }
+    let probe = probes.get(name);
+    if (!probe) {
+      probe = new RegExp(
+        `(?<![\\w$])${escapeRegExp(name)}=\\{(?:${ATTR_TAG_RECORD}\\(|${ATTR_TAG_BUILD}\\(\\(([\\w$]+)\\) => \\{)?`,
+        "g",
+      );
+      probes.set(name, probe);
+    }
+    probe.lastIndex = cursor;
+    const probeMatch = probe.exec(generated);
     let generatedStart: number;
     let valueStart: number;
-    const step = fold
-      ? new RegExp(`\\b${escapeRegExp(fold.add)}\\(`, "g")
-      : undefined;
-    if (step) step.lastIndex = cursor;
-    const stepMatch = step?.exec(generated);
-    if (fold && stepMatch && stepMatch.index < fold.end) {
+    if (stepMatch && (!probeMatch || stepMatch.index < probeMatch.index)) {
       generatedStart = stepMatch.index;
       valueStart = stepMatch.index + stepMatch[0].length;
     } else {
-      folds.delete(name);
-      const probe = new RegExp(
-        `${escapeRegExp(name)}=\\{(?:${ATTR_TAG_RECORD}\\(|${ATTR_TAG_BUILD}\\(\\(([\\w$]+)\\) => \\{)?`,
-        "g",
-      );
-      probe.lastIndex = cursor;
-      const probeMatch = probe.exec(generated);
       if (!probeMatch) continue;
       generatedStart = probeMatch.index;
       valueStart = probeMatch.index + probeMatch[0].length;
@@ -1280,11 +1301,11 @@ export function attributeTagDiagnosticMappings(
       if (add) {
         const bodyOpen = valueStart - 1;
         const end = matchingClose(generated, bodyOpen);
-        const first = new RegExp(`\\b${escapeRegExp(add)}\\(`, "g");
-        first.lastIndex = valueStart;
-        const firstMatch = first.exec(generated);
+        const step = stepFor(add);
+        step.lastIndex = valueStart;
+        const firstMatch = step.exec(generated);
         if (end < 0 || !firstMatch || firstMatch.index > end) continue;
-        folds.set(name, { add, end });
+        open.push({ step, end });
         valueStart = firstMatch.index + firstMatch[0].length;
       }
     }
@@ -1293,7 +1314,9 @@ export function attributeTagDiagnosticMappings(
     const close = matchingClose(generated, valueStart);
     if (close < 0) continue;
     const generatedEnd = close + 1;
-    generatedCursors.set(name, generatedEnd);
+    // Past this object's own `{` only: a nested call of the same name sits
+    // inside it, and is the next occurrence in source order.
+    generatedCursors.set(name, valueStart + 1);
     const properties = attributePropertyMappings(
       source,
       sourceStart,

@@ -325,7 +325,10 @@ reprinted `.solid.mx` region, `attributeTagDiagnosticMappings`
 (`src/language.ts`) finds each `name={__mxAttrTag({ ... })}`, and each `add({ ... })`
 of a `name={__mxAttrTagsOf((add) => { ... })}` builder, and maps every
 `"key": value` property to its authored attribute, the rest of the object to
-the tag name.
+the tag name. A nested call can fold the same name inside an occurrence with
+the same `add` name, so each authored occurrence takes the earlier of the
+innermost open builder's next `add(` and the next `name={` (unit rows in
+`src/attribute-tag-mappings.test.ts`).
 
 **A test that reports through Volar cannot prove what the emitted
 TypeScript checks.** Volar by itself drops a diagnostic whose
