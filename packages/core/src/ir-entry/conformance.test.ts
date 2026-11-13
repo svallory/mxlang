@@ -11,13 +11,16 @@ import { lowerSource } from "./index.ts";
  * `:error` cases, the sources htmljs-parser rejects, are not conformance cases
  * and are skipped here) goes
  * through `lowerSource`. A case either lowers clean, or sits in exactly one of
- * two lists:
+ * three lists:
  *
  * - `intended`: a refusal the language or the IR entry point makes on purpose.
  *   The case must still be refused, and only for a reason in that list.
  * - `knownGaps`: grammar-accepted syntax the IR entry point cannot parse yet.
- *   Bugs, not policy. Expected-failure semantics: the case must still fail, so
- *   fixing one fails this test until its entry is deleted.
+ *   Expected-failure semantics: the case must still fail, so fixing one fails
+ *   this test until its entry is deleted.
+ * - the none-preset refusals (`NONE_REFUSALS`): the intended behaviour of
+ *   `tagRules: "none"`, not bugs. Under that preset each case must still fail,
+ *   and never with an internal error.
  *
  * The class this guards: comments were rejected by the data target (the
  * entry point's predecessor, `@mxlang/data`) from
@@ -263,14 +266,14 @@ const KNOWN_GAPS: Record<string, string[]> = {
 };
 
 /**
- * Gaps of the `none` preset only (`tagRules: "none"`, Kit's): open-tag-only
+ * Refusals of the `none` preset only (`tagRules: "none"`, Kit's): open-tag-only
  * void tags (`<img>`), raw-text `<script>`/`<style>`, an html-comment tag and
  * a regexp attribute ("Missing ending", "closing X does not match"). Not a
  * bug: `none` switches the HTML parse rules (openTagOnly, text) off on
  * purpose, so these bodies parse as tags.
  * The default, strict rules parse them all.
  */
-const NONE_GAPS: Record<string, string[]> = {
+const NONE_REFUSALS: Record<string, string[]> = {
   "open-tag-only-and-raw-text": [
     "attr-regexp",
     "html-comment-tag",
@@ -294,14 +297,12 @@ for (const [group, { pattern, cases: names, strictOnly }] of Object.entries(
   for (const name of names)
     intendedBy.set(name, { group, pattern, strictOnly: strictOnly ?? false });
 }
-function gapsOf(...groups: Record<string, string[]>[]): Map<string, string> {
-  const gapBy = new Map<string, string>();
-  for (const gaps of groups) {
-    for (const [group, names] of Object.entries(gaps)) {
-      for (const name of names) gapBy.set(name, group);
-    }
+function groupsOf(groups: Record<string, string[]>): Map<string, string> {
+  const groupBy = new Map<string, string>();
+  for (const [group, names] of Object.entries(groups)) {
+    for (const name of names) groupBy.set(name, group);
   }
-  return gapBy;
+  return groupBy;
 }
 
 /** The corpus under the default rules (strict) and under Kit's `none`. */
@@ -309,12 +310,14 @@ const PRESETS = [
   {
     label: "default (strict) tag rules",
     tagRules: undefined,
-    gapBy: gapsOf(KNOWN_GAPS),
+    gapBy: groupsOf(KNOWN_GAPS),
+    refusalBy: new Map<string, string>(),
   },
   {
     label: '`tagRules: "none"`',
     tagRules: "none" as const,
-    gapBy: gapsOf(KNOWN_GAPS, NONE_GAPS),
+    gapBy: groupsOf(KNOWN_GAPS),
+    refusalBy: groupsOf(NONE_REFUSALS),
   },
 ];
 
@@ -329,16 +332,24 @@ function run(source: string, tagRules?: "none") {
   });
 }
 
-for (const { label, tagRules, gapBy } of PRESETS) {
+for (const { label, tagRules, gapBy, refusalBy } of PRESETS) {
   describe(`tree-sitter-mx corpus through lowerSource, ${label}`, () => {
     it("reads the whole corpus, and every list entry names a case", () => {
       expect(cases.length).toBeGreaterThanOrEqual(300);
       const names = cases.map((c) => c.name);
       expect(new Set(names).size).toBe(names.length);
-      for (const name of [...intendedBy.keys(), ...gapBy.keys()]) {
+      for (const name of [
+        ...intendedBy.keys(),
+        ...gapBy.keys(),
+        ...refusalBy.keys(),
+      ]) {
         expect(names, name).toContain(name);
       }
-      for (const name of intendedBy.keys())
+      for (const name of intendedBy.keys()) {
+        expect(gapBy.has(name), name).toBe(false);
+        expect(refusalBy.has(name), name).toBe(false);
+      }
+      for (const name of refusalBy.keys())
         expect(gapBy.has(name), name).toBe(false);
     });
 
@@ -348,6 +359,7 @@ for (const { label, tagRules, gapBy } of PRESETS) {
       const intended =
         found?.strictOnly && tagRules === "none" ? undefined : found;
       const gap = gapBy.get(c.name);
+      const refusal = refusalBy.get(c.name);
 
       if (intended) {
         it(`${c.name}: refused on purpose (${intended.group})`, () => {
@@ -374,6 +386,16 @@ for (const { label, tagRules, gapBy } of PRESETS) {
             (d) => d.severity === "error",
           );
           // Fixed? Delete this case from KNOWN_GAPS.
+          expect(errors.length).toBeGreaterThan(0);
+          expect(errors.map((e) => e.message).join("\n")).not.toMatch(
+            /^internal error/m,
+          );
+        });
+      } else if (refusal) {
+        it(`${c.name}: refused by the none preset (${refusal})`, () => {
+          const errors = run(c.source, tagRules).diagnostics.filter(
+            (d) => d.severity === "error",
+          );
           expect(errors.length).toBeGreaterThan(0);
           expect(errors.map((e) => e.message).join("\n")).not.toMatch(
             /^internal error/m,
