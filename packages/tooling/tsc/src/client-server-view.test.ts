@@ -132,10 +132,11 @@ describe("mx-tsc types a client name as undefined for the server view", {
       "client let q = 1;\n<div/>\nclient const g = () => q.toFixed(1);\n",
     "edge-return-nested.mx":
       "client { const f = () => { return 1 }; const n: number = f(); }\n<div/>\n",
-    // Known limit: a `client import` of another page's client export reports
-    // TS2614, because the page's one projection is its server module. This
-    // test flips when the follow-up bead `mx-tsc-client-import-reserved-export`
-    // lands: then the import is clean and `n` is checked against `number`.
+    // Known limit: a `client import` of another page's client export is
+    // reported (TS2694 from the client view's alias), because the page's one
+    // projection is its server module. This test flips when a client import
+    // of a client export is supported: then the import is
+    // clean and `n` is checked against `number`.
     "limit-client-import.mx":
       'client import { x } from "./ca.mx";\nclient const n: number = x;\n<div/>\n',
     // A type that names a client value is typed in the client scope; one that
@@ -188,6 +189,9 @@ describe("mx-tsc types a client name as undefined for the server view", {
     "limit-tdz-between.mx":
       "client const a = st;\nstatic const st = 1;\nclient const b = 2;\n<div/>\n",
     "edge-this.mx": "client console.log(this);\n<div/>\n",
+    // Client code reading a server-only name: the browser has none.
+    "client-reads-server.mx":
+      "server const secret = 1;\nclient const n = secret.toFixed(1);\n<div/>\n",
     // `client export … from` still checks the module and the names.
     "reexport-ok.mx":
       'client export { one } from "./one.ts";\nclient export * from "./one.ts";\nclient export * as ns from "./one.ts";\nclient export type { One } from "./one.ts";\n<div/>\n',
@@ -334,12 +338,18 @@ describe("mx-tsc types a client name as undefined for the server view", {
     expect(found[0]).toMatch(/^limit-namespace\.mx\(2,39\): error TS18048/);
   });
 
-  it("limit-client-import.mx: KNOWN LIMIT, a client import of a client export is TS2614", () => {
+  it("limit-client-import.mx: KNOWN LIMIT, a client import of a client export is TS2694", () => {
     const found = lines("limit-client-import.mx");
     expect(found).toHaveLength(1);
     expect(found[0]).toMatch(
-      /^limit-client-import\.mx\(1,17\): error TS2614: Module '"\.\/ca\.mx"' has no exported member 'x'/,
+      /^limit-client-import\.mx\(1,17\): error TS2694: Namespace '"[^']*\/ca\.mx"' has no exported member 'x'/,
     );
+  });
+
+  it("client-reads-server.mx: client code reading a server name is undefined, at the read", () => {
+    expect(lines("client-reads-server.mx")).toEqual([
+      "client-reads-server.mx(2,18): error TS18048: 'secret' is possibly 'undefined'.",
+    ]);
   });
 });
 

@@ -198,15 +198,80 @@ describe("importing a client export", { timeout: 60_000 }, () => {
     expect(errorsOf({ [FILE]: source, [CA]: CA_SOURCE }, FILE)).toEqual([]);
   });
 
-  // Known limit: a `client import` of another page's client export reports
-  // TS2614, because the page's one projection is its server module. This test
-  // flips when the follow-up bead `mx-tsc-client-import-reserved-export`
-  // lands: the import is then clean.
-  it("KNOWN LIMIT: a client import of a client export is TS2614", () => {
+  // Known limit: a `client import` of another page's client export is
+  // reported, because the page's one projection is its server module; the
+  // client view's alias reports it as an unknown member of the module
+  // (TS2694), at the specifier. This test flips when a client import of
+  // a client export is supported: the import is then clean.
+  it("KNOWN LIMIT: a client import of a client export is TS2694", () => {
     const source = 'client import { x } from "./ca.mx";\n<div/>\n';
     const found = errorsOf({ [FILE]: source, [CA]: CA_SOURCE }, FILE);
     expect(found).toHaveLength(1);
-    expect(found[0]?.code).toBe(2614);
+    expect(found[0]?.code).toBe(2694);
     expect(found[0]?.start).toBe(source.indexOf("x }"));
+  });
+});
+
+/**
+ * The two views of a page's module statements through the editor path: each
+ * diagnostic at the authored token, and navigation from client code to the
+ * `client import` that binds a name. The full source matrix is the html
+ * target's `client-server-scope.test.ts`.
+ */
+describe("the server and client views, at the authored token", {
+  timeout: 60_000,
+}, () => {
+  const ONE = "/project/one.ts";
+  const ONE_SOURCE =
+    "export function clamp(v: number): number { return v }\nexport const one = 1;\n";
+  const spans = (source: string) =>
+    errorsOf({ [FILE]: source, [ONE]: ONE_SOURCE }, FILE).map((d) => [
+      d.code,
+      source.slice(d.start ?? 0, (d.start ?? 0) + (d.length ?? 0)),
+      d.start,
+    ]);
+
+  it("client code reading a server name is undefined, at the name", () => {
+    const source =
+      "server const secret = 1;\nclient const n = secret.toFixed(1);\n<div/>\n";
+    expect(spans(source)).toEqual([
+      [18048, "secret", source.indexOf("secret.toFixed")],
+    ]);
+  });
+
+  it("a template read of a client import is undefined, at the read", () => {
+    const source =
+      'client import { one } from "./one.ts";\n<div>${one.toFixed(1)}</div>\n';
+    expect(spans(source)).toEqual([
+      [18048, "one", source.indexOf("one.toFixed")],
+    ]);
+  });
+
+  it("a server statement reading a client import is undefined, at the read", () => {
+    const source =
+      'client import { one } from "./one.ts";\nserver const z = one.toFixed(1);\n<div/>\n';
+    expect(spans(source)).toEqual([
+      [18048, "one", source.indexOf("one.toFixed")],
+    ]);
+  });
+
+  it("a refinement naming a client function checks clean", () => {
+    const source =
+      "client function clamp(v: number) { return v }\n<let/q=1/>\n<input value:clamp:=q/>\n";
+    expect(spans(source)).toEqual([]);
+  });
+
+  // TypeScript answers an imported name's definition with the declaration in
+  // the imported module (it skips the import, as in a .ts file): the client
+  // read resolves through the client view's alias to what the import names.
+  it("definition at a client read of an import reaches the imported declaration", () => {
+    const source =
+      'client import { one } from "./one.ts";\nclient const n = one + 1;\n<div/>\n';
+    const svc = service({ [FILE]: source, [ONE]: ONE_SOURCE });
+    svc.getSemanticDiagnostics(CONSUMER);
+    const found = (
+      svc.getDefinitionAtPosition(FILE, source.indexOf("one + 1")) ?? []
+    ).map((d) => [d.fileName, d.textSpan.start]);
+    expect(found).toEqual([[ONE, ONE_SOURCE.indexOf("one = 1")]]);
   });
 });
