@@ -32,7 +32,10 @@ path = "packages/editors/tree-sitter-mx"
 # `MarkoExtension` implements the command). `src/lib.rs`/`Cargo.toml` do that
 # here, minimally: no settings, no downloads — see their own doc comments for
 # the command resolution order. AstroMX is not listed yet because the server
-# does not compile that file kind.
+# does not compile that file kind. This entry also makes Zed ask the extension
+# for its TypeScript-server additions (src/lib.rs registers a project-installed
+# @mxlang/typescript-plugin with vtsls / typescript-language-server); Zed asks
+# every registered adapter, whether or not this server is running.
 [language_servers.mxlang]
 name = "MX Language Server"
 languages = ["MX", "Solid", "ReactMX", "PreactMX", "HonoMX"]

@@ -29,7 +29,41 @@ language name.
 
 | Source | Repo | Rev | What's taken |
 |---|---|---|---|
-| Rust extension shape | `marko-js/zed` (`Cargo.toml`, `src/lib.rs`, `extension.toml`) | `dd854edec1fab86d23eb24af9691505dfe3856a6` (repo `main` HEAD at fetch time, via `gh api repos/marko-js/zed/contents/{Cargo.toml,src/lib.rs,extension.toml}` on 2026-09-11 — the same rev already pinned above for the MX queries) | `crate-type = ["cdylib"]`, `zed_extension_api = "0.7.0"` (exact version, matching that `Cargo.toml`'s own unpinned-minor spelling), the `zed::Extension::language_server_command` shape (a `Command` built from a resolved binary path + `--stdio`), and `[language_servers.<key>]`'s `name`/`languages` table shape in `extension.toml`. **Not** taken: marko-js/zed's npm-download machinery (`npm_package_latest_version`/`npm_install_package`, the `did_find_server` cache, the two TS-plugin initialization-options hooks) — the brief is explicit ("keep it minimal: no settings, no downloads"), so `src/lib.rs` here only resolves a command path (a local worktree install via `Worktree::read_text_file`, then a global install via `Worktree::which`, then `bunx`, then `npx` — no `node_modules/.bin` walk-up, since `Worktree` exposes no such operation and a plain `std::fs`/`Path` walk cannot see worktree paths under Zed's wasm sandbox) and does no installation of its own. |
+| Rust extension shape | `marko-js/zed` (`Cargo.toml`, `src/lib.rs`, `extension.toml`) | `dd854edec1fab86d23eb24af9691505dfe3856a6` (repo `main` HEAD at fetch time, via `gh api repos/marko-js/zed/contents/{Cargo.toml,src/lib.rs,extension.toml}` on 2026-09-11 — the same rev already pinned above for the MX queries) | `crate-type = ["cdylib"]`, `zed_extension_api = "0.7.0"` (exact version, matching that `Cargo.toml`'s own unpinned-minor spelling), the `zed::Extension::language_server_command` shape (a `Command` built from a resolved binary path + `--stdio`), and `[language_servers.<key>]`'s `name`/`languages` table shape in `extension.toml`. **Not** taken: marko-js/zed's npm-download machinery (`npm_package_latest_version`/`npm_install_package`, the `did_find_server` cache) — the brief is explicit ("keep it minimal: no settings, no downloads"), so `src/lib.rs` here only resolves a command path (a local worktree install via `Worktree::read_text_file`, then a global install via `Worktree::which`, then `bunx`, then `npx` — no `node_modules/.bin` walk-up, since `Worktree` exposes no such operation and a plain `std::fs`/`Path` walk cannot see worktree paths under Zed's wasm sandbox) and does no installation of its own. |
+
+| TypeScript plugin hooks | `marko-js/zed` (`src/lib.rs`) | `67f9886fd9fc32d17547672f60547364c41460cd` (`main`, read with `gh api repos/marko-js/zed/contents/src/lib.rs`) | `language_server_additional_workspace_configuration` for target `vtsls` (`{"vtsls":{"tsserver":{"globalPlugins":[...]}}}`, the key vtsls's own `configuration.schema.json` declares) and `language_server_additional_initialization_options` for target `typescript-language-server` (`{"plugins":[...]}`), `None` for every other target; the plugin `location` is a probe directory (tsserver loads `<location>/node_modules/<name>`). **Not** taken: `npm_install_package` of the plugin: `@mxlang/typescript-plugin` is not on any registry, so `src/lib.rs` uses the project's own install (`node_modules/@mxlang/typescript-plugin/package.json` readable through `Worktree::read_text_file`, location = worktree root) and returns `None` without one. Added: `languages` (the six LSP ids, see "When Zed calls the TypeScript hooks"), which marko-js/zed does not need for `.marko`. |
+
+### When Zed calls the TypeScript hooks
+
+Read in `zed-industries/zed` at `48741fd17d0dec28be6ad664b0a06dc7202086be`,
+`crates/project/src/lsp_store.rs`:
+
+- `workspace_configuration_for_adapter` and
+  `initialization_options_for_adapter` (~4393-4462) start from the target
+  server's own settings, then loop over `delegate.registered_lsp_adapters()`
+  and merge every *other* adapter's `additional_workspace_configuration` /
+  `additional_initialization_options` for that target. That list is
+  `language_registry.all_lsp_adapters()` (~17173): every adapter an installed
+  extension registered, whether or not its server runs. So this extension's
+  hooks run for a TypeScript server because it declares
+  `[language_servers.mxlang]`; no MX file has to have started the `mxlang`
+  server in that worktree. The `worktree` the hooks receive is the target
+  server's.
+- Initialization options are computed once, when the target server starts
+  (~662). Workspace configuration is computed at start (~653), on every
+  `workspace/configuration` request from the server (~1037), and when
+  settings change for a running server (~9873). A plugin installed into an
+  open project therefore reaches `vtsls` on its next configuration request,
+  and `typescript-language-server` only on a restart.
+- `crates/language_extension/src/extension_lsp_adapter.rs` (~399-450) passes
+  the target's `LanguageServerName` to the extension and parses the returned
+  JSON; an error is logged, not fatal.
+
+The LSP language ids in `languages` are the languages' `config.toml` names
+lowercased (`LanguageName::lsp_id`): `mx`, `solid`, `reactmx`, `preactmx`,
+`honomx`, `angularmx`. AstroMX is left out, as in
+`[language_servers.mxlang]`. VS Code's id for `.ng.mx` is `ngmx`; Zed's is
+`angularmx`.
 
 `scripts/vendor.sh` generates `languages/mx/*.scm` the same way as
 `languages/solid/*.scm`, and `.github/workflows/upstream-check.yml`'s

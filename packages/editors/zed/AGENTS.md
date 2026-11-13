@@ -98,6 +98,18 @@ target is a toolchain install, not a repo dependency). See
 server", and `UPSTREAM.md` for the pinned `marko-js/zed` commit the `lib.rs`
 shape was read from.
 
+`src/lib.rs` also registers `@mxlang/typescript-plugin` with Zed's TypeScript
+server (task `zed-ts-plugin-via-vtsls`): `language_server_additional_workspace_configuration`
+for target `vtsls` (`vtsls.tsserver.globalPlugins`) and
+`language_server_additional_initialization_options` for target
+`typescript-language-server` (`plugins`), both built by plain functions with a
+`#[cfg(test)]` module (`cargo test` in this directory) pinning the exact JSON.
+The plugin is not on any registry, so it is used only from the project's own
+`node_modules` (location = worktree root, detected with the same
+`read_text_file` check); without it the hooks return `None`. When Zed calls
+these hooks (for every registered extension adapter, not only a running
+`mxlang` server) is in `UPSTREAM.md` "When Zed calls the TypeScript hooks".
+
 `base/{solid,ngmx,reactmx,preactmx,honomx}/injections.scm` inject this
 extension's own `MX` language into `mx_element` regions — the region is a
 single opaque external token, so nothing inside it is captured by the host

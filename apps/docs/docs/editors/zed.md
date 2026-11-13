@@ -67,8 +67,38 @@ rustup target add wasm32-wasip1
 ## TypeScript
 
 The language server above checks MX constructs against a host policy.
-TypeScript errors *inside* a `.solid.mx` file are a separate job, handled by
-`@mxlang/typescript-plugin` inside Zed's TypeScript server (`vtsls`).
+TypeScript errors *inside* an MX file, and a `.ts` file that imports one, are a
+separate job, handled by `@mxlang/typescript-plugin` inside Zed's TypeScript
+server (`vtsls` by default, or `typescript-language-server`).
+
+**Install the plugin in the project** (`@mxlang/typescript-plugin` in the
+project's own `node_modules`) and the extension registers it with that server
+itself: no settings. When the project root has
+`node_modules/@mxlang/typescript-plugin/package.json`, the extension adds the
+plugin to `vtsls`'s workspace configuration (`vtsls.tsserver.globalPlugins`)
+and to `typescript-language-server`'s initialization options (`plugins`), with
+the project root as its location and the languages
+`["mx", "solid", "reactmx", "preactmx", "honomx", "angularmx"]`. Without that install nothing is
+added, and the TypeScript server runs as before. The extension does not
+download the plugin.
+
+Zed asks the extension for these settings whenever it starts or reconfigures
+the TypeScript server, whether or not an MX file has started the MX language
+server. The `typescript-language-server` options are read only when that
+server starts, so after installing the plugin in an open project restart it
+(Command Palette → "editor: restart language server").
+
+`languages` holds **LSP language ids**, not the names in the languages'
+`config.toml`. Zed derives the id by lowercasing the language name
+(`LanguageName::lsp_id()` in `crates/language_core/src/language_name.rs`
+returns `name.to_lowercase()`, special-casing only `Plain Text`), so this
+extension's `Solid` language is sent over LSP as `solid` and `AngularMX` as
+`angularmx`.
+
+### Fallback: a plugin installed somewhere else
+
+For a plugin that is not in the project's own `node_modules`, register it by
+hand. For `vtsls`:
 
 ```json
 {
@@ -76,12 +106,12 @@ TypeScript errors *inside* a `.solid.mx` file are a separate job, handled by
     "vtsls": {
       "settings": {
         "vtsls": {
-          "typescript": {
+          "tsserver": {
             "globalPlugins": [
               {
                 "name": "@mxlang/typescript-plugin",
                 "location": "/absolute/path/to/node_modules/@mxlang/typescript-plugin",
-                "languages": ["solid"],
+                "languages": ["mx", "solid", "reactmx", "preactmx", "honomx", "angularmx"],
                 "enableForWorkspaceTypeScriptVersions": true
               }
             ]
@@ -92,13 +122,6 @@ TypeScript errors *inside* a `.solid.mx` file are a separate job, handled by
   }
 }
 ```
-
-`languages` must be `solid`, lowercase. `vtsls` matches that entry against
-the **LSP language id**, not against the name in the language's
-`config.toml`. Zed derives the id by lowercasing the language name
-(`LanguageName::lsp_id()` in `crates/language_core/src/language_name.rs`
-returns `name.to_lowercase()`, special-casing only `Plain Text`), so this
-extension's `Solid` language is sent over LSP as `solid`.
 
 With `typescript-language-server` in place of `vtsls`, the same plugin goes in
 its `plugins` array:
@@ -112,7 +135,7 @@ its `plugins` array:
           {
             "name": "@mxlang/typescript-plugin",
             "location": "/absolute/path/to/node_modules/@mxlang/typescript-plugin",
-            "languages": ["solid"]
+            "languages": ["mx", "solid", "reactmx", "preactmx", "honomx", "angularmx"]
           }
         ]
       }
