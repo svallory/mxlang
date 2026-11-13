@@ -34,6 +34,9 @@ const codes = (
 
 describe.each(["preact", "react", "hono"])(
   "a host-component call through a .ts barrel on %s",
+  // A cold plugin-service program is built per host and paid inside the
+  // first test, as in the sibling plugin-service files.
+  { timeout: 60_000 },
   (host) => {
     const at = (name: string) => join(fixtures, host, name);
     const service = createPluginService(
@@ -77,7 +80,9 @@ describe.each(["preact", "react", "hono"])(
   },
 );
 
-describe("a host-component call through a .ts barrel in a .preact.mx region", () => {
+describe("a host-component call through a .ts barrel in a .preact.mx region", {
+  timeout: 60_000,
+}, () => {
   const at = (name: string) => join(fixtures, "preact", name);
   const service = createPluginService(
     {
