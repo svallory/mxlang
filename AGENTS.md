@@ -47,7 +47,7 @@ bun run test:affected         # vitest related <source files changed vs origin/m
 
 `MX_TEST_LANE` (`all` by default and unset-equal) selects a lane, implemented by `scripts/vitest-lanes.ts`:
 
-- `bun run test:fast` — everything except the slow files (the tsc watch-mode programs and `typescript-plugin/src/index.test.ts`, ~11 min of the suite's CPU). What a dev loop uses.
+- `bun run test:fast` — everything except the slow files (the tsc watch-mode programs, tsc's `build-cache-build.test.ts` and `typescript-plugin/src/index.test.ts`, ~11 min of the suite's CPU). What a dev loop uses.
 - `bun run test:slow` — only the slow files.
 - Unset / `all` — every test; this is what CI, the gate, `bun run test` and a bare `vitest run` do, so nothing is ever dropped by default.
 

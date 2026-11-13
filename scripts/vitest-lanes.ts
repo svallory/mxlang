@@ -63,6 +63,7 @@ export const CORE_ISOLATED_FILES: readonly string[] = [
 /** Slow-lane test files per project dir, relative to the project root. */
 export const SLOW_LANE_FILES: Readonly<Record<string, readonly string[]>> = {
   "packages/tooling/tsc": [
+    "src/build-cache-build.test.ts",
     "src/watch.test.ts",
     "src/watch-ambient-types.test.ts",
     "src/watch-mx-diagnostics.test.ts",

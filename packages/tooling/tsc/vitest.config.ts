@@ -8,6 +8,9 @@ import { laneTest, SLOW_LANE_FILES } from "../../../scripts/vitest-lanes.ts";
 // gate and a bare `vitest run` still run them. The two fast watch-* files
 // (watch-compile 17 ms, watch-templates-helpers 0.3 s, from the forge baseline
 // JSON) stay in the fast lane, which is why this is an explicit list.
+// build-cache-build.test.ts (whole `mx-tsc -b` runs over the ng-build
+// fixtures, about a minute) is in the slow lane too; its unit rows,
+// build-cache.test.ts, are fast.
 export default defineConfig({
   test: {
     // Module reset per file in a reused process (root forks pool shares
