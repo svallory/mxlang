@@ -43,6 +43,8 @@ import {
   exprValue,
   fail,
   type MappedCode,
+  type ModuleStatementNames,
+  moduleStatementNames,
   type Node,
   type Policy,
   rejectUnsupportedFields,
@@ -403,14 +405,22 @@ export interface ClientTypeExport {
  *
  * The server module declares a client name `var q;`, so a template read sees
  * `undefined` and an importer finds no export. The projection types that view
- * and keeps the client code typed in a scope of its own:
+ * (the emitter declares the names `var q: undefined;` at module level) and
+ * keeps the client code typed in a scope of its own, the generated
+ * `namespace __mxClientView`:
  *
- * - `serverNames` are declared `var q: undefined;` at module level;
- * - `hoisted` are the statements a function body cannot hold: `import`s,
- *   `namespace`s and `declare` forms, with any `export` removed (a client
- *   name is not exported by the server module), and the `import` a
- *   `client export … from` becomes, bound to a name nothing reads (the
- *   module and the names it is asked for are still checked);
+ * - `moduleLevel` stays at module level, in both views: side-effect and
+ *   type-only imports (a mixed import's type specifiers as `import { type T }
+ *   from "m"`), the `import * as __mxClient…`/`import __mxClientD…` a value
+ *   import becomes, `import x = require(…)`, `declare global`, `declare
+ *   module "m"`, a type-only namespace, a namespace that merges with a
+ *   `server`/`static`/`export`/`import` declaration (`shared`), and the
+ *   `import` a `client export … from` becomes, bound to a name nothing reads
+ *   (the module and the names it is asked for are still checked);
+ * - `view` moves into `__mxClientView`, as written with `export` removed: the
+ *   aliases of each value specifier (`import a = __mxClient….a`, mapped to
+ *   the author's local and imported names), the default-import pair, the
+ *   other namespaces, the `declare` forms and `import x = A.b`;
  * - `types` are the interfaces and type aliases, which a type-only export of
  *   keeps (a type has no run-time side);
  * - `body` is everything else, with `export` removed, for the function the
@@ -425,8 +435,10 @@ export interface ClientTypeExport {
  *   module cannot load with one, and a function wrapper would hide the error.
  */
 export interface ClientProjection {
-  serverNames: string[];
-  hoisted: ClientPiece[];
+  moduleLevel: ClientPiece[];
+  view: ClientPiece[];
+  /** A default import is in `view`, typed with `__MxInstance`. */
+  usesInstance: boolean;
   types: ClientType[];
   typeExports: ClientTypeExport[];
   /** Local names of `export { a, b }` lists of values. */
@@ -634,6 +646,7 @@ function clientProjection(
   statements: Node[],
   code: string,
   span: SourceSpan | undefined,
+  shared: ReadonlySet<string>,
 ): ClientProjection {
   const base = span?.sourceStart;
   const piece = (start: number, end: number): ClientPiece => ({
@@ -643,7 +656,9 @@ function clientProjection(
         ? undefined
         : { sourceStart: base + start, sourceEnd: base + end },
   });
-  const hoisted: ClientPiece[] = [];
+  const moduleLevel: ClientPiece[] = [];
+  const view: ClientPiece[] = [];
+  let usesInstance = false;
   const types: ClientType[] = [];
   const typeExports: ClientTypeExport[] = [];
   const listed: string[] = [];
@@ -663,6 +678,118 @@ function clientProjection(
     span: undefined,
     parts,
   });
+  // A value import leaves module level: the module imports the namespace
+  // object under a generated name, and the client view binds each local name
+  // to it, so the server view reads the name as `undefined` (`var` line) and
+  // client code keeps every meaning of the export (value, type, namespace).
+  // An alias keeps its `import` keyword on a line of its own under
+  // `@ts-ignore`: the alias is not erasable syntax, and the ignore must not
+  // reach the name, where an unknown or unused name is reported.
+  const valueImport = (statement: Node, serial: number): void => {
+    const from = text(statement.source);
+    const id = `${base ?? 0}_${serial}`;
+    const typed: ClientPiece[] = [];
+    let namespace = false;
+    let byDefault = false;
+    const alias = (
+      local: Node,
+      target: Array<{ code: string; span?: SourceSpan }>,
+    ) =>
+      view.push(
+        partsPiece([
+          { code: "// @ts-ignore\n  import\n    " },
+          text(local),
+          { code: " = " },
+          ...target,
+          { code: ";" },
+        ]),
+      );
+    const defaultPair = (local: Node) => {
+      byDefault = true;
+      usesInstance = true;
+      const name = `__mxClientD${id}`;
+      view.push(
+        partsPiece([
+          { code: "const " },
+          text(local),
+          { code: ` = ${name};\n  type ` },
+          text(local),
+          {
+            code: ` = __MxInstance<typeof ${name}>;`,
+          },
+        ]),
+      );
+    };
+    for (const specifier of statement.specifiers as Node[]) {
+      if (
+        specifier.importKind === "type" ||
+        specifier.importKind === "typeof"
+      ) {
+        typed.push(text(specifier));
+      } else if (specifier.type === "ImportDefaultSpecifier") {
+        defaultPair(specifier.local);
+      } else if (specifier.type === "ImportNamespaceSpecifier") {
+        namespace = true;
+        alias(specifier.local, [{ code: `__mxClient${id}` }]);
+      } else {
+        const imported = specifier.imported;
+        const name =
+          imported.type === "Identifier" ? imported.name : imported.value;
+        if (name === "default") defaultPair(specifier.local);
+        else {
+          namespace = true;
+          if (imported.type === "Identifier") {
+            alias(specifier.local, [
+              { code: `__mxClient${id}.` },
+              text(imported),
+            ]);
+          } else {
+            view.push(
+              partsPiece([
+                { code: "const " },
+                text(specifier.local),
+                { code: ` = __mxClient${id}[` },
+                text(imported),
+                { code: "];" },
+              ]),
+            );
+          }
+        }
+      }
+    }
+    if (typed.length > 0) {
+      moduleLevel.push(
+        partsPiece([
+          { code: "import { " },
+          ...typed.flatMap((piece, index) => [
+            ...(index > 0 ? [{ code: ", " }] : []),
+            ...(piece.span ? [piece] : [{ code: piece.code }]),
+          ]),
+          { code: " } from " },
+          from,
+          { code: ";" },
+        ]),
+      );
+    }
+    if (namespace) {
+      moduleLevel.push(
+        partsPiece([
+          { code: `import * as __mxClient${id} from ` },
+          from,
+          { code: ";" },
+        ]),
+      );
+    }
+    if (byDefault) {
+      moduleLevel.push(
+        partsPiece([
+          { code: `import __mxClientD${id} from ` },
+          from,
+          { code: ";" },
+        ]),
+      );
+    }
+  };
   // `client export … from "m"` exports nothing the server module has, but the
   // module and the names it is asked for must exist: `import` them as names
   // nothing reads (a leading `_` keeps `noUnusedLocals` quiet).
@@ -718,7 +845,7 @@ function clientProjection(
     let inner = statement;
     if (statement.type === "ExportNamedDeclaration") {
       if (statement.source) {
-        hoisted.push(...reexportImports(statement, serial));
+        moduleLevel.push(...reexportImports(statement, serial));
         return;
       }
       if (!statement.declaration) {
@@ -745,7 +872,7 @@ function clientProjection(
         exportedTypes.push(inner.id.name);
       }
     } else if (statement.type === "ExportAllDeclaration") {
-      hoisted.push(...reexportImports(statement, serial));
+      moduleLevel.push(...reexportImports(statement, serial));
       return;
     } else if (
       // Core refuses a default export; the other names no declaration.
@@ -768,21 +895,48 @@ function clientProjection(
       });
       return;
     }
-    const isHoisted =
-      inner.type === "ImportDeclaration" ||
-      inner.type === "TSImportEqualsDeclaration" ||
-      inner.type === "TSModuleDeclaration" ||
-      inner.declare === true;
-    const target = isHoisted ? hoisted : body;
-    if (isHoisted) hoistedNodes.push(inner);
-    target.push(piece(inner.start, statement.end));
+    const written = piece(inner.start, statement.end);
+    if (inner.type === "ImportDeclaration") {
+      hoistedNodes.push(inner);
+      const typeOnly =
+        inner.importKind === "type" || inner.importKind === "typeof";
+      if (typeOnly || (inner.specifiers ?? []).length === 0) {
+        moduleLevel.push(written);
+      } else valueImport(inner, serial);
+      return;
+    }
+    if (inner.type === "TSImportEqualsDeclaration") {
+      hoistedNodes.push(inner);
+      if (
+        inner.moduleReference?.type === "TSExternalModuleReference" ||
+        inner.importKind === "type"
+      ) {
+        moduleLevel.push(written);
+      } else view.push(written);
+      return;
+    }
+    if (inner.type === "TSModuleDeclaration") {
+      hoistedNodes.push(inner);
+      const stays =
+        inner.id?.type !== "Identifier" ||
+        inner.global === true ||
+        isTypeOnlyNamespace(inner) ||
+        shared.has(inner.id.name);
+      (stays ? moduleLevel : view).push(written);
+      return;
+    }
+    if (inner.declare === true) {
+      hoistedNodes.push(inner);
+      view.push(written);
+      return;
+    }
+    body.push(written);
   });
   const taken = new Set(clientDeclaredNames(hoistedNodes));
   return {
-    serverNames: clientDeclaredNames(statements).filter(
-      (name) => !taken.has(name),
-    ),
-    hoisted,
+    moduleLevel,
+    view,
+    usesInstance,
     types,
     typeExports,
     listed,
@@ -1016,6 +1170,8 @@ export type DelegatedTagData =
       typeCheck?: ClientProjection;
       /** A `client` statement's declared names, the ones `code` is the `var` of. */
       clientVars?: string[];
+      /** A `client` statement's view of every module statement's declarations (core's). */
+      moduleNames?: readonly ModuleStatementNames[];
     }
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
@@ -1127,10 +1283,20 @@ function resolveDelegatedTag(
     const statements = parseClientStatements(own, node);
     const names = clientDeclaredNames(statements);
     collectConstEnums(statements, constEnumsOf(ctx));
+    // The module statements' declarations, as core's collector read them:
+    // the projection's two views are built from these names, never from a
+    // walk of its own.
+    const moduleNames = moduleStatementNames(ctx);
+    const shared = new Set(
+      moduleNames
+        .filter((statement) => statement.keyword !== "client")
+        .flatMap((statement) => statement.declarations.map((d) => d.name)),
+    );
     return {
       kind: "statement",
       code: names.length > 0 ? `var ${names.join(", ")};` : "",
       clientVars: names,
+      moduleNames,
       start: node.start,
       span: undefined,
       // The projection keeps the statement itself in a scope of its own: a
@@ -1140,6 +1306,7 @@ function resolveDelegatedTag(
         statements,
         own,
         statementCodeSpan(ctx, node, text, "client", own),
+        shared,
       ),
     };
   }

@@ -528,19 +528,19 @@ describe("html: the type-check projection of a `client` or `server` statement", 
 /**
  * Under `typeCheck` (the tooling projection, never the module that runs) the
  * module is the server view: a client name is `undefined`, none is exported,
- * and the client code is typed in a function the module calls where the last
- * `client` statement stands.
+ * and the client code is typed in a function `__mxClientView.__mxScope` calls
+ * where the last `client` statement stands.
  */
 describe("html typeCheck: the server view and the client code of a `client` statement", () => {
   const project = (source: string) =>
     compile(source, "/f/t.mx", { typeCheck: true });
   const wrapper = (code: string) =>
     code.slice(
-      code.indexOf("(async () => {"),
+      code.indexOf("(async function (this: void) {"),
       code.indexOf("})();") + "})();".length,
     );
   const beforeWrapper = (code: string) =>
-    code.slice(0, code.indexOf("(async () => {"));
+    code.slice(0, code.indexOf("(async function (this: void) {"));
 
   it("leaves out `var q: undefined` for a name a static `var` already declares", () => {
     const { code } = project("static var q = 1\nclient var q = 2\n<div/>\n");
@@ -551,13 +551,15 @@ describe("html typeCheck: the server view and the client code of a `client` stat
   it("declares each name `undefined` and types the client code in a function", () => {
     const { code } = project("client let q = 1;\n<div>${q}</div>\n");
     expect(code).toContain("var q: undefined; void [q];");
-    expect(wrapper(code)).toBe("(async () => {\n  let q = 1;\n})();");
+    expect(wrapper(code)).toBe(
+      "(async function (this: void) {\n    let q = 1;\n  })();",
+    );
   });
 
   it("is the same module without `typeCheck`: only the `var`", () => {
     const { code } = compile("client let q = 1;\n<div/>\n", "/f/t.mx");
     expect(code).toContain("var q;");
-    expect(code).not.toContain("(async () => {");
+    expect(code).not.toContain("(async function (this: void) {");
     expect(code).not.toContain("undefined");
   });
 
@@ -596,17 +598,21 @@ describe("html typeCheck: the server view and the client code of a `client` stat
     ).not.toContain("void [s]");
   });
 
-  it("hoists an import and a type out of the function, and declares neither as a value", () => {
+  it("moves a value import into the client view, keeps a type at module level, and declares the import `undefined`", () => {
     const { code } = project(
       'client import { a } from "./a.ts";\nclient interface P { n: number }\nclient const b = a;\n<div/>\n',
     );
     const before = beforeWrapper(code);
-    expect(before).toContain('import { a } from "./a.ts"');
+    expect(before).toContain('import * as __mxClient7_0 from "./a.ts";');
+    expect(before).not.toContain('import { a } from "./a.ts"');
     expect(before).toContain("interface P { n: number }");
-    expect(before).not.toContain("a: undefined");
+    expect(before).toContain("var a: undefined; void [a];");
+    expect(before).toContain("var b: undefined; void [b];");
+    expect(before).toContain(
+      "namespace __mxClientView {\n  // @ts-ignore\n  import\n    a = __mxClient7_0.a;",
+    );
     expect(wrapper(code)).toContain("const b = a;");
     expect(wrapper(code)).not.toContain("import");
-    expect(before).toContain("var b: undefined;");
   });
 
   it("names a top-level `return` after the module, and not one inside a function", () => {
@@ -640,7 +646,9 @@ describe("html typeCheck: the server view and the client code of a `client` stat
       ).toBe(source.slice(mapping.sourceStart, mapping.sourceEnd));
     }
     for (const text of [
-      'import { a } from "./a.ts";',
+      // A value import's module specifier, and its name, as the alias's.
+      '"./a.ts"',
+      "a",
       "interface P { n: number }",
       "const x = 1,\n  y = 2;",
       "let z = a;",
@@ -718,8 +726,12 @@ describe("html typeCheck: the server view and the client code of a `client` stat
       "client const z = st + 1;\nstatic const st = 1;\nclient const y = 2;\nstatic const after = 3;\n<div/>\n",
     );
     const at = (text: string) => code.indexOf(text);
-    expect(at("(async () => {")).toBeGreaterThan(at("const st = 1"));
-    expect(at("(async () => {")).toBeLessThan(at("const after = 3"));
+    expect(at("(async function (this: void) {")).toBeGreaterThan(
+      at("const st = 1"),
+    );
+    expect(at("(async function (this: void) {")).toBeLessThan(
+      at("const after = 3"),
+    );
     expect(wrapper(code)).toContain("const z = st + 1;");
     expect(wrapper(code)).toContain("const y = 2;");
   });

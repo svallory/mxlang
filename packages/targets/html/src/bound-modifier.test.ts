@@ -1,9 +1,8 @@
-import { join } from "node:path";
 import type { CustomTag } from "@mxlang/core";
 import * as core from "@mxlang/core";
-import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import descriptor from "./descriptor.ts";
+import { diagnosticsOf } from "./fixtures/type-check.ts";
 import { compile } from "./index.ts";
 
 // A bound attribute's refinement (`v:fn:=q`, Marko's `q = fn(next)` change
@@ -70,43 +69,8 @@ describe("a refinement that is no identifier, wherever it appears (html)", () =>
 
 // html emits no handler (Marko's is client-only), but the refinement is a real
 // reference in Marko's client output, so the type-check projection must see it:
-// `fn` applied to the bound value's type, mapped to the modifier's span.
-function diagnosticsOf(source: string): Array<{ text: string; at: string }> {
-  const result = compile(source, "x.mx", { typeCheck: true });
-  const file = join(import.meta.dirname, "bound-modifier.virtual.ts");
-  const options: ts.CompilerOptions = {
-    strict: true,
-    noEmit: true,
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    skipLibCheck: true,
-    types: [],
-  };
-  const host = ts.createCompilerHost(options);
-  const original = host.getSourceFile.bind(host);
-  host.getSourceFile = (name, ...rest) =>
-    name === file
-      ? ts.createSourceFile(name, result.code, ts.ScriptTarget.ES2022, true)
-      : original(name, ...rest);
-  const program = ts.createProgram([file], options, host);
-  return ts
-    .getPreEmitDiagnostics(program, program.getSourceFile(file))
-    .filter((d) => d.file?.fileName === file)
-    .map((d) => {
-      const start = d.start ?? 0;
-      const mapping = result.mappings.find(
-        (m) => m.generatedStart <= start && start < m.generatedEnd,
-      );
-      return {
-        text: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
-        at: mapping
-          ? source.slice(mapping.sourceStart, mapping.sourceEnd)
-          : "?",
-      };
-    });
-}
-
+// `fn` applied to the bound value's type, mapped to the modifier's span
+// (`diagnosticsOf` checks the projection in process).
 describe("html type-checks a refinement it never emits a handler for", () => {
   const prelude =
     'static function fn(next: string): string { return next; }\nstatic function bad(next: number): string { return String(next); }\nstatic const q = "a";\n';

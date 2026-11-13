@@ -53,6 +53,7 @@ import {
   type Ir,
   type IrNode,
   type MappedCode,
+  type ModuleStatementNames,
   mapped,
   mappedExpr,
   moduleExportName,
@@ -76,6 +77,70 @@ import {
 } from "./translate.ts";
 
 const INDENT = "  ";
+
+/**
+ * The module statements' names as the type-check projection reads them, from
+ * core's collector (`moduleStatementNames`): **C** the `client` statements'
+ * declarations, **S** the `server` statements', **N** the `import`, `static`
+ * and `export` statements'.
+ */
+interface ScopeNames {
+  /** Every name a `client` statement declares (C). */
+  client: ReadonlySet<string>;
+  /** C's `declare` forms and bodiless signatures: values only the projection declares. */
+  clientAmbient: readonly string[];
+  /** C's names bound at the client view's level: imports, namespaces, ambient forms. */
+  viewLevel: ReadonlySet<string>;
+  /** S, in source order. */
+  server: readonly string[];
+  /** N. */
+  shared: ReadonlySet<string>;
+}
+
+function scopeNames(statements: readonly ModuleStatementNames[]): ScopeNames {
+  const client = new Set<string>();
+  const clientAmbient = new Set<string>();
+  const viewLevel = new Set<string>();
+  const server = new Set<string>();
+  const shared = new Set<string>();
+  for (const { keyword, declarations } of statements) {
+    for (const declaration of declarations) {
+      if (keyword === "client") {
+        client.add(declaration.name);
+        if (declaration.ambient) clientAmbient.add(declaration.name);
+        if (
+          declaration.ambient ||
+          declaration.kind === "import" ||
+          declaration.kind === "namespace"
+        ) {
+          viewLevel.add(declaration.name);
+        }
+      } else if (keyword === "server") server.add(declaration.name);
+      else shared.add(declaration.name);
+    }
+  }
+  return {
+    client,
+    clientAmbient: [...clientAmbient],
+    viewLevel,
+    server: [...server],
+    shared,
+  };
+}
+
+const NO_NAMES = scopeNames([]);
+
+/** The first `client` statement's view of the module statements, if any. */
+function moduleNamesOf(body: readonly IrNode[]): ScopeNames {
+  for (const node of body) {
+    if (node.kind !== "DelegatedTag") continue;
+    const data = node.tag.data as DelegatedTagData;
+    if (data.kind === "statement" && data.moduleNames) {
+      return scopeNames(data.moduleNames);
+    }
+  }
+  return NO_NAMES;
+}
 
 /**
  * A well-formed HTML attribute name, as source text for the emitted module.
@@ -133,8 +198,16 @@ interface State {
     list: ClientTypeExport;
     start: number | undefined;
   }>;
-  /** Under `typeCheck`, every name a `client` statement declares as `undefined`. */
+  /** Under `typeCheck`, every name the server view declares `undefined` (the module's `var` lines). */
   clientNames: string[];
+  /** Under `typeCheck`, what moves into `__mxClientView`, in statement order. */
+  clientView: MappedCode[];
+  /** Under `typeCheck`, a default import's type is `__MxInstance<…>`. */
+  usesInstance: boolean;
+  /** Under `typeCheck`, the client names a refinement reads through `__mxScope`. */
+  refined: Set<string>;
+  /** Under `typeCheck`, the module statements' names (core's). */
+  scope: ScopeNames;
   /** Under `typeCheck`, the local names of `client export { … }` value lists. */
   clientListed: string[];
   /** Under `typeCheck`, where the last `client` statement stands. */
@@ -181,6 +254,8 @@ export function createEmitter(
     source?: string;
     /** The module's own statements' source, for `moduleDeclaredNames`; read only when a `client` statement names something. */
     declaredCodes?: () => string[];
+    /** Under `typeCheck`, the module statements' names (core's). */
+    scope?: ScopeNames;
   } = {},
 ): StringEmitter {
   let declaredMemo: ReadonlySet<string> | undefined;
@@ -199,6 +274,10 @@ export function createEmitter(
     clientTypes: [],
     clientTypeExports: [],
     clientNames: [],
+    clientView: [],
+    usesInstance: false,
+    refined: new Set(),
+    scope: options.scope ?? NO_NAMES,
     clientListed: [],
     clientStart: undefined,
     clientReturns: [],
@@ -595,17 +674,38 @@ export function createEmitter(
    * projection; never the module that runs) the value is `(false && fn(q), q)`,
    * so `fn` applied to the bound value's type is checked and mapped to the
    * modifier.
+   *
+   * When a `client` statement declares `fn`, the handler runs in the browser,
+   * so `fn` is the client binding unless a template binding of that name is in
+   * scope at the attribute: `typeof fn` there is decided by TypeScript's own
+   * scope, where the module's server view (`var fn: undefined`) stands for the
+   * client one, which `__mxScope` hands out.
    */
-  const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode =>
-    options.typeCheck && attr.kind === "bound" && attr.refinement
-      ? concatMapped(
-          "(false && ",
-          mappedExpr(attr.refinement),
-          `(${attr.value.code}), `,
-          mappedExpr(attr.value),
-          ")",
-        )
-      : mappedExpr(attr.value);
+  const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode => {
+    if (!(options.typeCheck && attr.kind === "bound" && attr.refinement)) {
+      return mappedExpr(attr.value);
+    }
+    const name = attr.refinement.code;
+    if (!state.scope.client.has(name)) {
+      return concatMapped(
+        "(false && ",
+        mappedExpr(attr.refinement),
+        `(${attr.value.code}), `,
+        mappedExpr(attr.value),
+        ")",
+      );
+    }
+    state.refined.add(name);
+    return concatMapped(
+      "(false && (null as unknown as __MxRefine<typeof ",
+      mappedExpr(attr.refinement),
+      `, Awaited<typeof __mxClientView.__mxScope>[${JSON.stringify(name)}]>)(`,
+      mappedExpr(attr.value),
+      "), ",
+      mappedExpr(attr.value),
+      ")",
+    );
+  };
 
   const attribute = (attr: Attr, tag = ""): void => {
     // Spreads are written by `elementAttributes`, never one at a time.
@@ -1513,15 +1613,32 @@ export function createEmitter(
         // module that runs keeps the `var` of its names.
         if (options.typeCheck && data.typeCheck) {
           const projection = data.typeCheck;
+          const { scope } = state;
           const lines: Array<string | MappedCode> = [];
-          const declared =
-            projection.serverNames.length > 0
-              ? projection.serverNames.filter(
-                  (name) =>
-                    !declaredNames().has(name) && !declaredByClient.has(name),
-                )
-              : [];
-          for (const name of declared) declaredByClient.add(name);
+          // The server view: the names the module that runs declares `var`
+          // (as it does), except one another module statement declares too
+          // (the merge keeps that declaration's type; `declaredNames` holds the
+          // `static`/`export`/`import` names, `scope.server` the `server` ones);
+          // plus the client `declare` names, which run nowhere on the server.
+          const runtime = (data.clientVars ?? []).filter(
+            (name) => !declaredNames().has(name) && !declaredByClient.has(name),
+          );
+          for (const name of runtime) declaredByClient.add(name);
+          const declared = runtime.filter(
+            (name) => !scope.server.includes(name),
+          );
+          for (const name of scope.clientAmbient) {
+            if (
+              declaredByClient.has(name) ||
+              declaredNames().has(name) ||
+              scope.server.includes(name)
+            ) {
+              continue;
+            }
+            declaredByClient.add(name);
+            declared.push(name);
+          }
+          state.clientNames.push(...declared);
           if (declared.length > 0) {
             // `void` reads the names, so `noUnusedLocals` does not flag a
             // declaration the author never wrote.
@@ -1529,16 +1646,19 @@ export function createEmitter(
               `var ${declared.map((name) => `${name}: undefined`).join(", ")}; void [${declared.join(", ")}];`,
             );
           }
-          for (const hoisted of projection.hoisted) {
-            lines.push(clientPiece(hoisted));
+          for (const piece of projection.moduleLevel) {
+            lines.push(clientPiece(piece));
           }
+          for (const piece of projection.view) {
+            state.clientView.push(clientPiece(piece));
+          }
+          if (projection.usesInstance) state.usesInstance = true;
           for (const type of projection.types) {
             state.clientTypes.push({ type, start: data.start });
           }
           for (const list of projection.typeExports) {
             state.clientTypeExports.push({ list, start: data.start });
           }
-          state.clientNames.push(...projection.serverNames);
           state.clientListed.push(...projection.listed);
           if (
             data.start !== undefined &&
@@ -1838,7 +1958,10 @@ function clientPiece(piece: ClientPiece): MappedCode {
  * as used before its declaration.
  */
 function placeClientCode(state: State): void {
-  const blocked = new Set(state.clientNames);
+  const { scope } = state;
+  // A type naming a client value, or a name the client view binds, cannot
+  // stand at module level, where the name is the server view's `undefined`.
+  const blocked = new Set([...state.clientNames, ...scope.viewLevel]);
   const moved = new Set<ClientType>();
   for (let changed = true; changed; ) {
     changed = false;
@@ -1893,7 +2016,7 @@ function placeClientCode(state: State): void {
   // `client export { a }` reads `a` where it ends, whichever side of the
   // declaration it stands on (an export list is hoisted).
   const listedValues = [...new Set(state.clientListed)].filter((name) =>
-    state.clientNames.includes(name),
+    scope.client.has(name),
   );
   const body = [
     ...inScope,
@@ -1901,16 +2024,58 @@ function placeClientCode(state: State): void {
     ...(listedValues.length > 0
       ? [concatMapped(`void [${listedValues.join(", ")}];`)]
       : []),
+    ...(state.refined.size > 0
+      ? [concatMapped(`return { ${[...state.refined].join(", ")} };`)]
+      : []),
   ];
-  if (body.length === 0) return;
+  if (body.length === 0 && state.clientView.length === 0) return;
+  // The client view's shadow: a `server` name does not exist in the browser.
+  // An `import`/`static`/`export` name does (it is the module's own), and a
+  // name the view binds itself is the client's. The arrow is an inner scope,
+  // so a client declaration of a shadowed name shadows it in turn.
+  const shadowed = scope.server.filter(
+    (name) => !scope.shared.has(name) && !scope.viewLevel.has(name),
+  );
+  const view: Array<string | MappedCode> = [
+    ...(shadowed.length > 0
+      ? [
+          `var ${shadowed.map((name) => `${name}: undefined`).join(", ")}; void [${shadowed.join(", ")}];`,
+        ]
+      : []),
+    ...state.clientView,
+    concatMapped(
+      "export const __mxScope = (async function (this: void) {\n",
+      ...body.map((code) => concatMapped(INDENT, INDENT, code, "\n")),
+      INDENT,
+      "})();",
+    ),
+  ];
+  // `@ts-ignore` covers only the generated `namespace` line: it is not
+  // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
-      "(async () => {\n",
-      ...body.map((code) => concatMapped(INDENT, code, "\n")),
-      "})();",
+      "// @ts-ignore\nnamespace __mxClientView {\n",
+      ...view.map((code) => concatMapped(INDENT, code, "\n")),
+      "}\nvoid __mxClientView.__mxScope;",
     ),
     start: state.clientStart,
   });
+  if (state.usesInstance) {
+    state.moduleHoisted.push({
+      code: concatMapped(
+        "type __MxInstance<T> = T extends abstract new (...args: any) => infer R ? R : never;",
+      ),
+      start: undefined,
+    });
+  }
+  if (state.refined.size > 0) {
+    state.moduleHoisted.push({
+      code: concatMapped(
+        "type __MxRefine<L, C> = 0 extends 1 & L ? L : [L] extends [undefined] ? C : L;",
+      ),
+      start: undefined,
+    });
+  }
 }
 
 /**
@@ -1974,6 +2139,7 @@ export function emitModuleWithMappings(
   const name = moduleExportName(ir, "@mxlang/target-html");
   const emitter = createEmitter(name, {
     ...options,
+    scope: options.typeCheck ? moduleNamesOf(ir.body) : undefined,
     declaredCodes: () => [
       ...ir.imports.map((node) => node.code),
       ...ir.hoisted.map((node) => node.code),
