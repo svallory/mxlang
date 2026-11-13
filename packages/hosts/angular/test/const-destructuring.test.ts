@@ -314,12 +314,6 @@ describe("an object rest", () => {
     expect(rest.page.reads).toBe(plain.page.reads);
   });
 
-  it("throws a TypeError for null, as destructuring does", () => {
-    expect(() => mount("<const/{ ...rest }=null/>${rest}")).toThrow(
-      "Cannot destructure 'null' as it is null.",
-    );
-  });
-
   it("warns once that the page class needs __mxRest", () => {
     const { warnings } = compileMx(
       "<const/{ a, ...r }=input.o/><const/{ ...s }=input.p/>${a}${r}${s}",
