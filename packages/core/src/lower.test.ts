@@ -6679,4 +6679,21 @@ describe("attachDependencies", () => {
     attachDependencies(ctx, error);
     expect(error.dependencies).toEqual(expected);
   });
+
+  it("adds them, beside its own, to a host's own Error class", () => {
+    class HostError extends Error {
+      dependencies?: string[] = ["/p/tags/inner.mx"];
+    }
+    const error = new HostError("x");
+    const ctx = { dependencies: new Set(["/p/card.mx"]) } as unknown as Ctx;
+    attachDependencies(ctx, error);
+    expect(error.dependencies).toEqual(["/p/tags/inner.mx", "/p/card.mx"]);
+  });
+
+  it("leaves a thrown non-Error value as it is", () => {
+    const thrown = { message: "x" };
+    const ctx = { dependencies: new Set(["/p/card.mx"]) } as unknown as Ctx;
+    attachDependencies(ctx, thrown);
+    expect(thrown).toEqual({ message: "x" });
+  });
 });

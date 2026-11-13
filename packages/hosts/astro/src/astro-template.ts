@@ -1685,13 +1685,7 @@ export function lowerAstroMx(
   } catch (error) {
     if (error instanceof AstroTemplateError) {
       // Its own files, if any, stay beside the ones this lowering read.
-      if (ctx)
-        error.dependencies = [
-          ...new Set([
-            ...(error.dependencies ?? []),
-            ...(ctx.dependencies ?? []),
-          ]),
-        ];
+      if (ctx) attachDependencies(ctx, error);
       throw error;
     }
     if (isTranslateError(error)) {

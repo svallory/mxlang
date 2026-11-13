@@ -20,9 +20,10 @@ D1 follows the resolved policy: build strictness is `descriptor.strict ===
 "always" || policy.strict === true || options.strict === true` (an astro
 page is `strict: "always"`, so `mx.strict: false` cannot turn its strictness
 off there; an explicit `options.strict: false` never removes policy
-strictness). D2 stays in descriptor option forwarding:
-HTML/Astro and Preact/React/Hono forward Vite's synchronous resolver, while
-Solid's descriptor retains its existing omission. D4 comes from absent
+strictness). D2 stays in descriptor option forwarding: every whole-file
+descriptor, Solid included, forwards Vite's synchronous resolver. The region
+path (`loadRegionCompile` -> `regionCompileFor`) does not, so an aliased callee
+of a `.solid.mx` or `.preact.mx` region stays unresolved in Vite. D4 comes from absent
 `load`, `host.name` and `pending`. Angular pages compile to template strings,
 not modules: Vite refuses the import with the descriptor's guidance to run
 `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`,
