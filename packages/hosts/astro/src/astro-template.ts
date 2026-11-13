@@ -1120,10 +1120,16 @@ export function createEmitter(
         // Positioned at the `/var` binding when the source is known (the
         // `lowerAstroMx` path); an `emitTemplate(ir)` caller or hand-built IR
         // has no source to resolve an offset against, so it keeps the tag.
-        const varOffset = node.varBindings?.[0]?.span?.sourceStart;
-        if (positionOf && varOffset !== undefined) {
-          const position = positionOf(varOffset);
-          throw new AstroTemplateError(message, position.line, position.column);
+        const varSpan = node.varBindings?.[0]?.span;
+        if (positionOf && varSpan) {
+          const position = positionOf(varSpan.sourceStart);
+          throw new AstroTemplateError(
+            message,
+            position.line,
+            position.column,
+            undefined,
+            { end: positionOf(varSpan.sourceEnd) },
+          );
         }
         fail(message, node);
       }

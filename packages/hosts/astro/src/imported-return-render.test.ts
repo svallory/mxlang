@@ -100,7 +100,13 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
   // template). It points at the `/n` binding (line 4, column 9), not at
   // the tag.
   it("still refuses /var on the imported call, positioned", () => {
-    let error: (Error & { line?: number; column?: number }) | undefined;
+    let error:
+      | (Error & {
+          line?: number;
+          column?: number;
+          end?: { line: number; column: number };
+        })
+      | undefined;
     try {
       lowerAstroMx(
         '---\nimport Counter from "./counter.mx";\n---\n<Counter/n start=1/><p>{n}</p>',
@@ -116,6 +122,8 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
       line: 4,
       column: 9,
     });
+    // The whole binding is underlined: `n` ends at column 10.
+    expect(error?.end).toEqual({ line: 4, column: 10 });
   });
 
   // `emitTemplate(ir)` has no source to resolve the binding's offset against,
