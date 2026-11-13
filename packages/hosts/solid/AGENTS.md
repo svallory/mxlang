@@ -93,7 +93,7 @@ Three facts worth knowing before touching it:
   for an atom); `compileSolidUnit` maps imports, `static` blocks
   and `Input` with `mappedStatement`. A value Solid rewrites maps what
   survives: a `<for>` accessor read (`i` to `i()`, `row` to `row()`, a for-in
-  key to `mxEntry()[0]`) maps its unchanged runs one to one and the replaced
+  key to `__mxEntry0()[0]`) maps its unchanged runs one to one and the replaced
   name as a whole (`Expr.unrewrittenCode`, `mappedExpr`). Every function
   value is emitted as written: a method shorthand (`onClick() { … }`) as the
   `function` expression the compiler printed (`async function <T>(…) { … }`;
@@ -162,8 +162,11 @@ Three facts worth knowing before touching it:
   respects shadowing, not a regex). `in=` is the special case: `keyed={e =>
   e[0]}` makes the entry one accessor, so the pair cannot be destructured in
   the parameter list — `([k, v]) =>` throws `TypeError: {} is not iterable` —
-  and the callback takes a generated `mxEntry` with `k`/`v` reading
-  `mxEntry()[0]`/`[1]`. Reads are rewritten rather than snapshotted to a
+  and the callback takes a generated `__mxEntry<n>` with `k`/`v` reading
+  `__mxEntry<n>()[0]`/`[1]`. Every name the emitter introduces for a loop
+  (`__mxList`, `__mxValue`, `__mxIndex`, `__mxRow`, `__mxEntry`, `__mxFrom`,
+  `__mxStep`, each with a per-emit serial) is in the reserved `__mx` space,
+  so no authored binding can collide with it and nothing scans the body. Reads are rewritten rather than snapshotted to a
   `const` at callback top, which would go stale on a same-key row
   replacement. Assigning to an accessor-backed param is a positioned compile
   error. Full table in `packages/hosts/solid/README.md`. Nothing Solid-specific
@@ -198,8 +201,8 @@ Three facts worth knowing before touching it:
   two `<Dynamic>` branches behind its existing `typeof` guard rather than
   one conditional attribute list. See spec §15 item 11 for the full detail.
 - **Attribute-tag values are Marko's record; `content` is an accessor.**
-  Each name of `attributeTagTree` is one `__mxAttrTag({...})` or a fold of
-  `__mxAttrTags` steps, whatever the callee declares (spec §8); the helper is
+  Each name of `attributeTagTree` is one `__mxAttrTag({...})` or one
+  `__mxAttrTagsOf((__mxAttrTagAcc) => { ... })` builder, whatever the callee declares (spec §8); the helper is
   a hoisted define (binding `__mxAttrTag`), so a test harness that evaluates
   a compiled region must include `compiled.hoistedDefines`. Solid 2.0.0-rc.7
   client measurements rule out an eager JSX `content` (one DOM node moves
@@ -217,7 +220,7 @@ Three facts worth knowing before touching it:
   attribute type is reported on the attribute itself and a missing one on the
   tag name (`solid-attr-tag-attr-offset` in
   `packages/tooling/typescript-plugin/AGENTS.md`). A params body that no
-  declared type reaches (a fold, a dynamic tag's or a `<define>`'s props) is
+  declared type reaches (a dynamic tag's or a `<define>`'s props) is
   cast to `(...args: any[]) => any`. `compileSolidMx` also takes an optional
   `warnings` array for core's non-fatal diagnostics.
 - **A region receives its surrounding module imports and reports callee

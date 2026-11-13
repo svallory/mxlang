@@ -212,7 +212,7 @@ describe("solid expression values", () => {
 
   it("maps a replaced read as a whole, so an error on it lands on the authored name", () => {
     const result = pairs("<for|k, v| in=o><p>${k}</p></for>");
-    expect(result).toContainEqual(["k", "mxEntry()[0]"]);
+    expect(result).toContainEqual(["k", "__mxEntry0()[0]"]);
   });
 
   it("drops the `?? {}` fallback after an object literal source", () => {

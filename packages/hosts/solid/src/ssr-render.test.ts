@@ -520,19 +520,19 @@ describe("Solid <for>: destructured params and nesting", () => {
   // left as free references that still compiled.
   it("resolves a destructured for-in key through the entry accessor", () => {
     expect(mx(`<for|{ a }, v| in=obj><li>\${a}\${v}</li></for>`)).toContain(
-      "{mxEntry()[0].a}{mxEntry()[1]}",
+      "{__mxEntry0()[0].a}{__mxEntry0()[1]}",
     );
   });
 
   it("resolves an array-destructured for-in key", () => {
     expect(mx(`<for|[a], v| in=obj><li>\${a}\${v}</li></for>`)).toContain(
-      "{mxEntry()[0][0]}{mxEntry()[1]}",
+      "{__mxEntry0()[0][0]}{__mxEntry0()[1]}",
     );
   });
 
   it("resolves a destructured for-in value", () => {
     expect(mx(`<for|k, { n }| in=obj><li>\${k}\${n}</li></for>`)).toContain(
-      "{mxEntry()[0]}{mxEntry()[1].n}",
+      "{__mxEntry0()[0]}{__mxEntry0()[1].n}",
     );
   });
 
@@ -549,7 +549,7 @@ describe("Solid <for>: destructured params and nesting", () => {
     const code = mx(
       `<for|{ a }| of=xs by="id"><for|q| of=ys by="id"><li>\${a}\${q.z}</li></for></for>`,
     );
-    expect(code).toContain("{mxRow().a}");
+    expect(code).toContain("{__mxRow0().a}");
     expect(code).toContain("{q().z}");
     expect(code).not.toContain("q()()");
   });
@@ -560,7 +560,7 @@ describe("Solid <for>: destructured params and nesting", () => {
     );
     // Every gensym read must be a parameter the emitted code actually binds.
     for (const name of new Set(
-      [...code.matchAll(/\b(mxRow\d*)\(\)/g)].map((m) => m[1]),
+      [...code.matchAll(/\b(__mxRow\d+)\(\)/g)].map((m) => m[1]),
     )) {
       expect(code).toContain(`{(${name})`);
     }

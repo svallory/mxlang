@@ -292,7 +292,7 @@ describe("Solid: the emitted arrow body is never a bare block", () => {
   });
 
   it("wraps a `<for in>` row body in a fragment rather than a block", () => {
-    expect(shape("ForInSoleComponent")).toContain("{(mxEntry) => <>");
+    expect(shape("ForInSoleComponent")).toContain("{(__mxEntry0) => <>");
   });
 
   it("wraps a stepped `<for to>` row body in a fragment rather than a block", () => {

@@ -34,6 +34,7 @@
 
 import * as babelParser from "@babel/parser";
 import {
+  ATTR_TAG_BUILD,
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   type Attr,
@@ -490,8 +491,8 @@ export function createEmitter(
    * out) or on the body's type is reported there.
    *
    * `contextual` says whether the callee's declared type reaches this object:
-   * it does through a lone `__mxAttrTag({...})` call, not through a fold's
-   * accumulator, nor for a callee with no type. Without it, a body's
+   * it does through a lone `__mxAttrTag({...})` call and through each `add`
+   * of a fold's `__mxAttrTagsOf` builder, not for a callee with no type. Without it, a body's
    * unannotated tag params would be an implicit `any` under strict tsc, so
    * they are cast to `any`, as an untyped callee's `content` is.
    */
@@ -528,15 +529,29 @@ export function createEmitter(
     );
   };
 
-  /** The statements folding `nodes` into `acc`, in tree order. */
-  const attrTagFold = (nodes: AttributeTagNode[], acc: string): MappedCode =>
-    concatMapped(...nodes.map((node) => attrTagFoldNode(node, acc)));
+  /**
+   * The statements handing each occurrence of `nodes` to `add`, in tree
+   * order. Without `contextual` there is no builder: `add` is the fold's
+   * accumulator and each step is `add = __mxAttrTags(add, {...})`.
+   */
+  const attrTagFold = (
+    nodes: AttributeTagNode[],
+    add: string,
+    contextual: boolean,
+  ): MappedCode =>
+    concatMapped(
+      ...nodes.map((node) => attrTagFoldNode(node, add, contextual)),
+    );
 
-  const attrTagFoldNode = (node: AttributeTagNode, acc: string): MappedCode => {
+  const attrTagFoldNode = (
+    node: AttributeTagNode,
+    add: string,
+    contextual: boolean,
+  ): MappedCode => {
     if (node.kind === "AttributeTag") {
       return concatMapped(
-        `${acc} = ${ATTR_TAG_FOLD}(${acc}, `,
-        attrTagValue(node.tag, false),
+        contextual ? `${add}(` : `${add} = ${ATTR_TAG_FOLD}(${add}, `,
+        attrTagValue(node.tag, contextual),
         "); ",
       );
     }
@@ -550,7 +565,7 @@ export function createEmitter(
               ") { ",
             )
           : " else { ";
-        parts.push(head, attrTagFold(branch.nodes, acc), "}");
+        parts.push(head, attrTagFold(branch.nodes, add, contextual), "}");
       });
       parts.push(" ");
       return concatMapped(...parts);
@@ -571,7 +586,7 @@ export function createEmitter(
       () => `__mxForParam${state.forParamTemp++}`,
     );
     const [first = "__mxItem", second] = bindings;
-    const body = attrTagFold(node.nodes, acc);
+    const body = attrTagFold(node.nodes, add, contextual);
     // Under `typeCheck`, an annotated param is re-declared at the top of the
     // loop body, and the authored body stands in a block of its own.
     const loopBody: Array<string | MappedCode> =
@@ -614,8 +629,13 @@ export function createEmitter(
   /**
    * One attribute-tag name's record (spec §8): its occurrences folded, in
    * source order, through the helper core supplies. A lone unconditional
-   * occurrence is one `__mxAttrTag` call; anything else folds from
-   * `undefined`, so a loop that runs zero times leaves the prop `undefined`.
+   * occurrence is one `__mxAttrTag` call; anything else is one
+   * `__mxAttrTagsOf((add) => { ... })` builder whose statements hand each
+   * occurrence to `add`, so a loop that runs zero times leaves the prop
+   * `undefined`, and the callee's declared type reaches every occurrence.
+   * With no declared type to reach (`contextual` false) the builder would
+   * infer `{}`, so the occurrences fold from `undefined` with `__mxAttrTags`
+   * in an arrow called in place, which infers the record from them.
    */
   function attrTagRecord(
     source: AttributeTagNode[],
@@ -629,11 +649,18 @@ export function createEmitter(
         ")",
       );
     }
-    const acc = `__mxAttrTagAcc${state.attrTagTemp++}`;
+    const add = `__mxAttrTagAcc${state.attrTagTemp++}`;
+    if (!contextual) {
+      return concatMapped(
+        `(() => { let ${add}; `,
+        attrTagFold(source, add, false),
+        `return ${add}; })()`,
+      );
+    }
     return concatMapped(
-      `(() => { let ${acc}; `,
-      attrTagFold(source, acc),
-      `return ${acc}; })()`,
+      `${ATTR_TAG_BUILD}((${add}) => { `,
+      attrTagFold(source, add, true),
+      "})",
     );
   }
 

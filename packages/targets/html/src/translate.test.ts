@@ -3334,7 +3334,7 @@ describe("`<for>` parameter annotations", () => {
       "an attribute-tag array loop",
       "<define/Foo|{ item }|><p>${item}</p></define>\n<Foo><for|x: number, i: number| of=list><@item>${x}</@item></for></Foo>",
       "for (const [i, x] of [...",
-      "of [...__mxAttrTagSource1].entries()) { const x: number = __mxForParam0; const i: number = __mxForParam1; { __mxAttrTagAcc0 = __mxAttrTags(__mxAttrTagAcc0, ",
+      "of [...__mxAttrTagSource1].entries()) { const x: number = __mxForParam0; const i: number = __mxForParam1; { __mxAttrTagAcc0({ ",
     ],
   ])(
     "%s prints a loop head without the annotation",

@@ -315,14 +315,15 @@ typecheck inputs.
 ## Attribute-tag call sites and callee dependencies (phase 4a)
 
 A caller's attribute-tag value is Marko's record, the same text whatever the
-callee declares (spec §8): `__mxAttrTag({...})` for a lone occurrence, a fold
-of `__mxAttrTags` steps otherwise. `__mxAttrTag` takes its `T` from the
-callee's prop (`NoInfer` on its argument), so TypeScript, resolving the callee
-module itself, checks each attribute where it is written; a missing attribute
-and a fold's mismatch are reported at the tag name, because both braces and
-the `content` key map there. Core reads nothing from the callee for this. In a
+callee declares (spec §8): `__mxAttrTag({...})` for a lone occurrence, an
+`__mxAttrTagsOf((add) => { add({...}); ... })` builder otherwise. Both take
+their `T` from the callee's prop (`NoInfer` on the occurrence), so TypeScript,
+resolving the callee module itself, checks each attribute where it is written,
+in a fold too; a missing attribute is reported at the tag name, because both
+braces and the `content` key map there. Core reads nothing from the callee for this. In a
 reprinted `.solid.mx` region, `attributeTagDiagnosticMappings`
-(`src/language.ts`) finds each `name={__mxAttrTag({ ... })}` and maps every
+(`src/language.ts`) finds each `name={__mxAttrTag({ ... })}`, and each `add({ ... })`
+of a `name={__mxAttrTagsOf((add) => { ... })}` builder, and maps every
 `"key": value` property to its authored attribute, the rest of the object to
 the tag name.
 

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
+  ATTR_TAG_BUILD,
   ATTR_TAG_RECORD,
   dropOwnParserPosition,
   errorDependencies,
@@ -1232,6 +1233,10 @@ export function attributeTagDiagnosticMappings(
   generated: string,
 ): CodeMapping[] {
   const generatedCursors = new Map<string, number>();
+  // A fold being walked, per name: its builder's `add` callback and the end
+  // of the builder's body. Each later source occurrence of the name is the
+  // next `add({ ... })` call before that end.
+  const folds = new Map<string, { add: string; end: number }>();
   const holes = new Set<CodeMapping>();
   const tags: Array<{
     sourceStart: number;
@@ -1245,17 +1250,44 @@ export function attributeTagDiagnosticMappings(
     const sourceStart = match.index + 1;
     // The value is one occurrence's object, `{ ... }`, as the record helper's
     // argument (`name={__mxAttrTag({ ... })}`) or, untyped, bare. A fold
-    // (several occurrences, or one under `<if>`/`<for>`) is an IIFE whose
-    // objects are not mapped here.
-    const probe = new RegExp(
-      `${escapeRegExp(name)}=\\{(?:${ATTR_TAG_RECORD}\\()?`,
-      "g",
-    );
-    probe.lastIndex = generatedCursors.get(name) ?? 0;
-    const probeMatch = probe.exec(generated);
-    if (!probeMatch) continue;
-    const generatedStart = probeMatch.index;
-    const valueStart = probeMatch.index + probeMatch[0].length;
+    // (several occurrences, or one under `<if>`/`<for>`) is a builder,
+    // `name={__mxAttrTagsOf((add) => { ... add({ ... }); ... })}`, whose
+    // occurrences are its `add` calls in source order.
+    const cursor = generatedCursors.get(name) ?? 0;
+    const fold = folds.get(name);
+    let generatedStart: number;
+    let valueStart: number;
+    const step = fold
+      ? new RegExp(`\\b${escapeRegExp(fold.add)}\\(`, "g")
+      : undefined;
+    if (step) step.lastIndex = cursor;
+    const stepMatch = step?.exec(generated);
+    if (fold && stepMatch && stepMatch.index < fold.end) {
+      generatedStart = stepMatch.index;
+      valueStart = stepMatch.index + stepMatch[0].length;
+    } else {
+      folds.delete(name);
+      const probe = new RegExp(
+        `${escapeRegExp(name)}=\\{(?:${ATTR_TAG_RECORD}\\(|${ATTR_TAG_BUILD}\\(\\(([\\w$]+)\\) => \\{)?`,
+        "g",
+      );
+      probe.lastIndex = cursor;
+      const probeMatch = probe.exec(generated);
+      if (!probeMatch) continue;
+      generatedStart = probeMatch.index;
+      valueStart = probeMatch.index + probeMatch[0].length;
+      const add = probeMatch[1];
+      if (add) {
+        const bodyOpen = valueStart - 1;
+        const end = matchingClose(generated, bodyOpen);
+        const first = new RegExp(`\\b${escapeRegExp(add)}\\(`, "g");
+        first.lastIndex = valueStart;
+        const firstMatch = first.exec(generated);
+        if (end < 0 || !firstMatch || firstMatch.index > end) continue;
+        folds.set(name, { add, end });
+        valueStart = firstMatch.index + firstMatch[0].length;
+      }
+    }
     if (generated[valueStart] !== "{") continue;
     // This tag's *own* closing `}`, not an inner tag's.
     const close = matchingClose(generated, valueStart);

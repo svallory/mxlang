@@ -47,8 +47,11 @@ Six facts worth knowing before editing it:
   and `@mxlang/host-hono` share this fix through `createJsxDeclarations`.
 - **Attribute tags are Marko's record** (spec §8), emitted per name of
   `attributeTagTree` whatever the callee declares: one `__mxAttrTag({...})`
-  for a lone unconditional occurrence, otherwise an IIFE folding each
-  occurrence with `__mxAttrTags` (`<if>` as `if`/`else`, `<for>` as a loop).
+  for a lone unconditional occurrence, otherwise
+  `__mxAttrTagsOf((__mxAttrTagAcc) => { ... })`, whose body calls
+  `__mxAttrTagAcc({...})` once per occurrence (`<if>` as `if`/`else`, `<for>`
+  as a loop); a fold no declared type reaches (an untyped callee) keeps an
+  IIFE folding each occurrence with `__mxAttrTags`.
   An occurrence object holds its attributes, its own attribute tags as
   records, and `content` (`ComponentChildren`, or a render function with
   params) only when it has a body; several occurrences key their bodies.
@@ -57,10 +60,11 @@ Six facts worth knowing before editing it:
   takes `T` from the callee's prop (`NoInfer` on its argument), so `mx-tsc`
   and the tsserver plugin report a wrong attribute at that attribute and a
   missing one at the tag name: both braces and the `content` key map to the
-  tag name, each key and value to its authored span. A fold has no declared
-  type until its result reaches the prop, so its error is on the tag name. A
-  params body that no declared type reaches (a fold, a dynamic tag's or a
-  `<define>`'s props) is cast to `(...args: any[]) => any`.
+  tag name, each key and value to its authored span. `__mxAttrTagsOf` takes
+  `T` from the prop the same way, so each `__mxAttrTagAcc({...})` of a fold is
+  checked at its own attributes. A params body that no declared type reaches
+  (an untyped callee, a dynamic tag's or a `<define>`'s props) is cast to
+  `(...args: any[]) => any`.
 - **`warnings` collects non-fatal diagnostics.** `compilePreactMx` (and the
   React and Hono wrappers over it) take an optional `warnings` array that
   core fills; tooling reports it, a build may ignore it.

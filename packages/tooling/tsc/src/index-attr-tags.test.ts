@@ -70,13 +70,13 @@ describe("mx-tsc", () => {
 
   // Every value shape (declared in `Shapes`), one bad occurrence per file:
   // exactly one diagnostic, at the authored attribute or tag. A repeated tag
-  // folds its occurrences into one record that no declared type reaches
-  // before the prop, so its error is on the tag name, not the attribute.
+  // folds its occurrences through a builder that takes the callee's declared
+  // prop type, so the bad occurrence's error is on its own `id` attribute.
   const shapes = [
     ["Extra", "TS2353", ["(3,25)", "(3,45)"]],
     ["Nested", "TS2322", ["(3,31)", "(3,31)"]],
     ["NestedMissing", "TS2345", ["(3,11)", "(3,31)"]],
-    ["Repeated", "TS2322", ["(3,11)", "(3,31)"]],
+    ["Repeated", "TS2322", ["(3,16)", "(3,36)"]],
     ["Renderable", "TS2322", ["(3,11)", "(3,31)"]],
   ] as const;
   it.each(
