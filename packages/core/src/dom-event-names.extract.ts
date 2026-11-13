@@ -79,11 +79,14 @@ export function domEventNames(libDomPath: string): string[] {
 
 /** The installed `typescript/lib/lib.dom.d.ts` and its package version. */
 export function installedLibDom(): { path: string; version: string } {
+  // Resolved and read, never `require`d: this generator is not part of the
+  // bundle, and a literal require would read as a runtime dependency of core
+  // to the bundled builds' dependency scan.
   const require = createRequire(import.meta.url);
   const path = require.resolve("typescript/lib/lib.dom.d.ts");
-  const { version } = require("typescript/package.json") as {
-    version: string;
-  };
+  const { version } = JSON.parse(
+    readFileSync(require.resolve("typescript/package.json"), "utf8"),
+  ) as { version: string };
   return { path, version };
 }
 
