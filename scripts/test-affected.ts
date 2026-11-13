@@ -89,6 +89,127 @@ export function probeConsumers(changed: readonly string[]): string[] {
   return hit ? [PROBE_CONSUMER] : [];
 }
 
+/**
+ * Fixture directories a test in a DIFFERENT project (or in no project's dir)
+ * reads, by a relative path or an import that hops out of its own package.
+ * `projectsFor` maps a changed fixture only to the project that owns it, so
+ * without this table a change here would skip (or, for a directory in no
+ * project, never run) the tests that read it. Each row lists every consumer
+ * test file a `git grep` for paths into that directory found; a path built at
+ * run time is not detected, so a new reader adds its row by hand.
+ */
+export const FIXTURE_CONSUMERS: readonly {
+  path: RegExp;
+  consumers: readonly string[];
+}[] = [
+  {
+    path: /^packages\/oracle\/fixtures\/angular\//,
+    consumers: ["packages/hosts/angular/test/ng-mx-mapping-invariant.test.ts"],
+  },
+  {
+    path: /^packages\/editors\/tree-sitter-mx\/test\/corpus\//,
+    consumers: ["packages/core/src/ir-entry/conformance.test.ts"],
+  },
+  {
+    path: /^packages\/core\/src\/fixtures\/syntax\/atom-fixture\.ts$/,
+    consumers: [
+      "packages/hosts/preact/src/expression-mappings.test.ts",
+      "packages/hosts/solid/src/bridge/mx.test.ts",
+      "packages/hosts/solid/src/expression-mappings.test.ts",
+      "packages/targets/html/src/expression-mappings.test.ts",
+    ],
+  },
+  {
+    path: /^packages\/core\/src\/fixtures\/syntax\/member-fixture\.ts$/,
+    consumers: ["packages/targets/html/src/member-syntax.test.ts"],
+  },
+  {
+    path: /^fixtures\//,
+    consumers: [
+      "packages/hosts/solid/src/bridge/print.test.ts",
+      "packages/oracle/src/oracle.test.ts",
+    ],
+  },
+  {
+    path: /^test-fixtures\/body-whitespace\//,
+    consumers: [
+      "packages/core/src/body-whitespace.test.ts",
+      "packages/core/src/ir-entry/parse.test.ts",
+      "packages/hosts/angular/test/body-whitespace.test.ts",
+      "packages/hosts/astro/src/body-whitespace.test.ts",
+      "packages/hosts/hono/src/dynamic-body.test.ts",
+      "packages/hosts/preact/src/dynamic-body.test.ts",
+      "packages/hosts/react/src/dynamic-body.test.ts",
+      "packages/hosts/solid/src/body-content.test.ts",
+      "packages/targets/html/src/dynamic-body.test.ts",
+    ],
+  },
+  {
+    path: /^test-fixtures\/third-party-targets\//,
+    consumers: [
+      "packages/core/src/target-loader-miss.test.ts",
+      "packages/core/src/third-party-target.test.ts",
+      "packages/target-registry/src/default-tag.test.ts",
+      "packages/tooling/tsc/src/ambient-types-throw.test.ts",
+      "packages/tooling/tsc/src/third-party-target.test.ts",
+      "packages/tooling/tsc/src/watch-ambient-types.test.ts",
+      "packages/tooling/typescript-plugin/src/ambient-types.test.ts",
+      "packages/tooling/typescript-plugin/src/tsserver-load.test.ts",
+    ],
+  },
+  {
+    path: /^test-fixtures\/dialects\//,
+    consumers: [
+      "packages/target-registry/src/dialect-check-tag-dirs.test.ts",
+      "packages/target-registry/src/dialect-check.test.ts",
+      "packages/target-registry/src/dialect-contracts.test.ts",
+      "packages/target-registry/src/dialect-diagnostic-codes.test.ts",
+      "packages/target-registry/src/dialect-lower-options.test.ts",
+      "packages/tooling/language-server/src/diagnose.test.ts",
+      "packages/tooling/language-server/src/dialect-contracts.test.ts",
+      "packages/tooling/language-server/src/dialect-lower-options.test.ts",
+      "packages/tooling/language-server/src/server.test.ts",
+      "packages/tooling/tsc/src/dialect-files.test.ts",
+      "packages/tooling/tsc/src/dialect-lower-options.test.ts",
+      "packages/tooling/tsc/src/fix-output.test.ts",
+      "packages/tooling/typescript-plugin/src/dialect-files.test.ts",
+      "packages/tooling/vite-plugin/src/dialect-files.test.ts",
+      "packages/tooling/vite-plugin/src/index.test.ts",
+    ],
+  },
+];
+
+/** The consumer test files (`FIXTURE_CONSUMERS`) that read `file` from another project. */
+export function fixtureConsumers(file: string): string[] {
+  return FIXTURE_CONSUMERS.filter((row) => row.path.test(file)).flatMap(
+    (row) => row.consumers,
+  );
+}
+
+/**
+ * The vitest projects to run whole for the changed files the import graph
+ * cannot see: each file's owning projects (`projectsFor`) plus the project of
+ * every test in another project that reads it (`FIXTURE_CONSUMERS`). A file
+ * with neither is `unmapped`.
+ */
+export function nonSourceProjects(
+  nonSources: readonly string[],
+  dirs: readonly string[] = projectDirs(),
+): { byProject: Map<string, string[]>; unmapped: string[] } {
+  const byProject = new Map<string, string[]>();
+  const unmapped: string[] = [];
+  for (const f of nonSources) {
+    const ps = new Set(projectsFor(f, dirs));
+    for (const consumer of fixtureConsumers(f)) {
+      const p = projectFor(consumer, dirs);
+      if (p !== undefined) ps.add(p);
+    }
+    for (const p of ps) byProject.set(p, [...(byProject.get(p) ?? []), f]);
+    if (ps.size === 0) unmapped.push(f);
+  }
+  return { byProject, unmapped };
+}
+
 export function isWide(file: string): boolean {
   return WIDE_FILES.some((re) => re.test(file));
 }
@@ -248,6 +369,7 @@ function main(): number {
     ...new Set([
       ...changed.filter(isRelatedSource),
       ...probeConsumers(changed),
+      ...changed.filter(isRelatedSource).flatMap(fixtureConsumers),
     ]),
   ];
   const nonSources = changed.filter((f) => !isRelatedSource(f));
@@ -299,15 +421,9 @@ function main(): number {
 
   // Changed files the import graph cannot see (.mx files, fixtures of any
   // extension, corpora, .json): run the vitest project of the package that
-  // owns each one.
+  // owns each one, plus the project of each test elsewhere that reads it.
   if (nonSources.length > 0) {
-    const byProject = new Map<string, string[]>();
-    const unmapped: string[] = [];
-    for (const f of nonSources) {
-      const ps = projectsFor(f);
-      for (const p of ps) byProject.set(p, [...(byProject.get(p) ?? []), f]);
-      if (ps.length === 0) unmapped.push(f);
-    }
+    const { byProject, unmapped } = nonSourceProjects(nonSources);
     if (byProject.size > 0) {
       const projects = [...byProject.keys()];
       for (const [p, files] of byProject) {

@@ -1,10 +1,14 @@
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createVitest } from "vitest/node";
 import {
+  FIXTURE_CONSUMERS,
+  fixtureConsumers,
   isRelatedSource,
   isWide,
   laneFor,
+  nonSourceProjects,
   PROBE_CONSUMER,
   probeConsumers,
   projectDirs,
@@ -112,6 +116,112 @@ describe("projectsFor", () => {
       "@mxlang/parser",
     ]);
     expect(projectsFor("docs/a.md", dirs)).toEqual([]);
+  });
+});
+
+describe("FIXTURE_CONSUMERS (fixtures read from another project)", () => {
+  const dirs = projectDirs();
+  const projectsOf = (file: string) =>
+    [...nonSourceProjects([file], dirs).byProject.keys()].sort();
+
+  it("an oracle angular fixture selects the oracle and host-angular projects", () => {
+    expect(
+      projectsOf("packages/oracle/fixtures/angular/x/input.ng.mx"),
+    ).toEqual(["@mxlang/host-angular", "@mxlang/oracle"]);
+  });
+
+  it("a tree-sitter-mx corpus file selects core beside its own project", () => {
+    expect(
+      projectsOf("packages/editors/tree-sitter-mx/test/corpus/tags.txt"),
+    ).toEqual(["@mxlang/core", "@mxlang/tree-sitter-mx"]);
+  });
+
+  it("core's atom fixture selects the hosts that load it", () => {
+    expect(
+      projectsOf("packages/core/src/fixtures/syntax/atom-fixture.ts"),
+    ).toEqual([
+      "@mxlang/core",
+      "@mxlang/core-isolated",
+      "@mxlang/host-preact",
+      "@mxlang/host-solid",
+      "@mxlang/target-html",
+    ]);
+  });
+
+  it("core's member fixture selects target-html", () => {
+    expect(
+      projectsOf("packages/core/src/fixtures/syntax/member-fixture.ts"),
+    ).toEqual(["@mxlang/core", "@mxlang/core-isolated", "@mxlang/target-html"]);
+  });
+
+  it("a root fixtures/ file (in no project) selects solid and the oracle", () => {
+    expect(projectsOf("fixtures/counter/template.mx")).toEqual([
+      "@mxlang/host-solid",
+      "@mxlang/oracle",
+    ]);
+  });
+
+  it("a body-whitespace case file selects core and every host that reads it", () => {
+    expect(projectsOf("test-fixtures/body-whitespace/cases.json")).toEqual([
+      "@mxlang/core",
+      "@mxlang/host-angular",
+      "@mxlang/host-astro",
+      "@mxlang/host-hono",
+      "@mxlang/host-preact",
+      "@mxlang/host-react",
+      "@mxlang/host-solid",
+      "@mxlang/target-html",
+    ]);
+  });
+
+  it("a third-party-targets fixture selects its readers' projects", () => {
+    expect(projectsOf("test-fixtures/third-party-targets/support.ts")).toEqual([
+      "@mxlang/core",
+      "@mxlang/targets",
+      "@mxlang/tsc",
+      "@mxlang/typescript-plugin",
+    ]);
+  });
+
+  it("a dialects fixture selects its readers' projects", () => {
+    expect(projectsOf("test-fixtures/dialects/ok/package.json")).toEqual([
+      "@mxlang/language-server",
+      "@mxlang/targets",
+      "@mxlang/tsc",
+      "@mxlang/typescript-plugin",
+      "@mxlang/vite-plugin",
+    ]);
+  });
+
+  it("an unrelated fixture selects only its own project", () => {
+    expect(projectsOf("packages/oracle/fixtures/marko/x/input.mx")).toEqual([
+      "@mxlang/oracle",
+    ]);
+    expect(projectsOf("packages/parser/test/fixtures/e.html")).toEqual([
+      "@mxlang/parser",
+    ]);
+    expect(
+      fixtureConsumers("packages/core/src/fixtures/syntax/declares-fixture.ts"),
+    ).toEqual([]);
+  });
+
+  it("a file in no project with no reader stays unmapped", () => {
+    expect(nonSourceProjects(["test-fixtures/README.md"], dirs)).toEqual({
+      byProject: new Map(),
+      unmapped: ["test-fixtures/README.md"],
+    });
+  });
+
+  it("every consumer is an existing test file in a vitest project", () => {
+    for (const { consumers } of FIXTURE_CONSUMERS) {
+      for (const consumer of consumers) {
+        expect(
+          existsSync(resolve(import.meta.dirname, "..", consumer)),
+          consumer,
+        ).toBe(true);
+        expect(projectFor(consumer, dirs), consumer).toBeDefined();
+      }
+    }
   });
 });
 
