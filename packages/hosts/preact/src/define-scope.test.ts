@@ -257,15 +257,23 @@ describe.each(HOSTS)(
         expect(() => parseTsx(code)).not.toThrow();
       });
 
-      it("a body with no /var is emitted as before, with no helper", async () => {
-        const code = await compile(
+      it.each([
+        [
+          "<try><b/><@placeholder>wait</@placeholder></try>",
+          "<__mxSuspense fallback={<>wait</>}><b /></__mxSuspense>",
+        ],
+        [
           "<try><b/><@placeholder>wait</@placeholder><@catch>e</@catch></try>",
-        );
-        expect(code).toContain(
           "<__mxErrorBoundary fallback={() => <>e</>}>{() => (<><__mxSuspense fallback={<>wait</>}><b /></__mxSuspense></>)}</__mxErrorBoundary>",
-        );
-        expect(code).not.toContain("__mxTryBody");
-      });
+        ],
+      ])(
+        "a body with no /var is emitted as before, with no helper: %s",
+        async (source, expected) => {
+          const code = await compile(source);
+          expect(code).toContain(expected);
+          expect(code).not.toContain("__mxTryBody");
+        },
+      );
     });
   },
 );

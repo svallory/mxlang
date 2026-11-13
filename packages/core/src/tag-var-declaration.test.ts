@@ -260,6 +260,8 @@ describe("an outer binding read after a body that declares its own /x", () => {
   const outers = [
     ["a custom-tag /var", "<counter/x/>"],
     ["a dynamic-tag /var", "<${input.t}/x/>"],
+    // A baseline, not a regression guard: `<const>` rows compiled before the
+    // restore covered every outer binding, and still do.
     ["a <const>", "<const/x=1/>"],
   ] as const;
   for (const [outer, outerSource] of outers) {
