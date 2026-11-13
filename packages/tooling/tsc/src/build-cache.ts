@@ -827,8 +827,8 @@ function readEntry(
     // cosmiconfig's `$import`, are config inputs core does not list in
     // `watch`. The text check is conservative: `$import` anywhere in the file
     // (a nested key, a string) only costs the cache, never a stale answer.
-    // A config whose revision failed to load (an unresolvable `$import`
-    // included) carries the previous text, or none in a fresh process.
+    // A config whose revision failed to load (malformed, a failed `$import`)
+    // is answered from the previous good revision, which no input covers.
     if (
       config?.error !== undefined ||
       config?.format === "module" ||

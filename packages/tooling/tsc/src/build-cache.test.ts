@@ -681,12 +681,9 @@ describe("build-cache project entry (inputs read from disk)", () => {
     expect(entry()).toBeUndefined();
   });
 
-  it("is not cacheable with an MX config that fails to load (an unresolvable $import)", () => {
+  it("is not cacheable with an MX config that fails to load (malformed JSON)", () => {
     const { dir, entry } = project();
-    writeFileSync(
-      join(dir, ".mxrc.json"),
-      JSON.stringify({ $import: "./missing-mx.json" }),
-    );
+    writeFileSync(join(dir, ".mxrc.json"), '{ "strict": true, }');
     expect(entry()).toBeUndefined();
   });
 
