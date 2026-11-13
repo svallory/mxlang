@@ -705,28 +705,25 @@ What lowering takes from where (P2):
 | `Static.code` | `source.slice(span)` minus the leading `static` and its whitespace (today `line.replace(/^static\s+/, "")`, `lowerStatement`) |
 | `Import.code`, `Export.code`, `InputInterface.code` | `source.slice(span)` |
 | `span` (`Import`/`Export`/`Static`), `loc` | the node span (right-trimmed) |
-| `end: Position` (`Import`, `Export`, `Static`, `InputInterface`) | **untrimmed**: `lineColumnAt(untrimmedEnd)`, the end of htmljs's statement range, as today (below) |
+| `end: Position` (`Import`, `Export`, `Static`, `InputInterface`) | **trimmed**: the position of `span.sourceEnd`, the end of the authored statement (below) |
 | `Import.bindings`, the `Input` test | the Babel payload (`code.node`) |
 
 Example: `static const A = 1 // trailing` is `[0, 30)` and `Static.code` is
 `const A = 1 // trailing` (a direct probe); `code.span` is `[7, 30)`
 and the payload's statement range `[7, 18)`.
 
-**`end` is a separate fact**. Today `end` is
-`endPosOf(node)` (`lower.ts`), Marko's `loc.end` of the statement tag, which
-is **not** trimmed: it is the end of htmljs's statement range, trailing
-whitespace and following line breaks included (probes: `static const A = 1   ` then
-`<div/>` gives `end` `{ line: 1, column: 21 }` with `span` `[0, 18)`;
-`export const B = 2` followed by two blank lines and `<div/>` gives `end`
-`{ line: 1, column: 18 }`, the range stopping at its own line's end; probed
-on the IR of an html compile, 2026-10-06). The port reproduces it from `untrimmedEnd`, the untrimmed
-range's end; `end` stays the trimmed extent. This is how "`span` trimmed, `end`
-untrimmed" is realised: it describes the IR, not a second meaning of the
-node's `end`. Two readers
-use it: the TypeScript plugin's block mapping (`mx-language.ts`
-`locateSourceCode`, `item.end`) and Astro's statement mappings
-(`astro-template.ts`, `statement.end`). Whether they depend on it is being
-measured under MX1 TODO `statement-end-untrimmed`.
+**`end` is the trimmed end**. `end` is the position of `span.sourceEnd`
+(`lowerStatement`, `lower.ts`): the end of the authored statement, trailing
+whitespace excluded (`static const A = 1   ` then `<div/>` gives `end`
+`{ line: 1, column: 18 }` with `span` `[0, 18)`). It is not the end of
+htmljs's statement range, which includes trailing whitespace and following
+line breaks; that untrimmed end stays on the node as `untrimmedEnd`, and
+`mxSpanOf` still reads it as the statement node's raw range. Two readers use
+`end`: the TypeScript plugin's block mapping (`mx-language.ts`
+`locateSourceCode`, `item.end`), which searches the trimmed `code` inside
+`[loc, end)`, and Astro's statement mappings (`astro-template.ts`,
+`statement.end`), which a trimmed `end` makes tighter. `Hoisted.end` comes
+from the node a host passed to `ctx.hoist` and is not trimmed here.
 
 Invariants: only in `MxDocument.body`; `export interface Input` is an
 `MxModuleStatement { keyword: "export" }` whose payload is a

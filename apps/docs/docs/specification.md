@@ -1852,7 +1852,9 @@ readonly there just as it is below its declaration (§5.5).
 
 A named, reusable fragment, callable like any tag, taking the same params and
 attribute tags as any other call. Hoists from inside a `<define>` land on the
-define's own head, not the enclosing render function's.
+define's own head, not the enclosing render function's. Type parameters
+written on the define (`<define/Foo<T>|{ v }: { v: T }|>`) are kept on its
+function on every target except Angular.
 
 A `<define>` is called as a tag only by its PascalCase name (`<define/Row>`
 then `<Row/>`) or through a dynamic tag; a lowercase `<define/row>` is called
