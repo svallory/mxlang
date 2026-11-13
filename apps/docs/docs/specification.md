@@ -5844,7 +5844,8 @@ character. The statement is then read as TypeScript, as the statement check
 reads it, and a row is found where an expression starts at its first character,
 either with its text as written or with its stand-in in its place. A statement
 start (after a block's `}`, after a line break that ends a statement) is such a
-place; a private name, a type, an object key, a binding and a binary operator
+place, and so is an assignment's target (`~zz = 1`, `[&a, &b] = xs`); a
+private name, a type, an object key, a binding and a binary operator
 (`a⏎&mask`) are not, and neither is a comment, a string, a regular expression
 or the text of a template literal. When the text as written is valid
 TypeScript, that reading decides; otherwise each candidate is read with its
