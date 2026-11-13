@@ -236,6 +236,27 @@ describe("mx()", () => {
         ).toBe(`/root/src/tags/badge.marko${MX_SUFFIX}`);
       });
 
+      it("is claimed without regard to the extension's case", async () => {
+        const resolveId = resolveIdOf(mx());
+        const ctx = makeContext();
+        // A `.MARKO` tag imported by a `Page.MX`, then a tag importing a tag
+        // from that claimed `.MARKO` id.
+        expect(
+          await resolveId.call(
+            ctx,
+            "./tags/Badge.MARKO",
+            `/root/src/Page.MX${MX_SUFFIX}`,
+          ),
+        ).toBe(`/root/src/tags/Badge.MARKO${MX_SUFFIX}`);
+        expect(
+          await resolveId.call(
+            ctx,
+            "./inner.marko",
+            `/root/src/tags/Outer.MARKO${MX_SUFFIX}`,
+          ),
+        ).toBe(`/root/src/tags/inner.marko${MX_SUFFIX}`);
+      });
+
       it("is left alone for any other importer, and with none", async () => {
         const resolveId = resolveIdOf(mx());
         const ctx = makeContext();

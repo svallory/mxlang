@@ -21,10 +21,12 @@ import {
   parseExpression as parseBabelExpression,
 } from "@babel/parser";
 import {
+  attachDependencies,
   type CustomTag,
   concatMapped,
   type GeneratedMapping,
   lower,
+  lowerKeepingDependencies,
   type MappedCode,
   type MxWarning,
   mapped,
@@ -124,6 +126,11 @@ export interface CompileSolidMxOptions {
    * package reads the same as it does today.
    */
   targets?: TargetLookup;
+  /**
+   * A synchronous resolver for the region's callee imports, tried before
+   * core's own resolution; `importer` is {@link filename}.
+   */
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 export interface RawSourceMap {
@@ -367,6 +374,7 @@ export function compileSolidMx(
   ctx.customTags = options.customTags;
   ctx.defaultTag = options.defaultTag;
   ctx.warnings = options.warnings;
+  ctx.resolveImport = options.resolveImport;
   if (options.importSpecifiers) {
     ctx.importSpecifiers = new Map(options.importSpecifiers);
     for (const name of options.importSpecifiers.keys()) ctx.imports.add(name);
@@ -402,7 +410,26 @@ export function compileSolidMx(
       ctx.importDefaultFromMarkoOrMx.add(name);
     }
   }
-  const ir = lowerKeepingDependencies(ctx, body);
+  // Every error from here on carries the callee files read so far, the ones
+  // `lower` throws and the region checks and emit after it alike.
+  try {
+    return emitRegion(source, options, ctx, lower(ctx, body));
+  } catch (error) {
+    attachDependencies(ctx, error);
+    throw error;
+  }
+}
+
+/**
+ * The rest of {@link compileSolidMx} once the region is lowered: the region
+ * checks that only the IR can answer, then the emit.
+ */
+function emitRegion(
+  source: string,
+  options: CompileSolidMxOptions,
+  ctx: ReturnType<typeof newCtx>,
+  ir: ReturnType<typeof lower>,
+): CompileSolidMxResult {
   // An import the *compiler* minted for a discovered tag is not a
   // module-level statement the author wrote, so it is not theirs to move:
   // the region is the only place that call exists, and the import has
@@ -582,29 +609,6 @@ function mappedStatement(
 }
 
 /**
- * `lower` records the callee files it read in `ctx.dependencies`, and a
- * successful compile returns them. A lowering error carries them too, so an
- * integration can watch the callee whose contract caused it (core's own
- * compile does the same); the error's sibling errors travel with it.
- */
-function lowerKeepingDependencies(
-  ctx: Parameters<typeof lower>[0],
-  body: Parameters<typeof lower>[1],
-): ReturnType<typeof lower> {
-  try {
-    return lower(ctx, body);
-  } catch (error) {
-    if (error instanceof TranslateError) {
-      const dependencies = [...(ctx.dependencies ?? [])];
-      for (const each of [error, ...(error.errors ?? [])]) {
-        each.dependencies = dependencies;
-      }
-    }
-    throw error;
-  }
-}
-
-/**
  * Compiles a whole `.mx` file to a Solid component module.
  *
  * This is the tag-unit entry point: a `tags/icon.mx` is an ordinary `.mx`
@@ -639,6 +643,7 @@ export function compileSolidUnit(
   ctx.customTags = options.customTags;
   ctx.defaultTag = options.defaultTag;
   ctx.warnings = options.warnings;
+  ctx.resolveImport = options.resolveImport;
   // A tag unit is a whole file compiling to a module, unlike the region path
   // above: it has a `export default function <Name>` to name, so a tag that
   // calls itself resolves to that declaration rather than importing itself.

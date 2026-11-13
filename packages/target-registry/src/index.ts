@@ -251,6 +251,8 @@ export interface RegionCompileOptions {
   onDependency?: (file: string) => void;
   /** Tooling projection: forwarded to every region's compile (`HostRegionInput.typeCheck`). */
   typeCheck?: boolean;
+  /** Callee import resolver, forwarded to every region's compile (`HostRegionInput.resolveImport`). */
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 /**
@@ -292,6 +294,9 @@ export function regionKindCompile(
       ...input,
       ...(options.warnings === undefined ? {} : { warnings: options.warnings }),
       ...(options.typeCheck ? { typeCheck: true } : {}),
+      ...(options.resolveImport === undefined
+        ? {}
+        : { resolveImport: options.resolveImport }),
       targets,
     });
     if (options.onDependency)

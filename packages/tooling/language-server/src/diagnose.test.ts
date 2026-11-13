@@ -32,6 +32,8 @@ import {
 } from "../../../../test-fixtures/dialects/probe.ts";
 import {
   diagnoseDocument,
+  isAstroMxDocument,
+  isSolidMxDocument,
   type RelatedDiagnostics,
   splitCodeFrame,
 } from "./diagnose.ts";
@@ -75,6 +77,21 @@ describe("target-table dispatch", () => {
         ?.message,
     ).toContain("useState");
   });
+
+  it.each([
+    ["/app/Counter.Solid.MX", true, false],
+    ["/app/Counter.REACT.mx", true, false],
+    ["/app/Card.Astro.Mx", false, true],
+    ["/app/Card.MX", false, false],
+  ])(
+    "reads the file kind of %s without regard to case",
+    (uri, region, astro) => {
+      expect([isSolidMxDocument(uri), isAstroMxDocument(uri)]).toEqual([
+        region,
+        astro,
+      ]);
+    },
+  );
 
   it("does not load a page compiler for template kinds", () => {
     const descriptor = builtinLookup().target("html");

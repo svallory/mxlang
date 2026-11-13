@@ -15,6 +15,7 @@ import {
   routeDialect,
 } from "./dialect-discovery.ts";
 import { CORE_DIALECT, MX_DIALECT } from "./dialect-registry.ts";
+import { isMxFileName } from "./scan.ts";
 import type {
   TargetCompileOptions,
   TargetCompileResult,
@@ -102,7 +103,7 @@ export function emitFor(
   try {
     dialect = routeDialect(filename, options);
   } catch (error) {
-    if (!filename.endsWith(".mx") || !isTranslateError(error)) throw error;
+    if (!isMxFileName(filename) || !isTranslateError(error)) throw error;
   }
   const identity = dialect ?? MX_DIALECT;
   return { dialect: identity, emit: EMITS.get(identity.id) };

@@ -1208,10 +1208,10 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    */
   const isMxModule = (file: string): string | undefined =>
     extensions.find((ext) => hasExt(file, ext + suffixFor(ext))) ??
-    (file.endsWith(TAG_EXT + suffixFor(TAG_EXT)) ? TAG_EXT : undefined);
+    (hasExt(file, TAG_EXT + suffixFor(TAG_EXT)) ? TAG_EXT : undefined);
   /** A file this plugin compiles from disk: matched by extension, or a tag. */
   const sourceExt = (file: string): string | undefined =>
-    matchExt(file) ?? (file.endsWith(TAG_EXT) ? TAG_EXT : undefined);
+    matchExt(file) ?? (hasExt(file, TAG_EXT) ? TAG_EXT : undefined);
   /** `/a/App.solid.mx.tsx` -> `/a/App.solid.mx`; `/a/x.mx.ts` -> `/a/x.mx` */
   const sourcePath = (file: string, ext: string) =>
     file.slice(0, -suffixFor(ext).length);
@@ -1369,7 +1369,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       // emitted call expects), so the tag is compiled here, by the same
       // whole-file path as the page. Claimed only for an importer that is
       // itself ours — a stray `.marko` import elsewhere stays untouched.
-      if (path.endsWith(TAG_EXT)) {
+      if (hasExt(path, TAG_EXT)) {
         if (!importer || isMxModule(splitId(importer)[0]) === undefined) {
           return null;
         }
@@ -1381,7 +1381,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         }
         if (resolved.external) return null;
         const [resolvedPath, resolvedSuffix] = splitId(resolved.id);
-        if (!resolvedPath.endsWith(TAG_EXT)) return null;
+        if (!hasExt(resolvedPath, TAG_EXT)) return null;
         return resolvedPath + suffixFor(TAG_EXT) + (resolvedSuffix || suffix);
       }
 

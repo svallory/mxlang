@@ -9,6 +9,7 @@
  */
 
 import {
+  attachDependencies,
   type CustomTag,
   type Ir,
   lower,
@@ -40,6 +41,8 @@ import {
   helperMembersFor,
   helperNamesFor,
   IMPORTS_ADVICE_CODE,
+  isMarkoSpecifier,
+  isMxSpecifier,
   RUNTIME_SPECIFIER,
   type UsedTag,
 } from "./emitter.ts";
@@ -187,6 +190,11 @@ export interface CompileNgMxOptions {
    * package reads the same as it does today.
    */
   targets?: TargetLookup;
+  /**
+   * A synchronous resolver for the regions' callee imports, tried before
+   * core's own resolution; `importer` is the `.ng.mx` file's `filename`.
+   */
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 export interface CompileNgMxResult {
@@ -339,6 +347,7 @@ function lowerRegion(
   ctx.customTags = options.customTags;
   ctx.defaultTag = options.defaultTag;
   ctx.warnings = warnings;
+  ctx.resolveImport = options.resolveImport;
   // Seed the module's own bindings exactly as `compileSolidMx` does, so a
   // capitalized tag bound by the surrounding module (an authored
   // `import Badge from "./tags/badge.mx"`) resolves instead of hitting
@@ -364,17 +373,22 @@ function lowerRegion(
   }
   for (const name of base.importDefaultFromMarkoOrMx ?? []) {
     const from = specifiers.get(name);
-    if (from?.endsWith(".mx") || from?.endsWith(".marko")) {
+    if (isMxSpecifier(from) || isMarkoSpecifier(from)) {
       ctx.importDefaultFromMarkoOrMx.add(name);
     }
   }
 
   // A `*ngIf="…"` after another attribute fails in `lower` with Marko's
-  // message about an assignment; the hint names the cause.
-  const ir: ReturnType<typeof lower> = withStructuralAttrHint(
-    positionedSource,
-    () => lower(ctx, body),
-  );
+  // message about an assignment; the hint names the cause. Whichever error
+  // leaves carries the callee files read so far (`dependencies`), which
+  // `withLineColumn` keeps: it adds to the error, never replaces it.
+  let ir: ReturnType<typeof lower>;
+  try {
+    ir = withStructuralAttrHint(positionedSource, () => lower(ctx, body));
+  } catch (error) {
+    attachDependencies(ctx, error);
+    throw error;
+  }
 
   // A4 divergence 4, the functional gain of `.ng.mx` over a `.mx` page:
   // module-level MX statements are *hoisted* into the surrounding TypeScript
@@ -431,7 +445,7 @@ function lowerRegion(
   const unresolved = new Map<string, string>();
   for (const name of base.importDefaultFromMarkoOrMx ?? []) {
     const specifier = base.importSpecifiers?.get(name);
-    if (!specifier?.endsWith(".mx")) continue;
+    if (!isMxSpecifier(specifier)) continue;
     authoredTagImports.push({ local: name });
     // An unresolvable path is an error only if the import is called as a
     // tag; the emitter would reject it eagerly, so it is withheld here and
@@ -721,7 +735,7 @@ function rewriteAuthoredTagImports(
   if (called.size === 0) return;
   walk(file, (node) => {
     if (node.type !== "ImportDeclaration") return;
-    if (!node.source?.value?.endsWith(".mx")) return;
+    if (!isMxSpecifier(node.source?.value)) return;
     if (node.start === undefined || node.end === undefined) return;
     const specifiers = node.specifiers ?? [];
     const defaultSpecifier = specifiers.find(
@@ -1561,12 +1575,20 @@ export function compileNgMx(
   // `noImplicitAny`. The fix is landing in the parser; the annotation is
   // correct either way and can stay.
   let deferred: AuthoredImportError | undefined;
+  // The parser rethrows a region's error as its own positioned
+  // `SyntaxError`, which keeps the message but not the callee files the
+  // failed lowering read; they are put back on it below.
+  let failedDependencies: string[] | undefined;
   const regionCompile: MxRegionCompile = (input: MxRegionCompileInput) => {
     let region: LoweredRegion;
     try {
       region = lowerRegion(input.source, filename, input, options);
     } catch (error) {
-      if (!(error instanceof AuthoredImportError)) throw error;
+      if (!(error instanceof AuthoredImportError)) {
+        if (error instanceof TranslateError)
+          failedDependencies ??= error.dependencies;
+        throw error;
+      }
       // No module AST yet to position it against: let the parse finish with
       // an empty stand-in, then throw at the import (below).
       deferred ??= error;
@@ -1590,6 +1612,9 @@ export function compileNgMx(
   try {
     file = parseNgMx(source, filename, options, regionCompile);
   } catch (error) {
+    if (failedDependencies && error instanceof Error)
+      (error as { dependencies?: string[] }).dependencies ??=
+        failedDependencies;
     throw withLineColumn(error);
   }
 

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parseTemplate } from "@angular/compiler";
 import { getCustomTags, positionRegionSource } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
+import { isTagModuleImport } from "../src/emitter.ts";
 import {
   compileNgMx,
   escapeTemplateLiteral,
@@ -1786,5 +1787,40 @@ describe("compileNgMx: tag type containers", () => {
       "/p/x.component.ng.mx",
     );
     expect(emittedTemplate(result.code)).toBe("<p>x</p>");
+  });
+});
+
+describe("compileNgMx: file-kind casing", () => {
+  it.each([
+    ["./Card.MX", undefined, true],
+    ['import Card from "./Card.Mx";', undefined, true],
+    ["./card.ts", "/p/Card.MX", true],
+    ["./card.mxx", undefined, false],
+  ])("isTagModuleImport(%j, %j) is %s", (specifier, resolved, expected) => {
+    expect(isTagModuleImport(specifier, resolved)).toBe(expected);
+  });
+});
+
+describe("compileNgMx: a failed compile reports its dependencies", () => {
+  it("attaches the callee whose contract failed to the thrown error", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-ngmx-deps-"));
+    try {
+      const callee = join(dir, "card.mx");
+      writeFileSync(
+        callee,
+        'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n',
+      );
+      const error = thrown(() =>
+        compileNgMx(
+          `import Card from "./card.mx";\n${componentFile(
+            "<Card><@header>a</@header><@header>b</@header></Card>",
+          )}`,
+          join(dir, "x.component.ng.mx"),
+        ),
+      ) as { dependencies?: string[] };
+      expect(error.dependencies).toEqual([callee]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

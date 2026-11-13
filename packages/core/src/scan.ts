@@ -160,6 +160,16 @@ const SIDECAR_SUFFIX = ".tag.ts";
 const TEMPLATE_SUFFIX = ".mx";
 
 /**
+ * Whether `name` (a file name, a path or a specifier) names an MX file: its
+ * lower-cased form ends with `.mx`. The one rule every file-kind check
+ * follows, so `Card.MX` is the same file kind as `card.mx`. Internal to core;
+ * not part of the package's public API.
+ */
+export function isMxFileName(name: string): boolean {
+  return name.toLowerCase().endsWith(TEMPLATE_SUFFIX);
+}
+
+/**
  * How one caller's files discover tags. Core's own discovery is a fixed
  * entry ({@link CORE_TAG_DISCOVERY}: core is dialect zero), a dialect's comes
  * from its manifest's `tagDirs`, `tagExtensions`, `sidecars`,
@@ -327,7 +337,7 @@ export function hostModuleSegment(
   entry: string,
   targets: TargetLookup,
 ): string | undefined {
-  if (!entry.toLowerCase().endsWith(TEMPLATE_SUFFIX)) return undefined;
+  if (!isMxFileName(entry)) return undefined;
   const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);
   const dot = bare.lastIndexOf(".");
   if (dot === -1) return undefined;
@@ -393,7 +403,7 @@ function rejectUncallableTagFile(
   diagnostics: readonly ScanDiagnostic[],
   dottedTagFiles: DottedTagFile[],
 ): boolean {
-  if (!entry.toLowerCase().endsWith(TEMPLATE_SUFFIX)) return false;
+  if (!isMxFileName(entry)) return false;
   const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);
   const dot = bare.lastIndexOf(".");
   if (dot === -1) return false;
@@ -1787,7 +1797,7 @@ function indexDirectory(
     if (skipClaimedFile(dir, entry, options.routes, diagnostics)) continue;
     if (rejectUncallableTagFile(dir, entry, diagnostics, dottedTagFiles))
       continue;
-    const isTemplate = entry.toLowerCase().endsWith(TEMPLATE_SUFFIX);
+    const isTemplate = isMxFileName(entry);
 
     if (!isSidecar && !isTemplate) continue;
 

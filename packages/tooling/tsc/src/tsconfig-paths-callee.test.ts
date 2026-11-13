@@ -346,3 +346,30 @@ it(
   },
   SPAWN_TIMEOUT_MS,
 );
+
+it(
+  "reads an aliased callee's Input from a .solid.mx region caller",
+  () => {
+    const p = project({
+      compilerOptions: {
+        ...BASE_OPTIONS,
+        baseUrl: ".",
+        paths: { "~/*": ["src/*"] },
+      },
+      include: ["page.solid.mx", "src"],
+    });
+    try {
+      writeFileSync(
+        join(p.dir, "page.solid.mx"),
+        'import Card from "~/Card.mx";\n\nexport const view = <Card><@tab/></Card>;\n',
+      );
+      const result = p.run();
+      expect(result.output).not.toContain("MX_UNREADABLE_CALLEE_INPUT");
+      expect(result.output).not.toContain("TS2307");
+      expect(result.output).toContain("declares no attribute tag `tab`");
+    } finally {
+      rmSync(p.dir, { recursive: true, force: true });
+    }
+  },
+  SPAWN_TIMEOUT_MS,
+);

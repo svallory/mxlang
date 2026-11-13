@@ -122,6 +122,12 @@ export interface HostRegionInput {
    * is reachable by its authored name so hovers and diagnostics name that.
    */
   typeCheck?: boolean;
+  /**
+   * A synchronous import resolver for the region's callee imports, tried
+   * before the built-in resolution; `importer` is {@link filename}. The same
+   * hook as `TargetCompileOptions.resolveImport`.
+   */
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 /**

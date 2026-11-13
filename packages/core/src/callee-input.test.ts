@@ -1932,6 +1932,20 @@ describe("calleeReturnsValue", () => {
     );
   });
 
+  it("reads a `.MX` callee as the `.mx` file kind", () => {
+    withFiles(
+      { "Counter.MX": "<span>x</span>\n" },
+      [["Counter", "./Counter.MX"]],
+      (ctx) => {
+        expect(calleeReturnShape(target, ctx)).toBe("none");
+        ctx.importSpecifiers = new Map([["Counter", "./Missing.MX"]]);
+        expect(calleeReturn(target, ctx).unreadable?.reason).toBe(
+          "could not be resolved",
+        );
+      },
+    );
+  });
+
   it("calleeReturn says why a .mx callee is unreadable, and nothing for other unknowns", () => {
     withFiles(
       {

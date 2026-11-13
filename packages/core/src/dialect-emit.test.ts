@@ -113,6 +113,15 @@ describe("emitFor", () => {
     );
   });
 
+  it("leaves a routing error on a `.mx` file in any case to its compile", () => {
+    dialectProject(dir, { manifest: { emit: "./emit.mjs" } });
+    for (const name of ["card.mx", "Card.MX"]) {
+      const found = emitFor(join(dir, name));
+      expect(found.dialect.id).toBe("mx");
+      expect(found.emit).toBeTypeOf("function");
+    }
+  });
+
   describe("a file whose routing fails", () => {
     function clash(): void {
       dialectProject(dir, {

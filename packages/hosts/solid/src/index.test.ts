@@ -611,6 +611,23 @@ describe("a failed compile still reports the dependencies it read", () => {
       ).dependencies,
     ).toContain(callee);
   });
+
+  it("compileSolidMx attaches them to an error raised after lowering", () => {
+    // Lowers clean (one `@header`), then the authored import is refused as
+    // a module-level statement — after `lower` has read the callee.
+    const error = failure(() =>
+      compileSolidMx(
+        'import x from "./x"\n<Card><@header>a</@header></Card>\n',
+        {
+          filename: caller,
+          importSpecifiers: new Map([["Card", "./card.mx"]]),
+          importDefaultFromMarkoOrMx: new Set(["Card"]),
+        },
+      ),
+    ) as { dependencies?: string[]; message?: string };
+    expect(error.message).toContain("module-level MX statements");
+    expect(error.dependencies).toEqual([callee]);
+  });
 });
 
 describe("Solid host errors", () => {

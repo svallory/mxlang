@@ -73,25 +73,23 @@ describe("two region kinds, two plugins", () => {
   });
 });
 
-describe("a case-variant suffix (X.SOLID.mx) is claimed but not lowered", () => {
-  // Unchanged from before region file kinds existed: the plugin has matched the suffix
-  // case-insensitively since it was added, and the parser's `.solid.mx`
-  // default left the grammar off for any other case. The language server,
-  // Vite and the registry all treat `X.SOLID.mx` as a whole-file `.mx`.
+describe("a case-variant suffix (X.SOLID.mx) is the same file kind", () => {
+  // One rule for every file-kind suffix: the lower-cased name ends with it.
+  // `X.SOLID.mx` is claimed and its MX regions lowered, as `x.solid.mx`.
   const source = "export const view = <if=true><p>x</p></if>;\n";
 
-  it("is claimed by the Solid plugin", () => {
-    const solid = createRegionLanguagePlugin(ts, fileKindForPipeline("region"));
-    expect(solid.getLanguageId("/a/X.SOLID.mx")).toBe("solidmx");
-  });
-
-  it("parses as plain TSX: MX syntax is a syntax error there, and lowered in .solid.mx", () => {
-    const solid = createRegionLanguagePlugin(ts, fileKindForPipeline("region"));
-    for (const file of ["/a/X.SOLID.mx", "/a/x.solid.mx"])
+  it.each(["/a/X.SOLID.mx", "/a/Counter.Solid.MX"])(
+    "%s is claimed and lowered by the Solid plugin",
+    (file) => {
+      const solid = createRegionLanguagePlugin(
+        ts,
+        fileKindForPipeline("region"),
+      );
+      expect(solid.getLanguageId(file)).toBe("solidmx");
       solid.createVirtualCode?.(file, "solidmx", snapshot(source), noScript);
-    expect(solid.getSyntaxError("/a/X.SOLID.mx")).toBeDefined();
-    expect(solid.getSyntaxError("/a/x.solid.mx")).toBeUndefined();
-  });
+      expect(solid.getSyntaxError(file)).toBeUndefined();
+    },
+  );
 });
 
 describe(".react.mx: the React region kind's own plugin", () => {

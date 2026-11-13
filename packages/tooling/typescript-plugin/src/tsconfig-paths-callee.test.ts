@@ -16,6 +16,11 @@ import ts from "typescript";
 import { afterAll, describe, expect, it } from "vitest";
 import { makePluginInstall } from "./fixtures/plugin-install.ts";
 import { createPluginService } from "./fixtures/plugin-service.ts";
+import {
+  createNgMxLanguagePlugin,
+  createRegionLanguagePlugins,
+  type MxDiagnosticLanguagePlugin,
+} from "./language.ts";
 import { createMxLanguagePlugin } from "./mx-language.ts";
 import { createTsconfigPathsResolver } from "./tsconfig-paths.ts";
 
@@ -157,6 +162,31 @@ describe("the plugin resolves aliased .mx callee imports through tsconfig paths"
       expect(service.getProgram()?.getSourceFile(page)).toBeDefined();
       expect(
         diagnostics.map((d) => ({ code: d.code, message: d.messageText })),
+      ).toEqual([]);
+    } finally {
+      service.dispose();
+      rmSync(project.dir, { recursive: true, force: true });
+    }
+  });
+  it("threads it to a .solid.mx region through the plugin factory too", () => {
+    const project = scratch({});
+    const page = join(project.dir, "page.solid.mx");
+    const source =
+      'import Card from "packages/tooling/tsc/src/fixtures/host-dispatch/alias-html/Card-html.mx";\n\nexport const view = <Card><@tab/></Card>;\n';
+    writeFileSync(page, source);
+    const consumer = join(project.dir, "consumer.ts");
+    const service = createPluginService(
+      { [page]: source, [consumer]: 'import "./page.solid.mx";' },
+      [consumer],
+    );
+    try {
+      service.getSemanticDiagnostics(consumer);
+      // Read through `baseUrl`, the callee's index signature accepts `tab`;
+      // unread, the call would warn MX_UNREADABLE_CALLEE_INPUT.
+      expect(
+        service
+          .getSyntacticDiagnostics(page)
+          .map((d) => ({ code: d.code, message: d.messageText })),
       ).toEqual([]);
     } finally {
       service.dispose();
@@ -313,6 +343,97 @@ describe("the plugin resolves aliased .mx callee imports through tsconfig paths"
       ]);
     } finally {
       rmSync(project.dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/** Compile `file` with `plugin`: each diagnostic's code, else its message. */
+function codesFrom(plugin: MxDiagnosticLanguagePlugin, file: string): string[] {
+  plugin.createVirtualCode?.(
+    file,
+    plugin.getLanguageId(file) ?? "typescript",
+    snapshotOf(readFileSync(file, "utf8")),
+    { getAssociatedScript: () => undefined },
+  );
+  return plugin
+    .getCompileDiagnostics(file)
+    .map(({ diagnosticCode, message }) => diagnosticCode ?? message);
+}
+
+describe("every pipeline's plugin reads an aliased callee's Input", () => {
+  // The read being real turns the unreadable-callee warning into "declares
+  // no attribute tag `tab`"; without the resolver the alias is unresolvable.
+  // `.astro.mx` has no row: its fence imports never reach core's callee
+  // reader, so an aliased one is not read either way.
+  const region =
+    'import Card from "~/Card.mx";\n\nexport const view = <Card><@tab/></Card>;\n';
+  function project(name: string, source: string) {
+    const scratchProject = scratch({
+      "~/*": ["src/*"],
+      ...targetHtmlEntry(""),
+    });
+    const file = join(scratchProject.dir, name);
+    writeFileSync(file, source);
+    const resolveImport = createTsconfigPathsResolver(ts, () =>
+      optionsOf(scratchProject.dir),
+    );
+    return { dir: scratchProject.dir, file, resolveImport };
+  }
+
+  it.each(["solid", "preact", "react", "hono"])(
+    "the .%s.mx region plugin",
+    (segment) => {
+      const { dir, file, resolveImport } = project(
+        `page.${segment}.mx`,
+        region,
+      );
+      try {
+        const pluginFor = (
+          options: Parameters<typeof createRegionLanguagePlugins>[1],
+        ) => {
+          const plugin = createRegionLanguagePlugins(ts, options).find(
+            (candidate) => candidate.getLanguageId(file) !== undefined,
+          );
+          if (!plugin) throw new Error(`no region plugin claims ${file}`);
+          return plugin;
+        };
+        expect(codesFrom(pluginFor({ resolveImport }), file)).toEqual([
+          "MX_UNKNOWN_ATTRIBUTE_TAG",
+        ]);
+        expect(codesFrom(pluginFor({}), file)).toEqual([
+          "MX_UNREADABLE_CALLEE_INPUT",
+        ]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("the .ng.mx plugin", () => {
+    const { dir, file, resolveImport } = project(
+      "x.component.ng.mx",
+      [
+        'import { Component } from "@angular/core";',
+        'import Card from "~/Card.mx";',
+        "",
+        "@Component({",
+        '  selector: "app-x",',
+        "  template: <Card><@tab>x</@tab></Card>,",
+        "})",
+        "export class XComponent {}",
+        "",
+      ].join("\n"),
+    );
+    try {
+      expect(
+        codesFrom(createNgMxLanguagePlugin(ts, { resolveImport }), file),
+      ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
+      // Angular resolves the callee for its selector too, and says so.
+      expect(codesFrom(createNgMxLanguagePlugin(ts), file)).toEqual([
+        "cannot resolve `~/Card.mx` to read its `export const selector`; check the import path.",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

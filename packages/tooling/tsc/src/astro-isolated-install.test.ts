@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -129,4 +130,33 @@ it("passes a real sink under an isolated install (a false-positive guard, green 
   );
 
   expect(output).not.toMatch(/error TS/);
+});
+
+it("loads the project's own @astrojs/language-server before mx-tsc's copy", () => {
+  const dir = isolatedProject();
+  try {
+    // A stub copy that only records it was loaded: mx-tsc's own copy would
+    // write nothing, so the marker proves which one the program used.
+    const server = join(dir, "node_modules", "@astrojs", "language-server");
+    mkdirSync(join(server, "dist", "core"), { recursive: true });
+    writeFileSync(
+      join(server, "package.json"),
+      JSON.stringify({ name: "@astrojs/language-server", version: "0.0.0" }),
+    );
+    const marker = join(dir, "project-astro-ls-loaded");
+    writeFileSync(
+      join(server, "dist", "core", "index.js"),
+      [
+        `exports.getAstroLanguagePlugin = () => {`,
+        `  require("node:fs").writeFileSync(${JSON.stringify(marker)}, "");`,
+        `  return { getLanguageId: () => undefined, createVirtualCode: () => undefined };`,
+        `};`,
+      ].join("\n"),
+    );
+    writeFileSync(join(dir, "page.astro.mx"), "<h1>hi</h1>\n");
+    runInProcess(["--noEmit", "-p", "tsconfig.json", "--astro"], dir);
+    expect(existsSync(marker)).toBe(true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

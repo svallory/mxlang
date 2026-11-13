@@ -198,6 +198,9 @@ export function createAmxLanguagePlugin(
               ),
               warnings,
               targets: builtinLookup(),
+              ...(options.resolveImport
+                ? { resolveImport: options.resolveImport }
+                : undefined),
             });
             return { ...lowered, warnings };
           },

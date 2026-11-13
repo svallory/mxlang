@@ -7,10 +7,12 @@
  * core reads callee readers from the compile's lookup, so the callee's
  * `Input` contract still reaches the call site as a `satisfies` check.
  */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MxWarning } from "@mxlang/core";
 import { print } from "@mxlang/tsx-bridge";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { compilePreactRegion } from "./index.ts";
 
 const DIR = join(import.meta.dirname, "fixtures", "region-callee");
@@ -41,5 +43,46 @@ export const page = (
       'satisfies NonNullable<Parameters<typeof Card>[0]["row"]>',
     );
     expect(warnings).toEqual([]);
+  });
+});
+
+describe("a failed region compile still reports the dependencies it read", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mx-preact-deps-"));
+  const callee = join(dir, "card.mx");
+  writeFileSync(
+    callee,
+    'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n',
+  );
+  const caller = join(dir, "page.preact.mx");
+  const compileFailure = (source: string) => {
+    try {
+      compilePreactRegion(source, {
+        filename: caller,
+        baseOffset: 0,
+        baseLine: 0,
+        baseColumn: 0,
+        importSpecifiers: new Map([["Card", "./card.mx"]]),
+        importDefaultFromMarkoOrMx: new Set(["Card"]),
+      });
+    } catch (error) {
+      return error as { dependencies?: string[]; message?: string };
+    }
+    throw new Error("expected a compile error");
+  };
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("attaches the callee whose contract failed in lowering", () => {
+    const error = compileFailure(
+      "<Card><@header>a</@header><@header>b</@header></Card>",
+    );
+    expect(error.dependencies).toEqual([callee]);
+  });
+
+  it("attaches them to an error raised after lowering", () => {
+    const error = compileFailure(
+      'import x from "./x"\n<Card><@header>a</@header></Card>',
+    );
+    expect(error.message).toContain("module-level MX statements");
+    expect(error.dependencies).toEqual([callee]);
   });
 });

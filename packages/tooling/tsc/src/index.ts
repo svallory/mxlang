@@ -569,26 +569,29 @@ function runPatchedTsc(
         typescript,
         dialectExtensions,
       );
-      const regionPlugins = createRegionLanguagePlugins(typescript);
+      // The program's parsed compiler options carry the tsconfig this run
+      // was invoked with (`-p`), `extends` chains included, so `paths` and
+      // `baseUrl` reach MX callee imports — from a whole-file `.mx`, a region
+      // file, an `.ng.mx` or an `.astro.mx` caller alike — the way they
+      // reach every other module the program resolves.
+      const resolveImport = createTsconfigPathsResolver(
+        typescript,
+        () => programOptions.options,
+      );
+      const regionPlugins = createRegionLanguagePlugins(typescript, {
+        resolveImport,
+      });
       // `retainCompiled`: Angular template diagnostics run over the very
       // compiles the type-check used, not a second pass of them.
       const ngMx = createNgMxLanguagePlugin(typescript, {
         retainCompiled: true,
+        resolveImport,
       });
       ngPlugins.push({
         rootNames: programOptions.rootNames,
         getCompiledNgMx: () => ngMx.getCompiledNgMx(),
       });
-      const mx = createMxLanguagePlugin(typescript, {
-        // The program's parsed compiler options carry the tsconfig this run
-        // was invoked with (`-p`), `extends` chains included, so `paths` and
-        // `baseUrl` reach `.mx` callee imports the way they reach every
-        // other module the program resolves.
-        resolveImport: createTsconfigPathsResolver(
-          typescript,
-          () => programOptions.options,
-        ),
-      });
+      const mx = createMxLanguagePlugin(typescript, { resolveImport });
       diagnosticPlugins.push(dialect, ...regionPlugins, ngMx, mx);
       const plugins: LanguagePlugin<string>[] = [
         dialect,
@@ -597,9 +600,13 @@ function runPatchedTsc(
         mx,
       ];
       if (astro) {
-        const amx = createAmxLanguagePlugin(typescript);
+        const amx = createAmxLanguagePlugin(typescript, { resolveImport });
         diagnosticPlugins.push(amx);
-        plugins.push(amx, createAstroLanguagePlugin());
+        // The project's own `@astrojs/language-server` first, then mx-tsc's.
+        plugins.push(
+          amx,
+          createAstroLanguagePlugin(undefined, projectDirOf(programOptions)),
+        );
       }
       // Watch only: which plugins this program made, so a rebuild reports
       // the newest answer per file (see `currentCompileDiagnostics`).
@@ -669,6 +676,17 @@ function currentAmbientTypeErrors(): string[] {
 }
 
 /**
+ * The directory of the project a program is created for: its tsconfig's
+ * directory, else the compiler host's (or the process's) current directory.
+ */
+function projectDirOf(options: ts.CreateProgramOptions): string {
+  const configFile = options.options.configFilePath;
+  return typeof configFile === "string"
+    ? dirname(configFile)
+    : (options.host?.getCurrentDirectory() ?? process.cwd());
+}
+
+/**
  * Adds the hosts' ambient declaration files for this program
  * (`ambientTypeFiles`, `TargetHost.ambientTypes`) to its root files, as a
  * framework's own tooling adds them to every program it checks. Runs before
@@ -676,11 +694,7 @@ function currentAmbientTypeErrors(): string[] {
  * `createProgram` then receives.
  */
 function addAmbientTypes(options: ts.CreateProgramOptions): void {
-  const configFile = options.options.configFilePath;
-  const projectDir =
-    typeof configFile === "string"
-      ? dirname(configFile)
-      : (options.host?.getCurrentDirectory() ?? process.cwd());
+  const projectDir = projectDirOf(options);
   const errors: string[] = [];
   const extra = ambientTypeFiles(options.rootNames, projectDir, errors);
   ambientTypeErrors.set(projectDir, errors);

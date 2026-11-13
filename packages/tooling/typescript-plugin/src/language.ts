@@ -50,6 +50,7 @@ import {
   createTargetPolicyRecorder,
   hostPolicyMessage,
 } from "./host-policy-diagnostics.ts";
+import type { TsPathsImportResolver } from "./tsconfig-paths.ts";
 import type {
   AuthoredSpan,
   SpannedVirtualCode,
@@ -181,6 +182,15 @@ export interface DependencyLanguagePluginOptions {
    * the files on disk, which core reads by itself.
    */
   readSource?: DependencySourceReader;
+  /**
+   * A tool-supplied import resolver for callee imports, tried before core's
+   * own probing — the `resolveImport` hook of `TranslatorOptions`. The
+   * tsserver plugin and `mx-tsc` pass tsconfig-paths resolution built from
+   * the program's compiler options (`createTsconfigPathsResolver`), so an
+   * aliased `.mx` callee import resolves to the same file the program's own
+   * module resolution sees, from every file kind that imports one.
+   */
+  resolveImport?: TsPathsImportResolver;
 }
 
 /** The plugin of the first built-in region file kind (`.solid.mx`). */
@@ -235,17 +245,15 @@ export function createRegionLanguagePlugin(
   const regionCompile = regionKindCompile(kind, {
     targets: builtinLookup(),
     typeCheck: true,
+    ...(options.resolveImport
+      ? { resolveImport: options.resolveImport }
+      : undefined),
   });
   const suffix = `.${extension}`;
-  // Claimed case-insensitively, as this plugin always has (e5dc0f40): Volar
-  // keys files case-insensitively where the filesystem is
-  // (`FileMap(ts.sys.useCaseSensitiveFileNames)`), and a segment is one
-  // lowercase word, so a canonical lower-cased name still matches exactly.
+  // One rule for every file-kind suffix, in every tool: the lower-cased name
+  // ends with the kind's suffix. An `X.SOLID.mx` is claimed and lowered alike.
   const isKind = (fileName: string) => fileName.toLowerCase().endsWith(suffix);
-  // The MX grammar, though, is on only for the exact suffix — the rule the
-  // language server, Vite and the registry apply, and the parser's old
-  // `.solid.mx` default: an `X.SOLID.mx` is claimed but not lowered.
-  const isRegionFile = (fileName: string) => fileName.endsWith(suffix);
+  const isRegionFile = isKind;
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
@@ -593,6 +601,9 @@ export function createNgMxLanguagePlugin(
           ),
           tagSelectorPrefix,
           targets: builtinLookup(),
+          ...(options.resolveImport
+            ? { resolveImport: options.resolveImport }
+            : undefined),
         });
         syntaxErrors.delete(fileName);
         if (options.retainCompiled || options.onCompiled) {

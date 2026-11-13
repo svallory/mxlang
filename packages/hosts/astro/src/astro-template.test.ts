@@ -1,4 +1,10 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,11 +16,13 @@ const OUT = (guarded: string, name: string): string =>
   `__mxAttrOut(${JSON.stringify(name)}, ${guarded})`;
 const SPREAD = "__mxAttrSpread";
 
+import { getCustomTags } from "@mxlang/core";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   AstroTemplateError,
   ATTRIBUTE_OUT_SOURCE,
+  astroTargets,
   astroTemplateDeclarations,
   lowerAstroMx,
 } from "./astro-template.ts";
@@ -1119,5 +1127,40 @@ describe("lowerAstroMx: <html-style>", () => {
     expect(code).toContain('<style is:inline media="print"');
     expect(code).toContain('set:html={__mxStyleText("a > b { color: red }")}');
     expect(code).not.toContain("html-style");
+  });
+});
+
+describe("a failed lowering reports its dependencies", () => {
+  // A fence import's callee is not read (the fence's specifiers never reach
+  // core), so the callee here is a discovered tag, whose contract is.
+  it("carries the tag whose contract failed on the AstroTemplateError", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-astro-deps-"));
+    try {
+      mkdirSync(join(dir, "tags"));
+      const callee = join(dir, "tags", "req.mx");
+      writeFileSync(
+        callee,
+        "export interface Input { header: AttrTag }\n<div/>\n",
+      );
+      const page = join(dir, "Page.astro.mx");
+      let error: unknown;
+      try {
+        lowerAstroMx("---\n---\n<req/>\n", page, {
+          customTags: getCustomTags(page, {
+            host: "astro",
+            targets: astroTargets,
+          }),
+        });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(AstroTemplateError);
+      expect((error as AstroTemplateError).message).toBe(
+        "missing required attribute tag `<@header>`",
+      );
+      expect((error as AstroTemplateError).dependencies).toEqual([callee]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

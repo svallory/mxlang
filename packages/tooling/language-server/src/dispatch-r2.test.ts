@@ -102,3 +102,12 @@ describe("round 2 silent-kind language-id matrix", () => {
     });
   }
 });
+
+describe("server recognition ignores the suffix's case", () => {
+  it.each(["file:///app/Card.MX", "file:///app/Counter.Solid.MX"])(
+    "%s is an MX document",
+    (uri) => {
+      expect(isMxDocument(uri, "")).toBe(true);
+    },
+  );
+});

@@ -22,6 +22,7 @@ import {
   createDialectLanguagePlugin,
   dialectFileExtensions,
 } from "./dialect-language.ts";
+import { fileKindOf } from "./file-kinds.ts";
 import {
   HOST_POLICY_DIAGNOSTIC_CODE,
   hostPolicyMessage,
@@ -71,12 +72,19 @@ function createBuiltinLanguagePlugins(
     switch (kind.pipeline) {
       case "region":
         plugins.push(
-          createRegionLanguagePlugin(typescript, kind, { readSource }),
+          createRegionLanguagePlugin(typescript, kind, {
+            readSource,
+            resolveImport,
+          }),
         );
         break;
       case "ng-template":
         plugins.push(
-          createNgMxLanguagePlugin(typescript, { readSource, onCompiled }),
+          createNgMxLanguagePlugin(typescript, {
+            readSource,
+            onCompiled,
+            resolveImport,
+          }),
         );
         break;
       case "astro-template":
@@ -132,20 +140,23 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
     );
     const readSource = createProjectSourceReader(info);
     ngDiagnostics = createEditorNgDiagnostics(typescript, info);
+    // The project's own compiler options decide alias resolution, so a
+    // tsconfig `paths` entry reaches MX callee imports — from every file
+    // kind — exactly as it reaches every other import the program resolves.
+    const resolveImport = createTsconfigPathsResolver(typescript, () =>
+      info.languageServiceHost.getCompilationSettings(),
+    );
     languagePlugins = createBuiltinLanguagePlugins(
       typescript,
       readSource,
       (entry) => ngDiagnostics?.notifyCompiled(entry),
       projectDirectory(typescript, info),
-      // The project's own compiler options decide alias resolution, so a
-      // tsconfig `paths` entry reaches `.mx` callee imports exactly as it
-      // reaches every other import the program resolves.
-      createTsconfigPathsResolver(typescript, () =>
-        info.languageServiceHost.getCompilationSettings(),
-      ),
+      resolveImport,
     );
     if (info.config?.astro === true) {
-      languagePlugins.push(createAmxLanguagePlugin(typescript, { readSource }));
+      languagePlugins.push(
+        createAmxLanguagePlugin(typescript, { readSource, resolveImport }),
+      );
     }
     return {
       languagePlugins: createConfiguredLanguagePlugins(
@@ -154,6 +165,7 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         undefined,
         languagePlugins,
         projectDirectory(typescript, info),
+        resolveImport,
       ),
       setup: (volarLanguage) => {
         language = volarLanguage;
@@ -174,7 +186,7 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         pluginModule.getExternalFiles?.(project, updateLevel) ?? []
       ).filter(
         (fileName) =>
-          fileName.endsWith(".mx") ||
+          fileName.toLowerCase().endsWith(".mx") ||
           isNgMx(fileName) ||
           fileName.endsWith(".astro") ||
           isDialectFile(fileName),
@@ -225,7 +237,7 @@ function resolveWholeFileAliases(
     optionsForResolution = options;
     return (
       language.scripts.get(file)?.languageId === MX_LANGUAGE_ID &&
-      resolveImport(name, file)?.endsWith(".mx")
+      resolveImport(name, file)?.toLowerCase().endsWith(".mx")
     );
   };
   const literals = host.resolveModuleNameLiterals;
@@ -328,11 +340,17 @@ export function createConfiguredLanguagePlugins(
   typescript: typeof ts,
   astro: boolean,
   loadAstro?: AstroLanguagePluginLoader,
-  mxPlugins: Array<AnyMxLanguagePlugin> = createBuiltinLanguagePlugins(
-    typescript,
-  ),
+  mxPlugins?: Array<AnyMxLanguagePlugin>,
   projectDir?: string,
+  resolveImport?: import("./tsconfig-paths.ts").TsPathsImportResolver,
 ) {
+  mxPlugins ??= createBuiltinLanguagePlugins(
+    typescript,
+    undefined,
+    undefined,
+    undefined,
+    resolveImport,
+  );
   return [
     ...mxPlugins,
     ...(astro &&
@@ -341,7 +359,7 @@ export function createConfiguredLanguagePlugins(
         plugin.getLanguageId?.(`component.${AMX_EXTENSION}`) ===
         AMX_LANGUAGE_ID,
     )
-      ? [createAmxLanguagePlugin(typescript)]
+      ? [createAmxLanguagePlugin(typescript, { resolveImport })]
       : []),
     ...(astro ? [createAstroLanguagePlugin(loadAstro, projectDir)] : []),
     createCompoundExtensionResolver(typescript),
@@ -551,15 +569,7 @@ function withSyntaxDiagnostics(
         if (compileDiagnostics.length === 0 && hostPolicy.length === 0) {
           return diagnostics;
         }
-        // Keep the historical diagnostic suffix casing: template modules
-        // are insensitive only for the ng pipeline; other kinds are exact.
-        const source =
-          builtinFileKinds.find((kind) =>
-            (kind.pipeline === "ng-template"
-              ? fileName.toLowerCase()
-              : fileName
-            ).endsWith(`.${kind.segment}.mx`),
-          )?.diagnosticSource ?? "mx";
+        const source = fileKindOf(fileName)?.diagnosticSource ?? "mx";
 
         return [
           ...diagnostics,

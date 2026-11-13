@@ -35,7 +35,7 @@ import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx, Node } from "./core.ts";
 import type { ComponentTarget } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
-import { hostModuleSegment } from "./scan.ts";
+import { hostModuleSegment, isMxFileName } from "./scan.ts";
 import { type ScopeRef, sameScopeRef, scopeRefOf } from "./scope-ref.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { metadataForTemplate, touchAndEvict } from "./template-tag.ts";
@@ -564,7 +564,7 @@ export function calleeReturn(
   if (
     resolved.kind === "input" &&
     resolved.input.kind === "unresolved" &&
-    /\.mx$/.test(resolved.input.specifier)
+    isMxFileName(resolved.input.specifier)
   ) {
     return {
       shape: "unknown",
@@ -574,7 +574,7 @@ export function calleeReturn(
       },
     };
   }
-  if (resolved.kind !== "path" || !resolved.path.endsWith(".mx")) {
+  if (resolved.kind !== "path" || !isMxFileName(resolved.path)) {
     return { shape: "unknown" };
   }
   // A host module file (`card.solid.mx`) is a TypeScript module with a
@@ -891,7 +891,7 @@ function readInputAt(
       parsedSources,
     };
   }
-  if (path.endsWith(".mx")) {
+  if (isMxFileName(path)) {
     // Whether a ctx is present decides this read too, so count it first.
     templateMetadataReads++;
     if (!context.ctx) {
@@ -1335,7 +1335,7 @@ class InputAnalyzer {
     if (this.reexportsSeen.has(reexportKey)) return undefined;
     this.reexportsSeen.add(reexportKey);
     let code = source;
-    if (resolved.endsWith(".mx")) {
+    if (isMxFileName(resolved)) {
       templateMetadataReads++;
       if (!this.context.ctx) return undefined;
       let mtimeMs: number | undefined;

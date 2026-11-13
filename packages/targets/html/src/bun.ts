@@ -60,13 +60,14 @@ const FOREIGN_SEGMENTS: readonly string[] = [
 /**
  * The `onLoad` filter: every `.mx` except a host module file (`.<segment>.mx`)
  * of `targets` or of {@link FOREIGN_SEGMENTS}. An unregistered `.<word>.mx`
- * is an ordinary `.mx` and stays claimed. Exported for its tests.
+ * is an ordinary `.mx` and stays claimed. Case-insensitive, as every file-kind
+ * check is: `Card.MX` is claimed and `App.Solid.MX` is not. Exported for its tests.
  */
 export function mxFilter(targets: TargetLookup): RegExp {
   const segments = [
     ...new Set([...FOREIGN_SEGMENTS, ...targets.moduleSegments()]),
   ];
-  return new RegExp(`(?<!\\.(?:${segments.join("|")}))\\.mx$`);
+  return new RegExp(`(?<!\\.(?:${segments.join("|")}))\\.mx$`, "i");
 }
 
 /**

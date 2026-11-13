@@ -14,6 +14,7 @@ import {
   type AttributeTag,
   type AttributeTagNode,
   type AttrTagProp,
+  attachDependencies,
   type Ctx,
   type CustomTag,
   checkReservedSource,
@@ -159,6 +160,12 @@ export class AstroTemplateError extends Error {
   end?: { line: number; column: number };
   /** Core's quick fixes for this error, offsets in the whole `.astro.mx` file. @unstable */
   fixes?: readonly IrDiagnosticFix[];
+  /**
+   * The callee files the failed lowering read, so an integration can watch
+   * the one whose contract caused the error (a successful lowering returns
+   * them as `LowerResult.dependencies`). @unstable
+   */
+  dependencies?: string[];
   loc: {
     line: number;
     column: number;
@@ -174,6 +181,7 @@ export class AstroTemplateError extends Error {
       diagnosticCode?: string;
       end?: { line: number; column: number };
       fixes?: readonly IrDiagnosticFix[];
+      dependencies?: string[];
     } = {},
   ) {
     super(message);
@@ -186,6 +194,9 @@ export class AstroTemplateError extends Error {
     }
     if (carried.end !== undefined) this.end = carried.end;
     if (carried.fixes !== undefined) this.fixes = carried.fixes;
+    if (carried.dependencies !== undefined) {
+      this.dependencies = carried.dependencies;
+    }
     this.loc = { line, column, ...(carried.end ? { end: carried.end } : {}) };
   }
 }
@@ -1483,6 +1494,11 @@ export function lowerAstroMx(
      * several targets passes the built-in registry's lookup.
      */
     targets?: TargetLookup;
+    /**
+     * A synchronous resolver for the template's callee imports, tried before
+     * core's own resolution; `importer` is `filename`.
+     */
+    resolveImport?: (specifier: string, importer: string) => string | undefined;
   } = {},
 ): LowerResult {
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---[^\S\r\n]*\r?\n?/);
@@ -1502,8 +1518,11 @@ export function lowerAstroMx(
     targets: options.targets ?? ownTargets,
   });
 
+  // Declared outside the `try` so a failed lowering still reports the callee
+  // files it read (`dependencies` on the thrown error).
+  let ctx: Ctx | undefined;
   try {
-    const ctx = newCtx(
+    ctx = newCtx(
       source,
       (node) => sourceOf(source, node),
       astroTemplateDeclarations,
@@ -1514,6 +1533,7 @@ export function lowerAstroMx(
     ctx.customTags = options.customTags;
     ctx.defaultTag = options.defaultTag;
     ctx.warnings = options.warnings;
+    ctx.resolveImport = options.resolveImport;
     // An `.astro.mx` file is an Astro component module, so it has a declaration to
     // name and a tag may call itself without importing itself.
     ctx.emitsModule = true;
@@ -1663,8 +1683,12 @@ export function lowerAstroMx(
       dependencies: [...(ctx.dependencies ?? [])],
     };
   } catch (error) {
-    if (error instanceof AstroTemplateError) throw error;
+    if (error instanceof AstroTemplateError) {
+      if (ctx) error.dependencies ??= [...(ctx.dependencies ?? [])];
+      throw error;
+    }
     if (isTranslateError(error)) {
+      if (ctx) attachDependencies(ctx, error);
       throw new AstroTemplateError(
         error.message,
         error.line,
@@ -1674,6 +1698,7 @@ export function lowerAstroMx(
           diagnosticCode: error.diagnosticCode,
           end: error.end,
           fixes: error.fixes,
+          dependencies: error.dependencies,
         },
       );
     }

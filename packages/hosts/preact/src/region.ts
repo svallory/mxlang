@@ -27,6 +27,7 @@
  */
 
 import {
+  attachDependencies,
   type CustomTag,
   concatMapped,
   drive,
@@ -95,6 +96,11 @@ export interface CompileJsxRegionOptions {
    * whole-file `typeCheck` projection does.
    */
   typeCheck?: boolean;
+  /**
+   * A synchronous resolver for the region's callee imports, tried before
+   * core's own resolution; `importer` is {@link filename}.
+   */
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 /** One import a region needs in its surrounding module (Solid's shape). */
@@ -182,7 +188,7 @@ export function compileJsxRegion(
   source: string,
   options: CompileJsxRegionOptions,
 ): CompileJsxRegionResult {
-  const { dialect, segment } = options;
+  const { segment } = options;
   const regionStart = {
     line: (options.baseLine ?? 0) + 1,
     column: options.baseColumn ?? 0,
@@ -217,6 +223,7 @@ export function compileJsxRegion(
   ctx.customTags = options.customTags;
   ctx.defaultTag = options.defaultTag;
   ctx.warnings = options.warnings;
+  ctx.resolveImport = options.resolveImport;
   ctx.unsupportedIn = `a \`.${segment}.mx\` region`;
   if (options.importSpecifiers) {
     ctx.importSpecifiers = new Map(options.importSpecifiers);
@@ -242,7 +249,36 @@ export function compileJsxRegion(
       ctx.importDefaultFromMarkoOrMx.add(name);
     }
   }
-  const ir = lower(ctx, body);
+  // Every error from here on carries the callee files read so far, the ones
+  // `lower` throws and the region checks and emit after it alike.
+  try {
+    return emitJsxRegion(
+      source,
+      padded,
+      options,
+      ctx,
+      lower(ctx, body),
+      regionStart,
+    );
+  } catch (error) {
+    attachDependencies(ctx, error);
+    throw error;
+  }
+}
+
+/**
+ * The rest of {@link compileJsxRegion} once the region is lowered: the
+ * module-level check, then the emit.
+ */
+function emitJsxRegion(
+  source: string,
+  padded: string,
+  options: CompileJsxRegionOptions,
+  ctx: ReturnType<typeof newCtx>,
+  ir: Ir,
+  regionStart: { line: number; column: number },
+): CompileJsxRegionResult {
+  const { dialect, segment } = options;
   rejectModuleLevel(ir, segment, regionStart, ctx.returnValue?.loc);
 
   // A region is one root element, so its `<define>`s sit in markup; the

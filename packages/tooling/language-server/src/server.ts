@@ -101,7 +101,7 @@ const MX_LANGUAGE_IDS = new Set(["mx", ...REGION_LANGUAGE_IDS]);
 function isMxDocument(uri: string, languageId: string): boolean {
   return (
     MX_LANGUAGE_IDS.has(languageId) ||
-    uri.endsWith(".mx") ||
+    uri.toLowerCase().endsWith(".mx") ||
     isDialectFile(uriPath(uri))
   );
 }

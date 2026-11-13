@@ -8794,6 +8794,40 @@ export function lower(ctx: Ctx, body: readonly Node[]): Ir {
   }
 }
 
+/**
+ * Puts the callee files `ctx` has read so far (`ctx.dependencies`) on a thrown
+ * `TranslateError` and on every sibling error it carries, so an integration
+ * can watch the callee whose contract caused it, as on a successful compile.
+ * Anything that is not a `TranslateError` is left as it is.
+ *
+ * For a host that throws after {@link lower} returns: wrap `lower` and the
+ * code after it in one `try`, call this in the `catch`, then rethrow.
+ *
+ * @unstable
+ */
+export function attachDependencies(ctx: Ctx, error: unknown): void {
+  if (!isTranslateError(error)) return;
+  const dependencies = [...(ctx.dependencies ?? [])];
+  for (const each of [error, ...(error.errors ?? [])]) {
+    each.dependencies = dependencies;
+  }
+}
+
+/**
+ * {@link lower}, with a lowering error carrying the callee files read before
+ * it ({@link attachDependencies}).
+ *
+ * @unstable
+ */
+export function lowerKeepingDependencies(ctx: Ctx, body: readonly Node[]): Ir {
+  try {
+    return lower(ctx, body);
+  } catch (error) {
+    attachDependencies(ctx, error);
+    throw error;
+  }
+}
+
 function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   // Before anything reads a tag name: an unnamed tag has none yet. The flag
   // tells `lowerChildren` the whole tree is already resolved, so only a call

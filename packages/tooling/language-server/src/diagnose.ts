@@ -93,11 +93,10 @@ function fileKindOf(
     (kind): kind is DocumentKind & BuiltinFileKind =>
       kind.pipeline !== "region",
   );
+  const lower = uri.toLowerCase();
   return (
-    regions.find((kind) => uri.endsWith(`.${kind.segment}.mx`)) ??
-    templates.find((kind) =>
-      uri.toLowerCase().endsWith(`.${kind.segment}.mx`),
-    ) ??
+    regions.find((kind) => lower.endsWith(`.${kind.segment}.mx`)) ??
+    templates.find((kind) => lower.endsWith(`.${kind.segment}.mx`)) ??
     regions.find((kind) => kind.languageIds?.includes(languageId))
   );
 }
@@ -625,7 +624,9 @@ export function diagnoseDocument(
       // the registered suffix: the host reads it for diagnostics and for
       // resolving callees, and the registry routes the file by it.
       const suffix = `.${kind.segment}.mx`;
-      const filename = path.endsWith(suffix) ? path : `${path}${suffix}`;
+      const filename = path.toLowerCase().endsWith(suffix)
+        ? path
+        : `${path}${suffix}`;
       const regionCompile = regionCompileFor(filename, {
         targets: lookup,
         warnings,

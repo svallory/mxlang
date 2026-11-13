@@ -14,6 +14,7 @@ import {
   regionCompileFor,
   regionFileKind,
   regionFileKinds,
+  regionKindCompile,
 } from "./index.ts";
 
 /** A test host whose only file kind, `.fake.mx`, has a region entry. */
@@ -203,5 +204,23 @@ describe("a .<word>.mx no region kind registers is not claimed", () => {
     expect(
       regionCompileFor("/app/post.mesh.mx", { targets: lookup }),
     ).toBeUndefined();
+  });
+});
+
+describe("regionKindCompile forwards the tool's import resolver", () => {
+  it("hands resolveImport to the kind's compileRegion, and none when unset", () => {
+    const compileRegion = vi.fn(
+      (_source: string, _input: HostRegionInput): HostRegionResult => ({
+        code: "null",
+      }),
+    );
+    const kind = { segment: "fake", compileRegion };
+    const resolveImport = (specifier: string) => `/src/${specifier}`;
+    regionKindCompile(kind, { resolveImport })(regionInput("/a/x.fake.mx"));
+    regionKindCompile(kind)(regionInput("/a/y.fake.mx"));
+    expect(
+      compileRegion.mock.calls.map(([, input]) => "resolveImport" in input),
+    ).toEqual([true, false]);
+    expect(compileRegion.mock.calls[0]?.[1].resolveImport).toBe(resolveImport);
   });
 });

@@ -24,6 +24,7 @@ import {
   discoverProjectTags,
   hostModuleSegment,
   hostRestrictionDiagnostics,
+  isMxFileName,
   normalizeMxTags,
   readParseOptions,
   scanCustomTags,
@@ -1553,6 +1554,20 @@ function flattenElements(nodes: IrNode[]): string[] {
   });
   return names;
 }
+
+describe("isMxFileName: file-kind case", () => {
+  it.each([
+    ["card.mx", true],
+    ["Card.MX", true],
+    ["/a/Counter.Solid.Mx", true],
+    ["./Card.mX", true],
+    ["card.mxx", false],
+    ["card.marko", false],
+    ["mx", false],
+  ])("%s -> %s", (name, expected) => {
+    expect(isMxFileName(name)).toBe(expected);
+  });
+});
 
 describe("hostModuleSegment: file-kind case", () => {
   it.each([

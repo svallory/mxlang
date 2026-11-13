@@ -1470,7 +1470,7 @@ export function kebabCase(name: string): string {
 /** `.../tags/user-card.mx` -> `user-card`; the tag's basename, extension dropped. */
 export function tagBasename(resolvedPath: string): string {
   const base = resolvedPath.split(/[/\\]/).pop() ?? resolvedPath;
-  return base.replace(/\.mx$/, "");
+  return base.replace(/\.mx$/i, "");
 }
 
 /**
@@ -1571,11 +1571,29 @@ export function isTagModuleImport(
   specifierOrCode: string,
   resolvedPath?: string,
 ): boolean {
-  if (resolvedPath) return resolvedPath.endsWith(".mx");
-  const specifier = specifierOrCode.endsWith(".mx")
+  if (resolvedPath) return isMxSpecifier(resolvedPath);
+  const specifier = isMxSpecifier(specifierOrCode)
     ? specifierOrCode
     : authoredImportSpecifier(specifierOrCode);
-  return specifier?.endsWith(".mx") === true;
+  return isMxSpecifier(specifier);
+}
+
+/**
+ * Whether an import specifier (or the path it resolved to) names a `.mx`
+ * file. Case-insensitive, the one rule every file-kind check follows:
+ * `./Card.MX` is the same tag module as `./card.mx`.
+ */
+export function isMxSpecifier(
+  specifier: string | undefined,
+): specifier is string {
+  return specifier?.toLowerCase().endsWith(".mx") === true;
+}
+
+/** {@link isMxSpecifier} for a `.marko` tag file. */
+export function isMarkoSpecifier(
+  specifier: string | undefined,
+): specifier is string {
+  return specifier?.toLowerCase().endsWith(".marko") === true;
 }
 
 /** One MX tag a template called, as the caller's TypeScript must name it. */
@@ -2409,14 +2427,14 @@ class AngularEmitter implements Emitter<string> {
         node.specifier ?? authoredImportSpecifier(node.code);
       // Only a `.mx` import names a tag module. An ordinary TypeScript import
       // the author wrote is not a component this host emits a selector for.
-      if (!specifierSource?.endsWith(".mx")) continue;
+      if (!isMxSpecifier(specifierSource)) continue;
       // `resolvedPath` is the reliable basename when present (two spellings
       // of one path collapse to one tag); an authored import has only what
       // the author wrote, which names the same file.
       const basename = tagBasename(node.resolvedPath ?? specifierSource);
       // The emitted module sits beside the tag file with a `.ts` extension,
       // so the call site's import path is the specifier minus `.mx`.
-      const specifier = specifierSource.replace(/\.mx$/, "");
+      const specifier = specifierSource.replace(/\.mx$/i, "");
       const derived = `${selectorPrefix}${kebabCase(basename)}`;
       // The callee's own `export const selector` wins over the derived
       // default, exactly as it does for the component it declares. Resolved

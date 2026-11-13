@@ -263,10 +263,12 @@ export {
 } from "./ir-entry/index.ts";
 export {
   annotationOf,
+  attachDependencies,
   expressionShape,
   exprValue,
   lower,
   lowerChildren,
+  lowerKeepingDependencies,
 } from "./lower.ts";
 export type {
   ContractAncestor,
