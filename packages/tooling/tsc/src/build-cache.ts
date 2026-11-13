@@ -296,7 +296,9 @@ export function toolIdentity(
   for (const file of [...outside].sort()) {
     const text = readText(file);
     if (text === null) return undefined;
-    parts.push(`self-import:${slash(relative(selfDir, file))}:${hashText(text)}`);
+    parts.push(
+      `self-import:${slash(relative(selfDir, file))}:${hashText(text)}`,
+    );
   }
   const entries = new Map<string, string>([["self", self]]);
   for (const external of options.externals ?? TOOL_EXTERNALS) {
@@ -369,7 +371,10 @@ function dependenciesOf(manifest: string): string[] {
  * through `require.resolve`, so a package whose `exports` hides its
  * `package.json` (or has no `require` condition) is found too.
  */
-function installedPackageDir(fromDir: string, name: string): string | undefined {
+function installedPackageDir(
+  fromDir: string,
+  name: string,
+): string | undefined {
   let dir = realpathSync(fromDir);
   for (;;) {
     const candidate = join(dir, "node_modules", name);
