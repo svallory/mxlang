@@ -2741,7 +2741,11 @@ the same rule. Marko-written callee code (spread, `for of`, property reads)
 therefore runs unchanged. A dynamic tag given a record renders its `content`;
 given a record with no `content` (a bodiless `<@name/>`) it renders nothing of
 its own, only the call's own body, as Marko 6.4.4's `normalizeDynamicRenderer`
-does for an object with no renderer.
+does for an object with no renderer. On html, as in that function, an object
+with no `content` renders its `default` (a module namespace), and an object
+whose `content` is not a function is Marko's error "A dynamic tag must be a
+string tag name (like `"div"`) or a Marko template/component, but received an
+object whose `content` is not a template/component."
 
 MX adds members on the record's **prototype**, never as own properties:
 `map`, `filter`, `length`, `at` and `toArray`. They are neither spread nor
