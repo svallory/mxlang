@@ -21,7 +21,10 @@ export interface DiagnosticsOptions {
 // emitted `import … from "@mxlang/target-html"` resolves to this package.
 const DIR = join(dirname(import.meta.dirname), "__type-check__");
 const PAGE = join(DIR, "page.mx");
-const MODULE = join(DIR, "page.ts");
+// `page.mx.ts`, so the projection's self-import (`import * as __mxSelf from
+// "./page.mx"`, its reserved export) resolves to the projection itself, as a
+// `.mx` specifier resolves to its virtual module in the tools.
+const MODULE = join(DIR, "page.mx.ts");
 
 const BASE: ts.CompilerOptions = {
   strict: true,

@@ -526,8 +526,12 @@ describe("html: the type-check projection of a `client` or `server` statement", 
       const result = compile(source, "/f/t.mx", { typeCheck });
       expect(result.mappings).toContainEqual(spanOf(result, source, code));
     }
+    // The same module, apart from the type-check module's reserved export.
     expect(compile(source, "/f/t.mx").code).toBe(
-      compile(source, "/f/t.mx", { typeCheck: true }).code,
+      compile(source, "/f/t.mx", { typeCheck: true }).code.replace(
+        /import \* as __mxSelf[\s\S]*?\n}\n/,
+        "",
+      ),
     );
   });
 
@@ -592,11 +596,32 @@ describe("html typeCheck: the server view and the client code of a `client` stat
     expect(code).not.toContain("undefined");
   });
 
+  it("holds every export, client ones too, in the reserved `__mxClientExports`; the running module has none", () => {
+    const source =
+      "client export const x = 1;\nclient export class C {}\nstatic export const stx = 3;\n<div/>\n";
+    expect(project(source).code).toContain(
+      [
+        'import * as __mxSelf from "./t.mx";',
+        "export declare namespace __mxClientExports {",
+        "  export import stx = __mxSelf.stx;",
+        "  export import Input = __mxSelf.Input;",
+        "  export import render = __mxSelf.render;",
+        '  export const x: Awaited<typeof __mxClientView.__mxScope>["x"];',
+        '  export const C: Awaited<typeof __mxClientView.__mxScope>["C"];',
+        "  export type C = __MxInstance<typeof C>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code } = compile(source, "/f/t.mx");
+    expect(code).not.toContain("__mxClientExports");
+    expect(code).not.toContain("__mxSelf");
+  });
+
   it("keeps a client export out of the module's exports", () => {
     const { code } = project(
       "client export const x = 1;\nclient export function f() {}\n<div/>\n",
     );
-    expect(code).not.toMatch(/export (const x|function f)/);
+    expect(code).not.toMatch(/^export (const x|function f)/m);
     expect(code).toContain("var x: undefined; void [x];");
     expect(code).toContain("var f: undefined; void [f];");
     expect(wrapper(code)).toContain("const x = 1;");

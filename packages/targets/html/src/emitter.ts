@@ -101,6 +101,9 @@ interface ScopeNames {
    * A `client` statement's `var` line drops these names.
    */
   own: ReadonlySet<string>;
+  /** C's classes and enums: their client export is a type as well as a value. */
+  clientClasses: ReadonlySet<string>;
+  clientEnums: ReadonlySet<string>;
 }
 
 function scopeNames(statements: readonly ModuleStatementNames[]): ScopeNames {
@@ -110,8 +113,16 @@ function scopeNames(statements: readonly ModuleStatementNames[]): ScopeNames {
   const server = new Set<string>();
   const shared = new Set<string>();
   const own = new Set<string>();
+  const clientClasses = new Set<string>();
+  const clientEnums = new Set<string>();
   for (const { keyword, declarations } of statements) {
     for (const declaration of declarations) {
+      if (keyword === "client" && declaration.kind === "class") {
+        clientClasses.add(declaration.name);
+      }
+      if (keyword === "client" && declaration.kind === "enum") {
+        clientEnums.add(declaration.name);
+      }
       if (keyword !== "client" && !declaration.ambient) {
         own.add(declaration.name);
       }
@@ -136,6 +147,8 @@ function scopeNames(statements: readonly ModuleStatementNames[]): ScopeNames {
     server: [...server],
     shared,
     own,
+    clientClasses,
+    clientEnums,
   };
 }
 
@@ -228,6 +241,12 @@ interface State {
   scope: ScopeNames;
   /** Under `typeCheck`, the local names of `client export { … }` value lists. */
   clientListed: string[];
+  /** Under `typeCheck`, the same lists' exported names, by local name. */
+  clientListedExports: Array<{ local: string; exported: string }>;
+  /** Under `typeCheck`, the client declarations' exported value names. */
+  clientExported: string[];
+  /** Under `typeCheck`, the client `const enum`s: exported, but with no value. */
+  clientExportedTypes: string[];
   /** Under `typeCheck`, where the last `client` statement stands. */
   clientStart: number | undefined;
   /** Under `typeCheck`, each `return` that no function encloses in `client` code. */
@@ -294,6 +313,9 @@ export function createEmitter(
     refinedReads: [],
     scope: options.scope ?? NO_NAMES,
     clientListed: [],
+    clientListedExports: [],
+    clientExported: [],
+    clientExportedTypes: [],
     clientStart: undefined,
     clientReturns: [],
     indent: 1,
@@ -1767,6 +1789,9 @@ export function createEmitter(
             state.clientTypeExports.push({ list, start: data.start });
           }
           state.clientListed.push(...projection.listed);
+          state.clientListedExports.push(...projection.listedExports);
+          state.clientExported.push(...projection.exported);
+          state.clientExportedTypes.push(...projection.exportedTypes);
           if (
             data.start !== undefined &&
             (state.clientStart === undefined || data.start > state.clientStart)
@@ -2148,7 +2173,7 @@ function clientPiece(piece: ClientPiece): MappedCode {
  * that reads a `static` or `server` name declared after it is still reported
  * as used before its declaration.
  */
-function placeClientCode(state: State): void {
+function placeClientCode(state: State): ClientExports {
   const { scope } = state;
   // A type naming a client value, or a name the client view binds, cannot
   // stand at module level, where the name is the server view's `undefined`.
@@ -2209,6 +2234,38 @@ function placeClientCode(state: State): void {
   const listedValues = [...new Set(state.clientListed)].filter((name) =>
     scope.client.has(name),
   );
+  // What the reserved export holds of the client code: the kept types (at
+  // module level, so read through the self-import) and the client value
+  // exports, which the client function returns. A `const enum` has no value.
+  const exports: ClientExports = {
+    types: [
+      ...state.clientTypes
+        .filter(({ type }) => type.exported && !moved.has(type))
+        .map(({ type }) => type.name),
+      ...state.clientTypeExports.flatMap(({ list }) =>
+        list.specifiers
+          .filter((specifier) => !movedNames.has(specifier.local))
+          .map((specifier) => specifier.exported),
+      ),
+    ],
+    values: [],
+  };
+  const noValue = new Set(state.clientExportedTypes);
+  for (const name of state.clientExported) {
+    if (!noValue.has(name))
+      exports.values.push({ local: name, exported: name });
+  }
+  for (const listed of state.clientListedExports) {
+    if (scope.client.has(listed.local) && !noValue.has(listed.local)) {
+      exports.values.push(listed);
+    }
+  }
+  const returned = [
+    ...new Set([
+      ...state.refined,
+      ...exports.values.map((value) => value.local),
+    ]),
+  ];
   const body = [
     ...state.clientHead,
     ...inScope,
@@ -2228,11 +2285,11 @@ function placeClientCode(state: State): void {
           ),
         ]
       : []),
-    ...(state.refined.size > 0
-      ? [concatMapped(`return { ${[...state.refined].join(", ")} };`)]
+    ...(returned.length > 0
+      ? [concatMapped(`return { ${returned.join(", ")} };`)]
       : []),
   ];
-  if (body.length === 0 && state.clientView.length === 0) return;
+  if (body.length === 0 && state.clientView.length === 0) return exports;
   // The client view's shadow: a `server` name does not exist in the browser.
   // An `import`/`static`/`export` name does (it is the module's own), and a
   // name the view binds itself is the client's. The arrow is an inner scope,
@@ -2254,7 +2311,7 @@ function placeClientCode(state: State): void {
       "})();",
     ),
   ];
-  // `@ts-ignore` covers only the generated `namespace` line: it is not
+  // `@ts-expect-error` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
@@ -2264,6 +2321,9 @@ function placeClientCode(state: State): void {
     ),
     start: state.clientStart,
   });
+  if (exports.values.some((value) => scope.clientClasses.has(value.local))) {
+    state.usesInstance = true;
+  }
   if (state.usesInstance) {
     state.moduleHoisted.push({
       code: concatMapped(
@@ -2280,6 +2340,65 @@ function placeClientCode(state: State): void {
       start: undefined,
     });
   }
+  return exports;
+}
+
+/** The client names a module's reserved export holds (`placeClientCode`). */
+interface ClientExports {
+  /** The exported client types that stay at module level, by exported name. */
+  types: string[];
+  /** The client value exports, by the local name the client function returns. */
+  values: Array<{ local: string; exported: string }>;
+}
+
+/**
+ * Under `typeCheck`, the module's reserved export, `__mxClientExports`: what
+ * an importer's `client import { a } from "./m.mx"` reads, since the module
+ * itself is the server view, which exports no client name. It holds every
+ * module-level export through a self-import (an `import a = b` of a
+ * module-level `const` or class is not a value or type alias), and each client
+ * value export typed from what the client function returns. It is in every
+ * type-check module, so an unknown name is reported at the importer's
+ * specifier, never at generated text. Nothing here is mapped.
+ */
+function reservedExport(
+  state: State,
+  exports: ClientExports,
+  fileName: string,
+  moduleExports: readonly string[],
+): MappedCode {
+  const self = [
+    ...new Set([...moduleExports, ...exports.types, "Input", "render"]),
+  ];
+  const taken = new Set(self);
+  const members = self.map(
+    (name) => `${INDENT}export import ${name} = __mxSelf.${name};`,
+  );
+  for (const { local, exported } of exports.values) {
+    if (taken.has(exported)) continue;
+    taken.add(exported);
+    members.push(
+      `${INDENT}export const ${exported}: Awaited<typeof __mxClientView.__mxScope>[${JSON.stringify(local)}];`,
+    );
+    if (state.scope.clientClasses.has(local)) {
+      members.push(
+        `${INDENT}export type ${exported} = __MxInstance<typeof ${exported}>;`,
+      );
+    } else if (state.scope.clientEnums.has(local)) {
+      members.push(
+        `${INDENT}export type ${exported} = (typeof ${exported})[keyof typeof ${exported}];`,
+      );
+    }
+  }
+  const base = fileName.slice(
+    Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1,
+  );
+  return concatMapped(
+    `import * as __mxSelf from ${JSON.stringify(`./${base}`)};\n`,
+    "export declare namespace __mxClientExports {\n",
+    ...members.map((member) => `${member}\n`),
+    "}",
+  );
 }
 
 /**
@@ -2338,7 +2457,14 @@ function inSourceOrder(
 export function emitModuleWithMappings(
   ir: Ir,
   escapeFrom: string,
-  options: { typeCheck?: boolean; source?: string } = {},
+  options: {
+    typeCheck?: boolean;
+    source?: string;
+    /** Under `typeCheck`, the compiled file's name: the reserved export's self-import reads it. */
+    fileName?: string;
+    /** Under `typeCheck`, every name a statement that is not `client` exports (core's `exports`). */
+    moduleExports?: readonly string[];
+  } = {},
 ): MappedCode {
   const name = moduleExportName(ir, "@mxlang/target-html");
   const emitter = createEmitter(name, {
@@ -2357,7 +2483,18 @@ export function emitModuleWithMappings(
   if (ir.needsAttrTagImport) {
     lines.push(`import type { AttrTag } from "${escapeFrom}";`);
   }
-  placeClientCode(emitter.state);
+  const clientExports = placeClientCode(emitter.state);
+  if (options.typeCheck && options.fileName !== undefined) {
+    emitter.state.moduleHoisted.push({
+      code: reservedExport(
+        emitter.state,
+        clientExports,
+        options.fileName,
+        options.moduleExports ?? [],
+      ),
+      start: emitter.state.clientStart,
+    });
+  }
   const hoisted = [
     ...ir.imports.map((node) => node.code),
     ...inSourceOrder(ir.hoisted, emitter.state.moduleHoisted),

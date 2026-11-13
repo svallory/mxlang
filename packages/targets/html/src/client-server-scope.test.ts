@@ -361,7 +361,8 @@ describe("the projection's layout", () => {
     "D1 no client view without a client statement: %j",
     (source) => {
       const { code } = compile(source, "/f/t.mx", { typeCheck: true });
-      expect(code).not.toContain("__mxClient");
+      expect(code).not.toContain("__mxClientView");
+      expect(code).not.toContain("__mxScope");
     },
   );
 });

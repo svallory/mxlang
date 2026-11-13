@@ -25,6 +25,7 @@ import {
   type GeneratedMapping,
   type MappedCode,
   type MxWarning,
+  moduleStatementNames,
   type TargetLookup,
   type Translator,
 } from "@mxlang/core";
@@ -169,7 +170,18 @@ export function compileHtml(
         emitted = emitModuleWithMappings(
           ir,
           options.runtimeFrom ?? escapeFrom,
-          { typeCheck: options.typeCheck, source },
+          {
+            typeCheck: options.typeCheck,
+            source,
+            ...(options.typeCheck
+              ? {
+                  fileName: filename,
+                  moduleExports: moduleStatementNames(ctx)
+                    .filter((statement) => statement.keyword !== "client")
+                    .flatMap((statement) => statement.exports),
+                }
+              : {}),
+          },
         );
         // Stock Marko replaces a const enum's member reads with their values
         // and drops the declaration. The projection keeps the enum: tsc checks

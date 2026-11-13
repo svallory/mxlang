@@ -397,7 +397,7 @@ export interface ClientType {
 
 /** `client export type { P, Q as R }`: each specifier names a type. */
 export interface ClientTypeExport {
-  specifiers: Array<{ local: string; piece: ClientPiece }>;
+  specifiers: Array<{ local: string; exported: string; piece: ClientPiece }>;
 }
 
 /**
@@ -451,6 +451,8 @@ export interface ClientProjection {
   typeExports: ClientTypeExport[];
   /** Local names of `export { a, b }` lists of values. */
   listed: string[];
+  /** The same lists' names as exported (`export { a as b }` is `b` of `a`). */
+  listedExports: Array<{ local: string; exported: string }>;
   body: ClientPiece[];
   exported: string[];
   /** Exported `const enum`s: they have no value to read, only a type. */
@@ -655,6 +657,7 @@ function clientProjection(
   const types: ClientType[] = [];
   const typeExports: ClientTypeExport[] = [];
   const listed: string[] = [];
+  const listedExports: Array<{ local: string; exported: string }> = [];
   const body: ClientPiece[] = [];
   const exported: string[] = [];
   const exportedTypes: string[] = [];
@@ -676,11 +679,18 @@ function clientProjection(
   // to it, so the server view reads the name as `undefined` (`var` line) and
   // client code keeps every meaning of the export (value, type, namespace).
   // An alias keeps its `import` keyword on a line of its own under
-  // `@ts-ignore`: the alias is not erasable syntax, and the ignore must not
+  // `@ts-expect-error`: the alias is not erasable syntax, and the ignore must not
   // reach the name, where an unknown or unused name is reported.
   const valueImport = (statement: Node, serial: number): void => {
     const from = text(statement.source);
     const id = `${base ?? 0}_${serial}`;
+    // Another `.mx` module's projection is its server view; what its client
+    // exports (and every module-level export) is in its reserved
+    // `__mxClientExports` namespace. Only a specifier written with the `.mx`
+    // extension is read there: the projection resolves no files.
+    const member = String(statement.source.value).endsWith(".mx")
+      ? `__mxClient${id}.__mxClientExports`
+      : `__mxClient${id}`;
     const typed: ClientPiece[] = [];
     let namespace = false;
     let byDefault = false;
@@ -731,16 +741,13 @@ function clientProjection(
         else {
           namespace = true;
           if (imported.type === "Identifier") {
-            alias(specifier.local, [
-              { code: `__mxClient${id}.` },
-              text(imported),
-            ]);
+            alias(specifier.local, [{ code: `${member}.` }, text(imported)]);
           } else {
             view.push(
               partsPiece([
                 { code: "const " },
                 text(specifier.local),
-                { code: ` = __mxClient${id}[` },
+                { code: ` = ${member}[` },
                 text(imported),
                 { code: "];" },
               ]),
@@ -845,15 +852,30 @@ function clientProjection(
         // not an export of the server module.
         if (statement.exportKind === "type") {
           typeExports.push({
-            specifiers: (statement.specifiers ?? []).map((specifier: Node) => ({
-              local: specifier.local?.name ?? specifier.local?.value ?? "",
-              piece: piece(specifier.start, specifier.end),
-            })),
+            specifiers: (statement.specifiers ?? []).map((specifier: Node) => {
+              const local =
+                specifier.local?.name ?? specifier.local?.value ?? "";
+              return {
+                local,
+                exported:
+                  specifier.exported?.name ??
+                  specifier.exported?.value ??
+                  local,
+                piece: piece(specifier.start, specifier.end),
+              };
+            }),
           });
         } else {
           for (const specifier of statement.specifiers ?? []) {
             const name = specifier.local?.name;
-            if (typeof name === "string") listed.push(name);
+            if (typeof name === "string") {
+              listed.push(name);
+              listedExports.push({
+                local: name,
+                exported:
+                  specifier.exported?.name ?? specifier.exported?.value ?? name,
+              });
+            }
           }
         }
         return;
@@ -933,6 +955,7 @@ function clientProjection(
     types,
     typeExports,
     listed,
+    listedExports,
     body,
     exported: exported.filter((name) => !taken.has(name)),
     exportedTypes,
