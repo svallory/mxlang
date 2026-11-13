@@ -18,8 +18,24 @@ import { join } from "node:path";
 /** The compiler-cli versions this checker is tested against. */
 export const SUPPORTED_COMPILER_CLI_RANGE = ">=22.0.0 <23.0.0";
 
-/** The `@angular/compiler-cli` module, as this package uses it. */
-export type CompilerCliModule = typeof import("@angular/compiler-cli");
+/**
+ * The `@angular/compiler-cli` module, as this package uses it: the two exports
+ * it reads, typed structurally. No declaration of this package names
+ * compiler-cli's own types, because a consumer that resolves with `node16`
+ * cannot read compiler-cli's `.d.ts` (TS2834 inside them). `checker.ts` casts
+ * to the real module type in its body, where it needs it.
+ */
+export interface CompilerCliModule {
+  /** The program class: `new NgtscProgram(rootNames, options, host, oldProgram?)`. */
+  readonly NgtscProgram: new (
+    rootNames: readonly string[],
+    options: object,
+    host: object,
+    oldProgram?: object,
+  ) => object;
+  /** compiler-cli's tsconfig reader, which resolves `extends` and merges `angularCompilerOptions`. */
+  readConfiguration(project: string): { readonly errors: readonly object[] };
+}
 
 export type CompilerCliResolution =
   | {

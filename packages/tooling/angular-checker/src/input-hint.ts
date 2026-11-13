@@ -61,14 +61,16 @@ function nearestInput(
  * uniquely nearest input.
  */
 export function addInputHints(
-  program: NgtscProgram,
+  // An `NgtscProgram`; typed `object` so this declaration names nothing from
+  // compiler-cli (see `CompilerCliModule`).
+  program: object,
   entry: ts.SourceFile,
   records: Diagnostic[],
   tsModule: typeof ts,
 ): Diagnostic[] {
   if (!records.some((d) => d.code === -998002 && d.file === entry.fileName))
     return records;
-  const checker = program.compiler.getTemplateTypeChecker();
+  const checker = (program as NgtscProgram).compiler.getTemplateTypeChecker();
   const hints = new Map<number, string>();
 
   function walk(component: ts.ClassDeclaration, value: unknown): void {

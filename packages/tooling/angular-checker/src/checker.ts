@@ -21,7 +21,6 @@ import type { NgtscProgram } from "@angular/compiler-cli";
 import { createVirtualTagModuleReader } from "@mxlang/host-angular";
 import type ts from "typescript";
 import {
-  type CompilerCliModule,
   CompilerCliUnavailableError,
   resolveCompilerCli,
   resolveTypescript,
@@ -35,6 +34,13 @@ import type {
   Diagnostic,
   DiagnosticCategory,
 } from "./types.ts";
+
+/**
+ * The real `@angular/compiler-cli` module type. Used only inside function
+ * bodies, never in an exported signature, so no emitted declaration imports
+ * compiler-cli (the exported `CompilerCliModule` is a narrow structural type).
+ */
+type RealCompilerCli = typeof import("@angular/compiler-cli");
 
 /**
  * A `tsconfigPath` that cannot be read or parsed. Never swallowed: falling
@@ -116,7 +122,7 @@ function toRecord(
 function buildOptions(
   tsModule: TypescriptModule,
   options: AngularCheckerOptions,
-  readConfiguration: CompilerCliModule["readConfiguration"],
+  readConfiguration: RealCompilerCli["readConfiguration"],
 ): ts.CompilerOptions {
   const base: ts.CompilerOptions = {
     strict: true,
@@ -317,9 +323,10 @@ export function createAngularChecker(
     throw new CompilerCliUnavailableError(tsResolution);
   }
   const tsModule = tsResolution.module;
-  const { NgtscProgram: Program } = resolution.module;
+  const cli = resolution.module as unknown as RealCompilerCli;
+  const { NgtscProgram: Program } = cli;
   // Fail at creation, not at the first check, if the tsconfig is unusable.
-  buildOptions(tsModule, options, resolution.module.readConfiguration);
+  buildOptions(tsModule, options, cli.readConfiguration);
 
   const files = new Map<string, string>();
   let program: NgtscProgram | undefined;
@@ -364,7 +371,7 @@ export function createAngularChecker(
       const compilerOptions = buildOptions(
         tsModule,
         options,
-        resolution.module.readConfiguration,
+        cli.readConfiguration,
       );
       const host = buildHost(
         tsModule,
@@ -483,7 +490,7 @@ export function createAngularChecker(
         const compilerOptions = buildOptions(
           tsModule,
           options,
-          resolution.module.readConfiguration,
+          cli.readConfiguration,
         );
         target = new Program(
           [],
