@@ -75,10 +75,11 @@ describe("an MX region parses on its own", () => {
 });
 
 describe("the Zed region hosts inject MX", () => {
-  const LANGUAGES = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "../../zed/languages",
+  // packages/editors/zed/languages, beside this package.
+  const EDITORS = path.dirname(
+    path.dirname(path.dirname(fileURLToPath(import.meta.url))),
   );
+  const LANGUAGES = path.join(EDITORS, "zed", "languages");
   it("no languages/*/injections.scm injects marko", () => {
     const offenders = fs
       .readdirSync(LANGUAGES)
