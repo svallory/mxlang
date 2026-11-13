@@ -93,10 +93,10 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
     );
   });
 
-  // Astro's fence imports reach core as plain bindings with no specifier, so
-  // core cannot read the callee's `<return>` and keeps refusing `/var` here
-  // with its generic message; `.astro.mx` cannot bind one either way (the
-  // fence runs before the template).
+  // A fence default import of a `.mx` file reaches core, which reads the
+  // callee's `<return>`; the Astro host then refuses `/var` with its own
+  // message, since `.astro.mx` cannot bind one (the fence runs before the
+  // template). It points at the tag, not at the `/n`.
   it("still refuses /var on the imported call, positioned", () => {
     let error: (Error & { line?: number; column?: number }) | undefined;
     try {
@@ -107,14 +107,12 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
     } catch (caught) {
       error = caught as Error;
     }
-    expect(error?.message).toMatch(
-      /tag variable `\/n` on `<Counter>` is not supported/,
+    expect(error?.message).toBe(
+      '`/var` on `<Counter>` can\'t bind in `.astro.mx`: Astro runs the `---` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. `import Counter from "./Counter.mx"; import { createOut } from "@mxlang/host-astro/runtime"; const value = Counter.render({ ... }, createOut());`, and use `value` in the template.',
     );
-    // At the `/n` itself, not the tag (core's dynamic-tag-var-silent-drop
-    // position change: `rejectUnsupportedFields` reports at `node.var`).
     expect({ line: error?.line, column: error?.column }).toEqual({
       line: 4,
-      column: 9,
+      column: 0,
     });
   });
 });
