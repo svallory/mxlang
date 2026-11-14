@@ -145,6 +145,12 @@ function offsetOf(source: string, line: number, column: number): number {
   return start + column;
 }
 
+/** A `$ statement` scriptlet line; group 1 is the statement. */
+const SCRIPTLET_LINE = /^\s*\$\s+(\S.*)$/;
+
+/** Length of a line's leading whitespace. */
+const indentOf = (line: string) => line.length - line.trimStart().length;
+
 function hintFor(
   reason: string,
   source: string,
@@ -166,14 +172,40 @@ function hintFor(
     }
   }
 
+  const refused = (statement: string) =>
+    `scriptlets (\`$ …\`) are not supported${scriptletSentence(declaredBinding(statement), declarations, voice)}`;
+
   // A syntax error inside a `$` scriptlet line: whatever is fixed there, the
   // line is rejected next, so say so now.
   const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
   const lineEnd = source.indexOf("\n", offset);
   const text = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
-  const scriptlet = text.match(/^\s*\$\s+(\S.*)$/);
+  const scriptlet = text.match(SCRIPTLET_LINE);
   if (scriptlet && !insideBraces(source, lineStart)) {
-    return `scriptlets (\`$ …\`) are not supported${scriptletSentence(declaredBinding(scriptlet[1] ?? ""), declarations, voice)}`;
+    return refused(scriptlet[1] ?? "");
+  }
+
+  // A scriptlet continued on a more-indented line (`$ const a = 1 + ` then
+  // `  2`): the parser ends the scriptlet at the line break and refuses the
+  // next line's indentation. Only the nearest non-blank line above is read.
+  if (reason === "Line has extra indentation at the beginning") {
+    let previousEnd = lineStart - 1;
+    while (previousEnd > 0) {
+      const previousStart = source.lastIndexOf("\n", previousEnd - 1) + 1;
+      const previous = source.slice(previousStart, previousEnd);
+      if (previous.trim() !== "") {
+        const above = previous.match(SCRIPTLET_LINE);
+        if (
+          above &&
+          !insideBraces(source, previousStart) &&
+          indentOf(text) > indentOf(previous)
+        ) {
+          return refused(above[1] ?? "");
+        }
+        break;
+      }
+      previousEnd = previousStart - 1;
+    }
   }
   return null;
 }

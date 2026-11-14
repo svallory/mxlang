@@ -164,3 +164,70 @@ describe("shorthand parse errors", () => {
     expect(aggregate.message).not.toContain("Identifier directly after number");
   });
 });
+
+describe("scriptlet continuation", () => {
+  const INDENTATION = "Line has extra indentation at the beginning";
+
+  /** A single parse error with `label` at `start`, framed as Marko frames it. */
+  function located(
+    label: string,
+    start: { line: number; column: number; index: number },
+  ) {
+    const error = new Error(
+      `t.mx:${start.line}:${start.column + 1}\n    > ${start.line} | …\n        |   ^ ${label}`,
+    ) as Error & { label: string; loc: unknown };
+    error.label = label;
+    error.loc = { start };
+    return error;
+  }
+
+  it("hints an indentation error below a `$ const` line with the declared name (g0504)", () => {
+    const error = located(INDENTATION, { line: 2, column: 2, index: 19 });
+    hintParseError(error, "$ const a = 1 + \n  2", undefined, MX_VOICE);
+    const hinted =
+      "Line has extra indentation at the beginning; scriptlets (`$ …`) are not supported; declare a value with `<const/a=…/>`";
+    expect(error.label).toBe(hinted);
+    expect(error.message).toContain(`^ ${hinted}`);
+  });
+
+  it("gives the generic tail when the `$` line declares nothing (g0506)", () => {
+    const error = located(INDENTATION, { line: 2, column: 2, index: 10 });
+    hintParseError(error, "$ a = b\n  && c", undefined, MX_VOICE);
+    expect(error.label).toBe(
+      "Line has extra indentation at the beginning; scriptlets (`$ …`) are not supported; a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template",
+    );
+  });
+
+  it.each([
+    [
+      "the line above is not a `$` line",
+      INDENTATION,
+      "const/y=1\n  a",
+      { line: 2, column: 2, index: 12 },
+    ],
+    [
+      "the `$` line sits inside `{…}`",
+      INDENTATION,
+      "<div x={a\n$ b\n  c}/>",
+      { line: 3, column: 2, index: 16 },
+    ],
+    [
+      "the line is not indented further",
+      INDENTATION,
+      "  $ a = b\n  c",
+      { line: 2, column: 2, index: 12 },
+    ],
+    [
+      "the reason is not the indentation one",
+      "Unexpected token",
+      "$ a = b\n  && c",
+      { line: 2, column: 2, index: 10 },
+    ],
+  ])("keeps the bare reason when %s", (_case, label, source, start) => {
+    const error = located(label, start);
+    const message = error.message;
+    hintParseError(error, source, undefined, MX_VOICE);
+    expect(error.label).toBe(label);
+    expect(error.message).toBe(message);
+  });
+});
