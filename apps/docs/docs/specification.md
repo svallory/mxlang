@@ -66,10 +66,15 @@ loop's own mapper parameters are in scope for the authored
 `from`/`to`/`step` expressions written inside the same callback, so a
 generated `_`/`mxIndex`/`$i` there silently shadowed an authored binding of the
 same name (`<const/_=5/>` with `<for|i| from=_ to=_+2>` rendered `NaN` three
-times). Those are now `__mxUnused` / `__mxIndex` on every host, as are the
-Solid whole-unit `$mxProps`/`$mxBody`/`$mxValue` helpers (now `__mxProps` and
-friends), the `$mxChildren`/`$mxMerge` imports, and the hoisted `$mx_Define*`
-tags.
+times). Those are now `__mxUnused` and a counter in the `__mx` space on every
+host (`__mxIndex<n>` on Solid, Preact, React and Hono, where `<n>` is a serial
+counted per compile so nested loops never share a name; `__mxIndex` on Astro).
+The other loop bindings those hosts name themselves follow the same serial:
+the copied `<for of>` list is `__mxList<n>` and an omitted `<for in>` value is
+`__mxValue<n>`, so no authored text changes a generated name. The Solid
+whole-unit `$mxProps`/`$mxBody`/`$mxValue` helpers (now `__mxProps` and
+friends), the `$mxChildren`/`$mxMerge` imports and the hoisted `$mx_Define*`
+tags moved into the `__mx` space too.
 
 Two carve-outs, neither a binding MX generates:
 
