@@ -1477,7 +1477,9 @@ including dialect-claimed argument expressions, for IR consumers. Empty
 argument lists (`a()=value` or a bare `a()`) are argument lists too; method
 parameters (`a(v) { … }`) are not. The refusal follows Marko's tag rules,
 not a blanket ban: `<define/X a(v)=1/>` and `<const/x value(v)=1/>`
-retain Marko's acceptance and dropped arguments. Builtin tags such as
+retain Marko's acceptance and dropped arguments, on every host and whatever
+`attributeArgs` is; MX warns at the argument list
+(`MX_ATTRIBUTE_ARGUMENTS_DROPPED`). Builtin tags such as
 `<try>` and host-owned tags such as
 `<html-comment>` retain their own shape checks and errors; an authored
 module statement in a region still gets the module-level refusal first.
@@ -4837,6 +4839,7 @@ host, a target or a dialect.
 | `MX_NOT_A_DOM_EVENT` | warning | an event attribute whose lowercase name is not a DOM event |
 | `MX_DEFINE_CONTENT_DROPPED` | warning | a `content` attribute on a `<define>` that has a body, which is the `content` |
 | `MX_DEFINE_EXTRA_PARAMS` | warning | a `<define>` param past the first, which the call ignores |
+| `MX_ATTRIBUTE_ARGUMENTS_DROPPED` | warning | arguments on an attribute of a `<define>` or `<const>`, which the tag ignores |
 | `MX_LOWERCASE_BINDING_NOT_CALLED` | warning | a lowercase tag naming a binding, which is not called |
 | `MX_UNREADABLE_CALLEE_INPUT` | warning | not raised: core no longer reads a callee's `Input` (§8); kept for consumers that match on it |
 | `MX_BODY_DROPPED` | warning | a body passed to a tag that never reads it |
