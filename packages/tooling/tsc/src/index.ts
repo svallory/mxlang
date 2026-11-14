@@ -432,6 +432,198 @@ function approximateUnmappedInVolar(): void {
 }
 
 /**
+ * Whether the next `tsc.js` evaluation is a `-w` run without `-b`: set by
+ * `runPatchedTsc` before `runVolarTsc`, read once by the `proxyCreateProgram`
+ * replacement when the patched `tsc.js` calls it, so a watcher keeps its own
+ * answer after later runs in the same process change it. It lives on the
+ * installed replacement (under the marker), not in this module: the
+ * replacement outlives a re-evaluation of this module (a test runner that
+ * resets modules but not Node's `require` cache), and a second copy of this
+ * module must set what the installed replacement reads.
+ */
+interface WatchResolutionSetting {
+  nextRun: boolean;
+}
+
+const WATCH_RESOLUTION_MARKER = Symbol.for("mx-tsc.watch-resolution");
+
+type CreateProgram = (
+  options: ts.CreateProgramOptions,
+  ...rest: unknown[]
+) => ts.Program;
+type ProxyCreateProgram = ((
+  typescript: typeof ts,
+  original: CreateProgram,
+  create: GetLanguagePlugins,
+) => CreateProgram) & { [WATCH_RESOLUTION_MARKER]?: WatchResolutionSetting };
+type ResolveLiterals = NonNullable<
+  ts.CompilerHost["resolveModuleNameLiterals"]
+>;
+
+/**
+ * Lets `tsc -w` record and watch the failed lookups of a `.mx` import, so a
+ * callee created or moved where the import points clears the caller's TS2307
+ * even when that directory is outside the tsconfig `include`.
+ *
+ * Volar's `proxyCreateProgram` installs a `resolveModuleNameLiterals` on its
+ * copy of the host that hands a batch with any literal ending in a plugin
+ * extension (`~/Card.mx`) to its own resolver and cache, never to the host's
+ * method. In `-w` the host's method is TypeScript's resolution cache, the only
+ * resolver whose failed lookups are watched, so nothing watched `src/` and
+ * Volar's cache kept the failure across rebuilds. Here, after Volar's override
+ * is installed, a batch with a plugin-extension literal Volar left unresolved
+ * also goes through the original host's method (`fallBackToVolarResolution`'s
+ * wrapper around the resolution cache, inside Volar's
+ * `fixupImpliedNodeFormatForFile`); per literal Volar's answer wins when it
+ * resolves, else the host's is used, so every resolution that worked before is
+ * unchanged and TypeScript keeps the failed result it records. A batch Volar
+ * resolves completely is left to Volar as before. `-p`, `-b` and `-b -w` keep Volar's override
+ * alone (the solution builder watches no failed lookups).
+ *
+ * The patched `tsc.js` reads the `proxyCreateProgram` export when it is
+ * evaluated, so replacing the export before `runVolarTsc` is enough. Done once
+ * per process; a second call finds the marker and returns the installed
+ * replacement's setting.
+ */
+function resolveThroughWatchHostInVolar(): WatchResolutionSetting {
+  const require = createRequire(import.meta.url);
+  const proxy = require("@volar/typescript/lib/node/proxyCreateProgram") as {
+    proxyCreateProgram: ProxyCreateProgram;
+  };
+  const original = proxy.proxyCreateProgram;
+  const installed = original[WATCH_RESOLUTION_MARKER];
+  if (installed) return installed;
+  const setting: WatchResolutionSetting = { nextRun: false };
+  const { fixupImpliedNodeFormatForFile } =
+    require("@volar/typescript/lib/node/utils") as {
+      fixupImpliedNodeFormatForFile: (
+        typescript: typeof ts,
+        pluginExtensions: string[],
+        sourceFile: ts.SourceFile,
+        packageJsonInfoCache: ts.PackageJsonInfoCache,
+        host: ts.ModuleResolutionHost,
+        options: ts.CompilerOptions,
+      ) => (() => void) | undefined;
+    };
+  const patched: ProxyCreateProgram = (typescript, createProgram, create) => {
+    const watchResolution = setting.nextRun;
+    let originalHost: ts.CompilerHost | undefined;
+    let pluginExtensions: string[] = [];
+    const recordExtensions: GetLanguagePlugins = (ts, options) => {
+      const created = create(ts, options);
+      const plugins = Array.isArray(created)
+        ? (created as LanguagePlugin<string>[])
+        : created.languagePlugins;
+      pluginExtensions = plugins.flatMap(
+        (plugin) =>
+          plugin.typescript?.extraFileExtensions.map(
+            ({ extension }) => `.${extension}`,
+          ) ?? [],
+      );
+      return created;
+    };
+    const inner = function (
+      this: unknown,
+      options: ts.CreateProgramOptions,
+      ...rest: unknown[]
+    ): ts.Program {
+      const host = options.host;
+      const fromHost = originalHost?.resolveModuleNameLiterals;
+      const fromVolar = host?.resolveModuleNameLiterals;
+      if (
+        watchResolution &&
+        host &&
+        originalHost &&
+        fromHost &&
+        fromVolar &&
+        fromVolar !== fromHost
+      ) {
+        const hostWithCache = originalHost;
+        const wrapped: ResolveLiterals = (
+          moduleLiterals,
+          containingFile,
+          redirectedReference,
+          compilerOptions,
+          containingSourceFile,
+          ...more
+        ) => {
+          const answers = fromVolar(
+            moduleLiterals,
+            containingFile,
+            redirectedReference,
+            compilerOptions,
+            containingSourceFile,
+            ...more,
+          );
+          // Only a plugin-extension import Volar left unresolved: one Volar
+          // resolved needs no watching (every `.mx` file's generated code
+          // imports itself, and watching those failed lookups would make an
+          // edit of the file start a second rebuild).
+          const unresolved = moduleLiterals.some(
+            (literal, index) =>
+              !answers[index]?.resolvedModule &&
+              pluginExtensions.some((extension) =>
+                literal.text.endsWith(extension),
+              ),
+          );
+          if (!unresolved) return answers;
+          const packageJsonInfoCache = hostWithCache
+            .getModuleResolutionCache?.()
+            ?.getPackageJsonInfoCache();
+          const dispose = packageJsonInfoCache
+            ? fixupImpliedNodeFormatForFile(
+                typescript,
+                pluginExtensions,
+                containingSourceFile,
+                packageJsonInfoCache,
+                hostWithCache,
+                compilerOptions,
+              )
+            : undefined;
+          let fromCache: readonly ts.ResolvedModuleWithFailedLookupLocations[];
+          try {
+            fromCache = fromHost.call(
+              hostWithCache,
+              moduleLiterals,
+              containingFile,
+              redirectedReference,
+              compilerOptions,
+              containingSourceFile,
+              ...more,
+            );
+          } finally {
+            dispose?.();
+          }
+          return answers.map((answer, index) =>
+            answer.resolvedModule ? answer : (fromCache[index] ?? answer),
+          );
+        };
+        host.resolveModuleNameLiterals = wrapped;
+      }
+      return createProgram.call(this, options, ...rest);
+    };
+    const volar = original(typescript, inner, recordExtensions);
+    return function (
+      this: unknown,
+      options: ts.CreateProgramOptions,
+      ...rest: unknown[]
+    ): ts.Program {
+      // The host tsc passed, before Volar replaces it with its copy.
+      originalHost = options.host;
+      return volar.call(this, options, ...rest);
+    };
+  };
+  patched[WATCH_RESOLUTION_MARKER] = setting;
+  proxy.proxyCreateProgram = patched;
+  if (proxy.proxyCreateProgram !== patched) {
+    throw new Error(
+      "mx-tsc: Volar's proxyCreateProgram could not be wrapped, so `mx-tsc -w` would never notice a .mx module created outside the tsconfig include",
+    );
+  }
+  return setting;
+}
+
+/**
  * The language-plugin factory Volar's patched `tsc.js` asks for.
  */
 type GetLanguagePlugins = (
@@ -563,6 +755,7 @@ function runPatchedTsc(
 ): number {
   let tscExitCode = 0;
   approximateUnmappedInVolar();
+  resolveThroughWatchHostInVolar().nextRun = watchMode && !solutionBuild;
   const dialectExtensions = dialectExtensionsOf(process.argv.slice(2));
   const exit = process.exit;
   const stopped = Symbol("mx-tsc-exit");

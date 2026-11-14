@@ -31,8 +31,12 @@ afterEach(() => {
   root = undefined;
 });
 
-/** Builds the project with `~/*` aliased to `<target>/*`; returns its helpers. */
-function project(target: string) {
+/**
+ * Builds the project with `~/*` aliased to `<target>/*` and the tsconfig
+ * `include` given (by default the callee's directory is included); returns its
+ * helpers.
+ */
+function project(target: string, include = ["page.mx", "src"]) {
   root = mkdtempSync(join(tmpdir(), "mx-tsc-watch-paths-"));
   const dir = join(root, "project");
   vi.useFakeTimers({
@@ -76,7 +80,7 @@ function project(target: string) {
             ],
           },
         },
-        include: ["page.mx", "src"],
+        include,
       }),
     );
   config(target);
@@ -119,6 +123,30 @@ it("mx-tsc watch resolves an aliased .mx callee created after the first build", 
 
 it("mx-tsc watch resolves an aliased .mx callee moved to the aliased path", async () => {
   const { dir, watch } = project("src");
+  mkdirSync(join(dir, "old"));
+  writeFileSync(join(dir, "old/Card.mx"), CARD);
+  const running = watch();
+  expect(running.start()).toContain("TS2307");
+  const moved = await running.cycle(() =>
+    renameSync(join(dir, "old/Card.mx"), join(dir, "src/Card.mx")),
+  );
+  expect(moved).toContain("TS2353");
+  expect(moved).not.toContain("TS2307");
+}, 120_000);
+
+it("mx-tsc watch resolves an aliased .mx callee created outside the tsconfig include", async () => {
+  const { dir, watch } = project("src", ["page.mx"]);
+  const running = watch();
+  expect(running.start()).toContain("TS2307");
+  const created = await running.cycle(() =>
+    writeFileSync(join(dir, "src/Card.mx"), CARD),
+  );
+  expect(created).toContain("TS2353");
+  expect(created).not.toContain("TS2307");
+}, 120_000);
+
+it("mx-tsc watch resolves an aliased .mx callee moved to an aliased path outside the tsconfig include", async () => {
+  const { dir, watch } = project("src", ["page.mx"]);
   mkdirSync(join(dir, "old"));
   writeFileSync(join(dir, "old/Card.mx"), CARD);
   const running = watch();
