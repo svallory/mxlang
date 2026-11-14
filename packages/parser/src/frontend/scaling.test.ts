@@ -5,7 +5,10 @@
  * quadratic one near 100. The bound of 30 leaves room for a loaded machine
  * (the style of the template parser's `parseScaling` guard).
  */
+import type { MxFrontEndOptions } from "@mxlang/babel/mx-ast";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_SYNTAX } from "../template/index.ts";
+import { MEMBER } from "../template/test-support/sugar-rows.ts";
 import { parse } from "./parse.ts";
 import { OPTIONS } from "./test-support/options.ts";
 
@@ -25,19 +28,23 @@ const SHAPES: Record<string, (n: number) => string> = {
     `<p>\${${Array.from({ length: n }, (_, i) => `(a${i} + ${i})`).join(" + ")}}</p>`,
 };
 
-function best(source: string): number {
+function best(source: string, options: MxFrontEndOptions = OPTIONS): number {
   let min = Number.POSITIVE_INFINITY;
   for (let run = 0; run < 3; run++) {
     const started = performance.now();
-    parse(source, OPTIONS);
+    parse(source, options);
     min = Math.min(min, performance.now() - started);
   }
   return min;
 }
 
-export function scaling(shape: (n: number) => string, n: number): number {
-  best(shape(n)); // warm up
-  return best(shape(n * 10)) / Math.max(best(shape(n)), 0.5);
+export function scaling(
+  shape: (n: number) => string,
+  n: number,
+  options: MxFrontEndOptions = OPTIONS,
+): number {
+  best(shape(n), options); // warm up
+  return best(shape(n * 10), options) / Math.max(best(shape(n), options), 0.5);
 }
 
 describe("linear scaling", () => {
@@ -48,6 +55,19 @@ describe("linear scaling", () => {
       expect(scaling(shape, n)).toBeLessThan(30);
     }, 60_000);
   }
+
+  // An armed expression row looks behind past the comments read so far in
+  // its expression at every candidate character; one flat array literal keeps
+  // Babel's tree shallow while every item puts a comment before a trigger.
+  it("many-comments-in-one-expression: 10x the input takes at most ~10x the time", () => {
+    const shape = (n: number) =>
+      `<p>\${[${Array.from({ length: n }, (_, i) => `/*c${i}*/ &a${i}`).join(", ")}]}</p>`;
+    const options = {
+      ...OPTIONS,
+      syntax: { ...DEFAULT_SYNTAX, expressionTriggers: [MEMBER] },
+    };
+    expect(scaling(shape, 2_500, options)).toBeLessThan(30);
+  }, 60_000);
 
   it("20,000 nested tags build a tree without overflowing the stack", () => {
     const document = parse(SHAPES.deep?.(20_000) ?? "", OPTIONS);
