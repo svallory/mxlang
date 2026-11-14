@@ -4849,9 +4849,7 @@ function warnDroppedAttributeArguments(
     const outer = attr.type === "MxAttribute" ? attr.args?.outer : undefined;
     const hasOuter =
       typeof outer?.start === "number" && typeof outer?.end === "number";
-    const at = hasOuter
-      ? positionAtOffset(ctx, outer.start)
-      : posOf(ctx, attr);
+    const at = hasOuter ? positionAtOffset(ctx, outer.start) : posOf(ctx, attr);
     const end = hasOuter
       ? { end: positionAtOffset(ctx, outer.end) }
       : warningEnd(ctx, attr);

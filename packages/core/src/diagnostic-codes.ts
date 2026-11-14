@@ -222,7 +222,8 @@ export const DEFINE_CONTENT_DROPPED_CODE = "MX_DEFINE_CONTENT_DROPPED";
 /** A `<define>` called with more params than the first, which the call ignores. */
 export const DEFINE_EXTRA_PARAMS_CODE = "MX_DEFINE_EXTRA_PARAMS";
 /** Arguments on an attribute of a `<define>` or `<const>`, which the tag ignores. */
-export const ATTRIBUTE_ARGUMENTS_DROPPED_CODE = "MX_ATTRIBUTE_ARGUMENTS_DROPPED";
+export const ATTRIBUTE_ARGUMENTS_DROPPED_CODE =
+  "MX_ATTRIBUTE_ARGUMENTS_DROPPED";
 /** A lowercase tag that names a binding: the native element renders and the binding is not called. */
 export const LOWERCASE_BINDING_NOT_CALLED_CODE =
   "MX_LOWERCASE_BINDING_NOT_CALLED";
