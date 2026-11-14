@@ -48,7 +48,7 @@ Keep `from`, `to`, `until` and `step` pure (a signal, a literal or a memo): they
 
 ## Children
 
-MX passes a component's body as `props.children`, so a hand-written Solid component called from MX, and a `.solid.mx` component called from TSX, both work. In a `.solid.mx` file you read `props.children`, as in any Solid component.
+MX passes a component's body as `props.children`, so a hand-written Solid component called from MX, and a `.solid.mx` component called from TSX, both work. In a `.solid.mx` file you read `props.children`, as in any Solid component. Because the body travels as children, an MX tag that MX calls through `<Dynamic>` as a host component (re-exported through a `.ts` barrel, bound with `<const/T=Card/>` or `static const T = Card`, or wrapped in `lazy(...)` or `memo(...)`) cannot tell a body that is one empty placeholder (`${""}`, `${null}`, `${false}`, `${undefined}`) from no body, as with a direct call. See [Divergences](/divergences-and-mx-2/).
 
 ## Data in a text placeholder
 
@@ -109,7 +109,7 @@ The handler receives the DOM event. The shared rules are in [Attributes](/langua
 
 ## Whole-file `.mx` on Solid
 
-A plain `.mx` compiles to a Solid component when `package.json` has `"mx": { "host": "solid" }` (or `mx.target: "solid-jsx"`). `.solid.mx` needs neither: its extension selects the host. In a whole-file component the body is `input.content`, Marko's name for it (an explicit `content=` prop wins over children), and `<if=input.content>` is true when a body was passed. Top-level `import` statements work as in a whole-file `.mx` on any other host, and the Vite plugin, the TypeScript plugin and the language server all compile the file as a Solid component, never as a region file or with the HTML target.
+A plain `.mx` compiles to a Solid component when `package.json` has `"mx": { "host": "solid" }` (or `mx.target: "solid-jsx"`). `.solid.mx` needs neither: its extension selects the host. In a whole-file component the body is `input.content`, Marko's name for it (an explicit `content=` prop wins over children), and `<if=input.content>` is true when a body was passed, except a body that is one empty placeholder (`${""}`, `${null}`, `${false}`, `${undefined}`), which reads as no body ([Divergences](/divergences-and-mx-2/)). Top-level `import` statements work as in a whole-file `.mx` on any other host, and the Vite plugin, the TypeScript plugin and the language server all compile the file as a Solid component, never as a region file or with the HTML target.
 
 ## How this is checked
 
