@@ -71,25 +71,25 @@ export function Lists() {
  }), _el$5);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 5,
- children: __mxIndex => (() => {
+ children: __mxIndex0 => (() => {
  var _el$14 = _tmpl$6();
- _$insert(_el$14, 0 + __mxIndex * 2);
+ _$insert(_el$14, 0 + __mxIndex0 * 2);
  return _el$14;
  })()
  }), _el$6);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 6,
- children: __mxIndex => (() => {
+ children: __mxIndex1 => (() => {
  var _el$15 = _tmpl$6();
- _$insert(_el$15, 10 + __mxIndex * -2);
+ _$insert(_el$15, 10 + __mxIndex1 * -2);
  return _el$15;
  })()
  }), _el$7);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 4,
- children: __mxIndex => (() => {
+ children: __mxIndex2 => (() => {
  var _el$16 = _tmpl$6();
- _$insert(_el$16, 0 + __mxIndex * 3);
+ _$insert(_el$16, 0 + __mxIndex2 * 3);
  return _el$16;
  })()
  }), _el$8);
@@ -98,12 +98,12 @@ export function Lists() {
  return Object.entries(meta() ?? {});
  },
  keyed: e => e[0],
- children: mxEntry => (() => {
+ children: __mxEntry3 => (() => {
  var _el$17 = _tmpl$7(),
  _el$18 = _el$17.firstChild,
  _el$19 = _el$18.nextSibling;
- _$insert(_el$17, () => mxEntry()[0], _el$18);
- _$insert(_el$17, () => mxEntry()[1], _el$19);
+ _$insert(_el$17, () => __mxEntry3()[0], _el$18);
+ _$insert(_el$17, () => __mxEntry3()[1], _el$19);
  return _el$17;
  })()
  }), _el$9);

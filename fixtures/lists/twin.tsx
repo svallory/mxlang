@@ -33,11 +33,13 @@ export function Lists() {
       {/* exclusive range with literal bounds, folded at lowering time */}
       <Repeat count={4}>{(i) => <b>{i}</b>}</Repeat>
       {/* stepped range: positive step */}
-      <Repeat count={5}>{(__mxIndex) => <em>{0 + __mxIndex * 2}</em>}</Repeat>
+      <Repeat count={5}>{(__mxIndex0) => <em>{0 + __mxIndex0 * 2}</em>}</Repeat>
       {/* stepped range: negative step counting down */}
-      <Repeat count={6}>{(__mxIndex) => <em>{10 + __mxIndex * -2}</em>}</Repeat>
+      <Repeat count={6}>
+        {(__mxIndex1) => <em>{10 + __mxIndex1 * -2}</em>}
+      </Repeat>
       {/* stepped range: until= with step= uses the exclusive bound */}
-      <Repeat count={4}>{(__mxIndex) => <em>{0 + __mxIndex * 3}</em>}</Repeat>
+      <Repeat count={4}>{(__mxIndex2) => <em>{0 + __mxIndex2 * 3}</em>}</Repeat>
       {/* object entries, keyed by the entry key */}
       {/*
         `keyed={fn}` makes Solid pass the entry as an accessor, so the pair
@@ -47,9 +49,9 @@ export function Lists() {
         accessor instead, which is what MX now emits.
       */}
       <For each={Object.entries(meta() ?? {})} keyed={(e) => e[0]}>
-        {(mxEntry) => (
+        {(__mxEntry3) => (
           <p>
-            {mxEntry()[0]}={mxEntry()[1]}
+            {__mxEntry3()[0]}={__mxEntry3()[1]}
           </p>
         )}
       </For>

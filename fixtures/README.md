@@ -57,7 +57,11 @@ directory with `input.solid.mx` and `twin.tsx`, no code change.
 ## Adding a fixture
 
 1. `mkdir fixtures/<name>`
-2. Write `twin.tsx`: real, working Solid JSX.
+2. Write `twin.tsx`: real, working Solid JSX. Where MX generates a binding
+   name, the twin uses the emitter's current generated name
+   (`__mx<Base><n>`, numbered in emission order, e.g. `__mxIndex0`,
+   `__mxEntry3`), so a change to generated names updates the twins in the
+   same PR.
 3. Write `input.solid.mx`: the MX spelling of the same component, per
    `notes/solidmx-jsx-mapping.md` and `notes/solidmx-spec.md` sections 4-5
    at the space root. If a construct isn't covered by the mapping doc, leave

@@ -75,25 +75,25 @@ export function Lists() {
  }), _el$5);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 5,
- children: (__mxIndex) => (() => {
+ children: (__mxIndex0) => (() => {
  var _el$16 = _tmpl$6();
- _$insert(_el$16, 0 + __mxIndex * 2);
+ _$insert(_el$16, 0 + __mxIndex0 * 2);
  return _el$16;
  })()
  }), _el$6);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 6,
- children: (__mxIndex) => (() => {
+ children: (__mxIndex1) => (() => {
  var _el$17 = _tmpl$6();
- _$insert(_el$17, 10 + __mxIndex * -2);
+ _$insert(_el$17, 10 + __mxIndex1 * -2);
  return _el$17;
  })()
  }), _el$7);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 4,
- children: (__mxIndex) => (() => {
+ children: (__mxIndex2) => (() => {
  var _el$18 = _tmpl$6();
- _$insert(_el$18, 0 + __mxIndex * 3);
+ _$insert(_el$18, 0 + __mxIndex2 * 3);
  return _el$18;
  })()
  }), _el$8);
@@ -102,15 +102,15 @@ export function Lists() {
  return Object.entries(meta() ?? {});
  },
  keyed: (e) => e[0],
- children: (mxEntry) => (() => {
+ children: (__mxEntry3) => (() => {
  var _el$19 = _tmpl$7();
  var _el$20 = _el$19.firstChild;
  var _el$21 = _el$20.nextSibling;
  _$insert(_el$19, () => {
- return mxEntry()[0];
+ return __mxEntry3()[0];
  }, _el$20);
  _$insert(_el$19, () => {
- return mxEntry()[1];
+ return __mxEntry3()[1];
  }, _el$21);
  return _el$19;
  })()
