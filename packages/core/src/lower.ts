@@ -3391,9 +3391,7 @@ function lowerAttributeIf(
     const lowered = lowerAttributeTags(ctx, branch, schema, true, false);
     unscope();
     branches.push({
-      ...(conditionAttr
-        ? { test: exprOf(ctx, attrValueOf(ctx, conditionAttr)) }
-        : {}),
+      ...(conditionAttr ? { test: conditionOf(ctx, conditionAttr) } : {}),
       span: nodeSpan(ctx, branch),
       nodes: lowered.tree,
     });
@@ -3724,6 +3722,23 @@ function rejectExtraConditionAttributes(
 }
 
 /**
+ * The condition an `<if>` chain's attribute spells, as an `Expr`. A condition
+ * attribute written without a value (`<else if>`, `<else if(x)>`, `<if value>`)
+ * is Marko's synthesized `true`, which has no position; it gets a zero-width
+ * span at the end of the attribute's spelled name (before any `(args)`), as a
+ * bare colon name's `valueSpan` does, so the IR keeps its promise of a span on
+ * every `Expr`. Its arguments stay dropped, as stock Marko drops them.
+ */
+function conditionOf(ctx: Ctx, attr: Node): Expr {
+  const condition = exprOf(ctx, attrValueOf(ctx, attr));
+  if (condition.span || hasExpressionValue(attr) || isMethodAttr(attr)) {
+    return condition;
+  }
+  const at = attrNameSpan(ctx, attr).sourceEnd;
+  return { ...condition, span: { sourceStart: at, sourceEnd: at } };
+}
+
+/**
  * `<if>` plus any `<else if>`/`<else>` siblings, grouped into one node.
  *
  * Returns the index of the first sibling it did not consume, so the caller
@@ -3752,7 +3767,7 @@ function lowerIfChain(
         node,
       );
     }
-    return exprOf(ctx, attrValueOf(ctx, cond));
+    return conditionOf(ctx, cond);
   });
 
   // Each branch is its own JS block: a `<const>` declared inside one does not
@@ -3812,7 +3827,7 @@ function lowerIfChain(
         childName === "else-if"
           ? (attrByName(child, "value") ?? tagAttributesOf(child)[0])
           : attrByName(child, "if");
-      return ifAttr ? exprOf(ctx, attrValueOf(ctx, ifAttr)) : null;
+      return ifAttr ? conditionOf(ctx, ifAttr) : null;
     });
     branches.push({
       condition: branchCondition,

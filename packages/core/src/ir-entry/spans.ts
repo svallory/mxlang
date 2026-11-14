@@ -59,7 +59,10 @@ type ImportNode = Extract<IrNode, { kind: "Import" }>;
  * one), a dynamic, bound, event or spread attribute its `valueSpan` (the value
  * as written, wrapper included; `value.span` when the attribute carries no
  * other, and an empty one at the end of the tag's name on a contract
- * `default`), and an `Import` its `from` and `names`. Other optional spans
+ * `default`), and an `Import` its `from` and `names`. An `<if>` chain's
+ * condition attribute written without a value (`<else if>`, `<else if(x)>`,
+ * `<if value>`) is `true` with a zero-width `span` at the end of the
+ * attribute's name, as a bare colon name's `valueSpan` is. Other optional spans
  * (`bodySpan`, `paramSpans`) stay optional. @unstable
  */
 export type Spanned<T> = T extends SourceSpan

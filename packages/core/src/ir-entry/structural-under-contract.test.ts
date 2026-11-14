@@ -609,6 +609,16 @@ describe("structural: reject, a for or if written with a head the construct woul
       "if",
     ],
     [
+      "else if(x) after an if",
+      "<if=a>\n  <string/>\n</if>\n<else if(x)>\n  <string/>\n</else>",
+      "if",
+    ],
+    [
+      "else if after an if",
+      "<if=a>\n  <string/>\n</if>\n<else if>\n  <string/>\n</else>",
+      "if",
+    ],
+    [
       "if(x) and else-if(x): one error, at the if",
       "<if(x)>\n  <string/>\n</if>\n<else-if(x)>\n  <string/>\n</else-if>",
       "if",
@@ -678,6 +688,11 @@ describe("structural: reject, a for or if written with a head the construct woul
       "entity\n  if=a\n    string\n  else-if(x)\n    string\n",
       "if",
     ],
+    [
+      "else if(x)",
+      "entity\n  if=a\n    string\n  else if(x)\n    string\n",
+      "if",
+    ],
   ] as const)("concise %s is the construct, once", (_l, source, keyword) => {
     expect(found(source, reject)).toEqual([
       ["MX_STRUCTURAL_CONSTRUCT", 2, 2, at(keyword)],
@@ -697,6 +712,39 @@ describe("structural: reject, a for or if written with a head the construct woul
     expect(
       found("<entity>\n  <for|x|(y)/>\n</entity>\n", { dialect }, customTags),
     ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 2, 2, FOR]]);
+    expect(
+      found("entity\n  if=true\n  else if(x)\n", { dialect }, customTags),
+    ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 2, 2, IF]]);
+  });
+
+  it("lowers a condition written without a value under pass and unset, with a zero-width span at the end of its name", () => {
+    const conditions = (
+      source: string,
+      options: Parameters<typeof lowerSource>[2],
+    ) => {
+      const result = lowerSource(source, "/t.mx", options);
+      expect(result.diagnostics).toEqual([]);
+      const chain = result.ir?.body[0];
+      if (chain?.kind !== "IfChain") throw new Error("no IfChain");
+      return chain.branches.map(
+        (b) =>
+          b.condition && { code: b.condition.code, span: b.condition.span },
+      );
+    };
+    for (const options of [{}, { structural: "pass" }] as const) {
+      expect(conditions("<if=a/>\n<else if(x)/>\n", options)[1]).toEqual({
+        code: "true",
+        span: { sourceStart: 16, sourceEnd: 16 },
+      });
+      expect(conditions("<if=a/>\n<else if/>\n", options)[1]).toEqual({
+        code: "true",
+        span: { sourceStart: 16, sourceEnd: 16 },
+      });
+      expect(conditions("<if value/>\n", options)[0]).toEqual({
+        code: "true",
+        span: { sourceStart: 9, sourceEnd: 9 },
+      });
+    }
   });
 
   it("keeps the shape error where the construct is legal: structural pass and unset", () => {

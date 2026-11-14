@@ -170,5 +170,19 @@ describe("body content beside attribute tags", () => {
         source.slice(comment.span.sourceStart, comment.span.sourceEnd),
       ).toBe("<!-- c -->");
     });
+
+    it("gives an `else if(y)` written without a value a zero-width test span at the end of its name", () => {
+      const tag = root(
+        "<loose><if=x><@m>M</@m></if><else if(y)><@m>N</@m></else></loose>\n",
+      );
+      const [chain] = tag.attributeTagTree;
+      if (chain?.kind !== "AttributeTagIf")
+        throw new Error("no AttributeTagIf");
+      const test = chain.branches[1]?.test;
+      expect({ code: test?.code, span: test?.span }).toEqual({
+        code: "true",
+        span: { sourceStart: 36, sourceEnd: 36 },
+      });
+    });
   });
 });
