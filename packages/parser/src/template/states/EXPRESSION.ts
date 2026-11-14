@@ -40,8 +40,8 @@ export interface ExpressionMeta extends Meta {
    * none). Its text is an operand, never a keyword.
    */
   atomEnd: number;
-  /** MX: the comments read so far, which trigger lexing looks behind past. */
-  comments: Meta[] | undefined;
+  /** MX: the comments read so far, keyed by their `end`, which trigger lexing looks behind past. */
+  comments: Map<number, Meta> | undefined;
   /** MX: where the last regular expression literal ended. */
   regexEnd: number;
   wasComment: boolean;
@@ -465,7 +465,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
         child.state === STATE.JS_COMMENT_LINE ||
         child.state === STATE.JS_COMMENT_BLOCK
       ) {
-        (expression.comments ||= []).push(child);
+        (expression.comments ||= new Map()).set(child.end, child);
       }
     }
     if (child.state === STATE.JS_COMMENT_LINE) {
@@ -1078,7 +1078,7 @@ function isOperatorWord(
     let j = wordStart - 1;
     for (;;) {
       while (j >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(j))) j--;
-      const comment = expression.comments?.find((c) => c.end === j + 1);
+      const comment = expression.comments?.get(j + 1);
       if (!comment) break;
       j = comment.start - 1;
     }
@@ -1216,7 +1216,7 @@ function endsPostfixUpdate(
       if (isLineTerminatorCode(data.charCodeAt(j))) return false;
       j--;
     }
-    const comment = expression.comments?.find((c) => c.end === j + 1);
+    const comment = expression.comments?.get(j + 1);
     if (!comment) break;
     if (hasLineTerminator(data, comment.start, comment.end)) return false;
     j = comment.start - 1;
@@ -1256,7 +1256,7 @@ function expectsExpression(
   let i = pos - 1;
   for (;;) {
     while (i >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(i))) i--;
-    const comment = expression.comments?.find((c) => c.end === i + 1);
+    const comment = expression.comments?.get(i + 1);
     if (!comment) break;
     i = comment.start - 1;
   }
