@@ -754,7 +754,11 @@ const ROWS: Row[] = [
     1,
     { defineCallPassesAttrs: true },
   ),
-  compileRow("MX_ATTRIBUTE_ARGUMENTS_DROPPED", "<define/X a(v)=1/>\n", 1, 11),
+  // A host that runs attribute methods: without one, the argument list is
+  // refused as a method before the `<define>` can drop it.
+  compileRow("MX_ATTRIBUTE_ARGUMENTS_DROPPED", "<define/X a(v)=1/>\n", 1, 11, {
+    resolveAttributeMethod: () => true,
+  }),
   compileRow(
     "MX_LOWERCASE_BINDING_NOT_CALLED",
     "<define/section|x|>d</define>\n<div>\n  <section/>\n</div>\n",
