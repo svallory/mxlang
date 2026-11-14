@@ -221,6 +221,8 @@ export const NOT_A_DOM_EVENT_CODE = "MX_NOT_A_DOM_EVENT";
 export const DEFINE_CONTENT_DROPPED_CODE = "MX_DEFINE_CONTENT_DROPPED";
 /** A `<define>` called with more params than the first, which the call ignores. */
 export const DEFINE_EXTRA_PARAMS_CODE = "MX_DEFINE_EXTRA_PARAMS";
+/** Arguments on an attribute of a `<define>` or `<const>`, which the tag ignores. */
+export const ATTRIBUTE_ARGUMENTS_DROPPED_CODE = "MX_ATTRIBUTE_ARGUMENTS_DROPPED";
 /** A lowercase tag that names a binding: the native element renders and the binding is not called. */
 export const LOWERCASE_BINDING_NOT_CALLED_CODE =
   "MX_LOWERCASE_BINDING_NOT_CALLED";
@@ -774,6 +776,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "a `<define>` param past the first, which the call ignores",
         ],
         [
+          ATTRIBUTE_ARGUMENTS_DROPPED_CODE,
+          "arguments on an attribute of a `<define>` or `<const>`, which the tag ignores",
+        ],
+        [
           LOWERCASE_BINDING_NOT_CALLED_CODE,
           "a lowercase tag naming a binding, which is not called",
         ],
@@ -877,6 +883,7 @@ export type MxDiagnosticCode =
   | typeof NOT_A_DOM_EVENT_CODE
   | typeof DEFINE_CONTENT_DROPPED_CODE
   | typeof DEFINE_EXTRA_PARAMS_CODE
+  | typeof ATTRIBUTE_ARGUMENTS_DROPPED_CODE
   | typeof LOWERCASE_BINDING_NOT_CALLED_CODE
   | typeof UNREADABLE_CALLEE_INPUT_CODE
   | typeof BODY_DROPPED_CODE

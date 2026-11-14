@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
+import type { MxWarning } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import memberSyntax from "./fixtures/syntax/member-fixture.ts";
 import type { Ir } from "./ir.ts";
@@ -14,6 +15,7 @@ function compile(
   source: string,
   attributeArgs?: HostDeclarations["attributeArgs"],
   dialect?: Dialect,
+  warnings?: MxWarning[],
 ): Ir {
   let result: Ir | undefined;
   compileSource(
@@ -33,6 +35,7 @@ function compile(
     {
       targets,
       dialect,
+      warnings,
       emitIr: (ir) => {
         result = ir;
         return "";
@@ -428,5 +431,72 @@ describe("the opt-in attribute argument refusal", () => {
     expect(() => compile("<x &b(v) a(v)=fn/>", "refuse", memberSyntax)).toThrow(
       "`&b` is a member reference and takes no value",
     );
+  });
+});
+
+describe("arguments on a <define>/<const> attribute warn", () => {
+  function warningsOf(
+    source: string,
+    attributeArgs?: HostDeclarations["attributeArgs"],
+  ): MxWarning[] {
+    const warnings: MxWarning[] = [];
+    compile(source, attributeArgs, undefined, warnings);
+    return warnings;
+  }
+
+  it.each([undefined, "refuse" as const])(
+    "warns at the argument list of a <define> attribute (attributeArgs %s)",
+    (attributeArgs) => {
+      expect(warningsOf("<define/X a(v)=1/>", attributeArgs)).toEqual([
+        expect.objectContaining({
+          code: "MX_ATTRIBUTE_ARGUMENTS_DROPPED",
+          message:
+            "the arguments on the `a` attribute of a `<define>` are ignored; remove them",
+          line: 1,
+          column: 11,
+          end: { line: 1, column: 14 },
+        }),
+      ]);
+    },
+  );
+
+  it.each([undefined, "refuse" as const])(
+    "warns at the argument list of a <const> attribute (attributeArgs %s)",
+    (attributeArgs) => {
+      expect(warningsOf("<const/x value(v)=1/>", attributeArgs)).toEqual([
+        expect.objectContaining({
+          code: "MX_ATTRIBUTE_ARGUMENTS_DROPPED",
+          message:
+            "the arguments on the `value` attribute of a `<const>` are ignored; remove them",
+          line: 1,
+          column: 14,
+          end: { line: 1, column: 17 },
+        }),
+      ]);
+    },
+  );
+
+  it("warns once per attribute with an argument list, an empty one included", () => {
+    expect(warningsOf("<define/X a()=1 b(v)=2 c=3/>")).toEqual([
+      expect.objectContaining({
+        code: "MX_ATTRIBUTE_ARGUMENTS_DROPPED",
+        line: 1,
+        column: 11,
+      }),
+      expect.objectContaining({
+        code: "MX_ATTRIBUTE_ARGUMENTS_DROPPED",
+        line: 1,
+        column: 17,
+      }),
+    ]);
+  });
+
+  it.each([
+    "<define/X a(v) { return v }/>",
+    "<define/X a=1/>",
+    "<const/x=1/>",
+    "<div a(v)=1/>",
+  ])("does not warn for %s", (source) => {
+    expect(warningsOf(source)).toEqual([]);
   });
 });

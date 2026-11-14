@@ -141,6 +141,7 @@ import {
 } from "./default-tag.ts";
 import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
 import {
+  ATTRIBUTE_ARGUMENTS_DROPPED_CODE,
   CONST_WRITE_BEFORE_DECLARATION_CODE,
   DEFINE_CONTENT_DROPPED_CODE,
   DEFINE_EXTRA_PARAMS_CODE,
@@ -4274,6 +4275,7 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   } finally {
     ctx.writeGuards = outerGuards;
   }
+  warnDroppedAttributeArguments(ctx, node, "const");
   // A `<const>` bound to a plain identifier whose value isn't statically a
   // function/arrow/class is "unknown" and routes dynamic when later used as a
   // tag — a destructuring pattern (`<const/{a,b}=...>`) never names a single
@@ -4724,6 +4726,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   // before the params shadow anything (Marko: `<define/D|x| a=x>` reads the
   // `x` outside).
   const attrs = lowerAttrs(ctx, node, "define", "component", false, false);
+  warnDroppedAttributeArguments(ctx, node, "define");
 
   // The params shadow the host's bindings inside the body only, and a
   // statement hoisted from inside belongs to *this* function's head — it may
@@ -4814,6 +4817,53 @@ function dropContentAttrBesideBody(
     code: DEFINE_CONTENT_DROPPED_CODE,
   });
   return attrs.filter((attr) => attr !== dropped);
+}
+
+/**
+ * Warns at each argument list written on an attribute of a `<define>` or
+ * `<const>` (`<define/X a(v)=1/>`, `<const/x value(v)=1/>`): the tag compiles
+ * and ignores the arguments, as stock Marko does, so the output stays and
+ * `MX_ATTRIBUTE_ARGUMENTS_DROPPED` says so. It fires whatever
+ * `attributeArgs` is, because the drop is the same everywhere.
+ *
+ * "Has an argument list" is a presence test, never a parse: `<const>` lowering
+ * never reads the arguments, so parsing them here would turn a broken list
+ * into a new error. Spreads and method shorthand (`a(v) { … }`) carry no
+ * `args`, so neither warns. An empty list (`a()=1`) does.
+ *
+ * Positioned at the list, `(` through `)`; at the attribute when no parsed
+ * `outer` span exists.
+ */
+function warnDroppedAttributeArguments(
+  ctx: Ctx,
+  node: Node,
+  tag: "define" | "const",
+): void {
+  const voice = voiceOfCtx(ctx);
+  for (const attr of tagAttributesOf(node)) {
+    const hasArgs =
+      attr.type === "MxAttribute"
+        ? attr.args != null
+        : attr.arguments !== undefined;
+    if (!hasArgs) continue;
+    const outer = attr.type === "MxAttribute" ? attr.args?.outer : undefined;
+    const hasOuter =
+      typeof outer?.start === "number" && typeof outer?.end === "number";
+    const at = hasOuter
+      ? positionAtOffset(ctx, outer.start)
+      : posOf(ctx, attr);
+    const end = hasOuter
+      ? { end: positionAtOffset(ctx, outer.end) }
+      : warningEnd(ctx, attr);
+    warn(ctx, {
+      message: `the arguments on the \`${attrNameOf(attr)}\` ${voice.attribute} of a ${tagText(ctx, tag, node)} are ignored; remove them`,
+      line: at.line,
+      column: at.column,
+      ...(end.end && { end: { line: end.end.line, column: end.end.column } }),
+      file: ctx.filename,
+      code: ATTRIBUTE_ARGUMENTS_DROPPED_CODE,
+    });
+  }
 }
 
 /**
