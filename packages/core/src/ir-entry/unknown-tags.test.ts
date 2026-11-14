@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
+import type { Dialect } from "../syntax-table.ts";
 import { type LowerSourceOptions, lowerSource } from "./index.ts";
 
 const customTags: Record<string, CustomTag> = {
@@ -1025,5 +1026,67 @@ describe("one error for an unknown tag in a closed parent", () => {
       diagnostics.map((d) => [d.code, d.file ?? "/t.mx", d.line, d.column]),
     ).toContainEqual(["MX_TAG_NOT_ALLOWED", "/t/tags/badge.mx", 1, 12]);
     expect(diagnostics.map((d) => d.code)).toContain("MX_UNKNOWN_TAG");
+  });
+});
+
+describe("a tag a dialect hook builds (ctx.child)", () => {
+  // A line trigger `!go` whose hook builds `<ghost>`, a name with no contract.
+  const dialect: Dialect = {
+    id: "line",
+    name: "Fixture",
+    table: {
+      lineTriggers: [
+        {
+          id: "line",
+          chars: "!",
+          match: "![a-z]+",
+          standIn: "keep",
+          node: { call: "line" },
+        },
+      ],
+    },
+    lowerTrigger: (_id, _text, _span, ctx) => ctx.child("ghost", []),
+  };
+  // `asc=1` against a boolean makes the lowering fail, which is what sends
+  // `lowerSource` to the parse-only unknown-tag scan.
+  const sortTags: Record<string, CustomTag> = {
+    sort: { attributes: { asc: { type: "boolean" } } },
+  };
+  const lower = (source: string) =>
+    lowerSource(source, "/u.mx", {
+      dialect,
+      customTags: sortTags,
+      unknownTags: "reject",
+    });
+
+  it("error path: the scan names the authored unknown tag and leaves out the built one", () => {
+    const { ir, diagnostics } = lower("sort asc=1\n!go\nbogus\n");
+    expect(ir).toBeUndefined();
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[0]).toMatchObject({ severity: "error", line: 1 });
+    expect(diagnostics[0]!.message).toContain(
+      "attribute `asc` must be boolean",
+    );
+    expect(diagnostics[1]).toMatchObject({
+      severity: "error",
+      code: "MX_UNKNOWN_TAG",
+      line: 3,
+      column: 0,
+    });
+    expect(diagnostics[1]!.message).toContain("`<bogus>`");
+    for (const d of diagnostics) expect(d.message).not.toContain("ghost");
+  });
+
+  it("success path: the built tag is MX_UNKNOWN_TAG at the trigger", () => {
+    const { ir, diagnostics } = lower("sort asc=true\n!go\n");
+    expect(ir).toBeUndefined();
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      severity: "error",
+      code: "MX_UNKNOWN_TAG",
+      line: 2,
+      column: 0,
+    });
+    expect(diagnostics[0]!.message).toContain("ghost");
   });
 });

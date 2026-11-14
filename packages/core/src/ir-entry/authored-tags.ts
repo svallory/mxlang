@@ -10,6 +10,13 @@
  * rules preset plus each custom tag's `text` / `preserveWhitespace` — and the
  * same syntax table, and reads the MX document. A parse error here is a parse
  * error in the real lowering too, so the caller keeps its own error.
+ *
+ * The list holds only tags written in the source. A tag a dialect hook builds
+ * (`ctx.child` from a line trigger) is exempt: the dialect owns it, and the
+ * scan never runs the hook, since a trigger node is not a tag node here. The
+ * built tag has no body, so skipping it hides no authored tag. Once the
+ * lowering succeeds it is checked like any other tag (`allUnknownTags` in
+ * `checks.ts`), at the trigger.
  */
 
 import { parseMxDocument } from "../compile.ts";
