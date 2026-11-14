@@ -47,7 +47,9 @@ function parseTsx(code: string): void {
   parse(code, { sourceType: "module", plugins: ["jsx", "typescript"] });
 }
 
-const LIST = "((mxList) => mxList ? [...mxList] : [])";
+const LIST = "((__mxList0) => __mxList0 ? [...__mxList0] : [])";
+// The outer list of a nested `<for>` is named after its body, so takes the next serial.
+const LIST1 = "((__mxList1) => __mxList1 ? [...__mxList1] : [])";
 const ROW = (key: string, body: string): string =>
   `<__mxFragment key={${key}}>${body}</__mxFragment>`;
 
@@ -91,27 +93,27 @@ const CASES: Array<[string, string, string]> = [
   [
     "<for in> with an empty body",
     "<for|k| in=input.o></for>",
-    `return (<>{Object.entries(input.o ?? {}).map(([k, value]) => ${ROW("k", "")})}</>);`,
+    `return (<>{Object.entries(input.o ?? {}).map(([k, __mxValue0]) => ${ROW("k", "")})}</>);`,
   ],
   [
     "<for from to> with a lone placeholder",
     `<for|n| from=1 to=3>${D}{n}</for>`,
-    `return (<>{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (__mxUnused, __mxIndex) => (1) + __mxIndex).map((n) => ${ROW("n", "{n}{null}")})}</>);`,
+    `return (<>{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (__mxUnused, __mxIndex0) => (1) + __mxIndex0).map((n) => ${ROW("n", "{n}{null}")})}</>);`,
   ],
   [
     "<for from until step> with a lone placeholder",
     `<for|n| from=0 until=6 step=2>${D}{n}</for>`,
-    `return (<>{Array.from({ length: Math.max(0, Math.ceil(((6) - (0)) / (2))) }, (__mxUnused, __mxIndex) => (0) + __mxIndex * (2)).map((n) => ${ROW("n", "{n}{null}")})}</>);`,
+    `return (<>{Array.from({ length: Math.max(0, Math.ceil(((6) - (0)) / (2))) }, (__mxUnused, __mxIndex0) => (0) + __mxIndex0 * (2)).map((n) => ${ROW("n", "{n}{null}")})}</>);`,
   ],
   [
     "<for from to> with an empty body",
     "<for|n| from=1 to=3></for>",
-    `return (<>{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (__mxUnused, __mxIndex) => (1) + __mxIndex).map((n) => ${ROW("n", "")})}</>);`,
+    `return (<>{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (__mxUnused, __mxIndex0) => (1) + __mxIndex0).map((n) => ${ROW("n", "")})}</>);`,
   ],
   [
     "a <for> whose only child is a <for> with a lone placeholder",
     `<for|a| of=input.l><for|b| of=a>${D}{b}</for></for>`,
-    `return (<>{${LIST}(input.l).map((a) => ${ROW("a", `{${LIST}(a).map((b) => ${ROW("b", "{b}{null}")})}`)})}</>);`,
+    `return (<>{${LIST1}(input.l).map((a) => ${ROW("a", `{${LIST}(a).map((b) => ${ROW("b", "{b}{null}")})}`)})}</>);`,
   ],
   [
     "a <for> with a lone placeholder as the only child of an <if>",

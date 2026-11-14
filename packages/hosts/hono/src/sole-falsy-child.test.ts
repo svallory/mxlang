@@ -51,7 +51,9 @@ function parseTsx(code: string): void {
   parse(code, { sourceType: "module", plugins: ["jsx", "typescript"] });
 }
 
-const LIST = "((mxList) => mxList ? [...mxList] : [])";
+const LIST = "((__mxList0) => __mxList0 ? [...__mxList0] : [])";
+// The outer list of a nested `<for>` is named after its body, so takes the next serial.
+const LIST1 = "((__mxList1) => __mxList1 ? [...__mxList1] : [])";
 const ROW = (key: string, body: string): string =>
   `<__mxFragment key={${key}}>${body}</__mxFragment>`;
 
@@ -100,7 +102,7 @@ const CASES: Array<[string, string, string]> = [
   [
     "<for from to> with a lone placeholder",
     `<for|n| from=0 to=1>${D}{n}</for>`,
-    `return (<>{Array.from({ length: Math.max(0, (1) - (0) + 1) }, (__mxUnused, __mxIndex) => (0) + __mxIndex).map((n) => ${ROW("n", "{n}{null}")})}</>);`,
+    `return (<>{Array.from({ length: Math.max(0, (1) - (0) + 1) }, (__mxUnused, __mxIndex0) => (0) + __mxIndex0).map((n) => ${ROW("n", "{n}{null}")})}</>);`,
   ],
   [
     "a <for> with a lone placeholder as the only child of an <if>",
@@ -110,7 +112,7 @@ const CASES: Array<[string, string, string]> = [
   [
     "a <for> inside a <for>: only the inner row is closed",
     `<for|a| of=input.l><for|b| of=a>${D}{b}</for></for>`,
-    `return (<>{${LIST}(input.l).map((a) => ${ROW("a", `{${LIST}(a).map((b) => ${ROW("b", "{b}{null}")})}`)})}</>);`,
+    `return (<>{${LIST1}(input.l).map((a) => ${ROW("a", `{${LIST}(a).map((b) => ${ROW("b", "{b}{null}")})}`)})}</>);`,
   ],
   [
     "a define call with a lone placeholder body",

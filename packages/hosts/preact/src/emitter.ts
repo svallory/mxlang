@@ -290,6 +290,8 @@ interface EmitterOptions {
   aliases?: Set<string>;
   varStatements?: string[];
   varSerial?: { n: number };
+  /** Serial for generated loop names (`#generatedName`), per emit. */
+  nameSerial?: { n: number };
   callbackScope?: boolean;
   /** Tooling-only handler-type alias name (`#typeCheck`). */
   typeCheck?: string;
@@ -953,24 +955,11 @@ function hasNamedAttr(attrs: Attr[], name: string): boolean {
   return attrs.some((attr) => attr.kind !== "spread" && attr.name === name);
 }
 
-function identifierNames(text: string): Set<string> {
-  return new Set(text.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []);
-}
-
 /**
  * The builder's `add` callback, or the accumulator of the non-contextual
  * IIFE fold; reserved `__mx` prefix.
  */
 const ATTR_TAG_ACC = "__mxAttrTagAcc";
-
-/** A loop-counter name that cannot shadow anything the body already uses. */
-function hygienicName(base: string, params: string[], body: string): string {
-  const used = identifierNames(`${params.join(" ")} ${body}`);
-  if (!used.has(base)) return base;
-  let index = 2;
-  while (used.has(`${base}${index}`)) index++;
-  return `${base}${index}`;
-}
 
 /**
  * The two bindings an `<for from/to>` mapper names in its own parameter list.
@@ -988,8 +977,6 @@ function hygienicName(base: string, params: string[], body: string): string {
  * which is the other fix.)
  */
 const RANGE_MAPPER_UNUSED = "__mxUnused";
-const rangeCounter = (params: string[], body: string): string =>
-  hygienicName("__mxIndex", params, body);
 
 /**
  * A range `<for>`'s row count (`span`) and its loop value at the counter
@@ -1116,6 +1103,12 @@ export class PreactEmitter implements Emitter<string> {
   /** Serial for the temps those statements bind, per emitted module. */
   #varSerial: { n: number };
   /**
+   * Serial for the loop names `#generatedName` makes. Shared by reference
+   * with every derived emitter (`#child`, `#scopeOf`) and never reset, so
+   * each generated name is unique within one emit.
+   */
+  readonly #nameSerial: { n: number };
+  /**
    * This emitter is filling a JSX **callback**, not the component body.
    *
    * Every structural kind on this target lowers to an expression — a `<for>`
@@ -1227,6 +1220,7 @@ export class PreactEmitter implements Emitter<string> {
     this.#aliases = options.aliases ?? new Set();
     this.#varStatements = options.varStatements ?? [];
     this.#varSerial = options.varSerial ?? { n: 0 };
+    this.#nameSerial = options.nameSerial ?? { n: 0 };
     this.#callbackScope = options.callbackScope ?? false;
     this.#decodeText = options.decodeText ?? true;
     this.#bare = options.bare ?? false;
@@ -1253,6 +1247,17 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /**
+   * A name for a binding the emitter introduces (a loop's list, entry value,
+   * range counter or attribute-tag index): `__mx<base><n>` from the per-emit
+   * `#nameSerial` counter. `__mx` is reserved for authored bindings
+   * (`checkReservedBindings`) and the serial keeps nested loops' names apart,
+   * so no name in scope can collide with it and nothing needs scanning.
+   */
+  #generatedName(base: string): string {
+    return `__mx${base}${this.#nameSerial.n++}`;
+  }
+
+  /**
    * An emitter sharing this one's dialect, import collection and region
    * sink. Everything not overridden is inherited.
    */
@@ -1272,6 +1277,7 @@ export class PreactEmitter implements Emitter<string> {
       aliases: this.#aliases,
       varStatements: overrides.varStatements ?? this.#varStatements,
       varSerial: overrides.varSerial ?? this.#varSerial,
+      nameSerial: this.#nameSerial,
       callbackScope: overrides.callbackScope ?? this.#callbackScope,
       typeCheck: this.#typeCheck,
       decodeText: overrides.decodeText ?? this.#decodeText,
@@ -2226,13 +2232,12 @@ export class PreactEmitter implements Emitter<string> {
     key: string,
     contextual: boolean,
   ): MappedCode {
-    const bodyText = nodes.map((node) => JSON.stringify(node)).join(" ");
     const [first = "item", second] = loop.params;
     const source = loop.source;
     const itemIndex =
       source.kind === "of" && second
         ? second
-        : hygienicName("mxAttrIndex", loop.params, bodyText);
+        : this.#generatedName("AttrIndex");
     const body = this.#inScope(loop.bindings, [], () =>
       this.#attributeTagFold(
         nodes,
@@ -2252,7 +2257,7 @@ export class PreactEmitter implements Emitter<string> {
         "} ",
       );
     if (source.kind === "of") {
-      const listVar = hygienicName("mxList", loop.params, source.list.code);
+      const listVar = this.#generatedName("List");
       return loopOver(
         concatMapped(
           `((${listVar}) => ${listVar} ? [...${listVar}] : [])(`,
@@ -2263,20 +2268,14 @@ export class PreactEmitter implements Emitter<string> {
       );
     }
     if (source.kind === "in") {
-      const value =
-        second ??
-        hygienicName(
-          "value",
-          loop.params,
-          `${body.code} ${source.object.code}`,
-        );
+      const value = second ?? this.#generatedName("Value");
       return loopOver(
         concatMapped("Object.entries(", mappedExpr(source.object), " ?? {})"),
         `[${first}, ${value}]`,
       );
     }
 
-    const counter = rangeCounter(loop.params, body.code);
+    const counter = this.#generatedName("Index");
     const { span, value } = rangeParts(source, counter);
     return loopOver(
       concatMapped(
@@ -3324,7 +3323,7 @@ export class PreactEmitter implements Emitter<string> {
       // unused binding in the callback.
       const params = second ? `${first}, ${second}` : first;
       const key = keyFrom(first);
-      const listVar = hygienicName("mxList", node.params, source.list.code);
+      const listVar = this.#generatedName("List");
       this.#out.push(
         this.#slot(
           `((${listVar}) => ${listVar} ? [...${listVar}] : [])(`,
@@ -3341,13 +3340,7 @@ export class PreactEmitter implements Emitter<string> {
     }
 
     if (source.kind === "in") {
-      const value =
-        second ??
-        hygienicName(
-          "value",
-          node.params,
-          `${body.code} ${source.object.code}`,
-        );
+      const value = second ?? this.#generatedName("Value");
       const key = keyFrom(first);
       this.#out.push(
         this.#slot(
@@ -3364,7 +3357,7 @@ export class PreactEmitter implements Emitter<string> {
       return;
     }
 
-    const counter = rangeCounter(node.params, body.code);
+    const counter = this.#generatedName("Index");
     const { span, value } = rangeParts(source, counter);
     // One `.map` over the index array, binding the loop value inside the
     // callback rather than in a first pass. Building the values first and

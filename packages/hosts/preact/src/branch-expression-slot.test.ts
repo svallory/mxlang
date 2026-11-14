@@ -79,7 +79,7 @@ const CASES: Array<[string, string, string]> = [
   [
     "in an <if> inside a <for>",
     `${DEFINE}<for|i| of=input.l><if=i><Foo/></if></for>`,
-    "return (<>{((mxList) => mxList ? [...mxList] : [])(input.l).map((i) => <__mxFragment key={i}>{i ? __mxDef_Foo() : null}</__mxFragment>)}</>);",
+    "return (<>{((__mxList0) => __mxList0 ? [...__mxList0] : [])(input.l).map((i) => <__mxFragment key={i}>{i ? __mxDef_Foo() : null}</__mxFragment>)}</>);",
   ],
   [
     "with attributes",
@@ -109,17 +109,17 @@ const CASES: Array<[string, string, string]> = [
   [
     "a <for> as the only child of an <if>",
     `${DEFINE}<if=input.a><for|i| of=input.l><Foo/></for></if>`,
-    "return (<>{input.a ? ((mxList) => mxList ? [...mxList] : [])(input.l).map((i) => <__mxFragment key={i}>{__mxDef_Foo()}</__mxFragment>) : null}</>);",
+    "return (<>{input.a ? ((__mxList0) => __mxList0 ? [...__mxList0] : [])(input.l).map((i) => <__mxFragment key={i}>{__mxDef_Foo()}</__mxFragment>) : null}</>);",
   ],
   [
     "a <for in> as the only child of an <if>",
     `${DEFINE}<if=input.a><for|k| in=input.o><Foo/></for></if>`,
-    "return (<>{input.a ? Object.entries(input.o ?? {}).map(([k, value]) => <__mxFragment key={k}>{__mxDef_Foo()}</__mxFragment>) : null}</>);",
+    "return (<>{input.a ? Object.entries(input.o ?? {}).map(([k, __mxValue0]) => <__mxFragment key={k}>{__mxDef_Foo()}</__mxFragment>) : null}</>);",
   ],
   [
     "a ranged <for> as the only child of an <if>",
     `${DEFINE}<if=input.a><for|i| from=0 to=2><Foo/></for></if>`,
-    "return (<>{input.a ? Array.from({ length: Math.max(0, (2) - (0) + 1) }, (__mxUnused, __mxIndex) => (0) + __mxIndex).map((i) => <__mxFragment key={i}>{__mxDef_Foo()}</__mxFragment>) : null}</>);",
+    "return (<>{input.a ? Array.from({ length: Math.max(0, (2) - (0) + 1) }, (__mxUnused, __mxIndex0) => (0) + __mxIndex0).map((i) => <__mxFragment key={i}>{__mxDef_Foo()}</__mxFragment>) : null}</>);",
   ],
   [
     "a <@catch> body that is a define call (an arrow body, not a block)",
@@ -184,7 +184,7 @@ const UNCHANGED: Array<[string, string, string]> = [
   [
     "a define call as the only child of a <for>",
     `${DEFINE}<for|i| of=input.l><Foo/></for>`,
-    "return (<>{((mxList) => mxList ? [...mxList] : [])(input.l).map((i) => <__mxFragment key={i}>{__mxDef_Foo()}</__mxFragment>)}</>);",
+    "return (<>{((__mxList0) => __mxList0 ? [...__mxList0] : [])(input.l).map((i) => <__mxFragment key={i}>{__mxDef_Foo()}</__mxFragment>)}</>);",
   ],
   [
     "an imported component as the only child of an <if>",

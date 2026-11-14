@@ -433,7 +433,7 @@ describe("<if> chains", () => {
 describe("<for> loops", () => {
   it("keys an `of` loop by the row itself when `by=` is absent", () => {
     expect(markup("<for|x| of=input.items><li>${x}</li></for>")).toBe(
-      "{((mxList) => mxList ? [...mxList] : [])(input.items).map((x) => <__mxFragment key={x}><li>{__mxRenderable(x)}</li></__mxFragment>)}",
+      "{((__mxList0) => __mxList0 ? [...__mxList0] : [])(input.items).map((x) => <__mxFragment key={x}><li>{__mxRenderable(x)}</li></__mxFragment>)}",
     );
   });
 
@@ -477,7 +477,33 @@ describe("<for> loops", () => {
 
   it("names the `in` loop's value binding when the author omits it", () => {
     expect(markup("<for|k| in=input.obj><p>${k}</p></for>")).toContain(
-      "([k, value])",
+      "([k, __mxValue0])",
+    );
+  });
+
+  it("names the omitted `in` value `__mxValue<n>` whatever the body reads", () => {
+    // The generated name was picked by scanning the body for identifiers,
+    // so an authored `value` in scope renamed it to `value2`. It now comes
+    // from the reserved `__mx` space, so authored text changes nothing.
+    expect(
+      markup("<const/value=1/>\n<for|k| in=input.o><p>${value}</p></for>"),
+    ).toContain(
+      "Object.entries(input.o ?? {}).map(([k, __mxValue0]) => <__mxFragment key={k}><p>{__mxRenderable(value)}</p></__mxFragment>)",
+    );
+  });
+
+  it("names the `of` list `__mxList<n>` even beside an authored `mxList`", () => {
+    expect(
+      markup("<const/mxList=[1]/>\n<for|x| of=mxList><p>${x}</p></for>"),
+    ).toContain("((__mxList0) => __mxList0 ? [...__mxList0] : [])(mxList)");
+  });
+
+  it("numbers the generated names of nested loops apart, in emission order", () => {
+    // The inner loop's body is emitted, and named, before the outer list.
+    expect(
+      markup("<for|row| of=input.rows><for|k| in=row><p>${k}</p></for></for>"),
+    ).toBe(
+      "{((__mxList1) => __mxList1 ? [...__mxList1] : [])(input.rows).map((row) => <__mxFragment key={row}>{Object.entries(row ?? {}).map(([k, __mxValue0]) => <__mxFragment key={k}><p>{__mxRenderable(k)}</p></__mxFragment>)}</__mxFragment>)}",
     );
   });
 
@@ -495,7 +521,7 @@ describe("<for> loops", () => {
 
   it("folds `step` into the emitted row value", () => {
     const out = markup("<for|i| from=1 to=9 step=2><b>${i}</b></for>");
-    expect(out).toContain("(1) + __mxIndex * (2)");
+    expect(out).toContain("(1) + __mxIndex0 * (2)");
     expect(out).toContain("Math.floor(((9) - (1)) / (2)) + 1");
   });
 
@@ -505,15 +531,14 @@ describe("<for> loops", () => {
     );
   });
 
-  it("names the counter `__mxIndex`, a name authored code cannot take", () => {
+  it("names the counter `__mxIndex<n>`, a name authored code cannot take", () => {
     // The counter is in scope for the authored `from`/`to`/`step`
     // expressions, which is why it must be a reserved `__mx` name and not a
-    // plausible author name: see `range-name-collision.test.ts`. The
-    // disambiguation `hygienicName` still does is unreachable for the base
-    // name — an authored `__mxIndex` is rejected at the binding — but it
-    // still guards the generated-name-versus-generated-name case.
+    // plausible author name: see `range-name-collision.test.ts`. An authored
+    // `__mx` binding is rejected at the binding, and the per-emit serial
+    // keeps one generated name apart from another.
     expect(markup("<for|i| from=0 to=2><b>${i}</b></for>")).toContain(
-      "(__mxUnused, __mxIndex)",
+      "(__mxUnused, __mxIndex0)",
     );
   });
 });

@@ -98,8 +98,8 @@ so a template using no `<try>` and no structured `class` imports nothing.
 | `...rest` | `{...rest}` |
 | `<if=c>`/`<else-if=c>`/`<else>` | one ternary chain, ending in `null` when there is no `<else>` |
 | `<for|x| of=xs>` | `[...xs].map((x) => <Fragment key={…}>…</Fragment>)` |
-| `<for|k, v| in=obj>` | `Object.entries(obj).map(([k, v]) => …)` |
-| `<for|i| from=a to=b step=s>` | `Array.from({length: …}, (_, i) => …).map(…)` |
+| `<for|k, v| in=obj>` | `Object.entries(obj).map(([k, v]) => …)`; an omitted value binds `__mxValue<n>` |
+| `<for|i| from=a to=b step=s>` | `Array.from({length: …}, (__mxUnused, __mxIndex<n>) => …).map(…)` |
 | `<Comp x=1/>` | `<Comp x={1} />` |
 | `<Comp>children</Comp>` | JSX children |
 | `<Comp|item|>…</Comp>` | a render-prop child: `{(item) => …}` |

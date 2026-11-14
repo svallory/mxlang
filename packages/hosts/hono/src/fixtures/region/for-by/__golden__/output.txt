@@ -3,9 +3,9 @@ import { Fragment as __mxFragment } from "hono/jsx";const __mxAttrValue = ((vali
 export default function Page(props: {items: Item[];}) {
   return <>
     <><ul>
-        {((mxList) => mxList ? [...mxList] : [])(props.items).map(
+        {((__mxList0) => __mxList0 ? [...__mxList0] : [])(props.items).map(
           (item, index) => <__mxFragment key={item.id}>
-            <li data-index=
-              {__mxAttrValue("data-index", index, "li")}>{__mxTextValue(item.name)}</li></__mxFragment>)}</ul></>
+
+            <li data-index={__mxAttrValue("data-index", index, "li")}>{__mxTextValue(item.name)}</li></__mxFragment>)}</ul></>
   </>;
 }

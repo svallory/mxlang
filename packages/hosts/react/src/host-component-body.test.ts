@@ -94,7 +94,7 @@ const EMITTED: Array<[string, string, string]> = [
     `${BOX}<Box><for|i| of=input.l>${D}{i}</for></Box>`,
     callOf(
       "Box",
-      "() => ((mxList) => mxList ? [...mxList] : [])(input.l).map((i) => <__mxFragment key={i}>{i}{null}</__mxFragment>)",
+      "() => ((__mxList0) => __mxList0 ? [...__mxList0] : [])(input.l).map((i) => <__mxFragment key={i}>{i}{null}</__mxFragment>)",
     ),
   ],
   [
