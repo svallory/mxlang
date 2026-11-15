@@ -5802,7 +5802,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   if (nested) {
     raise(
       INVALID_RETURN_CODE,
-      `${returnTag()} must be at the top level of its template or \`<define>\` body; it declares the value the whole unit or define returns, so it cannot be conditional or nested`,
+      `${returnTag()} must be at the top level of its template or ${tagText(ctx, "define")} body; it declares the value the whole unit or define returns, so it cannot be conditional or nested`,
       node,
     );
   }
