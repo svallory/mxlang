@@ -961,7 +961,13 @@ export const CONCISE_DASH_ROWS: [string, string, string][] = [
  * The tag grammar's whitespace beyond `isWhitespaceCode`: the rest of
  * Unicode's `Pattern_White_Space` (U+0085, U+200E, U+200F, U+2028, U+2029).
  */
-export const PATTERN_WHITE_SPACE = ["\u0085", "‎", "‏", " ", " "] as const;
+export const PATTERN_WHITE_SPACE = [
+  "\u0085",
+  "\u200E",
+  "\u200F",
+  "\u2028",
+  "\u2029",
+] as const;
 
 /**
  * Tag-grammar inputs where `W` separates: after a tag name, an attribute
