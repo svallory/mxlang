@@ -34,9 +34,9 @@ kind (`packages/core/src/emit.ts:35`), and `drive` calls them
 - `PreactEmitter` (`packages/hosts/preact/src/emitter.ts:1076`) is the only
   JSX emitter for Preact, React and Hono.
 - React and Hono have no emitter of their own. `compileReactMx` calls
-  `compilePreactMx` with React's dialect and declarations
+  `compilePreactMx` with `reactDialect` and `reactDeclarations`
   (`packages/hosts/react/src/compile.ts:53-62`); `compileHonoMx` does the same
-  with Hono's (`packages/hosts/hono/src/compile.ts:53`). Their region entries
+  with `honoDialect` and `honoDeclarations` (`packages/hosts/hono/src/compile.ts:53`). Their region entries
   call the shared `compileJsxRegion` (`packages/hosts/react/src/compile.ts:88`,
   `packages/hosts/hono/src/compile.ts:88`), defined in
   `packages/hosts/preact/src/region.ts:187`.
@@ -103,8 +103,11 @@ implementation of the same core interface with its own declarations
 (`packages/hosts/solid/package.json` has no such dependency). Its control flow
 is Solid's components, not JavaScript expressions:
 
-- `<if>` becomes nested `<Show when={…} fallback={…}>`
-  (`ifChain`, `packages/hosts/solid/src/emitter.ts:3099`; `<Show` at `:3115`).
+- `<if>` becomes nested `<Show when={…} fallback={…}>` when the chain has at
+  most two conditioned branches, and `<Switch fallback={…}>` with one
+  `<Match when={…}>` per branch when it has three or more (`ifChain`,
+  `packages/hosts/solid/src/emitter.ts:3099`; `<Show` at `:3115`, the
+  two-branch test at `:3127`, `<Match` at `:3137`, `<Switch` at `:3146`).
 - `<for>` becomes `<For each={…}>` with accessor parameters
   (`forLoop`, `packages/hosts/solid/src/emitter.ts:3150`; `<For` at `:3187`).
 - `<try>` becomes `<Loading>`/`<Errored>`
@@ -153,16 +156,16 @@ All hooks live in the `jsx` target's package. None of them adds anything to
 `packages/core`: core keeps its `Emitter` interface and `BindingRegistry`, and
 the `jsx` target's emitter calls a host handler where it calls its own code
 today. A host hands its handlers to the target from its descriptor's `load()`
-(the closure that already passes the dialect and declarations to the compile
-entry, `packages/hosts/react/src/compile.ts:53-62`). A third-party host on
+(the closure that already passes the `JsxDialect` value and the declarations to
+the compile entry, `packages/hosts/react/src/compile.ts:53-62`). A third-party host on
 `jsx` uses the same mechanism; how one is found is MX 2's question.
 
 | Hook | What it does | IR kind | Signature sketch | Default | Today's default lives at |
 |---|---|---|---|---|---|
 | `If` | turns an `<if>`/`<else-if>`/`<else>` chain into JSX | `IfChain` (`Emitter.ifChain`) | `ifChain(node, lower): MappedCode` | a ternary chain ending in `null` | `packages/hosts/preact/src/emitter.ts:3258` |
 | `For` | turns a `<for>` into JSX that renders each row | `For` (`Emitter.forLoop`) | `forLoop(node, lower): MappedCode` | `.map` with a `key` per row | `packages/hosts/preact/src/emitter.ts:3292` |
-| `Try` | renders `<try>`'s body under an error boundary and a placeholder | `DelegatedTag` with data `{ kind: "try" }` (no IR kind of its own) | `tryTag(node, lower): MappedCode` | `MxErrorBoundary` with a body thunk, `Suspense` under `<@placeholder>` | `packages/hosts/preact/src/emitter.ts:3452` |
-| `Await` | reserved for `<await>` | none: `<await>` never reaches an emitter | `awaitTag?(node, lower): MappedCode` | refuse, with today's error | every JSX host refuses `<await>` (`apps/docs/docs/specification.md:4134`) |
+| `Try` | renders `<try>`'s body under an error boundary and a placeholder | `DelegatedTag` with data `{ kind: "try" }` (no IR kind of its own) | `tryTag(node, lower): MappedCode` | `MxErrorBoundary` with a body thunk, `MxPlaceholder` (Preact's `Suspense`) under `<@placeholder>` | `packages/hosts/preact/src/emitter.ts:3452` |
+| `Await` | reserved for `<await>` | none: `<await>` never reaches an emitter | `awaitTag?(node, lower): MappedCode` | refuse, with today's error | each JSX host refuses `<await>` with its own error today, Solid through the field guard (`apps/docs/docs/specification.md:4134`) |
 | Binding read/write | rewrites references to a binding a host declares (a `<let>` read as `count()`) | none: core's `BindingRegistry`, used during lowering | `bindingRewrite?(name, declaredBy): BindingRewrite \| undefined` | no rewrite | core's registry (`packages/core/src/core.ts:345`), see below |
 | Output flavour | the names and small value shapes the emitted JSX uses | every kind that prints a name | a value of today's `JsxDialect` type | `preactDialect` | `packages/hosts/preact/src/dialect.ts:308` |
 
@@ -170,7 +173,8 @@ entry, `packages/hosts/react/src/compile.ts:53-62`). A third-party host on
 print child content: rendering children as an expression, opening a scope for
 row bindings, adding a runtime import. Today these are private members of
 `PreactEmitter` (`#expression`, `#inScope`, `#runtimeImports`, used in
-`forLoop` and `delegatedTag`); the step that introduces the hooks makes them
+`forLoop` and `delegatedTag`: `packages/hosts/preact/src/emitter.ts:3296-3297`,
+`:3483`, `:3514`); the step that introduces the hooks makes them
 the handler's argument.
 
 **`Await`.** No host fills it. It exists because decision 187 names it, and
@@ -202,7 +206,7 @@ Rows are hooks; each cell names what supplies the behaviour today.
 
 | Hook | preact | react | hono | solid |
 |---|---|---|---|---|
-| `If` | `PreactEmitter.ifChain` (`packages/hosts/preact/src/emitter.ts:3258`) | the same code, through `compilePreactMx` | the same code, through `compilePreactMx` | `SolidEmitter.ifChain`, `<Show>` (`packages/hosts/solid/src/emitter.ts:3099`) |
+| `If` | `PreactEmitter.ifChain` (`packages/hosts/preact/src/emitter.ts:3258`) | the same code, through `compilePreactMx` | the same code, through `compilePreactMx` | `SolidEmitter.ifChain`, `<Show>`/`<Switch>` (`packages/hosts/solid/src/emitter.ts:3099`) |
 | `For` | `PreactEmitter.forLoop` (`packages/hosts/preact/src/emitter.ts:3292`) | the same code | the same code | `SolidEmitter.forLoop`, `<For>` (`packages/hosts/solid/src/emitter.ts:3150`) |
 | `Try` | `PreactEmitter.delegatedTag` with `preactDialect`'s `MxErrorBoundary`/`MxPlaceholder` from `@mxlang/host-preact/runtime` (`packages/hosts/preact/src/dialect.ts:318-320`) | the same code with `reactDialect`'s names from `@mxlang/host-react/runtime` (`packages/hosts/react/src/dialect.ts:285-287`) | the same code with `honoDialect`'s `MxErrorBoundary` and `Suspense` from `@mxlang/host-hono/runtime` (`packages/hosts/hono/src/dialect.ts:24-27`) | `SolidEmitter.delegatedTag`, `<Loading>`/`<Errored>` (`packages/hosts/solid/src/emitter.ts:3441`) |
 | `Await` | refused (spec §13.3) | refused | refused | refused |
@@ -287,9 +291,9 @@ emitted module at the base and the head, and the affected tests unchanged.
    with its refusal; output flavour is today's `JsxDialect` value. React and
    Hono pass their flavour and no handler. No binding hook yet. Proof: the
    oracles and byte comparison. Depends on step 2.
-5. **Fold Solid.** Size L, probably several PRs. Packages:
+5. **Fold Solid.** Size L; may take several PRs. Packages:
    `packages/hosts/solid`, `packages/targets/jsx`. Solid supplies `If`
-   (`<Show>`), `For` (`<For>`), `Try` (`<Loading>`/`<Errored>`) and an output
+   (`<Show>`/`<Switch>`), `For` (`<For>`), `Try` (`<Loading>`/`<Errored>`) and an output
    flavour, and drops the parts of `SolidEmitter` the target then covers. Its
    first PR compares `SolidEmitter` with the target's emitter and lists every
    difference outside the named hooks; any extra hook it needs is proposed
