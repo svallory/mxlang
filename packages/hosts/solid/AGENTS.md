@@ -247,12 +247,13 @@ Three facts worth knowing before touching it:
   `HoistedDefine`) writes each one into the surrounding module after the
   import block, the same channel and placement `hoistedImports` uses.
   **Only a *direct top-level* child of the region hoists** — `define()`
-  checks the same `lazyScope` flag `/var` already uses (true once emission
-  has entered a `<for>`/`<if>`/attribute-tag body/another callback scope)
-  and fails with a positioned error naming the construct otherwise. Module
-  scope has no per-row or per-branch scope for a nested `<define>` to close
-  over, the identical §7.5-8 reasoning that already restricts `/var` to the
-  top level here.
+  checks the `lazyScope` flag (true once emission has entered a
+  `<for>`/`<if>`/call content/`<define>` body) and fails with a positioned
+  error naming the construct otherwise. Module scope has no per-row or
+  per-branch scope for a nested `<define>` to close over (§7.5-8). A `/var`
+  in such a body is fine: `inLazyScope` declares the body's own `let`s in a
+  function called in place, and `scopeReturnVars` treats the body as a scope
+  of its own.
   **A hoisted `<define>` may not close over a value local to the region**
   (a signal, a prop, anything from the surrounding TypeScript function the
   region lives in) — only its own params, another top-level `<define>`'s
@@ -306,8 +307,8 @@ Three facts worth knowing before touching it:
   plain-value convention. `/var` on a
   `<define>` call binds the call's own return value directly (there is no
   Solid-only callback-prop channel for a plain function call the way a
-  JSX component call has); it is otherwise still refused inside
-  `<for>`/`<if>` (§7.5-8), unchanged from every other `Component` target.
+  JSX component call has); inside a lazy body it binds in that body's own
+  scope, like every other `Component` target's `/var`.
   **Three round-2 review fixes, worth knowing before touching any of this:**
   - **`compileSolidUnit` must never see `hoistedDefines`/`defineBindings`
     populated.** `collectReturnVars` takes an `allowHoist` parameter
