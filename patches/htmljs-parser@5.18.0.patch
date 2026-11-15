@@ -1,8 +1,17 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e9674cffa86 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d62cda8c93356d84cb18fc67fa827cc3160de82b 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -145,8 +145,14 @@ var Parser = class {
+@@ -138,15 +138,21 @@ var Parser = class {
+     beginMixedMode && (this.endingMixedModeAtEOL = !0), this.activeTag = parentTag, name && ((_b = (_a = this.options).onCloseTagName) == null || _b.call(_a, name)), (_d = (_c = this.options).onCloseTagEnd) == null || _d.call(_c, { start, end });
+   }
+   // --------------------------
+-  consumeWhitespaceIfBefore(str, start = 0) {
++  consumeWhitespaceIfBefore(str, start = 0, isSpace = isWhitespaceCode) {
+     let { pos, data } = this, cur = pos + start;
+-    for (; isWhitespaceCode(data.charCodeAt(cur)); ) cur++;
++    for (; isSpace(data.charCodeAt(cur)); ) cur++;
+     return this.lookAheadFor(str, cur) ? (this.pos = cur, !0) : !1;
    }
    getPreviousNonWhitespaceCharCode(start = -1) {
      let behind = start;
@@ -19,15 +28,80 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
    }
    onlyWhitespaceRemainsOnLine(start) {
      let maxOffset = this.maxPos - this.pos, ahead = start;
-@@ -311,7 +317,7 @@ var ATTRIBUTE = {
+@@ -164,11 +170,11 @@ var Parser = class {
+     }
+     return !0;
+   }
+-  consumeWhitespaceOnLine(start = 1) {
++  consumeWhitespaceOnLine(start = 1, isSpace = isWhitespaceCode) {
+     let maxOffset = this.maxPos - this.pos, ahead = start;
+     for (; ahead < maxOffset; ) {
+       let code = this.lookAtCharCodeAhead(ahead);
+-      if (isWhitespaceCode(code))
++      if (isSpace(code))
+         switch (code) {
+           case 13:
+           case 10:
+@@ -180,9 +186,9 @@ var Parser = class {
+     }
+     return this.pos = this.maxPos, !0;
+   }
+-  consumeWhitespace() {
++  consumeWhitespace(isSpace = isWhitespaceCode) {
+     let maxOffset = this.maxPos - this.pos, ahead = 0;
+-    for (; ahead < maxOffset && isWhitespaceCode(this.lookAtCharCodeAhead(ahead)); )
++    for (; ahead < maxOffset && isSpace(this.lookAtCharCodeAhead(ahead)); )
+       ahead++;
+     this.pos += ahead;
+   }
+@@ -300,7 +306,7 @@ var ATTRIBUTE = {
+         this.pos += code === 13 && data.charCodeAt(this.pos + 1) === 10 ? 2 : 1;
+         continue;
+       }
+-      if (isWhitespaceCode(code)) {
++      if (isPatternWhiteSpaceCode(code)) {
+         this.pos++;
+         continue;
+       }
+@@ -309,9 +315,9 @@ var ATTRIBUTE = {
+         return;
+       }
        if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
-         attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
+-        attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
++        attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace(isPatternWhiteSpaceCode)) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace(isPatternWhiteSpaceCode)), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
 -        expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
 +        expr.attrValue = !!(attr.name || attr.spread), expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
          return;
        } else if (code === 40) {
          attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
+@@ -339,7 +345,7 @@ var ATTRIBUTE = {
+           );
+         attr.stage = 1;
+         let expr = this.enterState(states_exports.EXPRESSION);
+-        expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrName : shouldTerminateConciseAttrName : shouldTerminateHtmlAttrName;
++        expr.terminatedByWhitespace = !0, expr.attrName = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrName : shouldTerminateConciseAttrName : shouldTerminateHtmlAttrName;
+         return;
+       } else {
+         flushPendingAsync(this, attr), this.exitState();
+@@ -381,7 +387,7 @@ var ATTRIBUTE = {
+           start: child.start,
+           end: child.end
+         };
+-        this.consumeWhitespaceIfBefore("{") ? (attr.async && (attr.name && ((_d = (_c = this.options).onAttrName) == null || _d.call(_c, attr.name)), attr.asyncMethod = attr.async, attr.async = void 0), attr.args = {
++        this.consumeWhitespaceIfBefore("{", 0, isPatternWhiteSpaceCode) ? (attr.async && (attr.name && ((_d = (_c = this.options).onAttrName) == null || _d.call(_c, attr.name)), attr.asyncMethod = attr.async, attr.async = void 0), attr.args = {
+           start,
+           end,
+           value
+@@ -418,7 +424,7 @@ var ATTRIBUTE = {
+       }
+       case 4: {
+         let start = child.start - 1, end = ++this.pos;
+-        if (!this.consumeWhitespaceIfBefore("("))
++        if (!this.consumeWhitespaceIfBefore("(", 0, isPatternWhiteSpaceCode))
+           return flushPendingAsync(this, attr), this.emitError(
+             child,
+             28,
 @@ -481,7 +487,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
      if (!groupDepth && (code === 62 || code === 47 && data.charCodeAt(lookPos + 1) === 62)) {
        let exprEnd = lookPos;
@@ -81,8 +155,12 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
    }
  }
  function isAsyncMethodPrefix(parser, name) {
-@@ -562,7 +569,7 @@ function isAsyncMethodPrefix(parser, name) {
-   let skip = parser.isConcise ? isIndentCode : isWhitespaceCode, pos = parser.pos;
+@@ -559,10 +566,10 @@ function isAsyncMethodPrefix(parser, name) {
+   // "class", "style", "value", before comparing the rest.
+   data.charCodeAt(name.start) !== 97 || !parser.lookAheadFor("async", name.start))
+     return !1;
+-  let skip = parser.isConcise ? isIndentCode : isWhitespaceCode, pos = parser.pos;
++  let skip = parser.isConcise ? isIndentCode : isPatternWhiteSpaceCode, pos = parser.pos;
    for (; skip(data.charCodeAt(pos)); ) pos++;
    let code = data.charCodeAt(pos);
 -  return isWordCode(code) || // the method name
@@ -134,6 +212,20 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
      return parser.emitError(
        closeTag,
        0,
+@@ -862,11 +870,11 @@ var CONCISE_HTML_CONTENT = {
+         this.indent = "", this.pos += code === 13 && data.charCodeAt(this.pos + 1) === 10 ? 2 : 1;
+         continue;
+       }
+-      if (isWhitespaceCode(code)) {
++      if (isPatternWhiteSpaceCode(code)) {
+         let start = this.pos, next;
+         do
+           this.pos++;
+-        while (this.pos < maxPos && isWhitespaceCode(next = data.charCodeAt(this.pos)) && next !== 10 && next !== 13);
++        while (this.pos < maxPos && isPatternWhiteSpaceCode(next = data.charCodeAt(this.pos)) && next !== 10 && next !== 13);
+         this.indent += data.slice(start, this.pos);
+         continue;
+       }
 @@ -896,7 +904,7 @@ var CONCISE_HTML_CONTENT = {
            this.emitError(
              this.pos,
@@ -143,7 +235,49 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
            );
            return;
          }
-@@ -1119,7 +1127,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -906,7 +914,7 @@ var CONCISE_HTML_CONTENT = {
+           this.beginMixedMode = !0, this.beginHtmlBlock(void 0, !1);
+           return;
+         case 36:
+-          if (isWhitespaceCode(data.charCodeAt(this.pos + 1))) {
++          if (isPatternWhiteSpaceCode(data.charCodeAt(this.pos + 1))) {
+             this.enterState(states_exports.INLINE_SCRIPT), this.pos++;
+             return;
+           }
+@@ -952,7 +960,7 @@ var CONCISE_HTML_CONTENT = {
+         (_b = (_a = this.options).onComment) == null || _b.call(_a, states_exports.getJSCommentRange(child));
+         break;
+       case states_exports.JS_COMMENT_BLOCK: {
+-        (_d = (_c = this.options).onComment) == null || _d.call(_c, states_exports.getJSCommentRange(child)), this.consumeWhitespaceOnLine(0) || this.emitError(
++        (_d = (_c = this.options).onComment) == null || _d.call(_c, states_exports.getJSCommentRange(child)), this.consumeWhitespaceOnLine(0, isPatternWhiteSpaceCode) || this.emitError(
+           this.pos,
+           4,
+           "In concise mode a javascript comment block can only be followed by whitespace characters and a newline."
+@@ -1092,6 +1100,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+   exit() {
+   },
+   parse(data, maxPos, expression) {
++    let isSpace = expression.terminatedByWhitespace ? isPatternWhiteSpaceCode : isWhitespaceCode;
+     for (; this.pos < maxPos; ) {
+       let code = data.charCodeAt(this.pos);
+       if (code === 10 || code === 13) {
+@@ -1107,8 +1116,14 @@ var shouldTerminate = () => !1, unaryKeywords = [
+         this.pos++;
+         continue;
+       }
++      if (expression.attrName && isRefusedTagSpaceCode(code))
++        return this.emitError(
++          { start: this.pos, end: this.pos + 1 },
++          4,
++          refusedTagSpaceMessage(code)
++        );
+       if (!expression.groupStack.length) {
+-        if (expression.terminatedByWhitespace && isWhitespaceCode(code)) {
++        if (expression.terminatedByWhitespace && isSpace(code)) {
+           if (!checkForOperators(this, expression, !1)) {
+             this.exitState();
+             return;
+@@ -1119,7 +1134,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
            let wasExpression = !1;
            if (expression.operators) {
              let prevNonWhitespacePos = lookBehindWhile(
@@ -152,10 +286,11 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
                data,
                this.pos - 1
              );
-@@ -1147,6 +1155,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1147,21 +1162,28 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
+-            expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
 +            if (expression.attrValue) {
 +              let nextCode = data.charCodeAt(this.pos + 1);
 +              if (nextCode === 63 || nextCode === 46 && !(data.charCodeAt(this.pos + 2) >= 48 && data.charCodeAt(this.pos + 2) <= 57)) {
@@ -163,10 +298,36 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
 +                continue;
 +              }
 +            }
-             expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
++            expression.ternaryDepth++, this.pos++, this.consumeWhitespace(isSpace);
              continue;
            }
-@@ -1192,7 +1207,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+           this.pos++;
+           break;
+         case 58:
+           if (expression.operators && !expression.groupStack.length) {
+-            expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
++            expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace(isSpace);
+             continue;
+           }
+           this.pos++;
+           break;
+         case 61:
+           if (expression.operators) {
+-            data.charCodeAt(this.pos + 1) === 62 ? (expression.inType && !expression.forceType && this.getPreviousNonWhitespaceCharCode() !== 41 && (expression.inType = !1), this.pos++) : expression.forceType || expression.groupStack.length || (expression.inType = !1), this.pos++, this.consumeWhitespace();
++            data.charCodeAt(this.pos + 1) === 62 ? (expression.inType && !expression.forceType && this.getPreviousNonWhitespaceCharCode() !== 41 && (expression.inType = !1), this.pos++) : expression.forceType || expression.groupStack.length || (expression.inType = !1), this.pos++, this.consumeWhitespace(isSpace);
+             continue;
+           }
+           this.pos++;
+@@ -1176,7 +1198,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+               return;
+             default:
+               if (canFollowDivision(this.getPreviousNonWhitespaceCharCode())) {
+-                this.pos++, this.consumeWhitespace();
++                this.pos++, this.consumeWhitespace(isSpace);
+                 continue;
+               } else {
+                 this.enterState(states_exports.REGULAR_EXPRESSION), this.pos++;
+@@ -1192,7 +1214,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
          case 123:
            if (expression.inType && !expression.forceType) {
              let prevPos = lookBehindWhile(
@@ -175,20 +336,38 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
                data,
                this.pos - 1
              );
-@@ -1283,7 +1298,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1204,7 +1226,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+           if (expression.inType)
+             expression.groupStack.push(62), this.pos++;
+           else if (expression.operators && !expression.groupStack.length) {
+-            this.pos++, this.consumeWhitespace();
++            this.pos++, this.consumeWhitespace(isSpace);
+             continue;
+           } else
+             this.pos++;
+@@ -1282,13 +1304,17 @@ var shouldTerminate = () => !1, unaryKeywords = [
+ };
  function checkForOperators(parser, expression, eol) {
    if (!expression.operators) return !1;
-   let { pos, data } = parser;
+-  let { pos, data } = parser;
 -  if (lookBehindForOperator(expression, data, pos) !== -1)
+-    return parser.consumeWhitespace(), !0;
++  let { pos, data } = parser, isSpace = expression.terminatedByWhitespace ? isPatternWhiteSpaceCode : isWhitespaceCode;
 +  if (lookBehindForOperator(
 +    expression,
 +    data,
 +    lookBehindWhile(isUnicodeSpaceCode, data, pos - 1)
 +  ) !== -1)
-     return parser.consumeWhitespace(), !0;
++    return parser.consumeWhitespace(isSpace), !0;
    let terminatedByEOL = expression.terminatedByEOL || parser.isConcise;
    if (!(terminatedByEOL && eol)) {
-@@ -1333,7 +1352,7 @@ function lookBehindForOperator(expression, data, pos) {
+     let nextNonSpace = lookAheadWhile(
+-      terminatedByEOL ? isIndentCode : isWhitespaceCode,
++      terminatedByEOL ? isIndentCode : isSpace,
+       data,
+       pos + 1
+     );
+@@ -1333,7 +1359,7 @@ function lookBehindForOperator(expression, data, pos) {
          case 96:
            return -1;
          default:
@@ -197,7 +376,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
              expression,
              data,
              operandEnd,
-@@ -1345,7 +1364,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1345,7 +1371,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === 61 ? curPos - 1 : expression.inType ? -1 : curPos;
      case 46: {
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
@@ -206,7 +385,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
      }
      // special case -- and ++
      case 43:
-@@ -1353,7 +1372,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1353,7 +1379,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === code ? lookBehindForOperator(
          expression,
          data,
@@ -215,7 +394,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
        ) : curPos;
      default:
        return code < 97 || code > 122 ? -1 : lookBehindForKeyword(
-@@ -1388,7 +1407,7 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1388,7 +1414,7 @@ function lookAheadForOperator(expression, data, pos) {
      // defers to base expression state to track block groups.
      case 46: {
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
@@ -224,7 +403,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
      }
      default: {
        let startCode = data.charCodeAt(pos);
-@@ -1416,7 +1435,7 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1416,7 +1442,7 @@ function lookAheadForOperator(expression, data, pos) {
    }
  }
  function canFollowDivision(code) {
@@ -233,7 +412,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
    switch (code) {
      case 96:
      case 39:
-@@ -1432,8 +1451,8 @@ function canFollowDivision(code) {
+@@ -1432,8 +1458,8 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -244,7 +423,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
  }
  function lookAheadWhile(match, data, pos) {
    let max = data.length;
-@@ -1453,7 +1472,7 @@ function lookBehindForKeyword(expression, data, pos, keywords) {
+@@ -1453,7 +1479,7 @@ function lookBehindForKeyword(expression, data, pos, keywords) {
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
@@ -253,7 +432,25 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
    }
    return -1;
  }
-@@ -1694,10 +1713,10 @@ function startsTypeName(parser, pos, allowGroup) {
+@@ -1569,7 +1595,7 @@ var HTML_CONTENT = {
+             start: this.pos,
+             end: this.pos + 2
+           }), this.enterState(states_exports.CLOSE_TAG), this.pos += 2;
+-        else if (nextCode === 62 || nextCode === 60 || isWhitespaceCode(nextCode)) {
++        else if (nextCode === 62 || nextCode === 60 || isPatternWhiteSpaceCode(nextCode)) {
+           this.startText(), this.pos++;
+           continue;
+         } else
+@@ -1671,7 +1697,7 @@ var INLINE_SCRIPT = {
+     });
+   },
+   parse(data, _maxPos, inlineScript) {
+-    this.consumeWhitespace(), data.charCodeAt(this.pos) === 123 ? (inlineScript.block = !0, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace) : prepareScriptlet(this.enterState(states_exports.EXPRESSION), this);
++    this.consumeWhitespace(isPatternWhiteSpaceCode), data.charCodeAt(this.pos) === 123 ? (inlineScript.block = !0, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace) : prepareScriptlet(this.enterState(states_exports.EXPRESSION), this);
+   },
+   return(child, inlineScript) {
+     inlineScript.block && (this.pos++, (this.lookAtCharCodeAhead(0) === 59 || this.consumeWhitespaceIfBefore(";")) && this.pos++), inlineScript.value.start = child.start, inlineScript.value.end = child.end, this.exitState();
+@@ -1694,10 +1720,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
      return allowGroup;
@@ -266,7 +463,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
        return !1;
    return !0;
  }
-@@ -1744,14 +1763,14 @@ var JS_COMMENT_LINE = {
+@@ -1744,14 +1770,14 @@ var JS_COMMENT_LINE = {
    },
    exit() {
    },
@@ -283,7 +480,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
          this.exitState();
          return;
        } else
-@@ -1764,6 +1783,13 @@ var JS_COMMENT_LINE = {
+@@ -1764,6 +1790,13 @@ var JS_COMMENT_LINE = {
    return() {
    }
  };
@@ -297,7 +494,81 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
  function getJSCommentRange(comment) {
    return {
      start: comment.start,
-@@ -2664,12 +2690,41 @@ function htmlEOF() {
+@@ -1830,7 +1863,7 @@ var OPEN_TAG = {
+           let cur = this.pos;
+           for (; cur < maxPos; ) {
+             let peek = data.charCodeAt(cur);
+-            if (isWhitespaceCode(peek))
++            if (isPatternWhiteSpaceCode(peek))
+               cur++;
+             else if (peek === 47 && data.charCodeAt(cur + 1) === 47)
+               for (cur += 2; cur < maxPos && !isLineCode(data.charCodeAt(cur)); ) cur++;
+@@ -1853,7 +1886,7 @@ var OPEN_TAG = {
+       }
+       if (this.isConcise) {
+         if (code === 59) {
+-          if (this.pos++, this.exitState(), !this.consumeWhitespaceOnLine(0)) {
++          if (this.pos++, this.exitState(), !this.consumeWhitespaceOnLine(0, isPatternWhiteSpaceCode)) {
+             switch (data.charCodeAt(this.pos)) {
+               case 47:
+                 switch (data.charCodeAt(this.pos + 1)) {
+@@ -1950,11 +1983,11 @@ var OPEN_TAG = {
+           30,
+           "An html comment cannot be used within an open tag. Use a JavaScript comment (// or /* */) instead."
+         );
+-      if (isWhitespaceCode(code)) {
++      if (isPatternWhiteSpaceCode(code)) {
+         this.pos++;
+         continue;
+       } else if (code === 44) {
+-        this.pos++, this.consumeWhitespace();
++        this.pos++, this.consumeWhitespace(isPatternWhiteSpaceCode);
+         continue;
+       } else if (tag.hasAttrs) {
+         this.enterState(states_exports.ATTRIBUTE);
+@@ -1962,7 +1995,7 @@ var OPEN_TAG = {
+       } else if (tag.tagName)
+         switch (code) {
+           case 47: {
+-            if (tag.stage = 1, this.pos++, isWhitespaceCode(data.charCodeAt(this.pos)))
++            if (tag.stage = 1, this.pos++, isPatternWhiteSpaceCode(data.charCodeAt(this.pos)))
+               return this.emitError(
+                 this.pos,
+                 23,
+@@ -2064,7 +2097,7 @@ var OPEN_TAG = {
+           start: child.start,
+           end: child.end
+         };
+-        if (this.consumeWhitespaceIfBefore("{")) {
++        if (this.consumeWhitespaceIfBefore("{", 0, isPatternWhiteSpaceCode)) {
+           let attr = this.enterState(states_exports.ATTRIBUTE);
+           typeParams ? (attr.start = typeParams.start, attr.typeParams = typeParams) : attr.start = start, attr.args = { start, end, value }, tag.hasAttrs = !0;
+         } else {
+@@ -2098,7 +2131,7 @@ var OPEN_TAG = {
+           (_h = (_g = this.options).onTagTypeArgs) == null || _h.call(_g, types);
+           break;
+         }
+-        this.consumeWhitespace();
++        this.consumeWhitespace(isPatternWhiteSpaceCode);
+         let nextCode = this.lookAtCharCodeAhead(0);
+         nextCode === 124 && !hasParams ? (_j = (_i = this.options).onTagTypeParams) == null || _j.call(_i, types) : nextCode === 40 && !(typeParams || hasParams || hasArgs) ? tag.typeParams = types : this.emitError(
+           child,
+@@ -2535,7 +2568,13 @@ var TAG_NAME = {
+       if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
+         this.pos += 2, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace;
+         return;
+-      } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
++      } else if (isRefusedTagSpaceCode(code))
++        return this.emitError(
++          { start: this.pos, end: this.pos + 1 },
++          4,
++          refusedTagSpaceMessage(code)
++        );
++      else if (isPatternWhiteSpaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
+         this.activeTag.shorthandEnd = this.pos, this.exitState();
+         return;
+       } else if (code === 46 || code === 35) {
+@@ -2664,12 +2703,69 @@ function htmlEOF() {
        return this.emitError(
          this.activeTag,
          22,
@@ -337,14 +608,51 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e96
 +function isUnicodeWhitespaceCode(code) {
 +  return isWhitespaceCode(code) || isUnicodeSpaceCode(code);
 +}
++function isPatternWhiteSpaceCode(code) {
++  return isWhitespaceCode(code) || code === 133 || code === 8206 || code === 8207 || code === 8232 || code === 8233;
++}
++function isRefusedTagSpaceCode(code) {
++  return isUnicodeSpaceCode(code) && code !== 8232 && code !== 8233;
++}
++var REFUSED_TAG_SPACE_NAMES = {
++  160: "NO-BREAK SPACE",
++  5760: "OGHAM SPACE MARK",
++  8192: "EN QUAD",
++  8193: "EM QUAD",
++  8194: "EN SPACE",
++  8195: "EM SPACE",
++  8196: "THREE-PER-EM SPACE",
++  8197: "FOUR-PER-EM SPACE",
++  8198: "SIX-PER-EM SPACE",
++  8199: "FIGURE SPACE",
++  8200: "PUNCTUATION SPACE",
++  8201: "THIN SPACE",
++  8202: "HAIR SPACE",
++  8239: "NARROW NO-BREAK SPACE",
++  8287: "MEDIUM MATHEMATICAL SPACE",
++  12288: "IDEOGRAPHIC SPACE",
++  65279: "ZERO WIDTH NO-BREAK SPACE"
++};
++function refusedTagSpaceMessage(code) {
++  return `U+${code.toString(16).toUpperCase().padStart(4, "0")} ${REFUSED_TAG_SPACE_NAMES[code]} is not whitespace in a tag; use a plain space (U+0020).`;
++}
  function matchesCloseAngleBracket(code) {
    return code === 62;
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e9125e5b256 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..b194dd587a2bf770d096acdf8ee54319a39f4f50 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -118,8 +118,14 @@ var Parser = class {
+@@ -111,15 +111,21 @@ var Parser = class {
+     beginMixedMode && (this.endingMixedModeAtEOL = !0), this.activeTag = parentTag, name && ((_b = (_a = this.options).onCloseTagName) == null || _b.call(_a, name)), (_d = (_c = this.options).onCloseTagEnd) == null || _d.call(_c, { start, end });
+   }
+   // --------------------------
+-  consumeWhitespaceIfBefore(str, start = 0) {
++  consumeWhitespaceIfBefore(str, start = 0, isSpace = isWhitespaceCode) {
+     let { pos, data } = this, cur = pos + start;
+-    for (; isWhitespaceCode(data.charCodeAt(cur)); ) cur++;
++    for (; isSpace(data.charCodeAt(cur)); ) cur++;
+     return this.lookAheadFor(str, cur) ? (this.pos = cur, !0) : !1;
    }
    getPreviousNonWhitespaceCharCode(start = -1) {
      let behind = start;
@@ -361,15 +669,80 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
    }
    onlyWhitespaceRemainsOnLine(start) {
      let maxOffset = this.maxPos - this.pos, ahead = start;
-@@ -284,7 +290,7 @@ var ATTRIBUTE = {
+@@ -137,11 +143,11 @@ var Parser = class {
+     }
+     return !0;
+   }
+-  consumeWhitespaceOnLine(start = 1) {
++  consumeWhitespaceOnLine(start = 1, isSpace = isWhitespaceCode) {
+     let maxOffset = this.maxPos - this.pos, ahead = start;
+     for (; ahead < maxOffset; ) {
+       let code = this.lookAtCharCodeAhead(ahead);
+-      if (isWhitespaceCode(code))
++      if (isSpace(code))
+         switch (code) {
+           case 13:
+           case 10:
+@@ -153,9 +159,9 @@ var Parser = class {
+     }
+     return this.pos = this.maxPos, !0;
+   }
+-  consumeWhitespace() {
++  consumeWhitespace(isSpace = isWhitespaceCode) {
+     let maxOffset = this.maxPos - this.pos, ahead = 0;
+-    for (; ahead < maxOffset && isWhitespaceCode(this.lookAtCharCodeAhead(ahead)); )
++    for (; ahead < maxOffset && isSpace(this.lookAtCharCodeAhead(ahead)); )
+       ahead++;
+     this.pos += ahead;
+   }
+@@ -273,7 +279,7 @@ var ATTRIBUTE = {
+         this.pos += code === 13 && data.charCodeAt(this.pos + 1) === 10 ? 2 : 1;
+         continue;
+       }
+-      if (isWhitespaceCode(code)) {
++      if (isPatternWhiteSpaceCode(code)) {
+         this.pos++;
+         continue;
+       }
+@@ -282,9 +288,9 @@ var ATTRIBUTE = {
+         return;
+       }
        if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
-         attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
+-        attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
++        attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace(isPatternWhiteSpaceCode)) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace(isPatternWhiteSpaceCode)), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
 -        expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
 +        expr.attrValue = !!(attr.name || attr.spread), expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
          return;
        } else if (code === 40) {
          attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
+@@ -312,7 +318,7 @@ var ATTRIBUTE = {
+           );
+         attr.stage = 1;
+         let expr = this.enterState(states_exports.EXPRESSION);
+-        expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrName : shouldTerminateConciseAttrName : shouldTerminateHtmlAttrName;
++        expr.terminatedByWhitespace = !0, expr.attrName = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrName : shouldTerminateConciseAttrName : shouldTerminateHtmlAttrName;
+         return;
+       } else {
+         flushPendingAsync(this, attr), this.exitState();
+@@ -354,7 +360,7 @@ var ATTRIBUTE = {
+           start: child.start,
+           end: child.end
+         };
+-        this.consumeWhitespaceIfBefore("{") ? (attr.async && (attr.name && ((_d = (_c = this.options).onAttrName) == null || _d.call(_c, attr.name)), attr.asyncMethod = attr.async, attr.async = void 0), attr.args = {
++        this.consumeWhitespaceIfBefore("{", 0, isPatternWhiteSpaceCode) ? (attr.async && (attr.name && ((_d = (_c = this.options).onAttrName) == null || _d.call(_c, attr.name)), attr.asyncMethod = attr.async, attr.async = void 0), attr.args = {
+           start,
+           end,
+           value
+@@ -391,7 +397,7 @@ var ATTRIBUTE = {
+       }
+       case 4: {
+         let start = child.start - 1, end = ++this.pos;
+-        if (!this.consumeWhitespaceIfBefore("("))
++        if (!this.consumeWhitespaceIfBefore("(", 0, isPatternWhiteSpaceCode))
+           return flushPendingAsync(this, attr), this.emitError(
+             child,
+             28,
 @@ -454,7 +460,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
      if (!groupDepth && (code === 62 || code === 47 && data.charCodeAt(lookPos + 1) === 62)) {
        let exprEnd = lookPos;
@@ -423,8 +796,12 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
    }
  }
  function isAsyncMethodPrefix(parser, name) {
-@@ -535,7 +542,7 @@ function isAsyncMethodPrefix(parser, name) {
-   let skip = parser.isConcise ? isIndentCode : isWhitespaceCode, pos = parser.pos;
+@@ -532,10 +539,10 @@ function isAsyncMethodPrefix(parser, name) {
+   // "class", "style", "value", before comparing the rest.
+   data.charCodeAt(name.start) !== 97 || !parser.lookAheadFor("async", name.start))
+     return !1;
+-  let skip = parser.isConcise ? isIndentCode : isWhitespaceCode, pos = parser.pos;
++  let skip = parser.isConcise ? isIndentCode : isPatternWhiteSpaceCode, pos = parser.pos;
    for (; skip(data.charCodeAt(pos)); ) pos++;
    let code = data.charCodeAt(pos);
 -  return isWordCode(code) || // the method name
@@ -476,6 +853,20 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
      return parser.emitError(
        closeTag,
        0,
+@@ -835,11 +843,11 @@ var CONCISE_HTML_CONTENT = {
+         this.indent = "", this.pos += code === 13 && data.charCodeAt(this.pos + 1) === 10 ? 2 : 1;
+         continue;
+       }
+-      if (isWhitespaceCode(code)) {
++      if (isPatternWhiteSpaceCode(code)) {
+         let start = this.pos, next;
+         do
+           this.pos++;
+-        while (this.pos < maxPos && isWhitespaceCode(next = data.charCodeAt(this.pos)) && next !== 10 && next !== 13);
++        while (this.pos < maxPos && isPatternWhiteSpaceCode(next = data.charCodeAt(this.pos)) && next !== 10 && next !== 13);
+         this.indent += data.slice(start, this.pos);
+         continue;
+       }
 @@ -869,7 +877,7 @@ var CONCISE_HTML_CONTENT = {
            this.emitError(
              this.pos,
@@ -485,7 +876,49 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
            );
            return;
          }
-@@ -1092,7 +1100,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -879,7 +887,7 @@ var CONCISE_HTML_CONTENT = {
+           this.beginMixedMode = !0, this.beginHtmlBlock(void 0, !1);
+           return;
+         case 36:
+-          if (isWhitespaceCode(data.charCodeAt(this.pos + 1))) {
++          if (isPatternWhiteSpaceCode(data.charCodeAt(this.pos + 1))) {
+             this.enterState(states_exports.INLINE_SCRIPT), this.pos++;
+             return;
+           }
+@@ -925,7 +933,7 @@ var CONCISE_HTML_CONTENT = {
+         (_b = (_a = this.options).onComment) == null || _b.call(_a, states_exports.getJSCommentRange(child));
+         break;
+       case states_exports.JS_COMMENT_BLOCK: {
+-        (_d = (_c = this.options).onComment) == null || _d.call(_c, states_exports.getJSCommentRange(child)), this.consumeWhitespaceOnLine(0) || this.emitError(
++        (_d = (_c = this.options).onComment) == null || _d.call(_c, states_exports.getJSCommentRange(child)), this.consumeWhitespaceOnLine(0, isPatternWhiteSpaceCode) || this.emitError(
+           this.pos,
+           4,
+           "In concise mode a javascript comment block can only be followed by whitespace characters and a newline."
+@@ -1065,6 +1073,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+   exit() {
+   },
+   parse(data, maxPos, expression) {
++    let isSpace = expression.terminatedByWhitespace ? isPatternWhiteSpaceCode : isWhitespaceCode;
+     for (; this.pos < maxPos; ) {
+       let code = data.charCodeAt(this.pos);
+       if (code === 10 || code === 13) {
+@@ -1080,8 +1089,14 @@ var shouldTerminate = () => !1, unaryKeywords = [
+         this.pos++;
+         continue;
+       }
++      if (expression.attrName && isRefusedTagSpaceCode(code))
++        return this.emitError(
++          { start: this.pos, end: this.pos + 1 },
++          4,
++          refusedTagSpaceMessage(code)
++        );
+       if (!expression.groupStack.length) {
+-        if (expression.terminatedByWhitespace && isWhitespaceCode(code)) {
++        if (expression.terminatedByWhitespace && isSpace(code)) {
+           if (!checkForOperators(this, expression, !1)) {
+             this.exitState();
+             return;
+@@ -1092,7 +1107,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
            let wasExpression = !1;
            if (expression.operators) {
              let prevNonWhitespacePos = lookBehindWhile(
@@ -494,10 +927,11 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
                data,
                this.pos - 1
              );
-@@ -1120,6 +1128,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1120,21 +1135,28 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
+-            expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
 +            if (expression.attrValue) {
 +              let nextCode = data.charCodeAt(this.pos + 1);
 +              if (nextCode === 63 || nextCode === 46 && !(data.charCodeAt(this.pos + 2) >= 48 && data.charCodeAt(this.pos + 2) <= 57)) {
@@ -505,10 +939,36 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
 +                continue;
 +              }
 +            }
-             expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
++            expression.ternaryDepth++, this.pos++, this.consumeWhitespace(isSpace);
              continue;
            }
-@@ -1165,7 +1180,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+           this.pos++;
+           break;
+         case 58:
+           if (expression.operators && !expression.groupStack.length) {
+-            expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
++            expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace(isSpace);
+             continue;
+           }
+           this.pos++;
+           break;
+         case 61:
+           if (expression.operators) {
+-            data.charCodeAt(this.pos + 1) === 62 ? (expression.inType && !expression.forceType && this.getPreviousNonWhitespaceCharCode() !== 41 && (expression.inType = !1), this.pos++) : expression.forceType || expression.groupStack.length || (expression.inType = !1), this.pos++, this.consumeWhitespace();
++            data.charCodeAt(this.pos + 1) === 62 ? (expression.inType && !expression.forceType && this.getPreviousNonWhitespaceCharCode() !== 41 && (expression.inType = !1), this.pos++) : expression.forceType || expression.groupStack.length || (expression.inType = !1), this.pos++, this.consumeWhitespace(isSpace);
+             continue;
+           }
+           this.pos++;
+@@ -1149,7 +1171,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+               return;
+             default:
+               if (canFollowDivision(this.getPreviousNonWhitespaceCharCode())) {
+-                this.pos++, this.consumeWhitespace();
++                this.pos++, this.consumeWhitespace(isSpace);
+                 continue;
+               } else {
+                 this.enterState(states_exports.REGULAR_EXPRESSION), this.pos++;
+@@ -1165,7 +1187,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
          case 123:
            if (expression.inType && !expression.forceType) {
              let prevPos = lookBehindWhile(
@@ -517,20 +977,38 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
                data,
                this.pos - 1
              );
-@@ -1256,7 +1271,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1177,7 +1199,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+           if (expression.inType)
+             expression.groupStack.push(62), this.pos++;
+           else if (expression.operators && !expression.groupStack.length) {
+-            this.pos++, this.consumeWhitespace();
++            this.pos++, this.consumeWhitespace(isSpace);
+             continue;
+           } else
+             this.pos++;
+@@ -1255,13 +1277,17 @@ var shouldTerminate = () => !1, unaryKeywords = [
+ };
  function checkForOperators(parser, expression, eol) {
    if (!expression.operators) return !1;
-   let { pos, data } = parser;
+-  let { pos, data } = parser;
 -  if (lookBehindForOperator(expression, data, pos) !== -1)
+-    return parser.consumeWhitespace(), !0;
++  let { pos, data } = parser, isSpace = expression.terminatedByWhitespace ? isPatternWhiteSpaceCode : isWhitespaceCode;
 +  if (lookBehindForOperator(
 +    expression,
 +    data,
 +    lookBehindWhile(isUnicodeSpaceCode, data, pos - 1)
 +  ) !== -1)
-     return parser.consumeWhitespace(), !0;
++    return parser.consumeWhitespace(isSpace), !0;
    let terminatedByEOL = expression.terminatedByEOL || parser.isConcise;
    if (!(terminatedByEOL && eol)) {
-@@ -1306,7 +1325,7 @@ function lookBehindForOperator(expression, data, pos) {
+     let nextNonSpace = lookAheadWhile(
+-      terminatedByEOL ? isIndentCode : isWhitespaceCode,
++      terminatedByEOL ? isIndentCode : isSpace,
+       data,
+       pos + 1
+     );
+@@ -1306,7 +1332,7 @@ function lookBehindForOperator(expression, data, pos) {
          case 96:
            return -1;
          default:
@@ -539,7 +1017,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
              expression,
              data,
              operandEnd,
-@@ -1318,7 +1337,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1318,7 +1344,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === 61 ? curPos - 1 : expression.inType ? -1 : curPos;
      case 46: {
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
@@ -548,7 +1026,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
      }
      // special case -- and ++
      case 43:
-@@ -1326,7 +1345,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1326,7 +1352,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === code ? lookBehindForOperator(
          expression,
          data,
@@ -557,7 +1035,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
        ) : curPos;
      default:
        return code < 97 || code > 122 ? -1 : lookBehindForKeyword(
-@@ -1361,7 +1380,7 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1361,7 +1387,7 @@ function lookAheadForOperator(expression, data, pos) {
      // defers to base expression state to track block groups.
      case 46: {
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
@@ -566,7 +1044,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
      }
      default: {
        let startCode = data.charCodeAt(pos);
-@@ -1389,7 +1408,7 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1389,7 +1415,7 @@ function lookAheadForOperator(expression, data, pos) {
    }
  }
  function canFollowDivision(code) {
@@ -575,7 +1053,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
    switch (code) {
      case 96:
      case 39:
-@@ -1405,8 +1424,8 @@ function canFollowDivision(code) {
+@@ -1405,8 +1431,8 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -586,7 +1064,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
  }
  function lookAheadWhile(match, data, pos) {
    let max = data.length;
-@@ -1426,7 +1445,7 @@ function lookBehindForKeyword(expression, data, pos, keywords) {
+@@ -1426,7 +1452,7 @@ function lookBehindForKeyword(expression, data, pos, keywords) {
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
@@ -595,7 +1073,25 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
    }
    return -1;
  }
-@@ -1667,10 +1686,10 @@ function startsTypeName(parser, pos, allowGroup) {
+@@ -1542,7 +1568,7 @@ var HTML_CONTENT = {
+             start: this.pos,
+             end: this.pos + 2
+           }), this.enterState(states_exports.CLOSE_TAG), this.pos += 2;
+-        else if (nextCode === 62 || nextCode === 60 || isWhitespaceCode(nextCode)) {
++        else if (nextCode === 62 || nextCode === 60 || isPatternWhiteSpaceCode(nextCode)) {
+           this.startText(), this.pos++;
+           continue;
+         } else
+@@ -1644,7 +1670,7 @@ var INLINE_SCRIPT = {
+     });
+   },
+   parse(data, _maxPos, inlineScript) {
+-    this.consumeWhitespace(), data.charCodeAt(this.pos) === 123 ? (inlineScript.block = !0, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace) : prepareScriptlet(this.enterState(states_exports.EXPRESSION), this);
++    this.consumeWhitespace(isPatternWhiteSpaceCode), data.charCodeAt(this.pos) === 123 ? (inlineScript.block = !0, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace) : prepareScriptlet(this.enterState(states_exports.EXPRESSION), this);
+   },
+   return(child, inlineScript) {
+     inlineScript.block && (this.pos++, (this.lookAtCharCodeAhead(0) === 59 || this.consumeWhitespaceIfBefore(";")) && this.pos++), inlineScript.value.start = child.start, inlineScript.value.end = child.end, this.exitState();
+@@ -1667,10 +1693,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
      return allowGroup;
@@ -608,7 +1104,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
        return !1;
    return !0;
  }
-@@ -1717,14 +1736,14 @@ var JS_COMMENT_LINE = {
+@@ -1717,14 +1743,14 @@ var JS_COMMENT_LINE = {
    },
    exit() {
    },
@@ -625,7 +1121,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
          this.exitState();
          return;
        } else
-@@ -1737,6 +1756,13 @@ var JS_COMMENT_LINE = {
+@@ -1737,6 +1763,13 @@ var JS_COMMENT_LINE = {
    return() {
    }
  };
@@ -639,7 +1135,81 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
  function getJSCommentRange(comment) {
    return {
      start: comment.start,
-@@ -2637,12 +2663,41 @@ function htmlEOF() {
+@@ -1803,7 +1836,7 @@ var OPEN_TAG = {
+           let cur = this.pos;
+           for (; cur < maxPos; ) {
+             let peek = data.charCodeAt(cur);
+-            if (isWhitespaceCode(peek))
++            if (isPatternWhiteSpaceCode(peek))
+               cur++;
+             else if (peek === 47 && data.charCodeAt(cur + 1) === 47)
+               for (cur += 2; cur < maxPos && !isLineCode(data.charCodeAt(cur)); ) cur++;
+@@ -1826,7 +1859,7 @@ var OPEN_TAG = {
+       }
+       if (this.isConcise) {
+         if (code === 59) {
+-          if (this.pos++, this.exitState(), !this.consumeWhitespaceOnLine(0)) {
++          if (this.pos++, this.exitState(), !this.consumeWhitespaceOnLine(0, isPatternWhiteSpaceCode)) {
+             switch (data.charCodeAt(this.pos)) {
+               case 47:
+                 switch (data.charCodeAt(this.pos + 1)) {
+@@ -1923,11 +1956,11 @@ var OPEN_TAG = {
+           30,
+           "An html comment cannot be used within an open tag. Use a JavaScript comment (// or /* */) instead."
+         );
+-      if (isWhitespaceCode(code)) {
++      if (isPatternWhiteSpaceCode(code)) {
+         this.pos++;
+         continue;
+       } else if (code === 44) {
+-        this.pos++, this.consumeWhitespace();
++        this.pos++, this.consumeWhitespace(isPatternWhiteSpaceCode);
+         continue;
+       } else if (tag.hasAttrs) {
+         this.enterState(states_exports.ATTRIBUTE);
+@@ -1935,7 +1968,7 @@ var OPEN_TAG = {
+       } else if (tag.tagName)
+         switch (code) {
+           case 47: {
+-            if (tag.stage = 1, this.pos++, isWhitespaceCode(data.charCodeAt(this.pos)))
++            if (tag.stage = 1, this.pos++, isPatternWhiteSpaceCode(data.charCodeAt(this.pos)))
+               return this.emitError(
+                 this.pos,
+                 23,
+@@ -2037,7 +2070,7 @@ var OPEN_TAG = {
+           start: child.start,
+           end: child.end
+         };
+-        if (this.consumeWhitespaceIfBefore("{")) {
++        if (this.consumeWhitespaceIfBefore("{", 0, isPatternWhiteSpaceCode)) {
+           let attr = this.enterState(states_exports.ATTRIBUTE);
+           typeParams ? (attr.start = typeParams.start, attr.typeParams = typeParams) : attr.start = start, attr.args = { start, end, value }, tag.hasAttrs = !0;
+         } else {
+@@ -2071,7 +2104,7 @@ var OPEN_TAG = {
+           (_h = (_g = this.options).onTagTypeArgs) == null || _h.call(_g, types);
+           break;
+         }
+-        this.consumeWhitespace();
++        this.consumeWhitespace(isPatternWhiteSpaceCode);
+         let nextCode = this.lookAtCharCodeAhead(0);
+         nextCode === 124 && !hasParams ? (_j = (_i = this.options).onTagTypeParams) == null || _j.call(_i, types) : nextCode === 40 && !(typeParams || hasParams || hasArgs) ? tag.typeParams = types : this.emitError(
+           child,
+@@ -2508,7 +2541,13 @@ var TAG_NAME = {
+       if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
+         this.pos += 2, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace;
+         return;
+-      } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
++      } else if (isRefusedTagSpaceCode(code))
++        return this.emitError(
++          { start: this.pos, end: this.pos + 1 },
++          4,
++          refusedTagSpaceMessage(code)
++        );
++      else if (isPatternWhiteSpaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
+         this.activeTag.shorthandEnd = this.pos, this.exitState();
+         return;
+       } else if (code === 46 || code === 35) {
+@@ -2637,12 +2676,69 @@ function htmlEOF() {
        return this.emitError(
          this.activeTag,
          22,
@@ -678,6 +1248,34 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e91
 +}
 +function isUnicodeWhitespaceCode(code) {
 +  return isWhitespaceCode(code) || isUnicodeSpaceCode(code);
++}
++function isPatternWhiteSpaceCode(code) {
++  return isWhitespaceCode(code) || code === 133 || code === 8206 || code === 8207 || code === 8232 || code === 8233;
++}
++function isRefusedTagSpaceCode(code) {
++  return isUnicodeSpaceCode(code) && code !== 8232 && code !== 8233;
++}
++var REFUSED_TAG_SPACE_NAMES = {
++  160: "NO-BREAK SPACE",
++  5760: "OGHAM SPACE MARK",
++  8192: "EN QUAD",
++  8193: "EM QUAD",
++  8194: "EN SPACE",
++  8195: "EM SPACE",
++  8196: "THREE-PER-EM SPACE",
++  8197: "FOUR-PER-EM SPACE",
++  8198: "SIX-PER-EM SPACE",
++  8199: "FIGURE SPACE",
++  8200: "PUNCTUATION SPACE",
++  8201: "THIN SPACE",
++  8202: "HAIR SPACE",
++  8239: "NARROW NO-BREAK SPACE",
++  8287: "MEDIUM MATHEMATICAL SPACE",
++  12288: "IDEOGRAPHIC SPACE",
++  65279: "ZERO WIDTH NO-BREAK SPACE"
++};
++function refusedTagSpaceMessage(code) {
++  return `U+${code.toString(16).toUpperCase().padStart(4, "0")} ${REFUSED_TAG_SPACE_NAMES[code]} is not whitespace in a tag; use a plain space (U+0020).`;
 +}
  function matchesCloseAngleBracket(code) {
    return code === 62;

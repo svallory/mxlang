@@ -1,5 +1,6 @@
 import {
   htmlEOF,
+  isPatternWhiteSpaceCode,
   isWhitespaceCode,
   type Meta,
   Parser,
@@ -110,7 +111,7 @@ export const HTML_CONTENT: StateDefinition<HTMLContentMeta> = {
         } else if (
           nextCode === CODE.CLOSE_ANGLE_BRACKET ||
           nextCode === CODE.OPEN_ANGLE_BRACKET ||
-          isWhitespaceCode(nextCode)
+          isPatternWhiteSpaceCode(nextCode)
         ) {
           this.startText();
           this.pos++;

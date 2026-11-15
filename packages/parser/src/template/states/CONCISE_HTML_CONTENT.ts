@@ -1,6 +1,6 @@
 import {
   htmlEOF,
-  isWhitespaceCode,
+  isPatternWhiteSpaceCode,
   STATE,
   type StateDefinition,
 } from "../internal.ts";
@@ -46,7 +46,7 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
         continue;
       }
 
-      if (isWhitespaceCode(code)) {
+      if (isPatternWhiteSpaceCode(code)) {
         // Eagerly consume the indent up to the end of the line.
         const start = this.pos;
         let next: number;
@@ -54,7 +54,7 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
           this.pos++;
         } while (
           this.pos < maxPos &&
-          isWhitespaceCode((next = data.charCodeAt(this.pos))) &&
+          isPatternWhiteSpaceCode((next = data.charCodeAt(this.pos))) &&
           next !== CODE.NEWLINE &&
           next !== CODE.CARRIAGE_RETURN
         );
@@ -111,7 +111,7 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
           this.beginHtmlBlock(undefined, false); // pos stays at <
           return;
         case CODE.DOLLAR:
-          if (isWhitespaceCode(data.charCodeAt(this.pos + 1))) {
+          if (isPatternWhiteSpaceCode(data.charCodeAt(this.pos + 1))) {
             this.enterState(STATE.INLINE_SCRIPT);
             this.pos++; // skip $
             return;
@@ -205,7 +205,7 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
       case STATE.JS_COMMENT_BLOCK: {
         this.options.onComment?.(STATE.getJSCommentRange(child));
 
-        if (!this.consumeWhitespaceOnLine(0)) {
+        if (!this.consumeWhitespaceOnLine(0, isPatternWhiteSpaceCode)) {
           // Make sure there is only whitespace on the line
           // after the ending "*/" sequence
           this.emitError(

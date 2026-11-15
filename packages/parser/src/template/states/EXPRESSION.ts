@@ -1,5 +1,7 @@
 import {
   isIndentCode,
+  isPatternWhiteSpaceCode,
+  isRefusedTagSpaceCode,
   isWhitespaceCode,
   isUnicodeSpaceCode,
   isUnicodeWhitespaceCode,
@@ -8,6 +10,7 @@ import {
   type Meta,
   Parser,
   STATE,
+  refusedTagSpaceMessage,
   type StateDefinition,
   wordWidthAt,
   wordWidthBefore,
@@ -51,6 +54,8 @@ export interface ExpressionMeta extends Meta {
   ternaryDepth: number;
   terminatedByEOL: boolean;
   terminatedByWhitespace: boolean;
+  /** MX: the expression is an attribute name, which refuses a non-`Pattern_White_Space` Unicode space. */
+  attrName: boolean;
   consumeIndentedContent: boolean;
   shouldTerminate(
     code: number,
@@ -122,6 +127,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
       ternaryDepth: 0,
       terminatedByEOL: false,
       terminatedByWhitespace: false,
+      attrName: false,
       consumeIndentedContent: false,
     };
   },
@@ -129,6 +135,12 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
   exit() {},
 
   parse(data, maxPos, expression) {
+    // MX: a whitespace-terminated expression (a name, tag variable or
+    // attribute value) is in the tag grammar, whose whitespace is
+    // `isPatternWhiteSpaceCode`.
+    const isSpace = expression.terminatedByWhitespace
+      ? isPatternWhiteSpaceCode
+      : isWhitespaceCode;
     while (this.pos < maxPos) {
       const code = data.charCodeAt(this.pos);
 
@@ -186,9 +198,19 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
         continue;
       }
 
+      // MX: a Unicode space that is not `Pattern_White_Space` is refused in
+      // an attribute name, never read as a name character.
+      if (expression.attrName && isRefusedTagSpaceCode(code)) {
+        return this.emitError(
+          { start: this.pos, end: this.pos + 1 },
+          ErrorCode.INVALID_CHARACTER,
+          refusedTagSpaceMessage(code),
+        );
+      }
+
       // Termination checks (no groupStack)
       if (!expression.groupStack.length) {
-        if (expression.terminatedByWhitespace && isWhitespaceCode(code)) {
+        if (expression.terminatedByWhitespace && isSpace(code)) {
           if (!checkForOperators(this, expression, false)) {
             this.exitState();
             return;
@@ -251,7 +273,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
             }
             expression.ternaryDepth++;
             this.pos++; // skip ?
-            this.consumeWhitespace();
+            this.consumeWhitespace(isSpace);
             continue;
           }
           this.pos++;
@@ -264,7 +286,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
               expression.inType = true;
             }
             this.pos++; // skip :
-            this.consumeWhitespace();
+            this.consumeWhitespace(isSpace);
             continue;
           }
           this.pos++;
@@ -286,7 +308,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
               expression.inType = false;
             }
             this.pos++; // skip = (or the char after =>)
-            this.consumeWhitespace();
+            this.consumeWhitespace(isSpace);
             continue;
           }
           this.pos++;
@@ -304,7 +326,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
             default:
               if (canFollowDivision(this.getPreviousNonWhitespaceCharCode())) {
                 this.pos++;
-                this.consumeWhitespace();
+                this.consumeWhitespace(isSpace);
                 continue;
               } else {
                 this.enterState(STATE.REGULAR_EXPRESSION);
@@ -340,7 +362,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
             this.pos++;
           } else if (expression.operators && !expression.groupStack.length) {
             this.pos++;
-            this.consumeWhitespace();
+            this.consumeWhitespace(isSpace);
             continue;
           } else {
             this.pos++;
@@ -491,6 +513,10 @@ function checkForOperators(
   if (!expression.operators) return false;
 
   const { pos, data } = parser;
+  // MX: a whitespace-terminated expression is in the tag grammar.
+  const isSpace = expression.terminatedByWhitespace
+    ? isPatternWhiteSpaceCode
+    : isWhitespaceCode;
   // MX: Unicode whitespace right before the whitespace or newline that got here
   // is part of the same run, so look behind past it (`a +\u00a0 b` and
   // `a +\u00a0\n` read as `a +  b` and `a + \n`, where the first space looks
@@ -503,14 +529,14 @@ function checkForOperators(
       lookBehindWhile(isUnicodeSpaceCode, data, pos - 1),
     ) !== -1
   ) {
-    parser.consumeWhitespace();
+    parser.consumeWhitespace(isSpace);
     return true;
   }
 
   const terminatedByEOL = expression.terminatedByEOL || parser.isConcise;
   if (!(terminatedByEOL && eol)) {
     const nextNonSpace = lookAheadWhile(
-      terminatedByEOL ? isIndentCode : isWhitespaceCode,
+      terminatedByEOL ? isIndentCode : isSpace,
       data,
       pos + 1,
     );

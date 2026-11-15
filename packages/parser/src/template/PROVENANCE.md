@@ -161,8 +161,8 @@ concise-dash pair below.
 | `states/EXPRESSION.ts` | `checkForOperators` | looks behind past a run of Unicode whitespace (`isUnicodeSpaceCode` only, never ASCII) right before the whitespace or newline that triggered it (`a +\u00a0 b`, `a +\u00a0\n`) |
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `++`/`--` case | `lookBehindWhile(isUnicodeWhitespaceCode, …)` |
 | `states/ATTRIBUTE.ts` | `shouldTerminateHtmlAttrValue` | a Unicode-whitespace-preceded `>=` is a comparison (`<if=count\u00a0>= 10>`) |
-| `states/ATTRIBUTE.ts` | `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName` | a Unicode-whitespace-preceded `--` starts the text block (the attribute's range keeps the trailing whitespace, `1\u00a0` or `x\u00a0`, because an ASCII space ends the attribute by the current-character test, which is unchanged; pinned in `CONCISE_DASH_ROWS`) |
-| `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | none: a Unicode-whitespace rule does not apply here. Only ASCII whitespace before `//` or `/*` in HTML text starts a comment, as upstream; `<p>Visit\u00a0//cdn.example/x.js</p>` is text. The function is byte-identical to upstream again |
+| `states/ATTRIBUTE.ts` | `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName` | a Unicode-whitespace-preceded `--` starts the text block (a value's range keeps the trailing whitespace, `1\u00a0`, because an ASCII space ends the value by the current-character test, which is unchanged; a name refuses the space instead, see the tag-grammar section below; pinned in `CONCISE_DASH_ROWS`) |
+| `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | none: a Unicode-whitespace rule does not apply here. Only ASCII whitespace before `//` or `/*` in HTML text starts a comment, as upstream; `<p>Visit\u00a0//cdn.example/x.js</p>` is text. The function's only change is the tag-grammar `<` test below |
 
 Comments around an operator word (same follow-up; source only): `isOperatorWord`'s
 look-back before `of`, `yield` and `await` steps over comments
@@ -175,6 +175,37 @@ at the whitespace after the comment (a separate site, not changed).
 Left: every current-character and look-ahead whitespace test (a value
 still does not end at a Unicode space; the `.` look-aheads), and `detectAmbiguousCloseAngleBracket`'s look-behinds, which a
 forward scan reaches only after it has rejected a Unicode space.
+
+### Whitespace in the tag grammar
+
+The `divergences.md` row on tag-grammar whitespace (both dist builds of
+`patches/htmljs-parser@5.18.0.patch` carry the same JavaScript). In the tag
+grammar, whitespace is Unicode's `Pattern_White_Space`:
+`isPatternWhiteSpaceCode` (`util/util.ts`) is `isWhitespaceCode` plus U+0085,
+U+200E, U+200F, U+2028 and U+2029, and each of those five reads exactly as
+VT. `isRefusedTagSpaceCode` (`isUnicodeSpaceCode` without U+2028 and
+U+2029) is refused in a tag name, a shorthand or an attribute name with
+`INVALID_CHARACTER` on the one character and `refusedTagSpaceMessage` (a
+table of the 17 Unicode names). Pinned by `PATTERN_WS_TAG_FORMS` (each
+separator renders as its VT twin) and `REFUSED_SPACE_ROWS`
+(`mx-unicode-words.cases.ts`), and the grammar probes g1538, g1681, g1712,
+g1713 and g1718 to g1722.
+
+| Source location | Function | What changed |
+|---|---|---|
+| `core/Parser.ts` | `consumeWhitespace`, `consumeWhitespaceIfBefore`, `consumeWhitespaceOnLine` | an `isSpace` parameter, `isWhitespaceCode` by default |
+| `states/TAG_NAME.ts` | `TAG_NAME.parse`, `endsTagName` | refuses `isRefusedTagSpaceCode`; `isPatternWhiteSpaceCode` ends the name |
+| `states/OPEN_TAG.ts` | `OPEN_TAG.parse`, `OPEN_TAG.return` | the concise next-line peek, the gap between attributes, `/` + whitespace and every whitespace helper call use `isPatternWhiteSpaceCode` |
+| `states/ATTRIBUTE.ts` | `ATTRIBUTE.parse`, `ATTRIBUTE.return`, `isAsyncMethodPrefix`, the trigger helpers | `isPatternWhiteSpaceCode` after a name, in every helper call and in the HTML-mode arm of the `skip` choice; the name's expression is marked `attrName` |
+| `states/EXPRESSION.ts` | `EXPRESSION.parse`, `checkForOperators` | refuses `isRefusedTagSpaceCode` in an `attrName` expression; a `terminatedByWhitespace` expression ends at, consumes and looks ahead past `isPatternWhiteSpaceCode` (any other expression keeps `isWhitespaceCode`) |
+| `states/INLINE_SCRIPT.ts` | `INLINE_SCRIPT.parse` | the gap after `$` is `isPatternWhiteSpaceCode` |
+| `states/CONCISE_HTML_CONTENT.ts` | `CONCISE_HTML_CONTENT.parse`, `.return` | indentation, `$` + whitespace and the line after a `/* */` use `isPatternWhiteSpaceCode` |
+| `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | `<` followed by `isPatternWhiteSpaceCode` is text |
+
+Left with `isWhitespaceCode`: `isIndentCode` sites, the CR/LF line ends,
+`onlyWhitespaceRemainsOnLine`, the other expression look-aheads and
+look-behinds, body text, `--` delimiter lines, `LINE_TRIGGER`, close tag
+names, strings, comments and regular expressions.
 
 ## The parser never throws
 

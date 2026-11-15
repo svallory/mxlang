@@ -7033,8 +7033,8 @@
     "  attr \"b\" [7,8) name=[7,8)"
   ],
   "g1538": [
-    "tag \"div\" [1,4) [0,10) open=[0,10) mode=html self-closed",
-    "  attr \"a b\" [5,8) name=[5,8)"
+    "tag \"div\" [1,4) [0,6) open=[0,6) mode=html incomplete",
+    "error INVALID_CHARACTER [6,7)"
   ],
   "g1539": [
     "tag \"div\" [0,3) [0,9) open=[0,3) mode=html concise",
@@ -7702,9 +7702,8 @@
     "  text [11,15)"
   ],
   "g1681": [
-    "tag \"div\" [0,3) [0,14) open=[0,6) mode=html concise",
-    "  attr \"x \" [4,6) name=[4,6)",
-    "  text [9,13)"
+    "tag \"div\" [0,3) [0,5) open=[0,5) mode=html concise incomplete",
+    "error INVALID_CHARACTER [5,6)"
   ],
   "g1682": [
     "tag \"p\" [1,2) [0,14) open=[0,3) close=[10,14) \"p\" mode=html",
@@ -7852,14 +7851,10 @@
     "  text [6,7)",
     "error MISSING_END_TAG [0,6)"
   ],
-  "g1712": [
-    "tag \"div --\" [0,6) [0,11) open=[0,11) mode=html concise",
-    "  attr \"text\" [7,11) name=[7,11)"
-  ],
+  "g1712": ["error INVALID_CHARACTER [3,4)"],
   "g1713": [
-    "tag \"div\" [0,3) [0,13) open=[0,13) mode=html concise",
-    "  sugar tag . \"a --\" [3,8)",
-    "  attr \"text\" [9,13) name=[9,13)"
+    "tag \"div\" [0,3) [0,5) open=[0,5) mode=html concise incomplete",
+    "error INVALID_CHARACTER [5,6)"
   ],
   "g1714": [
     "tag \"x\" [0,1) [0,6) open=[0,6) mode=html concise",
@@ -7880,5 +7875,28 @@
   "g1717": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
     "  attr \"x\" [5,18) name=[5,6) = value \"(a) :É => a\" [7,18)"
+  ],
+  "g1718": [
+    "tag \"div\" [0,3) [0,15) open=[0,7) mode=html concise",
+    "  attr \"a\" [4,5) name=[4,5)",
+    "  attr \"b\" [6,7) name=[6,7)",
+    "  tag \"span\" [10,14) [10,15) open=[10,14) mode=html concise"
+  ],
+  "g1719": [
+    "tag \"div\" [1,4) [0,10) open=[0,10) mode=html self-closed",
+    "  attr \"a\" [5,6) name=[5,6)",
+    "  attr \"b\" [7,8) name=[7,8)"
+  ],
+  "g1720": [
+    "tag \"div\" [0,3) [0,9) open=[0,8) mode=html concise",
+    "  attr \"span\" [4,8) name=[4,8)"
+  ],
+  "g1721": [
+    "tag \"div\" [1,4) [0,6) open=[0,6) mode=html incomplete",
+    "error INVALID_CHARACTER [6,7)"
+  ],
+  "g1722": [
+    "tag \"div\" [0,3) [0,7) open=[0,5) mode=html concise",
+    "  attr \"a\" [4,5) name=[4,5)"
   ]
 }

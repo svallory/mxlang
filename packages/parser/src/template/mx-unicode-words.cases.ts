@@ -768,10 +768,11 @@ export function atomAfterSymbolMismatch(
 
 /**
  * Characters at or above U+0080 that are no identifier characters: symbols,
- * punctuation, emoji (a surrogate pair), private use, format characters and
- * U+0085 and U+200B (which TypeScript, unlike ECMAScript and Babel, skips),
- * and surrogates that form no pair (a lone high, a lone low, a low before a
- * high).
+ * punctuation, emoji (a surrogate pair), private use, format characters,
+ * U+200B (which TypeScript, unlike ECMAScript and Babel, skips), and
+ * surrogates that form no pair (a lone high, a lone low, a low before a
+ * high). U+0085 and U+200E are tag-grammar whitespace
+ * (`PATTERN_WS_TAG_FORMS`), so they are not here.
  */
 const NON_WORD_SYMBOLS = [
   "©",
@@ -784,9 +785,7 @@ const NON_WORD_SYMBOLS = [
   "\u{1f600}",
   "\u{10ffff}",
   "",
-  "\u0085",
   "​",
-  "‎",
   "⁠",
   "­",
   "᠎",
@@ -911,10 +910,11 @@ export function renderAttrRanges(mod: AtomParserModule, code: string): string {
 
 /**
  * In concise mode, `--` after Unicode whitespace
- * starts the text block, as after an ASCII space, but the attribute's range
- * keeps the trailing Unicode whitespace (value `1 `, name `x `):
- * an ASCII space ends the attribute by the current-character test, which is
- * not a look-behind and is not changed. Not equal to the ASCII-space twin,
+ * starts the text block, as after an ASCII space, but a value's range
+ * keeps the trailing Unicode whitespace (value `1 `): an ASCII space
+ * ends the value by the current-character test, which is not a look-behind
+ * and is not changed. An attribute name refuses the space instead
+ * (`REFUSED_SPACE_ROWS`). Not equal to the ASCII-space twin,
  * by ruling; these stay out of `unicodeWhitespaceTwinMismatches`.
  * [input, events | atoms, attribute ranges], each beside its twin.
  */
@@ -931,8 +931,8 @@ export const CONCISE_DASH_ROWS: [string, string, string][] = [
   ],
   [
     "div x\u00a0-- text\n",
-    '<div> @x\u00a0 > text:"text" | <div> @x\u00a0',
-    "@4-6",
+    "<div> ERR(5-6 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(5-6 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+    "",
   ],
   ["div x -- text\n", '<div> @x > text:"text" | <div> @x', "@4-5"],
   [
@@ -954,5 +954,152 @@ export const CONCISE_DASH_ROWS: [string, string, string][] = [
     "div x=1\u3000 -- text\n",
     '<div> @x ="1\u3000" > text:"text" | <div> @x ="1\u3000"',
     "@4-5 =6-8",
+  ],
+];
+
+/**
+ * The tag grammar's whitespace beyond `isWhitespaceCode`: the rest of
+ * Unicode's `Pattern_White_Space` (U+0085, U+200E, U+200F, U+2028, U+2029).
+ */
+export const PATTERN_WHITE_SPACE = ["\u0085", "‎", "‏", " ", " "] as const;
+
+/**
+ * Tag-grammar inputs where `W` separates: after a tag name, an attribute
+ * name or value, a tag variable or a shorthand, after `<` in body text,
+ * after an operator in a whitespace-terminated value, as concise
+ * indentation and after a concise `$`.
+ */
+const PATTERN_WS_TAG_FORMS = [
+  "<divWa/>",
+  "<div aWb/>",
+  "<div a=1Wb/>",
+  "<div/xWa/>",
+  "<div.cWa/>",
+  "<p><Wb</p>",
+  "<div a=x +Wb/>",
+  "divWa\n",
+  "div aWb\n",
+  "div a=1Wb\n",
+  "div a=x +Wb\n",
+  "div\nWspan\n",
+  "$Wx\n",
+];
+
+/**
+ * Each `PATTERN_WS_TAG_FORMS` input with a `PATTERN_WHITE_SPACE` character
+ * renders as the same input with VT (U+000B): it separates and never ends
+ * a concise line. All are one UTF-16 unit, so offsets never shift. Returns
+ * the inputs whose renderings differ (none expected) and how many ran.
+ */
+export function patternWhiteSpaceTwinMismatches(
+  mod: AtomParserModule & NoThrowParserModule,
+): { total: number; bad: string[] } {
+  // `JSON.stringify` escapes VT and leaves the others as they are.
+  const vt = (t: string) => t.replaceAll("\\u000b", "\v");
+  let total = 0;
+  const bad: string[] = [];
+  for (const ws of PATTERN_WHITE_SPACE) {
+    for (const form of PATTERN_WS_TAG_FORMS) {
+      total++;
+      const code = form.replaceAll("W", ws);
+      const got = renderWhitespaceEvents(mod, code).replaceAll(ws, "\v");
+      const twin = vt(renderWhitespaceEvents(mod, form.replaceAll("W", "\v")));
+      if (got !== twin) bad.push(`${JSON.stringify(code)}: ${got}`);
+    }
+  }
+  return { total, bad };
+}
+
+/**
+ * [input, events | atoms]: each Unicode space that is not
+ * `Pattern_White_Space` is refused at its position in an attribute name
+ * (`<div aWb/>`, one row per code point), and once each in a tag name, a
+ * shorthand, a concise tag name and between attributes, where it would
+ * start an attribute name.
+ */
+export const REFUSED_SPACE_ROWS: [string, string][] = [
+  [
+    "<div a\u00a0b/>",
+    "<div> ERR(6-7 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u1680b/>",
+    "<div> ERR(6-7 U+1680 OGHAM SPACE MARK is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+1680 OGHAM SPACE MARK is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2000b/>",
+    "<div> ERR(6-7 U+2000 EN QUAD is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2000 EN QUAD is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2001b/>",
+    "<div> ERR(6-7 U+2001 EM QUAD is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2001 EM QUAD is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2002b/>",
+    "<div> ERR(6-7 U+2002 EN SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2002 EN SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2003b/>",
+    "<div> ERR(6-7 U+2003 EM SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2003 EM SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2004b/>",
+    "<div> ERR(6-7 U+2004 THREE-PER-EM SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2004 THREE-PER-EM SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2005b/>",
+    "<div> ERR(6-7 U+2005 FOUR-PER-EM SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2005 FOUR-PER-EM SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2006b/>",
+    "<div> ERR(6-7 U+2006 SIX-PER-EM SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2006 SIX-PER-EM SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2007b/>",
+    "<div> ERR(6-7 U+2007 FIGURE SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2007 FIGURE SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2008b/>",
+    "<div> ERR(6-7 U+2008 PUNCTUATION SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2008 PUNCTUATION SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u2009b/>",
+    "<div> ERR(6-7 U+2009 THIN SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+2009 THIN SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u200ab/>",
+    "<div> ERR(6-7 U+200A HAIR SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+200A HAIR SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u202fb/>",
+    "<div> ERR(6-7 U+202F NARROW NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+202F NARROW NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u205fb/>",
+    "<div> ERR(6-7 U+205F MEDIUM MATHEMATICAL SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+205F MEDIUM MATHEMATICAL SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\u3000b/>",
+    "<div> ERR(6-7 U+3000 IDEOGRAPHIC SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+3000 IDEOGRAPHIC SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a\ufeffb/>",
+    "<div> ERR(6-7 U+FEFF ZERO WIDTH NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+FEFF ZERO WIDTH NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div\u00a0x/>",
+    "ERR(4-5 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).) | ERR(4-5 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div.a\u00a0b/>",
+    "<div> ERR(6-7 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> ERR(6-7 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "div\u00a0x\n",
+    "ERR(3-4 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).) | ERR(3-4 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).)",
+  ],
+  [
+    "<div a=1 \u00a0b/>",
+    '<div> @a ="1" ERR(9-10 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).) | <div> @a ="1" ERR(9-10 U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).)',
   ],
 ];

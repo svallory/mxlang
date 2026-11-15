@@ -1,5 +1,6 @@
 import {
   isIndentCode,
+  isPatternWhiteSpaceCode,
   matchesCloseCurlyBrace,
   type Meta,
   Parser,
@@ -46,7 +47,8 @@ export const INLINE_SCRIPT: StateDefinition<ScriptletMeta> = {
   },
 
   parse(data, _maxPos, inlineScript) {
-    this.consumeWhitespace();
+    // MX: the gap after `$` is tag-grammar whitespace.
+    this.consumeWhitespace(isPatternWhiteSpaceCode);
     if (data.charCodeAt(this.pos) === CODE.OPEN_CURLY_BRACE) {
       inlineScript.block = true;
       this.pos++; // skip {

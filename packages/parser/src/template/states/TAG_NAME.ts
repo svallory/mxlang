@@ -1,10 +1,12 @@
 import {
-  isWhitespaceCode,
+  isPatternWhiteSpaceCode,
+  isRefusedTagSpaceCode,
   matchesCloseCurlyBrace,
   type Meta,
   Parser,
   type Ranges,
   STATE,
+  refusedTagSpaceMessage,
   type StateDefinition,
 } from "../internal.ts";
 import * as CODE from "../util/codes.ts";
@@ -138,6 +140,14 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         // MX: every `${}` is an expression position.
         expr.triggers = true;
         return;
+      } else if (isRefusedTagSpaceCode(code)) {
+        // MX: a Unicode space that is not `Pattern_White_Space` is refused
+        // in a tag name or shorthand, never read as a name character.
+        return this.emitError(
+          { start: this.pos, end: this.pos + 1 },
+          ErrorCode.INVALID_CHARACTER,
+          refusedTagSpaceMessage(code),
+        );
       } else if (endsTagName(this, code, data.charCodeAt(this.pos + 1))) {
         this.activeTag!.shorthandEnd = this.pos;
         this.exitState();
@@ -250,7 +260,7 @@ function endsTagName(parser: Parser, code: number, next: number): boolean {
   return (
     code === CODE.NEWLINE ||
     code === CODE.CARRIAGE_RETURN ||
-    isWhitespaceCode(code) ||
+    isPatternWhiteSpaceCode(code) ||
     code === CODE.EQUAL ||
     (code === CODE.COLON && next === CODE.EQUAL) ||
     code === CODE.OPEN_PAREN ||

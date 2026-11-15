@@ -54,6 +54,8 @@ import {
   extraWordTwinMismatches,
   NON_WORD_ROWS,
   nonWordTwinMismatches,
+  patternWhiteSpaceTwinMismatches,
+  REFUSED_SPACE_ROWS,
   renderAttrRanges,
   renderWhitespaceEvents,
   UNICODE_WHITESPACE_ROWS,
@@ -444,7 +446,7 @@ describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
 
   it("a symbol renders as an ASCII non-word", () => {
     const { total, bad } = nonWordTwinMismatches(mod);
-    expect(total).toBe(6_660);
+    expect(total).toBe(5_994);
     expect(bad).toEqual([]);
   });
 
@@ -466,6 +468,19 @@ describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
     expect(total).toBe(114);
     expect(bad).toEqual([]);
   });
+
+  it("tag-grammar Pattern_White_Space renders as VT", () => {
+    const { total, bad } = patternWhiteSpaceTwinMismatches(wsMod);
+    expect(total).toBe(65);
+    expect(bad).toEqual([]);
+  });
+
+  it.each(REFUSED_SPACE_ROWS)(
+    "a Unicode space that is not Pattern_White_Space is refused in a tag: %j",
+    (input, expected) => {
+      expect(renderWhitespaceEvents(wsMod, input)).toBe(expected);
+    },
+  );
 });
 
 // template-parser-comment-in-text-tag-open-crash: the same table the source

@@ -69,6 +69,23 @@ export const EVENT_ROWS: DivergenceRow[] = [
     input: "<,>a",
     note: "a nameless tag open at EOF throws in stock",
   },
+  // Unicode whitespace in the tag grammar (divergences.md). Stock reads every
+  // non-ASCII space as a name character.
+  {
+    id: "nbsp-in-attr-name",
+    input: "<div a\u00a0b/>",
+    note: "stock reads one attribute `a\u00a0b`; MX refuses the NBSP (`INVALID_CHARACTER`)",
+  },
+  {
+    id: "line-separator-in-tag",
+    input: "<div a\u2028b/>",
+    note: "stock reads one attribute `a\u2028b`; MX reads two, as with VT",
+  },
+  {
+    id: "line-separator-after-concise-name",
+    input: "div\u2028span\n",
+    note: "stock reads the tag name `div\u2028span`; MX reads `div` with the attribute `span`",
+  },
 ];
 
 /**

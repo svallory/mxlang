@@ -32,6 +32,7 @@ import {
   DEFAULT_SYNTAX,
   type SyntaxTable,
 } from "../template/syntax.ts";
+import { isPatternWhiteSpaceCode } from "../template/util/util.ts";
 import {
   type ContainerKind,
   type SubParseTrigger,
@@ -1647,12 +1648,13 @@ class FrontEnd {
     let headEnd = event.end;
     if (tag.concise) {
       // Never back past the last part of the head (`_reached`): a part's
-      // own range may end in whitespace the parser read into it.
+      // own range may end in whitespace the parser read into it. The
+      // tag grammar's whitespace (`Pattern_White_Space`, U+0085 too) is
+      // trimmed as well.
       const lastPart = tag._reached - this.offset;
-      while (
-        headEnd > lastPart &&
-        isTrimmable(this.source.charCodeAt(headEnd - 1))
-      ) {
+      while (headEnd > lastPart) {
+        const code = this.source.charCodeAt(headEnd - 1);
+        if (!(isTrimmable(code) || isPatternWhiteSpaceCode(code))) break;
         headEnd--;
       }
     }

@@ -174,11 +174,68 @@ export function wordWidthAt(data: string, i: number) {
  * behind (a dialect trigger's look-behind, division or regex, the keyword and operator
  * look-behinds, ` --` and ` >=`): ASCII whitespace and the Unicode
  * whitespace and line terminators of `isUnicodeSpaceCode`, which behave
- * exactly as ASCII whitespace there. Look-aheads and the tag grammar keep
- * `isWhitespaceCode`.
+ * exactly as ASCII whitespace there. Look-aheads keep `isWhitespaceCode`;
+ * the tag grammar uses `isPatternWhiteSpaceCode`.
  */
 export function isUnicodeWhitespaceCode(code: number) {
   return isWhitespaceCode(code) || isUnicodeSpaceCode(code);
+}
+
+/**
+ * MX: whitespace in the tag grammar (between attributes, at the end of a
+ * tag name, attribute name, tag variable or whitespace-terminated value,
+ * concise indentation): `isWhitespaceCode` plus the rest of Unicode's
+ * `Pattern_White_Space` (U+0085, U+200E, U+200F, U+2028, U+2029). Each of
+ * those five reads exactly as VT (U+000B): it separates and never ends a
+ * concise line.
+ */
+export function isPatternWhiteSpaceCode(code: number) {
+  return (
+    isWhitespaceCode(code) ||
+    code === 0x85 ||
+    code === 0x200e ||
+    code === 0x200f ||
+    code === 0x2028 ||
+    code === 0x2029
+  );
+}
+
+/**
+ * MX: the Unicode spaces that are not `Pattern_White_Space`
+ * (`isUnicodeSpaceCode` without U+2028 and U+2029). A tag name, a
+ * shorthand or an attribute name refuses one at its position
+ * (`refusedTagSpaceMessage`).
+ */
+export function isRefusedTagSpaceCode(code: number) {
+  return isUnicodeSpaceCode(code) && code !== 0x2028 && code !== 0x2029;
+}
+
+// The Unicode names of the `isRefusedTagSpaceCode` characters (no JS API
+// returns a character's name).
+const REFUSED_TAG_SPACE_NAMES: Readonly<Record<number, string>> = {
+  0xa0: "NO-BREAK SPACE",
+  0x1680: "OGHAM SPACE MARK",
+  0x2000: "EN QUAD",
+  0x2001: "EM QUAD",
+  0x2002: "EN SPACE",
+  0x2003: "EM SPACE",
+  0x2004: "THREE-PER-EM SPACE",
+  0x2005: "FOUR-PER-EM SPACE",
+  0x2006: "SIX-PER-EM SPACE",
+  0x2007: "FIGURE SPACE",
+  0x2008: "PUNCTUATION SPACE",
+  0x2009: "THIN SPACE",
+  0x200a: "HAIR SPACE",
+  0x202f: "NARROW NO-BREAK SPACE",
+  0x205f: "MEDIUM MATHEMATICAL SPACE",
+  0x3000: "IDEOGRAPHIC SPACE",
+  0xfeff: "ZERO WIDTH NO-BREAK SPACE",
+};
+
+/** The `INVALID_CHARACTER` message for a refused space (`isRefusedTagSpaceCode`). */
+export function refusedTagSpaceMessage(code: number) {
+  const hex = code.toString(16).toUpperCase().padStart(4, "0");
+  return `U+${hex} ${REFUSED_TAG_SPACE_NAMES[code]} is not whitespace in a tag; use a plain space (U+0020).`;
 }
 
 /**

@@ -425,10 +425,16 @@ export class Parser {
 
   // --------------------------
 
-  consumeWhitespaceIfBefore(str: string, start = 0) {
+  // MX: `isSpace` is the whitespace test; the tag grammar passes
+  // `isPatternWhiteSpaceCode`.
+  consumeWhitespaceIfBefore(
+    str: string,
+    start = 0,
+    isSpace: (code: number) => boolean = isWhitespaceCode,
+  ) {
     const { pos, data } = this;
     let cur = pos + start;
-    while (isWhitespaceCode(data.charCodeAt(cur))) cur++;
+    while (isSpace(data.charCodeAt(cur))) cur++;
 
     if (this.lookAheadFor(str, cur)) {
       this.pos = cur;
@@ -475,13 +481,18 @@ export class Parser {
     return true;
   }
 
-  consumeWhitespaceOnLine(start = 1) {
+  // MX: `isSpace` is the whitespace test; the tag grammar passes
+  // `isPatternWhiteSpaceCode`.
+  consumeWhitespaceOnLine(
+    start = 1,
+    isSpace: (code: number) => boolean = isWhitespaceCode,
+  ) {
     const maxOffset = this.maxPos - this.pos;
     let ahead = start;
 
     while (ahead < maxOffset) {
       const code = this.lookAtCharCodeAhead(ahead);
-      if (isWhitespaceCode(code)) {
+      if (isSpace(code)) {
         switch (code) {
           case CODE.CARRIAGE_RETURN:
           case CODE.NEWLINE:
@@ -500,13 +511,12 @@ export class Parser {
     return true;
   }
 
-  consumeWhitespace() {
+  // MX: `isSpace` is the whitespace test; the tag grammar passes
+  // `isPatternWhiteSpaceCode`.
+  consumeWhitespace(isSpace: (code: number) => boolean = isWhitespaceCode) {
     const maxOffset = this.maxPos - this.pos;
     let ahead = 0;
-    while (
-      ahead < maxOffset &&
-      isWhitespaceCode(this.lookAtCharCodeAhead(ahead))
-    ) {
+    while (ahead < maxOffset && isSpace(this.lookAtCharCodeAhead(ahead))) {
       ahead++;
     }
     this.pos += ahead;

@@ -1,7 +1,7 @@
 import {
   isIndentCode,
+  isPatternWhiteSpaceCode,
   isUnicodeWhitespaceCode,
-  isWhitespaceCode,
   matchesCloseAngleBracket,
   matchesCloseCurlyBrace,
   matchesCloseParen,
@@ -103,7 +103,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         continue;
       }
 
-      if (isWhitespaceCode(code)) {
+      if (isPatternWhiteSpaceCode(code)) {
         this.pos++;
         continue;
       }
@@ -131,14 +131,14 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
           ensureAttrName(this, attr);
           attr.bound = true;
           this.pos += 2; // skip :=
-          this.consumeWhitespace();
+          this.consumeWhitespace(isPatternWhiteSpaceCode);
         } else if (code === CODE.PERIOD) {
           attr.spread = true;
           this.pos += 3; // skip ...
         } else {
           ensureAttrName(this, attr);
           this.pos++; // skip =
-          this.consumeWhitespace();
+          this.consumeWhitespace(isPatternWhiteSpaceCode);
         }
 
         attr.stage = ATTR_STAGE.VALUE;
@@ -211,6 +211,8 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         // Don't advance pos: EXPRESSION starts at current char
         const expr = this.enterState(STATE.EXPRESSION);
         expr.terminatedByWhitespace = true;
+        // MX: a refused Unicode space in the name is an error there.
+        expr.attrName = true;
         expr.shouldTerminate = this.isConcise
           ? this.activeTag!.stage === TAG_STAGE.ATTR_GROUP
             ? shouldTerminateConciseGroupedAttrName
@@ -284,7 +286,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
           end: child.end,
         };
 
-        if (this.consumeWhitespaceIfBefore("{")) {
+        if (this.consumeWhitespaceIfBefore("{", 0, isPatternWhiteSpaceCode)) {
           // A shorthand method: any pending `async` is a modifier on this
           // method rather than an attribute, so only the name is emitted.
           if (attr.async) {
@@ -365,7 +367,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         const start = child.start - 1; // include <
         const end = ++this.pos; // include >
 
-        if (!this.consumeWhitespaceIfBefore("(")) {
+        if (!this.consumeWhitespaceIfBefore("(", 0, isPatternWhiteSpaceCode)) {
           flushPendingAsync(this, attr);
           return this.emitError(
             child,
@@ -517,7 +519,7 @@ function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
 
   // `&a = 1`: whitespace before the `=`, exactly as after a name (in
   // concise mode a line break ends the attribute).
-  const skip = parser.isConcise ? isIndentCode : isWhitespaceCode;
+  const skip = parser.isConcise ? isIndentCode : isPatternWhiteSpaceCode;
   let at = end;
   while (at < parser.maxPos && skip(data.charCodeAt(at))) at++;
   const code = data.charCodeAt(at);
@@ -590,14 +592,14 @@ function enterTriggerValue(parser: Parser, attr: AttrMeta, bound: boolean) {
   attr.bound = bound;
   attr.stage = ATTR_STAGE.TRIGGER_VALUE;
   parser.pos += bound ? 2 : 1; // skip = or :=
-  parser.consumeWhitespace();
+  parser.consumeWhitespace(isPatternWhiteSpaceCode);
   enterAttrValue(parser, true);
 }
 
 /** Whether an attribute trigger's text may end at `pos`: whitespace, `,`, EOF, or the end of the tag, line or attribute group. */
 function endsAttrTriggerAt(parser: Parser, data: string, pos: number) {
   const code = data.charCodeAt(pos);
-  if (code !== code || isWhitespaceCode(code) || code === CODE.COMMA) {
+  if (code !== code || isPatternWhiteSpaceCode(code) || code === CODE.COMMA) {
     return true;
   }
   if (parser.isConcise) {
@@ -817,7 +819,7 @@ function isAsyncMethodPrefix(parser: Parser, name: Range) {
 
   // In concise mode a newline ends the attribute, so a name on the following
   // line belongs to a separate attribute and cannot be this method's name.
-  const skip = parser.isConcise ? isIndentCode : isWhitespaceCode;
+  const skip = parser.isConcise ? isIndentCode : isPatternWhiteSpaceCode;
   let pos = parser.pos;
   while (skip(data.charCodeAt(pos))) pos++;
 

@@ -15,11 +15,12 @@
 import type { MxBodyMode, MxStatementKeyword } from "@mxlang/babel/mx-ast";
 import { TagType } from "../template/index.ts";
 import type { TagType as TagTypeValue } from "../template/internal.ts";
+import { isPatternWhiteSpaceCode } from "../template/util/util.ts";
 
 /** Where a tag name can start: after these (or at the start of the input), never mid-name. */
 function startsName(code: number): boolean {
   return (
-    code <= 32 || // whitespace and line breaks: a concise line, an open tag after spaces
+    isPatternWhiteSpaceCode(code) || // whitespace and line breaks: a concise line, an open tag after spaces
     code === 60 || // `<`
     code === 44 || // `,` (a concise head continued, `,div`)
     code === 47 || // `/` (the end of a `/* */` before a head)
@@ -45,7 +46,7 @@ function nameEnd(
   for (let at = start; at < source.length; at++) {
     const code = source.charCodeAt(at);
     if (
-      code <= 32 ||
+      isPatternWhiteSpaceCode(code) || // whitespace, U+0085, U+200E, U+200F, U+2028, U+2029
       code === 61 || // =
       code === 40 || // (
       code === 47 || // /

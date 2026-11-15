@@ -1,7 +1,7 @@
 import {
   isIndentCode,
   isLineCode,
-  isWhitespaceCode,
+  isPatternWhiteSpaceCode,
   matchesCloseAngleBracket,
   matchesCloseParen,
   matchesPipe,
@@ -114,7 +114,7 @@ export const OPEN_TAG: StateDefinition<OpenTagMeta> = {
           let cur = this.pos;
           while (cur < maxPos) {
             const peek = data.charCodeAt(cur);
-            if (isWhitespaceCode(peek)) {
+            if (isPatternWhiteSpaceCode(peek)) {
               cur++;
             } else if (
               peek === CODE.FORWARD_SLASH &&
@@ -155,7 +155,7 @@ export const OPEN_TAG: StateDefinition<OpenTagMeta> = {
         if (code === CODE.SEMICOLON) {
           this.pos++; // skip ;
           this.exitState();
-          if (!this.consumeWhitespaceOnLine(0)) {
+          if (!this.consumeWhitespaceOnLine(0, isPatternWhiteSpaceCode)) {
             switch (data.charCodeAt(this.pos)) {
               case CODE.FORWARD_SLASH:
                 switch (data.charCodeAt(this.pos + 1)) {
@@ -293,12 +293,12 @@ export const OPEN_TAG: StateDefinition<OpenTagMeta> = {
         );
       }
 
-      if (isWhitespaceCode(code)) {
+      if (isPatternWhiteSpaceCode(code)) {
         this.pos++;
         continue;
       } else if (code === CODE.COMMA) {
         this.pos++; // skip ,
-        this.consumeWhitespace();
+        this.consumeWhitespace(isPatternWhiteSpaceCode);
         continue;
       } else {
         if (tag.hasAttrs) {
@@ -310,7 +310,7 @@ export const OPEN_TAG: StateDefinition<OpenTagMeta> = {
               tag.stage = TAG_STAGE.VAR;
               this.pos++; // skip /
 
-              if (isWhitespaceCode(data.charCodeAt(this.pos))) {
+              if (isPatternWhiteSpaceCode(data.charCodeAt(this.pos))) {
                 return this.emitError(
                   this.pos,
                   ErrorCode.MISSING_TAG_VARIABLE,
@@ -449,7 +449,7 @@ export const OPEN_TAG: StateDefinition<OpenTagMeta> = {
           end: child.end,
         };
 
-        if (this.consumeWhitespaceIfBefore("{")) {
+        if (this.consumeWhitespaceIfBefore("{", 0, isPatternWhiteSpaceCode)) {
           const attr = this.enterState(STATE.ATTRIBUTE);
 
           if (typeParams) {
@@ -497,7 +497,7 @@ export const OPEN_TAG: StateDefinition<OpenTagMeta> = {
           break;
         }
 
-        this.consumeWhitespace();
+        this.consumeWhitespace(isPatternWhiteSpaceCode);
         const nextCode = this.lookAtCharCodeAhead(0);
 
         if (nextCode === CODE.PIPE && !hasParams) {

@@ -17137,8 +17137,7 @@
     "expected": [
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
-      "AttrName 5-8 \"a\u00a0b\"",
-      "OpenTagEnd 8-10 \"/>\" selfClosed=true"
+      "Error 6-7 4 \"U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).\""
     ]
   },
   {
@@ -18719,10 +18718,7 @@
     "input": "div x\u00a0-- text\n",
     "expected": [
       "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
-      "AttrName 4-6 \"x\u00a0\"",
-      "OpenTagEnd 6-6 \"\" selfClosed=false",
-      "Text 9-13 \"text\"",
-      "CloseTagEnd 14-14 \"\""
+      "Error 5-6 4 \"U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).\""
     ]
   },
   {
@@ -19079,10 +19075,7 @@
     "id": "g1712",
     "input": "div\u00a0-- text",
     "expected": [
-      "OpenTagName 0-6 \"div\u00a0--\" quasis=[0-6 \"div\u00a0--\"] expressions=[]",
-      "AttrName 7-11 \"text\"",
-      "OpenTagEnd 11-11 \"\" selfClosed=false",
-      "CloseTagEnd 11-11 \"\""
+      "Error 3-4 4 \"U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).\""
     ]
   },
   {
@@ -19090,10 +19083,7 @@
     "input": "div.a\u00a0-- text",
     "expected": [
       "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
-      "TagShorthandClass 3-8 \".a\u00a0--\" quasis=[4-8 \"a\u00a0--\"] expressions=[]",
-      "AttrName 9-13 \"text\"",
-      "OpenTagEnd 13-13 \"\" selfClosed=false",
-      "CloseTagEnd 13-13 \"\""
+      "Error 5-6 4 \"U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).\""
     ]
   },
   {
@@ -19139,6 +19129,60 @@
       "AttrName 5-6 \"x\"",
       "AttrValue 6-18 \"=(a) :\u00c9 => a\" bound=false value=7-18 \"(a) :\u00c9 => a\"",
       "OpenTagEnd 18-20 \"/>\" selfClosed=true"
+    ]
+  },
+  {
+    "id": "g1718",
+    "input": "div a\u2028b\n  span\n",
+    "expected": [
+      "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
+      "AttrName 4-5 \"a\"",
+      "AttrName 6-7 \"b\"",
+      "OpenTagEnd 7-7 \"\" selfClosed=false",
+      "OpenTagName 10-14 \"span\" quasis=[10-14 \"span\"] expressions=[]",
+      "OpenTagEnd 14-14 \"\" selfClosed=false",
+      "CloseTagEnd 15-15 \"\"",
+      "CloseTagEnd 15-15 \"\""
+    ]
+  },
+  {
+    "id": "g1719",
+    "input": "<div a\u2028b/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"a\"",
+      "AttrName 7-8 \"b\"",
+      "OpenTagEnd 8-10 \"/>\" selfClosed=true"
+    ]
+  },
+  {
+    "id": "g1720",
+    "input": "div\u2028span\n",
+    "expected": [
+      "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
+      "AttrName 4-8 \"span\"",
+      "OpenTagEnd 8-8 \"\" selfClosed=false",
+      "CloseTagEnd 9-9 \"\""
+    ]
+  },
+  {
+    "id": "g1721",
+    "input": "<div a\u3000b/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "Error 6-7 4 \"U+3000 IDEOGRAPHIC SPACE is not whitespace in a tag; use a plain space (U+0020).\""
+    ]
+  },
+  {
+    "id": "g1722",
+    "input": "div a\u0085\n",
+    "expected": [
+      "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
+      "AttrName 4-5 \"a\"",
+      "OpenTagEnd 6-6 \"\" selfClosed=false",
+      "CloseTagEnd 7-7 \"\""
     ]
   }
 ]

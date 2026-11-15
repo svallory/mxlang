@@ -387,9 +387,9 @@ What the row order means for some inputs:
 | `<foo (a)/>`, `<foo /x/>` | whitespace before the form (row 11): tag arguments, a tag variable | g0697 g0698 |
 | `div a--b` | the attribute name `a--b`: row 4 is reached where an attribute could begin | g0126 |
 | `div a -- text` | the name `a` and a text block | g0699 |
-| `div x\u00a0-- text` (U+00A0 before `--`) | the name `x\u00a0` and a text block: the name keeps the Unicode space, which ends no name | g1681 |
-| `div\u00a0-- text` (U+00A0 before `--`) | the tag name `div\u00a0--` and the attribute `text`: the tag-name state stays ASCII, as upstream and Marko | g1712 |
-| `div.a\u00a0-- text` (U+00A0 before `--`) | the class `a\u00a0--` and the attribute `text`: the shorthand state stays ASCII, as upstream and Marko | g1713 |
+| `div x\u00a0-- text` (U+00A0 before `--`) | `INVALID_CHARACTER` at the U+00A0 (5 to 6), `U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).`: a name refuses a Unicode space that is not `Pattern_White_Space` ([Whitespace at the parser level](#the-parser-grammar-whitespace-at-the-parser-level)) | g1681 |
+| `div\u00a0-- text` (U+00A0 before `--`) | the same error at 3 to 4: the tag name refuses it too, where upstream and Marko read the tag name `div\u00a0--` | g1712 |
+| `div.a\u00a0-- text` (U+00A0 before `--`) | the same error at 5 to 6: so does a shorthand, where upstream and Marko read the class `a\u00a0--` | g1713 |
 | `x=1 :é` | the tag `x` with the single value `1 :é`: a spaced `:` after a value continues it | g1714 |
 | `(a) :É => a` | the tag arguments `(a)`, the attribute `:É` and the value `=> a`: a bare input parses as tag forms | g1715 |
 | `<div x=1 :é/>` | the single value `1 :é`, as stock | g1716 |
@@ -545,12 +545,12 @@ A name is an `EXPRESSION` position with the flag `terminatedByWhitespace`
 | Mode | Hard stops | Source | Probes |
 | --- | --- | --- | --- |
 | HTML | `,` `=` `(` `>` `<`; `:` when the next character is `=`; `/` when the next character is `>` | `shouldTerminateHtmlAttrName` | g0122 g0086 g0010 g0123 g1397 g1534 |
-| Concise | `,` `=` `(` `;` `<`; `:` when the next character is `=`; `-` when the next character is `-` **and** the previous character is whitespace, ASCII or Unicode | `shouldTerminateConciseAttrName` | g0124 g0125 g0126 g0127 g1681 |
+| Concise | `,` `=` `(` `;` `<`; `:` when the next character is `=`; `-` when the next character is `-` **and** the previous character is whitespace, ASCII or Unicode (a Unicode space that is not `Pattern_White_Space` never gets there: the name refuses it first) | `shouldTerminateConciseAttrName` | g0124 g0125 g0126 g0127 g1681 |
 | Concise, inside `[ … ]` | `,` `=` `(` `]` `<`; `:` when the next character is `=` | `shouldTerminateConciseGroupedAttrName` | g0128 g0129 g0130 g0131 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div a b/>`, `<div a\n b/>` | two names: whitespace and a newline end a name | g0053 g0728 g1031 g1052 g1537 g1538 g1552 g1553 |
+| `<div a b/>`, `<div a\n b/>` | two names: whitespace and a newline end a name | g0053 g0728 g1031 g1052 g1537 g1552 g1553 |
 | `<div a[b c]/>`, `<div {a b}/>`, `<div a"b c"/>` | one name each: no stop is examined inside a group or a string | g0729 g0730 g0731 g1206 |
 | `<div a/ b/>` | one name `a/ b`: the `/` follows a word character, so it is a division, which consumes the whitespace after it | g0732 g1128 |
 | `<div a: b/>`, `<div a? b/>` | the names `a:` and `b`, `a?` and `b`: with no `operators` flag, `:` and `?` consume nothing | g0733 g0734 |
@@ -751,12 +751,30 @@ no MX decision.
 
 ## Whitespace at the parser level
 
-The rows in this document that read U+00A0 or another Unicode space as part of
-a name or value record the template parser's events. In the tag grammar the
-language's whitespace is Unicode's Pattern_White_Space set, and any other
-Unicode space character there is refused at its position with a message
-naming it ([Unicode in the parser](/architecture/unicode-in-the-parser/));
-expressions keep JavaScript's rule.
+In the tag grammar the language's whitespace is Unicode's
+`Pattern_White_Space` set: `isWhitespaceCode` (`code <= 0x20`) and U+0085,
+U+200E, U+200F, U+2028 and U+2029 (`isPatternWhiteSpaceCode`). Those five read
+exactly as VT does: they end a tag name, shorthand, attribute name, tag
+variable or whitespace-terminated value, they separate attributes, they count
+as concise indentation and as the gap after a concise `$`, and they never end
+a concise line; only CR and LF do. Any other Unicode space character
+(`isRefusedTagSpaceCode`: U+00A0, U+1680, U+2000 to U+200A, U+202F, U+205F,
+U+3000, U+FEFF) is refused in a tag name, a shorthand or an attribute name,
+including where an attribute name would start, with `INVALID_CHARACTER` on
+that one character and the message
+`U+<hex> <NAME> is not whitespace in a tag; use a plain space (U+0020).`
+([Unicode in the parser](/architecture/unicode-in-the-parser/)). Rows in this document that
+read U+00A0 as part of a value record expressions, which keep JavaScript's
+rule; close tag names and body text read as before.
+
+| Input | Result | Probes |
+| --- | --- | --- |
+| `<div a\u00a0b/>` | `INVALID_CHARACTER` at 6 to 7, `U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).` | g1538 |
+| `<div a\u3000b/>` | `INVALID_CHARACTER` at 6 to 7, naming `U+3000 IDEOGRAPHIC SPACE` | g1721 |
+| `<div a\u2028b/>` | the attributes `a` and `b`, as with VT | g1719 |
+| `div\u2028span\n` | the tag `div` with the attribute `span` | g1720 |
+| `div a\u2028b\n  span\n` | `<div> @a @b` with `span` nested in it: U+2028 does not end the line | g1718 |
+| `div a\u0085\n` | `<div> @a`; the front end's head span ends at 5, before the U+0085, as before a VT | g1722 |
 
 The template parser reports text as raw source ranges (`htmlEOF`,
 `handleDelimitedBlockEOL`):
