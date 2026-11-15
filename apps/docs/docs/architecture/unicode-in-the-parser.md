@@ -94,17 +94,17 @@ Standard: ECMAScript's WhiteSpace and LineTerminator. The unpatched parser uses 
 
 ### Concise `--` after Unicode whitespace
 
-In concise mode, a `--` after one of the 19 code points ends the attribute and starts a text block, as after an ASCII space. The code point stays in the attribute's range, because an ASCII space ends an attribute by the current-character test, which is not a look-behind and does not recognise the Unicode characters.
+In concise mode, a `--` after one of the 19 code points at the end of an attribute value ends the value and starts a text block, as after an ASCII space. The code point stays in the value's range, because an ASCII space ends a value by the current-character test, which is not a look-behind and does not recognise the Unicode characters. An attribute name is in the tag grammar (below): U+2028 and U+2029 separate there, as an ASCII space does, and the other 17 code points are refused at their position. So only a value keeps a refused space.
 
 Standard: MX's own; neither ECMAScript nor the unpatched parser defines it. The unpatched parser reads the `--` as part of the value or the name and the text as another attribute.
 
 | Input | stock | MX | Probe |
 | --- | --- | --- | --- |
 | `div x=1\u00a0-- text\n` | `@x ="1\u00a0--" @text`; value range 6 to 10 | `@x ="1\u00a0"` and the text `text`; value range 6 to 8 | g1680 |
-| `div x\u00a0-- text\n` | `@x\u00a0--` and `@text` | `@x\u00a0` and the text `text`; name range 4 to 6 | g1681 |
+| `div x\u00a0-- text\n` | `@x\u00a0--` and `@text` | the error `U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).` at 5 to 6 | g1681 |
 | `div x=1 -- text\n` (an ASCII space) | `@x ="1"` and the text `text` | the same | g1688 |
 
-A trailing U+00A0 on a value does not reach emitted code (the expression is parsed as `1`); on an attribute name the compile fails with `Invalid attribute name`.
+A trailing U+00A0 on a value does not reach emitted code (the expression is parsed as `1`). An attribute name never keeps one: the parser refuses it.
 
 ### `await`, `yield` and `of` before a dialect trigger
 
@@ -133,10 +133,6 @@ In HTML body text, `//` and `/*` start a comment only after ASCII whitespace. A 
 
 ### Whitespace in the tag grammar
 
-> Not released yet: the parser on main still reads the characters below as
-> name characters, as stock does (`div\u00a0-- text` names the tag
-> `div\u00a0--`; `<div a\u00a0b/>` has one attribute `a\u00a0b`, g1538).
-
 In the tag grammar (between tags, attributes, names and shorthands, outside
 any expression), whitespace is Unicode's `Pattern_White_Space` set, the fixed
 set UAX #31 recommends for language syntax: tab, LF, VT, FF, CR, space,
@@ -146,6 +142,24 @@ category Zs, and U+FEFF) is refused at its position with an error that names
 the character and the plain space it looks like. So `div x\u00a0y` is an
 error at the no-break space, not one attribute named `x\u00a0y`. Expressions
 keep JavaScript's whitespace rule (the look-behinds above).
+
+The five characters beyond ASCII read exactly as VT (U+000B) does: they end
+a tag name, attribute name, tag variable or whitespace-terminated value, they
+count as concise indentation and as the gap after a concise `$`, and they
+never end a concise line. A refused character is refused in a tag name, a
+shorthand or an attribute name, including where an attribute name would
+start; inside a value, a close tag name or body text it is read as before.
+
+| Input | stock | MX | Probe |
+| --- | --- | --- | --- |
+| `<div a\u00a0b/>` | one attribute `a\u00a0b` | the error `U+00A0 NO-BREAK SPACE is not whitespace in a tag; use a plain space (U+0020).` at 6 to 7 | g1538 |
+| `<div a\u3000b/>` | one attribute `a\u3000b` | the error naming `U+3000 IDEOGRAPHIC SPACE` at 6 to 7 | g1721 |
+| `div\u00a0-- text` | the tag `div\u00a0--` | the error at 3 to 4 | g1712 |
+| `div.a\u00a0-- text` | the class `a\u00a0--` | the error at 5 to 6 | g1713 |
+| `<div a\u2028b/>` | one attribute `a\u2028b` | `@a @b` | g1719 |
+| `div\u2028span\n` | the tag `div\u2028span` | `<div>` with the attribute `span` | g1720 |
+| `div a\u2028b\n  span\n` | one attribute `a\u2028b` | `<div> @a @b`, with `span` nested in it: the U+2028 does not end the line | g1718 |
+| `div a\u0085\n` | one attribute `a\u0085` | `@a`; the head's span ends before the U+0085 | g1722 |
 
 Standard: UAX #31, "Pattern Syntax" (`Pattern_White_Space`). The unpatched
 parser and HTML read these characters as part of a name; the difference is a
@@ -166,7 +180,7 @@ MX has no rule that ends a value at a spaced `:` or `.` followed by a name: `x=a
 ## Known approximations and leftovers
 
 - MX's whitespace still counts 27 ASCII control characters that ECMAScript does not (U+0000 to U+0008 and U+000E to U+001F). This is inherited from htmljs-parser, whose `isWhitespaceCode` is `code <= 0x20` and carries the comment "this might be slightly non-conforming".
-- U+2028 and U+2029 are whitespace in the look-behinds but do not end a concise line.
+- U+0085, U+2028 and U+2029 separate in the tag grammar but do not end a concise line; only CR and LF do.
 - The word class has no table of its own; it follows the engine's Unicode property data. TypeScript's identifier tables follow Unicode 15.1 and Babel's 17.0, so a character added to `ID_Continue` after the engine's Unicode version is a non-word character here until the engine updates.
 - Not determined: how editors, formatters and language tools consume the attribute ranges that keep a trailing Unicode space.
 
