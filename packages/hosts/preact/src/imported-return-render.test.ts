@@ -156,7 +156,9 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
   });
 
   // A callback body is a `/var` scope of its own, per row and per branch, as
-  // in Marko 6.4.4 and the html target.
+  // in Marko 6.4.4 and the html target. Each fixture binds the body's `/var`
+  // under the same name as an outer one: a body whose statements were hoisted
+  // to the enclosing scope would declare `n` twice and fail to compile.
   it("binds a /var in a <for> body per row", async () => {
     expect(
       await renderCaller(
@@ -168,9 +170,9 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
   it("binds a /var in an <if>/<else> branch, only in the branch that renders", async () => {
     expect(
       await renderCaller(
-        "<if=false><Counter/n start=1/>${n}</if><else><Counter/m start=5/><p>${m}</p></else>",
+        "<Counter/n start=1/><if=false><Counter/n start=9/>${n}</if><else><Counter/n start=5/><b>${n}</b></else><i>${n}</i>",
       ),
-    ).toBe("<span>5</span><p>6</p>");
+    ).toBe("<span>1</span><span>5</span><b>6</b><i>2</i>");
   });
 
   it("lets a /var in a <for> body shadow an outer /var of the same name", async () => {
@@ -183,16 +185,18 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
 
   it("binds a /var in a component's content body", async () => {
     expect(
-      await renderCaller("<Box><Counter/n start=1/><p>${n}</p></Box>"),
-    ).toBe("<section><span>1</span><p>2</p></section>");
+      await renderCaller(
+        "<Counter/n start=1/><Box><Counter/n start=5/><b>${n}</b></Box><i>${n}</i>",
+      ),
+    ).toBe("<span>1</span><section><span>5</span><b>6</b></section><i>2</i>");
   });
 
   it("binds a /var in an attribute-tag body", async () => {
     expect(
       await renderCaller(
-        "<Card><@body><Counter/n start=1/><p>${n}</p></@body></Card>",
+        "<Counter/n start=1/><Card><@body><Counter/n start=5/><b>${n}</b></@body></Card><i>${n}</i>",
       ),
-    ).toBe("<div><span>1</span><p>2</p></div>");
+    ).toBe("<span>1</span><div><span>5</span><b>6</b></div><i>2</i>");
   });
 
   it("refuses /var on an imported tag without <return>, at the call", () => {
