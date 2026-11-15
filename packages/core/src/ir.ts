@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 15;
+export const IR_VERSION = 16;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -907,6 +907,17 @@ export type IrNode =
        * since the body is `content`.
        */
       attrs: Attr[];
+      /**
+       * The attribute tags written in the define's body, as a component
+       * call's `attributeTagTree`: Marko lowers `<define/D><@item x=1/></define>`
+       * to `const D = { item: attrTag({ x: 1 }) }`, so each attribute-tag name
+       * is a property of the define's value, after the attributes and before
+       * `content`. Evaluated where the `<define>` is written, outside the
+       * params' scope, as the attributes are; the rest of the body is
+       * `children`. Absent when the body has none; optional so a hand-built
+       * define keeps compiling.
+       */
+      attributeTagTree?: AttributeTagNode[];
       children: IrNode[];
     } & IrBase)
   | ({

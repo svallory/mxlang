@@ -2538,15 +2538,21 @@ const FUNCTION_OWN_NAMES: ReadonlySet<string> = new Set([
  * `Object.assign` throws on all four. A define with an attribute of any of
  * those names (or a spread, whose keys are unknown) first makes them
  * writable. Marko's define value is a plain object, where
- * `<define/D name="x"/>` is fine.
+ * `<define/D name="x"/>` is fine. `attributeTagNames` are the names of the
+ * body's attribute tags (`attributeTagNames(define.attributeTagTree)`), which
+ * are properties of the value too, so `<@name>` needs the same wrapper.
  */
-export function defineValueWrapper(attrs: readonly Attr[]): {
+export function defineValueWrapper(
+  attrs: readonly Attr[],
+  attributeTagNames: readonly string[] = [],
+): {
   open: string;
   between: string;
 } {
-  const risky = attrs.some(
-    (attr) => attr.kind === "spread" || FUNCTION_OWN_NAMES.has(attr.name),
-  );
+  const risky =
+    attrs.some(
+      (attr) => attr.kind === "spread" || FUNCTION_OWN_NAMES.has(attr.name),
+    ) || attributeTagNames.some((name) => FUNCTION_OWN_NAMES.has(name));
   return risky
     ? {
         open: "Object.assign(Object.defineProperties(",

@@ -35,10 +35,11 @@ function boundScope(
     return { names: node.bindings, covers: (key) => key !== "source" };
   }
   if (node.kind === "Define") {
-    // A `<define>`'s attributes are written outside its params' scope.
+    // A `<define>`'s attributes and its body's attribute tags are written
+    // outside its params' scope.
     return {
       names: node.bindings ?? node.params,
-      covers: (key) => key !== "attrs",
+      covers: (key) => key !== "attrs" && key !== "attributeTagTree",
     };
   }
   if (

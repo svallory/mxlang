@@ -4714,6 +4714,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     );
   }
   rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "define", node), {
+    attributeTags: true,
     var: true,
     params: true,
   });
@@ -4728,6 +4729,12 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   // `x` outside).
   const attrs = lowerAttrs(ctx, node, "define", "component", false, false);
   warnDroppedAttributeArguments(ctx, node, "define");
+
+  // The body's attribute tags are properties of the value too (Marko:
+  // `<define/D><@item x=1/></define>` gives `D.item`), written where the
+  // `<define>` is, so they are lowered outside the params' scope, as the
+  // attributes are; the rest of the body is the define's content.
+  const loweredTags = lowerAttributeTags(ctx, node, { owner: "define" });
 
   // The params shadow the host's bindings inside the body only, and a
   // statement hoisted from inside belongs to *this* function's head — it may
@@ -4758,7 +4765,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   try {
     lowered = withPrelude(ctx, () =>
       withTagParams(ctx, node, "define", () =>
-        lowerChildren(ctx, bodyChildren(node)),
+        lowerChildren(ctx, loweredTags.contentChildren),
       ),
     );
     // Read through the field's type: TypeScript keeps the `null` assigned
@@ -4801,6 +4808,9 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     ...(typeParams ? { typeParams } : {}),
     ...(returnValue ? { returnValue } : {}),
     attrs: dropContentAttrBesideBody(ctx, node, attrs, children.length > 0),
+    ...(loweredTags.tree.length > 0
+      ? { attributeTagTree: loweredTags.tree }
+      : {}),
     children: [...hoisted, ...children],
     loc,
   };

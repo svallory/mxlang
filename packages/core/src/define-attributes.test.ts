@@ -163,3 +163,46 @@ describe("`content` on a <define>", () => {
     expect(thrown('<define/D content="x">body</define>')).toBeUndefined();
   });
 });
+
+// Stock Marko 6.4.4 compiles `<define/Bar><@item x=1/></define>` to
+// `const Bar = { item: attrTag({ x: 1 }) }`: the body's attribute tags are
+// properties of the define's value, after its attributes.
+describe("attribute tags in a <define> body", () => {
+  const tagNames = (define: Define) =>
+    (define.attributeTagTree ?? []).map((node) =>
+      node.kind === "AttributeTag" ? node.tag.name : node.kind,
+    );
+
+  it("lower onto the define, not refused", () => {
+    const define = defineOf("<define/Bar><@item x=1/></define>");
+    expect(tagNames(define)).toEqual(["item"]);
+    const item = define.attributeTagTree?.[0];
+    if (item?.kind !== "AttributeTag") throw new Error("no AttributeTag");
+    expect(
+      item.tag.attrs.map((attr) => [attr.kind, "name" in attr && attr.name]),
+    ).toEqual([["dynamic", "x"]]);
+    expect(define.children).toEqual([]);
+  });
+
+  it("leave the rest of a mixed body as the define's children", () => {
+    const define = defineOf("<define/Bar><@item/><p>x</p></define>");
+    expect(tagNames(define)).toEqual(["item"]);
+    expect(
+      define.children.map((node) =>
+        node.kind === "Element" ? node.name : node.kind,
+      ),
+    ).toEqual(["p"]);
+  });
+
+  it("keep an <if> around them as one AttributeTagIf", () => {
+    const define = defineOf("<define/Bar><if=input.a><@item/></if></define>");
+    expect(tagNames(define)).toEqual(["AttributeTagIf"]);
+    expect(define.children).toEqual([]);
+  });
+
+  it("are absent when the body has none", () => {
+    expect(defineOf("<define/D a=1><p>x</p></define>")).not.toHaveProperty(
+      "attributeTagTree",
+    );
+  });
+});
