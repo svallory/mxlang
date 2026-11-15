@@ -324,11 +324,11 @@ lists the reads; `tag.concise`, the copy `OPEN_TAG.enter` records, is read by
 
 | Case | Result | Probes |
 | --- | --- | --- |
-| a concise line that starts with `<` | an HTML region; it ends at the first newline after its top-level tag has closed, and text after that tag on the line is HTML content: `div\n  <span>a</span> b\n  p` is the tag `span`, the text ` b`, then the concise child `p` | g0024 |
+| a concise line that starts with `<` | an HTML region; it ends at the first newline after its top-level tag has closed, and text after that tag on the line is HTML content: `div\n  <span>a</span> b\n  p` is the tag `span`, the text ` b`, then the concise child `p` | g0024 g1068 g1279 |
 | a newline inside an open HTML tag of the region | the region continues: `<a></a><b>\n</b>\ndiv` | g0679 |
-| a region line with no open tag (an HTML comment) | the region ends at the newline | g0680 |
+| a region line with no open tag (an HTML comment) | the region ends at the newline | g0680 g1067 |
 | a region whose top-level tag is a void tag | the region ends at the newline | g0681 |
-| `/>` in HTML mode | self-closes the tag, void or not | g0682 g0683 |
+| `/>` in HTML mode | self-closes the tag, void or not | g0682 g0683 g1540 g1541 |
 | the `onOpenTagEnd` range | empty in concise mode; the `>` or `/>` in HTML mode | g0684 g0044 g0010 |
 | a delimited block under a concise text tag | concise mode: end of input in its placeholder is silent | g0377 |
 | a delimited block under any other concise tag | HTML mode: the same end of input is an error | g0379 |
@@ -340,8 +340,8 @@ content reads to the next `>`, and the text between is compared:
 
 | # | The text between `</` and `>` | Result | Probes |
 | --- | --- | --- | --- |
-| 1 | empty (`</>`) | closes the open tag, whatever its name | g0155 g0685 |
-| 2 | equal to the open tag's written name, or to the literal `div` when the name range is empty | closes it. `<div:x>` is closed by `</div:x>` and not by `</div>`. TODO `unnamed-tag-close-compares-literal-div` | g0154 g0686 g0687 g0688 |
+| 1 | empty (`</>`) | closes the open tag, whatever its name | g0155 g0685 g1254 |
+| 2 | equal to the open tag's written name, or to the literal `div` when the name range is empty | closes it. `<div:x>` is closed by `</div:x>` and not by `</div>`. TODO `unnamed-tag-close-compares-literal-div` | g0154 g0686 g0687 g0688 g1120 |
 | 3 | equal to the source from the start of the name to the end of its shorthands | closes it | g0689 |
 | 4 | anything else | `The closing "x" tag does not match the corresponding opening "y" tag` | g0238 |
 | — | any, with no open tag | `The closing "x" tag was not expected` | g0237 |
@@ -359,20 +359,20 @@ spec §3 "Concise mode" describes.
 
 | # | Character | Mode | Result | Probes |
 | --- | --- | --- | --- | --- |
-| 1 | newline | concise, outside `[ … ]` | look ahead over whitespace (newlines included), `//` comments and `/* */` comments; if the next character is `,` the open tag continues, otherwise the open tag ends at this newline | g0028 g0029 g0030 |
-| 2 | newline | HTML, or inside `[ … ]` | skipped | g0031 g0032 |
-| 3 | `;` | concise | the open tag ends. Only whitespace, a `//` or `/* */` comment or an HTML comment may follow on the line, otherwise `A semicolon indicates the end of a line. Only comments may follow it.` This applies inside `[ … ]` too | g0033 g0034 g0035 |
+| 1 | newline | concise, outside `[ … ]` | look ahead over whitespace (newlines included), `//` comments and `/* */` comments; if the next character is `,` the open tag continues, otherwise the open tag ends at this newline | g0028 g0029 g0030 g1032 g1236 |
+| 2 | newline | HTML, or inside `[ … ]` | skipped | g0031 g0032 g1192 g1240 |
+| 3 | `;` | concise | the open tag ends. Only whitespace, a `//` or `/* */` comment or an HTML comment may follow on the line, otherwise `A semicolon indicates the end of a line. Only comments may follow it.` This applies inside `[ … ]` too | g0033 g0034 g0035 g1084 g1087 g1237 |
 | 4 | `-` | concise | first, if the next character is not `-`, in or out of `[ … ]`: `"-" not allowed as first character of attribute name` (`div [a -b]`, observed). Otherwise, inside `[ … ]`: `Attribute group was not properly ended`. Otherwise the open tag ends and a delimited block begins ([E12](#the-parser-grammar-expression-boundaries-e12-delimited-html-blocks)) | g0036 g0037 g0038 g0039 |
-| 5 | `[` | concise | begins an attribute group; a second `[` inside one is `Unexpected "[" character within open tag.` | g0040 g0041 |
-| 6 | `]` | concise | ends the attribute group; outside one it is `Unexpected "]" character within open tag.` | g0042 g0043 |
-| 7 | `>` | HTML | ends the open tag | g0044 |
+| 5 | `[` | concise | begins an attribute group; a second `[` inside one is `Unexpected "[" character within open tag.` | g0040 g0041 g1107 |
+| 6 | `]` | concise | ends the attribute group; outside one it is `Unexpected "]" character within open tag.` | g0042 g0043 g1241 |
+| 7 | `>` | HTML | ends the open tag | g0044 g1554 |
 | 8 | `/>` | HTML | ends the open tag, self-closed | g0010 |
-| 9 | `//`, `/*` | both | a JavaScript comment, reported as an open-tag comment. A `//` comment runs to the end of its line, in a text tag's open tag too (`isInTextBody`): `<script // c </script>` is the comment `// c </script>` and then `EOF reached while parsing open tag`; `<script x=1 // </script>\n>a</script>` is the value `1 // </script>`, the body text `a` and the close tag | g0045 g0046 g0047 g0048 |
+| 9 | `//`, `/*` | both | a JavaScript comment, reported as an open-tag comment. A `//` comment runs to the end of its line, in a text tag's open tag too (`isInTextBody`): `<script // c </script>` is the comment `// c </script>` and then `EOF reached while parsing open tag`; `<script x=1 // </script>\n>a</script>` is the value `1 // </script>`, the body text `a` and the close tag | g0045 g0046 g0047 g0048 g1036 g1242 |
 | 10 | `<!--` | both | `An html comment cannot be used within an open tag. Use a JavaScript comment (// or /* */) instead.` | g0049 |
 | 11 | whitespace | both | skipped | g0050 |
-| 12 | `,` | both | skipped together with **all** whitespace after it, newlines included, in concise mode too | g0051 g0052 |
-| 13 | any other, and the tag already has an attribute | both | an attribute begins here ([Attributes](#the-parser-grammar-attributes)) | g0053 |
-| 14 | any other, the tag has a name and no attribute yet | both | `/` begins the tag variable (E9); `(` begins tag arguments (E6); `\|` begins tag parameters (E7); `<` begins a type list (E14, E15); anything else begins the first attribute | g0054 g0007 g0055 g0005 g0056 |
+| 12 | `,` | both | skipped together with **all** whitespace after it, newlines included, in concise mode too | g0051 g0052 g1037 |
+| 13 | any other, and the tag already has an attribute | both | an attribute begins here ([Attributes](#the-parser-grammar-attributes)) | g0053 g1190 g1542 |
+| 14 | any other, the tag has a name and no attribute yet | both | `/` begins the tag variable (E9); `(` begins tag arguments (E6); `\|` begins tag parameters (E7); `<` begins a type list (E14, E15); anything else begins the first attribute | g0054 g0007 g0055 g0005 g0056 g1096 g1248 |
 | 15 | any other, the tag has no name yet | both | the tag name begins here | g0001 g0057 |
 
 What the row order means for some inputs:
@@ -380,10 +380,10 @@ What the row order means for some inputs:
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<foo x \|a\|/>` | row 14 is before the first attribute only: after `x`, `\|a\|` is an attribute name | g0691 |
-| `<foo x=1 /y/>` | the single value `1 /y` | g0692 |
+| `<foo x=1 /y/>` | the single value `1 /y` | g0692 g1097 g1219 |
 | `<div/x(a)/>`, `<div\|a\|/x/>`, `<foo\|a\|(b)/>`, `<foo(a)\|b\|/>` | the forms of row 14 in either order | g0693 g0694 g0695 g0696 |
 | `<foo(a)(b)/>` | `A tag can only have one argument` | g0226 |
-| `<foo\|a\|\|b\|/>` | `A tag can only specify parameters once` | g0227 |
+| `<foo\|a\|\|b\|/>` | `A tag can only specify parameters once` | g0227 g1396 |
 | `<foo (a)/>`, `<foo /x/>` | whitespace before the form (row 11): tag arguments, a tag variable | g0697 g0698 |
 | `div a--b` | the attribute name `a--b`: row 4 is reached where an attribute could begin | g0126 |
 | `div a -- text` | the name `a` and a text block | g0699 |
@@ -397,7 +397,7 @@ What the row order means for some inputs:
 | `div a\n  // c\n  ,b` | attributes `a` and `b`: row 1's look-ahead crosses the comment line | g0700 |
 | `<div` | `EOF reached while parsing open tag` | g0221 |
 | `div a` | the tag ends at end of input | g0684 |
-| `div [a` | `EOF reached while within an attribute group (e.g. "[ ... ]").` | g0222 |
+| `div [a` | `EOF reached while within an attribute group (e.g. "[ ... ]").` | g0222 g1523 |
 
 ### Tag names
 
@@ -407,7 +407,7 @@ What the row order means for some inputs:
 | --- | --- | --- | --- |
 | 1 | newline | the part ends | g0058 g0023 |
 | 2 | `${` | an interpolation (E13) inside the part; the part continues after its `}` | g0059 g0060 |
-| 3 | whitespace, `=`, `:` when the next character is `=`, `(`, `/`, `\|`, `<`, `,`; in concise mode also `;` and `[`; in HTML mode also `>` | the part ends, and the open tag continues at this character | g0010 g0061 g0062 g0063 g0064 g0065 g0066 g0067 g0068 g0069 g0070 |
+| 3 | whitespace, `=`, `:` when the next character is `=`, `(`, `/`, `\|`, `<`, `,`; in concise mode also `;` and `[`; in HTML mode also `>` | the part ends, and the open tag continues at this character | g0010 g0061 g0062 g0063 g0064 g0065 g0066 g0067 g0068 g0069 g0070 g1249 g1251 |
 | 4 | `.` or `#` | the part ends and a shorthand part begins after this character | g0071 |
 | 5 | any other | part of the name | g0072 |
 
@@ -428,9 +428,9 @@ The name forms:
 | Form | Example | Grammar | Probes |
 | --- | --- | --- | --- |
 | Static | `div`, `my-widget` | a run of row-5 characters | g0057 g0073 |
-| Interpolated | `<${expr}>`, `<${foo}-bar>`, `<${a}${b}>` | any mix of row-5 characters and `${…}` | g0074 g0075 g0076 |
+| Interpolated | `<${expr}>`, `<${foo}-bar>`, `<${a}${b}>` | any mix of row-5 characters and `${…}` | g0074 g0075 g0076 g1409 |
 | Unnamed | `<.card>`, `<#main>` | the name part is empty and a shorthand follows; the name event has an **empty** range | g0002 g0077 |
-| Statement tag | `static`, `import`, … | a name in the supplied statement set, for which the consumer returns `TagType.statement` ([E10](#the-parser-grammar-expression-boundaries-e10-statement-tags)) | g0078 g0079 g0080 |
+| Statement tag | `static`, `import`, … | a name in the supplied statement set, for which the consumer returns `TagType.statement` ([E10](#the-parser-grammar-expression-boundaries-e10-statement-tags)) | g0078 g0079 g0080 g1042 |
 
 The empty name range is the parser's signal that the tag is unnamed (the
 catalogue's `MxTagName` `kind: "unnamed"`, [ast.md §3.3](/architecture/ast/));
@@ -450,8 +450,8 @@ A shorthand part is read by the tag-name loop above (`TAG_NAME.parse`,
 | --- | --- | --- |
 | `div.a\n  span` | the part `.a` and a child: a part ends on a newline | g0058 |
 | `<div.${x}-y/>`, `<div.a${x}b/>` | one class part: a part continues across `${…}` | g0709 g0060 |
-| `<div.a#b.c/>` | parts `.a`, `#b`, `.c`: a part ends at the next `.` or `#` | g0071 |
-| `<div#a#b/>` | `Multiple shorthand ID parts are not allowed on the same tag` | g0233 |
+| `<div.a#b.c/>` | parts `.a`, `#b`, `.c`: a part ends at the next `.` or `#` | g0071 g1252 |
+| `<div#a#b/>` | `Multiple shorthand ID parts are not allowed on the same tag` | g0233 g1253 |
 | `<input#main:email.big/>` | the id part `main:email` and the class part `big`: `:` is a name character, so a `:name` after a shorthand is inside that part | g0638 |
 
 Core splits the static part of a shorthand `class`/`id` value at its first `:`
@@ -465,16 +465,16 @@ arguments, type parameters.
 
 | # | Character | Condition | Result | Probes |
 | --- | --- | --- | --- | --- |
-| 1 | newline | concise mode (also inside `[ … ]`) | the attribute ends | g0081 g0082 |
+| 1 | newline | concise mode (also inside `[ … ]`) | the attribute ends | g0081 g0082 g1451 |
 | 2 | newline | HTML mode | skipped | g0083 |
 | 3 | whitespace | — | skipped | g0084 |
-| 4 | `<!--` | — | the attribute ends; the open tag reports the HTML-comment error | g0049 |
-| 5 | `=` | — | the value begins after the `=` and after **all** whitespace that follows it, newlines included ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode), [E2](#the-parser-grammar-expression-boundaries-e2-attribute-value-concise-mode)) | g0085 |
-| 6 | `:=` | — | as row 5; the value is bound | g0086 |
-| 7 | `...` | — | a spread value begins immediately after the third dot, with **no** whitespace skipped ([E3](#the-parser-grammar-expression-boundaries-e3-spread-attribute)) | g0087 g0088 |
+| 4 | `<!--` | — | the attribute ends; the open tag reports the HTML-comment error | g0049 g1244 |
+| 5 | `=` | — | the value begins after the `=` and after **all** whitespace that follows it, newlines included ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode), [E2](#the-parser-grammar-expression-boundaries-e2-attribute-value-concise-mode)) | g0085 g1256 g1297 |
+| 6 | `:=` | — | as row 5; the value is bound | g0086 g1255 |
+| 7 | `...` | — | a spread value begins immediately after the third dot, with **no** whitespace skipped ([E3](#the-parser-grammar-expression-boundaries-e3-spread-attribute)) | g0087 g0088 g1382 |
 | 8 | `(` | — | attribute arguments (E4) | g0089 |
 | 9 | `<` | a name has just been read, or an `async` is pending | method type parameters (E16) | g0090 g0091 |
-| 10 | `{` | arguments have been read | the method body (E5) | g0092 |
+| 10 | `{` | arguments have been read | the method body (E5) | g0092 g1121 |
 | 11 | `</` | nothing read yet | `A close tag was found before the "<tag>" open tag was closed. …` | g0093 |
 | 12 | `<` | nothing read yet | `Invalid attribute name. Attribute name cannot begin with the "<" character.` | g0094 |
 | 13 | any other | nothing read yet | the name begins at this character ([Attribute names](#the-parser-grammar-attributes-attribute-names)) | g0010 |
@@ -485,24 +485,24 @@ What the row order means for some inputs:
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<div x = 1/>`, `<div x\n  =1/>` | `x` with the value `1`: after a name, whitespace is skipped and the `=` still attaches | g0710 g0711 |
-| `<foo x (a)/>` | `x` with arguments | g0712 |
-| `<foo x <T>(a) {b}/>` | a method named `x` | g0713 |
+| `<foo x (a)/>` | `x` with arguments | g0712 g1273 g1449 |
+| `<foo x <T>(a) {b}/>` | a method named `x` | g0713 g1272 |
 | concise `div x\n  =1` | the attribute `x`, then a child: an unnamed tag with the default value `1` (row 1) | g0714 |
 | concise `div x =1` | `x` with the value `1` | g0715 |
 | `<div x /*d*/ = :a/>` | the name `x`, an open-tag comment, then a default attribute with the value `:a`, read as source text: a comment is row 14 | g0716 |
-| `<div a ...b/>` | the name `a`, then a spread `b` | g0717 |
+| `<div a ...b/>` | the name `a`, then a spread `b` | g0717 g1450 |
 | `<div a(b)=c/>` | the name, the arguments and the value `c` | g0718 |
-| `<if=x/>`, `<if:=x/>`, `<foo(a) { b }/>` | the default attribute: a zero-width name range, then the value or method | g0011 g0719 g0120 |
-| `<div a(b)(c)/>` | `An attribute can only have one set of arguments` | g0099 |
+| `<if=x/>`, `<if:=x/>`, `<foo(a) { b }/>` | the default attribute: a zero-width name range, then the value or method | g0011 g0719 g0120 g1035 |
+| `<div a(b)(c)/>` | `An attribute can only have one set of arguments` | g0099 g1526 |
 
 After each part is read (`ATTRIBUTE.return`):
 
 | Part | Result | Probes |
 | --- | --- | --- |
-| name | first, a name that is exactly `async`, read first in its attribute, may be held back (below). Otherwise the name is reported (`<div ::b/>` and `<div a::b/>` are the attributes `::b` and `a::b`, as stock), unless an `async` is pending, and in HTML mode the ambiguous-`>` check runs ([below](#the-parser-grammar-attributes-the-ambiguous-check)) | g0095 g0096 g0097 g0098 |
-| arguments | if the attribute already has arguments: `An attribute can only have one set of arguments`. Otherwise, if `{` follows, after any whitespace **including newlines in both modes**, the attribute is a method and the arguments are its parameters. Otherwise, if type parameters were read: `An attribute cannot have both type parameters and arguments`. Otherwise the arguments are reported as attribute arguments | g0099 g0100 g0101 g0102 g0089 |
-| method body | the method is reported; the attribute ends | g0103 |
-| type parameters | `(` **must** follow, after any whitespace; otherwise `Attribute cannot contain type parameters unless it is a shorthand method` | g0104 g0105 |
+| name | first, a name that is exactly `async`, read first in its attribute, may be held back (below). Otherwise the name is reported (`<div ::b/>` and `<div a::b/>` are the attributes `::b` and `a::b`, as stock), unless an `async` is pending, and in HTML mode the ambiguous-`>` check runs ([below](#the-parser-grammar-attributes-the-ambiguous-check)) | g0095 g0096 g0097 g0098 g1545 |
+| arguments | if the attribute already has arguments: `An attribute can only have one set of arguments`. Otherwise, if `{` follows, after any whitespace **including newlines in both modes**, the attribute is a method and the arguments are its parameters. Otherwise, if type parameters were read: `An attribute cannot have both type parameters and arguments`. Otherwise the arguments are reported as attribute arguments | g0099 g0100 g0101 g0102 g0089 g1044 g1045 g1261 |
+| method body | the method is reported; the attribute ends | g0103 g1484 g1486 |
+| type parameters | `(` **must** follow, after any whitespace; otherwise `Attribute cannot contain type parameters unless it is a shorthand method` | g0104 g0105 g1417 g1543 g1551 |
 | value | an empty value is `Missing value for attribute`. In HTML mode the ambiguous-`>` check runs. The value (or spread) is reported; the attribute ends | g0106 g0107 g0108 g0087 |
 
 **`async` methods** (`isAsyncMethodPrefix`, `flushPendingAsync`): how a
@@ -510,13 +510,13 @@ leading `async` is read.
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div async onClick(a) {x}/>` | the method `onClick`, with `async` as its modifier | g0720 |
-| `<div async(a) {b}/>`, `<div async <T>(a) {b}/>` | a default method (empty name) | g0721 g0091 |
-| `<div async x/>` | the names `async` and `x` | g0722 |
+| `<div async onClick(a) {x}/>` | the method `onClick`, with `async` as its modifier | g0720 g1549 g1550 |
+| `<div async(a) {b}/>`, `<div async <T>(a) {b}/>` | a default method (empty name) | g0721 g0091 g1419 |
+| `<div async x/>` | the names `async` and `x` | g0722 g1547 g1548 |
 | `<div async(1)/>` | the attribute `async` with arguments | g0723 |
 | `<div async/>`, `<div async=1/>` | the attribute `async` | g0724 g0725 |
 | concise `div async\tonClick(a) {x}` | the method `onClick`: a tab is skipped | g0726 |
-| concise `div async\n  onClick(a) {x}` | the attribute `async`, then a child tag: a newline is not skipped | g0727 |
+| concise `div async\n  onClick(a) {x}` | the attribute `async`, then a child tag: a newline is not skipped | g0727 g1546 |
 
 The attribute forms:
 
@@ -544,20 +544,20 @@ A name is an `EXPRESSION` position with the flag `terminatedByWhitespace`
 
 | Mode | Hard stops | Source | Probes |
 | --- | --- | --- | --- |
-| HTML | `,` `=` `(` `>` `<`; `:` when the next character is `=`; `/` when the next character is `>` | `shouldTerminateHtmlAttrName` | g0122 g0086 g0010 g0123 |
+| HTML | `,` `=` `(` `>` `<`; `:` when the next character is `=`; `/` when the next character is `>` | `shouldTerminateHtmlAttrName` | g0122 g0086 g0010 g0123 g1397 g1534 |
 | Concise | `,` `=` `(` `;` `<`; `:` when the next character is `=`; `-` when the next character is `-` **and** the previous character is whitespace, ASCII or Unicode | `shouldTerminateConciseAttrName` | g0124 g0125 g0126 g0127 g1681 |
 | Concise, inside `[ … ]` | `,` `=` `(` `]` `<`; `:` when the next character is `=` | `shouldTerminateConciseGroupedAttrName` | g0128 g0129 g0130 g0131 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div a b/>`, `<div a\n b/>` | two names: whitespace and a newline end a name | g0053 g0728 |
-| `<div a[b c]/>`, `<div {a b}/>`, `<div a"b c"/>` | one name each: no stop is examined inside a group or a string | g0729 g0730 g0731 |
-| `<div a/ b/>` | one name `a/ b`: the `/` follows a word character, so it is a division, which consumes the whitespace after it | g0732 |
+| `<div a b/>`, `<div a\n b/>` | two names: whitespace and a newline end a name | g0053 g0728 g1031 g1052 g1537 g1538 g1552 g1553 |
+| `<div a[b c]/>`, `<div {a b}/>`, `<div a"b c"/>` | one name each: no stop is examined inside a group or a string | g0729 g0730 g0731 g1206 |
+| `<div a/ b/>` | one name `a/ b`: the `/` follows a word character, so it is a division, which consumes the whitespace after it | g0732 g1128 |
 | `<div a: b/>`, `<div a? b/>` | the names `a:` and `b`, `a?` and `b`: with no `operators` flag, `:` and `?` consume nothing | g0733 g0734 |
 | `<div a)/>` | `Mismatched group. …` | g0735 |
 | concise `div a[b]=1` | the name `a[b]` | g0736 |
 | `<div a/b/>` | the name `a/b`: a lone `/` is no HTML stop | g0737 |
-| concise `div [a;b]` | the name `a;b`: `;` is no stop inside `[ … ]` | g0738 |
+| concise `div [a;b]` | the name `a;b`: `;` is no stop inside `[ … ]` | g0738 g1127 |
 
 ### The ambiguous `>` check
 
@@ -571,16 +571,16 @@ otherwise the first `>` ends the tag.
 | # | Character | Effect | Probes |
 | --- | --- | --- | --- |
 | 1 | `>=` anywhere; `>` inside `(…)` or `[…]` | a comparison; scanning continues | g0132 g0133 g0134 |
-| 2 | word character | an operand; but if an operand already ended at a space or tab and no operator has been seen since, **no error** | g0135 g0136 |
-| 3 | space, tab | marks the previous operand as ended | g0136 |
-| 4 | `=>`; `/` preceded (ignoring spaces and tabs) by a word character, `)` or `]`; `(` `[`; a matched `)` `]`; `&` `*` `^` `:` `!` `-` `%` `.` `\|` `+` `?` `~` | connects operands; scanning continues | g0137 g0138 g0139 g0140 |
+| 2 | word character | an operand; but if an operand already ended at a space or tab and no operator has been seen since, **no error** | g0135 g0136 g1455 g1470 |
+| 3 | space, tab | marks the previous operand as ended | g0136 g1556 |
+| 4 | `=>`; `/` preceded (ignoring spaces and tabs) by a word character, `)` or `]`; `(` `[`; a matched `)` `]`; `&` `*` `^` `:` `!` `-` `%` `.` `\|` `+` `?` `~` | connects operands; scanning continues | g0137 g0138 g0139 g0140 g1457 g1459 g1461 g1463 g1467 g1468 |
 | 5 | end of input | **no error** | g0141 |
-| 6 | anything else: a newline, `<`, a quote, a backtick, `{`, `}`, `,`, `;`, a bare `=`, an unmatched `)` or `]`, a `/` not preceded by an operand | **no error** | g0142 g0143 g0144 g0145 |
+| 6 | anything else: a newline, `<`, a quote, a backtick, `{`, `}`, `,`, `;`, a bare `=`, an unmatched `)` or `]`, a `/` not preceded by an operand | **no error** | g0142 g0143 g0144 g0145 g1175 g1372 g1458 g1460 g1462 g1469 g1555 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div x=a > b/>`, `<div x=a > b>`, `<div x=a >b/>`, `<div a > b>` | the error | g0135 g0616 g0739 g0740 |
-| `<div x=a > b</div>` | the value `a`, the end of the open tag, and the body text ` b` | g0143 |
+| `<div x=a > b/>`, `<div x=a > b>`, `<div x=a >b/>`, `<div a > b>` | the error | g0135 g0616 g0739 g0740 g1245 g1288 g1456 g1464 g1465 |
+| `<div x=a > b</div>` | the value `a`, the end of the open tag, and the body text ` b` | g0143 g1466 |
 | concise `div x=a > b` | one value: the check does not run in concise mode | g0264 |
 
 Whether the TypeScript-aware boundary keeps this check is OQ 8.
@@ -593,9 +593,9 @@ are E6, E7, E9, E14 to E17 below.
 | Form | Result | Probes |
 | --- | --- | --- |
 | tag arguments `<Tag(expr)>` ([E6](#the-parser-grammar-expression-boundaries-e6-tag-arguments)) | arguments, and attributes may follow them at this level: `<foo(a) b=1/>` | g0741 |
-| tag-level default method `<Tag(a) { … }>` ([E17](#the-parser-grammar-expression-boundaries-e17-tag-level-default-method)) | tag arguments followed by `{` are the parameters of the default attribute's method | g0120 |
-| tag variable `<Tag/x>` ([E9](#the-parser-grammar-expression-boundaries-e9-tag-variable)) | a value written after it with `=` is the tag's default attribute: `<let/x = 1/>` is the variable `x` and the default value `1` | g0742 |
-| tag parameters `<Tag\|a, b\|>` ([E7](#the-parser-grammar-expression-boundaries-e7-tag-parameters)) | the parameters; empty pipes are accepted | g0743 g0744 |
+| tag-level default method `<Tag(a) { … }>` ([E17](#the-parser-grammar-expression-boundaries-e17-tag-level-default-method)) | tag arguments followed by `{` are the parameters of the default attribute's method | g0120 g1483 g1487 |
+| tag variable `<Tag/x>` ([E9](#the-parser-grammar-expression-boundaries-e9-tag-variable)) | a value written after it with `=` is the tag's default attribute: `<let/x = 1/>` is the variable `x` and the default value `1` | g0742 g1327 |
+| tag parameters `<Tag\|a, b\|>` ([E7](#the-parser-grammar-expression-boundaries-e7-tag-parameters)) | the parameters; empty pipes are accepted | g0743 g0744 g1260 |
 | tag type arguments `<Tag<A, B>>` ([E14](#the-parser-grammar-expression-boundaries-e14-tag-type-arguments)) | the list directly after the name | g0745 |
 | tag type parameters `<Tag <A, B>\|x\|>` ([E15](#the-parser-grammar-expression-boundaries-e15-tag-type-parameters)) | the list after whitespace, before parameters | g0746 |
 | attribute-method type parameters ([E16](#the-parser-grammar-expression-boundaries-e16-attribute-method-type-parameters)) | `<div onClick<T>(a) { … }>` | g0017 |
@@ -608,7 +608,7 @@ rule (see [Status](#the-parser-grammar-status-sources-of-truth-and-method)). Spe
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div><@svg:rect/></div>` | the tag name `@svg:rect`: `<@name>` is an ordinary tag to the parser | g0661 |
+| `<div><@svg:rect/></div>` | the tag name `@svg:rect`: `<@name>` is an ordinary tag to the parser | g0661 g1155 g1304 |
 
 What an attribute tag means is decided after the parse: its name is a property
 key, and a `:` in it is part of that key; placement
@@ -623,15 +623,15 @@ on a native element is rejected (spec §8 "Deferred to MX 2").
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<p>${a} $!{b}</p>` | two placeholders in HTML content, the second unescaped | g0747 |
-| `<script>${a}</script>`, `<script>"${a}"</script>` | a placeholder in a text body, and inside a quoted string of one | g0748 g0749 |
+| `<p>${a} $!{b}</p>` | two placeholders in HTML content, the second unescaped | g0747 g1040 g1488 |
+| `<script>${a}</script>`, `<script>"${a}"</script>` | a placeholder in a text body, and inside a quoted string of one | g0748 g0749 g1530 |
 | `<script>${:a}</script>` | the placeholder with the value `:a`, read as stock reads it: the parser lexes no atom, in a text body or elsewhere | g0750 |
 | ``<script>`${:a}`</script>`` | text only: a template literal in a text body is text, so its `${…}` is no placeholder | g0751 |
-| `<p>\${a}</p>` | the text `${a}`: an odd run of backslashes before the `$` makes it literal | g0752 |
-| `<p>\\${a}</p>` | the text `\` and the placeholder `a`: an even run keeps half as text | g0753 |
-| `<p>${}</p>` | `Invalid placeholder, the expression cannot be missing` | g0190 |
-| `<p>${ }</p>` | a placeholder whose value is the space | g0754 |
-| `<div x=$!{a}/>` | the value text `$!{a}`: in an attribute value `$` is a word character and `{…}` a group (OQ 12) | g0755 |
+| `<p>\${a}</p>` | the text `${a}`: an odd run of backslashes before the `$` makes it literal | g0752 g1227 |
+| `<p>\\${a}</p>` | the text `\` and the placeholder `a`: an even run keeps half as text | g0753 g1228 |
+| `<p>${}</p>` | `Invalid placeholder, the expression cannot be missing` | g0190 g1226 g1489 |
+| `<p>${ }</p>` | a placeholder whose value is the space | g0754 g1225 |
+| `<div x=$!{a}/>` | the value text `$!{a}`: in an attribute value `$` is a word character and `{…}` a group (OQ 12) | g0755 g1263 g1289 |
 | concise `${x} a=1` | a tag whose name is the interpolation, with an attribute (spec §3 "A bare `${expr}` line") | g0756 |
 | concise `div ${x}` | an attribute name `${x}`: no placeholder in an open tag | g0757 |
 
@@ -666,14 +666,14 @@ target `import`, `static`, `export`; and today an empty set on the hosts and
 | --- | --- | --- | --- |
 | 1 | newline | ends a mixed-mode region or a delimited block when their rules say so; otherwise text | g0146 g0147 |
 | 2 | `<![CDATA[` | a CDATA section, to the next `]]>` | g0148 |
-| 3 | `<!--` | an HTML comment, to the next `->` (`HTML_COMMENT.parse` looks for a `-` directly followed by `>`, so `<!-- a -> b -->` ends after `a ->`, observed) | g0149 g0150 |
-| 4 | `<!` | a doctype, to the next `>` | g0151 |
-| 5 | `<?` | a declaration, to the next `>`; a `?` directly before that `>` is part of the closer | g0152 g0153 |
+| 3 | `<!--` | an HTML comment, to the next `->` (`HTML_COMMENT.parse` looks for a `-` directly followed by `>`, so `<!-- a -> b -->` ends after `a ->`, observed) | g0149 g0150 g1104 g1307 |
+| 4 | `<!` | a doctype, to the next `>` | g0151 g1280 |
+| 5 | `<?` | a declaration, to the next `>`; a `?` directly before that `>` is part of the closer | g0152 g0153 g1105 |
 | 6 | `</` | a close tag | g0154 g0155 |
-| 7 | `<` followed by `>`, `<` or whitespace | text | g0156 |
+| 7 | `<` followed by `>`, `<` or whitespace | text | g0156 g1235 |
 | 8 | `<` followed by anything else | an open tag | g0157 |
 | 9 | `$` followed by whitespace, with only whitespace between it and the previous newline | a scriptlet (E11) | g0158 g0159 |
-| 10 | `//` or `/*`, when the character before it is ASCII whitespace (as upstream; a Unicode space does not count here) | a JavaScript comment: `//` to the end of the line, `/* */` to its end | g0160 g0161 g0162 g1682 g1689 g1690 |
+| 10 | `//` or `/*`, when the character before it is ASCII whitespace (as upstream; a Unicode space does not count here) | a JavaScript comment: `//` to the end of the line, `/* */` to its end | g0160 g0161 g0162 g1682 g1689 g1690 g1308 |
 | 11 | `${`, `$!{`, or backslashes before one | a placeholder or escaped placeholder | g0163 |
 | 12 | anything else | text | g0164 |
 
@@ -683,7 +683,7 @@ target `import`, `static`, `export`; and today an empty set on the hosts and
 | `<p>a\u00a0// b\n</p>` (U+00A0 before `//`) | text only, `a\u00a0// b\n`: no comment, as upstream and Marko (row 10) | g1682 g0760 |
 | `<p>Visit\u00a0//cdn.example/x.js</p>` | text; the tag closes (the reading alpha.7 and alpha.8 got wrong: a comment that swallowed `</p>`) | g1689 |
 | `<p>a\u00a0/* b */ c</p>` | text only: no comment | g1690 |
-| `<p>http://x</p>` | text: no whitespace before the `//` | g0761 |
+| `<p>http://x</p>` | text: no whitespace before the `//` | g0761 g1234 |
 
 CDATA sections and declarations parse to events and are rejected in lowering
 (spec §3 "CDATA sections and XML declarations").
@@ -698,19 +698,19 @@ repository the consumer's set is `html-comment`, `html-script`, `html-style`,
 | # | At | Result | Probes |
 | --- | --- | --- | --- |
 | 1 | newline | ends a delimited block when its rules say so; otherwise text | g0165 g0166 |
-| 2 | `<` | in HTML mode, `</>` or `</name>` with exactly the open tag's written name ends the body (`checkForClosingTag`); any other `<` is text | g0026 g0167 g0168 |
-| 3 | `//` | text, to the end of the line or, in HTML mode, to the body's close tag (concise `script -- // a</script> b` is the one text `// a</script> b`, observed) | g0169 g0170 |
-| 4 | `/*` | text, to `*/`; unterminated is `EOF reached while parsing multi-line JavaScript comment` | g0171 g0172 |
+| 2 | `<` | in HTML mode, `</>` or `</name>` with exactly the open tag's written name ends the body (`checkForClosingTag`); any other `<` is text | g0026 g0167 g0168 g1322 g1559 g1560 g1561 |
+| 3 | `//` | text, to the end of the line or, in HTML mode, to the body's close tag (concise `script -- // a</script> b` is the one text `// a</script> b`, observed) | g0169 g0170 g1230 g1321 |
+| 4 | `/*` | text, to `*/`; unterminated is `EOF reached while parsing multi-line JavaScript comment` | g0171 g0172 g1320 |
 | 5 | a backtick | a template literal, lexed as in an expression, `${…}` included | g0173 |
-| 6 | `"` or `'` | a string to the **next** same quote, within which placeholders are recognised; unterminated is `EOF reached while parsing string expression`. A backslash does **not** escape the quote: `PARSED_STRING.parse` treats `\` only as a possible placeholder escape, so `"a\"b"` ends after `a\"` | g0174 g0175 g0176 |
+| 6 | `"` or `'` | a string to the **next** same quote, within which placeholders are recognised; unterminated is `EOF reached while parsing string expression`. A backslash does **not** escape the quote: `PARSED_STRING.parse` treats `\` only as a possible placeholder escape, so `"a\"b"` ends after `a\"` | g0174 g0175 g0176 g1229 g1562 |
 | 7 | `${`, `$!{`, or backslashes before one | a placeholder or escaped placeholder | g0177 |
-| 8 | anything else | text | g0178 |
+| 8 | anything else | text | g0178 g1323 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<script>a ${x} <b></script>` | the placeholder `x` and the text ` <b>` | g0762 |
 | `<textarea>don't</textarea>` | `EOF reached while parsing string expression`: a quote must be balanced | g0763 |
-| `<script>var s = "a\"b";</script>`, `<script>var s = 'it\'s';</script>` | the same error for valid JavaScript (row 6; OQ 13). TODO `text-body-string-backslash-escape` | g0176 g0764 |
+| `<script>var s = "a\"b";</script>`, `<script>var s = 'it\'s';</script>` | the same error for valid JavaScript (row 6; OQ 13). TODO `text-body-string-backslash-escape` | g0176 g0764 g1319 |
 
 Spec §3 "CDATA sections and XML declarations" describes a raw-text body as "a
 single `MarkoText`" and lists `<title>` among them; both differ from the rows
@@ -723,10 +723,10 @@ indentation and then acts on the first other character:
 
 | # | Step | Result | Probes |
 | --- | --- | --- | --- |
-| 1 | the line's indentation is compared, by length, with each open tag's | a tag indented as much or more is closed: `div\n  span\np` | g0765 |
-| 2 | no tag remains open and the line is indented | `Line has extra indentation at the beginning`, unless its first character is `/` | g0767 g0768 |
-| 3 | the enclosing tag is a text tag and the first character is not `-` | `A line within a tag that only allows text content must begin with a "-" character` | g0769 |
-| 4 | a child line whose indentation string differs from the tag's first child line | `Line indentation does not match indentation of previous line` | g0770 g0766 |
+| 1 | the line's indentation is compared, by length, with each open tag's | a tag indented as much or more is closed: `div\n  span\np` | g0765 g1309 g1312 g1539 |
+| 2 | no tag remains open and the line is indented | `Line has extra indentation at the beginning`, unless its first character is `/` | g0767 g0768 g1033 |
+| 3 | the enclosing tag is a text tag and the first character is not `-` | `A line within a tag that only allows text content must begin with a "-" character` | g0769 g1565 |
+| 4 | a child line whose indentation string differs from the tag's first child line | `Line indentation does not match indentation of previous line` | g0770 g0766 g1310 g1311 g1316 g1563 g1564 |
 | 5 | otherwise | the first character selects a row of the next table | g0771 |
 
 | First character | Result | Probes |
@@ -735,9 +735,9 @@ indentation and then acts on the first other character:
 | `$` followed by whitespace | a scriptlet (E11) | g0180 |
 | `--` | a delimited block (E12) | g0181 |
 | `-` not followed by `-` | `A line in concise mode cannot start with a single hyphen. Use "--" instead. …` | g0182 |
-| `//`, `/*` | a JavaScript comment. After a `/* */` comment only whitespace may follow on the line, otherwise `In concise mode a javascript comment block can only be followed by whitespace characters and a newline.` | g0183 g0184 g0185 |
+| `//`, `/*` | a JavaScript comment. After a `/* */` comment only whitespace may follow on the line, otherwise `In concise mode a javascript comment block can only be followed by whitespace characters and a newline.` | g0183 g0184 g0185 g1243 g1566 g1567 |
 | `/` followed by anything else | `A line in concise mode cannot start with "/" unless it starts a "//" or "/*" comment` | g0186 |
-| anything else | an open tag; `$foo` is therefore a tag | g0057 g0187 |
+| anything else | an open tag; `$foo` is therefore a tag | g0057 g0187 g1167 g1305 g1306 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
@@ -765,8 +765,8 @@ The template parser reports text as raw source ranges (`htmlEOF`,
 | --- | --- | --- |
 | `<p>\n  $ x\n</p>` | `"\n  "` and `"\n"`: nothing is trimmed or collapsed | g0774 |
 | concise `-- a\n\n` | `a`: at end of input in concise content the text stops before trailing newlines | g0775 |
-| `div\n  --\n    a\n  --` | the block's indentation and the newline before the closing delimiter are outside the text | g0776 |
-| `div -- a\nb`, `div --  a  \nb` | `a`; ` a  `: a single-line block's text starts after its hyphens and one more character and stops before the newline | g0777 g0778 |
+| `div\n  --\n    a\n  --` | the block's indentation and the newline before the closing delimiter are outside the text | g0776 g1314 |
+| `div -- a\nb`, `div --  a  \nb` | `a`; ` a  `: a single-line block's text starts after its hyphens and one more character and stops before the newline | g0777 g0778 g1231 g1590 |
 
 The whitespace rules of spec §3 "Whitespace" (boundary trimming, dropping a
 whitespace-only run that begins with a newline, collapsing runs to one space,
@@ -801,7 +801,7 @@ The template parser's own messages:
 
 | Condition | Message | Probes |
 | --- | --- | --- |
-| `=`, `:=` or `...` with no value | `Missing value for attribute` | g0106 g0188 g0189 |
+| `=`, `:=` or `...` with no value | `Missing value for attribute` | g0106 g0188 g0189 g1123 g1124 g1125 |
 | empty `${}` in content, in a tag name or in a template literal | `Invalid placeholder, the expression cannot be missing` | g0190 g0191 g0192 |
 
 End of input inside a **position**
@@ -810,10 +810,10 @@ depends on the state that owns the position:
 
 | Condition | Message | Probes |
 | --- | --- | --- |
-| end of input in a position owned by an attribute with no name that is not a spread: an attribute name, a default value or default arguments, and the arguments after a pending `async` (`<div async(a`, observed) | `EOF reached while parsing attribute name for the "<tag>" tag` | g0196 g0197 g0198 |
-| end of input in a position owned by a named attribute: its value, arguments, method type parameters or method body | `EOF reached while parsing attribute value for the "<name>" attribute` | g0199 g0200 g0201 g0202 |
-| end of input in a spread | `EOF reached while parsing attribute value for the ... attribute` | g0203 |
-| end of input in a tag name's or shorthand's `${…}` | `EOF reached while parsing tag name` | g0204 g0205 |
+| end of input in a position owned by an attribute with no name that is not a spread: an attribute name, a default value or default arguments, and the arguments after a pending `async` (`<div async(a`, observed) | `EOF reached while parsing attribute name for the "<tag>" tag` | g0196 g0197 g0198 g1187 |
+| end of input in a position owned by a named attribute: its value, arguments, method type parameters or method body | `EOF reached while parsing attribute value for the "<name>" attribute` | g0199 g0200 g0201 g0202 g1109 g1126 g1446 |
+| end of input in a spread | `EOF reached while parsing attribute value for the ... attribute` | g0203 g1524 |
+| end of input in a tag name's or shorthand's `${…}` | `EOF reached while parsing tag name` | g0204 g0205 g1326 |
 | end of input in a placeholder | `EOF reached while parsing placeholder` | g0206 |
 | end of input in any other position | `EOF reached while parsing expression` | g0207 g0208 g0209 |
 
@@ -822,17 +822,17 @@ conditions:
 
 | Condition | Message | Probes |
 | --- | --- | --- |
-| end of input after an attribute name and whitespace, HTML mode | `EOF reached while parsing attribute "<name>" for the "<tag>" tag` | g0210 |
-| end of input in a string | `EOF reached while parsing string expression` | g0211 |
+| end of input after an attribute name and whitespace, HTML mode | `EOF reached while parsing attribute "<name>" for the "<tag>" tag` | g0210 g1447 |
+| end of input in a string | `EOF reached while parsing string expression` | g0211 g1113 g1532 |
 | end of input in a template literal's text | `EOF reached while parsing template string expression` | g0212 |
-| end of input in a regular expression | `EOF reached while parsing regular expression` | g0213 |
-| a newline in a regular expression | `EOL reached while parsing regular expression` (`REGULAR_EXPRESSION.parse`) | g0214 |
-| end of input in a `/* */` comment | `EOF reached while parsing multi-line JavaScript comment` (`JS_COMMENT_BLOCK.parse`) | g0215 |
-| end of input in a CDATA section, an HTML comment, a doctype, a declaration, a close tag | `EOF reached while parsing CDATA`, `… comment`, `… document type`, `… declaration`, `… closing tag` | g0216 g0217 g0218 g0219 g0220 |
+| end of input in a regular expression | `EOF reached while parsing regular expression` | g0213 g1533 |
+| a newline in a regular expression | `EOL reached while parsing regular expression` (`REGULAR_EXPRESSION.parse`) | g0214 g1114 |
+| end of input in a `/* */` comment | `EOF reached while parsing multi-line JavaScript comment` (`JS_COMMENT_BLOCK.parse`) | g0215 g1330 |
+| end of input in a CDATA section, an HTML comment, a doctype, a declaration, a close tag | `EOF reached while parsing CDATA`, `… comment`, `… document type`, `… declaration`, `… closing tag` | g0216 g0217 g0218 g0219 g0220 g1115 g1116 g1117 g1118 g1119 |
 | end of input in an HTML-mode open tag | `EOF reached while parsing open tag` | g0221 |
 | end of input in a `[ … ]` group | `EOF reached while within an attribute group (e.g. "[ ... ]").` | g0222 |
 | end of input with an HTML-mode tag open | `Missing ending "<tag>" tag` | g0223 |
-| a closing bracket with no open group, or the wrong one | `Mismatched group. …` | g0224 g0225 |
+| a closing bracket with no open group, or the wrong one | `Mismatched group. …` | g0224 g0225 g1214 |
 | the ambiguous `>` | `Ambiguous ">" in attribute. …` | g0135 |
 | `</` where an attribute name would begin | `A close tag was found before the "<tag>" open tag was closed. …` | g0093 |
 | `<` where an attribute name would begin | `Invalid attribute name. Attribute name cannot begin with the "<" character.` | g0094 |
@@ -847,14 +847,14 @@ conditions:
 | a statement tag in HTML mode | `The "<name>" tag is reserved and cannot be used as an HTML tag.` | g0234 |
 | a statement tag under another tag | `"<name>" can only be used at the root of the template.` | g0235 |
 | an HTML comment in an open tag | `An html comment cannot be used within an open tag. Use a JavaScript comment (// or /* */) instead.` | g0049 |
-| code after `;` on a concise line | `A semicolon indicates the end of a line. Only comments may follow it.` | g0236 |
-| a lone `-` where a concise attribute would begin | `"-" not allowed as first character of attribute name` | g0037 |
+| code after `;` on a concise line | `A semicolon indicates the end of a line. Only comments may follow it.` | g0236 g1238 g1250 |
+| a lone `-` where a concise attribute would begin | `"-" not allowed as first character of attribute name` | g0037 g1239 |
 | `--` inside `[ … ]` at an attribute start | `Attribute group was not properly ended` | g0038 |
 | `[` inside `[ … ]`; `]` outside one | `Unexpected "[" character within open tag.`; `Unexpected "]" character within open tag.` | g0041 g0043 |
 | a close tag with no open tag | `The closing "<name>" tag was not expected` | g0237 |
 | a close tag naming another tag | `The closing "<x>" tag does not match the corresponding opening "<y>" tag` | g0238 |
 | the concise line errors | the five messages in [Concise mode](#the-parser-grammar-concise-mode-indentation-and-line-rules) | g0182 g0186 g0185 g0239 |
-| text after a closing block delimiter | `A concise mode closing block delimiter can only be followed by whitespace.` | g0240 |
+| text after a closing block delimiter | `A concise mode closing block delimiter can only be followed by whitespace.` | g0240 g1156 |
 
 Rejections raised **outside** the template parser, by core: scriptlets, CDATA
 and declarations (spec §3); an attribute name outside Marko's grammar, such as
@@ -901,40 +901,40 @@ State the position keeps as it scans:
 
 | # | Character | Result | Probes |
 | --- | --- | --- | --- |
-| 1 | a newline (`\n`, `\r` or `\r\n`) | the value **ends before the newline** when all of these hold: depth is 0; the position has `terminatedByEOL` or `terminatedByWhitespace`; a `//` comment was just read (`wasComment`) or the continuation test fails for this newline; and it is not the case that the position has `consumeIndentedContent` and the next character is a space or tab. Otherwise the newline is consumed | g0307 g0442 g0443 g0290 g0499 g0783 |
+| 1 | a newline (`\n`, `\r` or `\r\n`) | the value **ends before the newline** when all of these hold: depth is 0; the position has `terminatedByEOL` or `terminatedByWhitespace`; a `//` comment was just read (`wasComment`) or the continuation test fails for this newline; and it is not the case that the position has `consumeIndentedContent` and the next character is a space or tab. Otherwise the newline is consumed | g0307 g0442 g0443 g0290 g0499 g0783 g1394 g1430 g1521 g1582 |
 | 2 | a word character | consumed | g0784 |
-| 3 | whitespace at depth 0, in a position with `terminatedByWhitespace` | the value ends before it unless the continuation test succeeds | g0339 g0785 g0786 g0787 |
+| 3 | whitespace at depth 0, in a position with `terminatedByWhitespace` | the value ends before it unless the continuation test succeeds | g0339 g0785 g0786 g0787 g1147 |
 | 4 | a hard stop at depth 0 | the value ends before it. Exemption, in a position with `operators`: when the value so far has a non-whitespace character and the last one is an operator by the look-behind table, the stop is ignored and row 5 applies | g0415 g0788 g0789 g0790 |
 | 5 | any other | the character table below | g0268 |
 
 | Character | Effect | Probes |
 | --- | --- | --- |
-| `"`, `'` | a string, to the same quote; `\` escapes one character | g0241 |
-| backtick | a template literal, to the closing backtick; `\` escapes one character; each `${` opens a nested position with the hard stop `}`, no flags but `triggers`, which it copies from the position the template literal is in (`TEMPLATE_STRING.parse`) | g0242 |
+| `"`, `'` | a string, to the same quote; `\` escapes one character | g0241 g1055 g1074 g1075 |
+| backtick | a template literal, to the closing backtick; `\` escapes one character; each `${` opens a nested position with the hard stop `}`, no flags but `triggers`, which it copies from the position the template literal is in (`TEMPLATE_STRING.parse`) | g0242 g1098 g1130 g1278 g1287 g1334 |
 | `?` | first, with `operators` and `attrValue` at depth 0: when the next character is `?`, or is `.` not followed by a digit, both characters are consumed and nothing else happens ([E1 overrides](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)). Otherwise, with `operators` at depth 0: `ternaryDepth` + 1, then **all whitespace after it is consumed, newlines included**. Otherwise a plain character | g0243 g0244 g0245 |
-| `:` | first, with `triggers` and a dialect trigger on `:`, at any depth: the trigger's hook may consume it ([Atoms](#the-parser-grammar-atoms)); the default syntax table has none. Otherwise, with `operators` at depth 0: if `ternaryDepth` > 0 it is decremented, otherwise the type context is entered (`inType`); then all whitespace after it is consumed. Otherwise a plain character | g0246 g0247 g0248 g0249 |
-| `=` | with `operators`, at any depth: if the next character is `>` (an arrow), the type context is left when `inType` is set, `forceType` is not, and the previous non-whitespace character is not `)`; both characters are consumed. If the next character is not `>`, the type context is left unless `forceType` is set or a group is open. Then all whitespace after it is consumed. Without `operators` a plain character | g0250 g0251 g0252 g0253 |
-| `/` | `//` is a comment to the end of the line; `/*` is a comment to `*/`. Otherwise it is a **division** when the previous non-whitespace character is a word character or one of backtick, `'`, `"`, `%`, `)`, `.`, `<`, `]`, `}`: it is consumed with all whitespace after it. Otherwise it starts a **regular expression**, which runs to the next `/` that is not escaped and not inside `[…]`. This row does not depend on `operators` or on depth | g0254 g0255 g0256 g0257 |
-| `(`, `[` | opens a group | g0258 |
-| `{` | opens a group. Before that, when `inType` is set and `forceType` is not, the type context is left unless the previous non-whitespace character is an operator by the look-behind table | g0259 g0260 |
-| `<` | in a type context: opens a group that closes with `>`. Otherwise, with `operators` at depth 0, it is consumed with all whitespace after it. Otherwise a plain character | g0261 g0262 g0263 |
+| `:` | first, with `triggers` and a dialect trigger on `:`, at any depth: the trigger's hook may consume it ([Atoms](#the-parser-grammar-atoms)); the default syntax table has none. Otherwise, with `operators` at depth 0: if `ternaryDepth` > 0 it is decremented, otherwise the type context is entered (`inType`); then all whitespace after it is consumed. Otherwise a plain character | g0246 g0247 g0248 g0249 g1366 |
+| `=` | with `operators`, at any depth: if the next character is `>` (an arrow), the type context is left when `inType` is set, `forceType` is not, and the previous non-whitespace character is not `)`; both characters are consumed. If the next character is not `>`, the type context is left unless `forceType` is set or a group is open. Then all whitespace after it is consumed. Without `operators` a plain character | g0250 g0251 g0252 g0253 g1078 g1079 g1080 g1172 g1373 g1374 |
+| `/` | `//` is a comment to the end of the line; `/*` is a comment to `*/`. Otherwise it is a **division** when the previous non-whitespace character is a word character or one of backtick, `'`, `"`, `%`, `)`, `.`, `<`, `]`, `}`: it is consumed with all whitespace after it. Otherwise it starts a **regular expression**, which runs to the next `/` that is not escaped and not inside `[…]`. This row does not depend on `operators` or on depth | g0254 g0255 g0256 g0257 g1193 g1336 g1338 g1339 g1340 g1341 g1344 g1420 |
+| `(`, `[` | opens a group | g0258 g1102 |
+| `{` | opens a group. Before that, when `inType` is set and `forceType` is not, the type context is left unless the previous non-whitespace character is an operator by the look-behind table | g0259 g0260 g1375 |
+| `<` | in a type context: opens a group that closes with `>`. Otherwise, with `operators` at depth 0, it is consumed with all whitespace after it. Otherwise a plain character | g0261 g0262 g0263 g1060 g1367 |
 | `>` | a plain character when the position is not in a type context, or when the previous character is `=`. Otherwise it is a closing bracket | g0264 g0265 g0266 |
-| `)`, `]`, `}`, and `>` as a closing bracket | closes the innermost group. With no open group, or when the innermost group expects a different closer, the error `Mismatched group. …` | g0267 g0224 g0225 |
-| any other | consumed | g0268 |
+| `)`, `]`, `}`, and `>` as a closing bracket | closes the innermost group. With no open group, or when the innermost group expects a different closer, the error `Mismatched group. …` | g0267 g0224 g0225 g1500 g1572 |
+| any other | consumed | g0268 g1054 g1164 |
 
 Source: `EXPRESSION.parse`; `canFollowDivision` for the division test. What the
 steps and the character table mean together, for some inputs:
 
 | Case | Result | Probes |
 | --- | --- | --- |
-| a position with no flags | `?`, `:`, `=`, `<` and `>` are plain characters: `<div x(a ? b : c = d < e > f)/>` is one argument list | g0791 |
-| inside a group | steps 1, 3 and 4 do not apply, and `?`, `:` and `as` do not touch the ternary counter or the type context: `<div x=(a as number > b)/>` is one value | g0792 g0793 |
+| a position with no flags | `?`, `:`, `=`, `<` and `>` are plain characters: `<div x(a ? b : c = d < e > f)/>` is one argument list | g0791 g1570 g1667 g1668 |
+| inside a group | steps 1, 3 and 4 do not apply, and `?`, `:` and `as` do not touch the ternary counter or the type context: `<div x=(a as number > b)/>` is one value | g0792 g0793 g1073 g1205 g1246 g1571 g1606 |
 | a `:name` inside groups | source text, as stock: `<div x=[(:a)]/>` is the value `[(:a)]` | g0794 |
-| whitespace after `?`, `:`, `=` or a non-type `<`, with `operators` at depth 0 | consumed by that row, newlines included | g0795 g0250 g0262 |
+| whitespace after `?`, `:`, `=` or a non-type `<`, with `operators` at depth 0 | consumed by that row, newlines included | g0795 g0250 g0262 g1365 |
 | the same characters in an attribute name, which has no `operators` | nothing is consumed: `<div a: b/>`, `<div a? b/>` and concise `div a: b` are the names `a:`/`a?` and `b` | g0733 g0734 g0796 |
-| whitespace after a division `/` | consumed in a position with or without `operators` | g0254 g0732 |
+| whitespace after a division `/` | consumed in a position with or without `operators` | g0254 g0732 g1064 g1129 g1277 g1337 |
 | whitespace after a `:name` at the start of a value | ends the value, as after any word: `<div x=:a b/>` is the value `:a` and the attribute `b` | g0797 |
-| a string, a template literal's text, a regular expression, a comment | opaque: a hard stop inside one is not examined; a template literal's `${…}` is its own position | g0798 g0799 g0800 g0801 |
+| a string, a template literal's text, a regular expression, a comment | opaque: a hard stop inside one is not examined; a template literal's `${…}` is its own position | g0798 g0799 g0800 g0801 g1332 g1333 g1343 g1347 g1348 g1349 g1350 g1352 g1407 g1415 g1421 g1433 g1434 g1472 g1473 g1474 g1476 g1527 g1583 |
 
 #### The continuation test
 
@@ -943,12 +943,12 @@ of the scan, at depth 0:
 
 | # | Step | Result | Probes |
 | --- | --- | --- | --- |
-| 1 | the position has no `operators` flag | **fail** | g0802 |
-| 2 | look behind: the character immediately before the whitespace or newline is an operator by the look-behind table | **succeed**; the whitespace that follows is consumed, newlines included | g0803 g0290 |
-| 3 | this is a newline, and the position has `terminatedByEOL` or the parser is in concise mode | **fail** | g0456 g0506 |
+| 1 | the position has no `operators` flag | **fail** | g0802 g1579 |
+| 2 | look behind: the character immediately before the whitespace or newline is an operator by the look-behind table | **succeed**; the whitespace that follows is consumed, newlines included | g0803 g0290 g1046 g1076 |
+| 3 | this is a newline, and the position has `terminatedByEOL` or the parser is in concise mode | **fail** | g0456 g0506 g1342 |
 | 4 | find the next character: with `terminatedByEOL` or in concise mode spaces and tabs are skipped; otherwise all whitespace, newlines included | continue with that character | g0804 g0805 g0806 |
-| 5 | that character is `<` followed by `/` in HTML mode, or `<!--` in either mode | **fail** | g0807 g0808 g0809 |
-| 6 | the position's `shouldTerminate` returns true for that character | **fail** | g0810 g0811 |
+| 5 | that character is `<` followed by `/` in HTML mode, or `<!--` in either mode | **fail** | g0807 g0808 g0809 g1270 g1271 g1291 |
+| 6 | the position's `shouldTerminate` returns true for that character | **fail** | g0810 g0811 g1082 g1185 |
 | 7 | look ahead: that character is an operator by the look-ahead table | **succeed**, and scanning resumes where that table says; otherwise **fail** | g0785 g0339 |
 
 **Look-behind table** (`lookBehindForOperator`). `c` is the character
@@ -957,18 +957,18 @@ immediately before the whitespace:
 | `c` | Operator? | Probes |
 | --- | --- | --- |
 | `&` `*` `^` `:` `=` `<` `%` `\|` `?` `~` | yes | g0269 g0270 g0271 g0272 g0273 g0274 g0275 g0276 g0277 g0278 |
-| `!` | Skip back over the whole run of `!`. Let `o` be the character before the run. **No** when `o` is `)`, `]`, `"`, `'` or a backtick. **No** when `o` is a word character and the word ending at `o` is neither a unary keyword (last row) nor `in` or `instanceof` as a whole word. **Yes** in every other case, which includes `o` = `}` and `typeof!` | g0279 g0280 g0281 g0282 g0283 g0284 |
+| `!` | Skip back over the whole run of `!`. Let `o` be the character before the run. **No** when `o` is `)`, `]`, `"`, `'` or a backtick. **No** when `o` is a word character and the word ending at `o` is neither a unary keyword (last row) nor `in` or `instanceof` as a whole word. **Yes** in every other case, which includes `o` = `}` and `typeof!` | g0279 g0280 g0281 g0282 g0283 g0284 g1215 g1216 g1424 g1501 g1575 |
 | `>` | yes when the character before it is `=` (an arrow). Otherwise yes outside a type context and no inside one | g0285 g0286 g0287 |
-| `.` | yes when the first non-whitespace character after the whitespace is a word character | g0288 g0289 |
-| `+`, `-` | when the character before it is the same character (`++`, `--`): the answer is this table applied to the nearest non-whitespace character before the pair. Otherwise yes | g0290 g0291 g0292 g0293 g0294 g0295 g0296 g0297 |
-| a lowercase letter | **no** when `c` is the last character of a trigger's text (the position's `atomEnd`, set only by a dialect trigger): its text is an operand, not a keyword. Otherwise yes when a unary keyword ends at `c` as a whole word. Outside a type context the keywords are `async` `await` `class` `function` `new` `typeof` `delete` `void`; inside one they are `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique`. "Whole word" means the keyword starts at the first character of the value, or the character before it is neither a word character nor `.` | g0298 g0299 g0300 g0301 g0302 g0303 g0304 g0305 g0306 |
+| `.` | yes when the first non-whitespace character after the whitespace is a word character | g0288 g0289 g1065 g1208 |
+| `+`, `-` | when the character before it is the same character (`++`, `--`): the answer is this table applied to the nearest non-whitespace character before the pair. Otherwise yes | g0290 g0291 g0292 g0293 g0294 g0295 g0296 g0297 g1173 g1174 |
+| a lowercase letter | **no** when `c` is the last character of a trigger's text (the position's `atomEnd`, set only by a dialect trigger): its text is an operand, not a keyword. Otherwise yes when a unary keyword ends at `c` as a whole word. Outside a type context the keywords are `async` `await` `class` `function` `new` `typeof` `delete` `void`; inside one they are `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique`. "Whole word" means the keyword starts at the first character of the value, or the character before it is neither a word character nor `.` | g0298 g0299 g0300 g0301 g0302 g0303 g0304 g0305 g0306 g1081 g1149 g1150 g1154 g1176 g1282 g1283 |
 | anything else | no | g0307 g0308 g0309 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
 | concise `div x=:new\n  span` | the single value `:new\n  span`, as stock: `new` is a unary keyword, so the newline does not end the value | g0298 |
 | `<div x=:typeof />` | the value `:typeof /`, then `Missing ending "div" tag`, as stock: the operator exemption uses the same table | g0608 |
-| concise `div x=return\n  b`, `div x=throw\n  b`, `div x=yield\n  b` | the value ends at the newline: these words are in neither keyword list | g0308 g0812 g0813 |
+| concise `div x=return\n  b`, `div x=throw\n  b`, `div x=yield\n  b` | the value ends at the newline: these words are in neither keyword list | g0308 g0812 g0813 g1177 |
 | concise `div x=a /* c */\n  b` | the value ends at the newline: a `/` is not in the table | g0814 |
 
 **Look-ahead table** (`lookAheadForOperator`). `n` is the next character found
@@ -976,11 +976,11 @@ in step 4:
 
 | `n` | Operator? | Scanning resumes | Probes |
 | --- | --- | --- | --- |
-| `&` `*` `^` `!` `<` `%` `\|` `~` `+` `-` | yes | after `n` | g0310 g0311 g0312 g0313 g0314 g0315 g0316 g0317 g0318 g0319 |
-| `/` `{` `(` `>` `?` `:` `=` | yes | at `n`, which the character table then handles | g0320 g0321 g0322 g0323 g0324 g0325 g0326 |
-| `.` | yes when the first non-whitespace character after the `.` is a word character | at that word character | g0327 g0328 g0329 g0330 |
-| a lowercase letter | yes when one of `as` `extends` `instanceof` `in` `satisfies` starts at `n`, is followed by a whitespace character, and the first non-whitespace character after that exists and is not `:` `,` `=` `/` `>` or `;` | at that character | g0331 g0332 g0333 g0334 g0335 g0336 g0337 g0338 |
-| anything else | no | — | g0339 g0340 g0341 g0342 |
+| `&` `*` `^` `!` `<` `%` `\|` `~` `+` `-` | yes | after `n` | g0310 g0311 g0312 g0313 g0314 g0315 g0316 g0317 g0318 g0319 g1038 g1077 g1180 g1181 g1195 g1209 g1210 g1328 |
+| `/` `{` `(` `>` `?` `:` `=` | yes | at `n`, which the character table then handles | g0320 g0321 g0322 g0323 g0324 g0325 g0326 g1099 g1101 g1103 g1290 g1448 |
+| `.` | yes when the first non-whitespace character after the `.` is a word character | at that word character | g0327 g0328 g0329 g0330 g1162 |
+| a lowercase letter | yes when one of `as` `extends` `instanceof` `in` `satisfies` starts at `n`, is followed by a whitespace character, and the first non-whitespace character after that exists and is not `:` `,` `=` `/` `>` or `;` | at that character | g0331 g0332 g0333 g0334 g0335 g0336 g0337 g0338 g1049 g1069 g1070 g1071 g1072 g1148 g1151 g1152 g1153 g1171 g1178 g1179 g1183 g1184 g1211 g1212 g1213 g1357 g1383 g1422 g1423 g1518 g1600 |
+| anything else | no | — | g0339 g0340 g0341 g0342 g1100 |
 
 What `as` and `satisfies` do to the type context is read 7 of
 [The type context](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-the-type-context). MX changes the `:` and `.` rows for an
@@ -1004,7 +1004,7 @@ The type context is the flag `inType`.
 | How it is entered | `forceType` | Probes |
 | --- | --- | --- |
 | a `:` at depth 0 with `ternaryDepth` 0, in a position with `operators` | not set | g0349 g0383 |
-| an `as` or `satisfies` found by the look-ahead while the position is not in a type context | set when `ternaryDepth` is 0 | g0348 g0815 |
+| an `as` or `satisfies` found by the look-ahead while the position is not in a type context | set when `ternaryDepth` is 0 | g0348 g0815 g1627 |
 | the position's flags at creation: a type list (E14 to E16), a statement or scriptlet that begins with a type keyword (E10, E11) | set | g0391 g0816 |
 
 Leaving it is the `=` and `{` rows of the character table (reads 5 and 6
@@ -1016,14 +1016,14 @@ an input on each side:
 
 | # | Read by | In a type context | Outside one | Observed | Probes |
 | --- | --- | --- | --- | --- | --- |
-| 1 | the `<` row of the character table | opens a group that `>` closes, at any depth, with or without `operators`; no whitespace is consumed after it | with `operators` at depth 0 it is consumed with the whitespace after it; otherwise a plain character | `x=a as Map<K, V> y` is the value `a as Map<K, V>`; concise `div x=a<b, c> d` is the value `a<b` | g0261 g0343 |
+| 1 | the `<` row of the character table | opens a group that `>` closes, at any depth, with or without `operators`; no whitespace is consumed after it | with `operators` at depth 0 it is consumed with the whitespace after it; otherwise a plain character | `x=a as Map<K, V> y` is the value `a as Map<K, V>`; concise `div x=a<b, c> d` is the value `a<b` | g0261 g0343 g1577 g1578 |
 | 2 | the `>` row of the character table | a closing bracket unless the previous character is `=`: it closes a `<` group, and is `Mismatched group` when no group is open or the innermost group expects another closer | a plain character | concise `div x=a as T > b` is the error; concise `div x=a > b` is one value | g0266 g0264 |
-| 3 | the `>` row of the look-behind table | not an operator (an arrow's `>` still is) | an operator | concise `div x=a as T<U>\n  b` ends at the newline; `div x=f<T>\n  b` is one value | g0287 g0286 |
-| 4 | the last row of the look-behind table: the unary keyword list | `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique` | `async` `await` `class` `function` `new` `typeof` `delete` `void` | concise `div x=a as keyof\n  T` is one value and `div x=a as void\n  b` ends at the newline; `div x=void\n  b` is one value and `div x=keyof\n  b` ends at the newline | g0302 g0303 g0300 g0301 |
-| 5 | the `=` row, at `=>` | left, unless `forceType` is set or the previous non-whitespace character is `)` | nothing to leave | `<div x=a: b => c<d> e/>` is the value `a: b => c<d` and the `>` ends the tag; `<div x=a: (b) => c<d> e/>` is the value `a: (b) => c<d>` | g0344 g0345 |
-| 6 | the `{` row | left, unless `forceType` is set or the previous non-whitespace character is a look-behind operator (reads 3 and 4 apply to that test) | nothing to leave | concise `div x=a: T {b}<c> d` is one value (left at `{`, so the `>` is an operator); `div x=a: keyof {b}<c> d` is the value `a: keyof {b}<c>` and the attribute `d` | g0260 g0346 |
-| 7 | the look-ahead's keyword row, at `as` or `satisfies` | nothing changes: `forceType` is **not** set | the context is entered, and `forceType` set when `ternaryDepth` is 0 | concise `div x=a: T as U = b<c> d` is one value (the `=` leaves the context); `div x=a as U = b<c> d` is the value `a as U = b<c>` and the attribute `d` | g0347 g0348 |
-| 8, 9 | the tag variable's two stop functions, at `<` (E9) | not a hard stop | a hard stop | `<let/x: Map<K,V> = 1/>` is the variable `x: Map<K,V>`; `<let/x<T>=1/>` is the `Unexpected types. …` error | g0349 g0350 g0351 g0352 |
+| 3 | the `>` row of the look-behind table | not an operator (an arrow's `>` still is) | an operator | concise `div x=a as T<U>\n  b` ends at the newline; `div x=f<T>\n  b` is one value | g0287 g0286 g1445 g1630 |
+| 4 | the last row of the look-behind table: the unary keyword list | `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique` | `async` `await` `class` `function` `new` `typeof` `delete` `void` | concise `div x=a as keyof\n  T` is one value and `div x=a as void\n  b` ends at the newline; `div x=void\n  b` is one value and `div x=keyof\n  b` ends at the newline | g0302 g0303 g0300 g0301 g1284 g1362 |
+| 5 | the `=` row, at `=>` | left, unless `forceType` is set or the previous non-whitespace character is `)` | nothing to leave | `<div x=a: b => c<d> e/>` is the value `a: b => c<d` and the `>` ends the tag; `<div x=a: (b) => c<d> e/>` is the value `a: (b) => c<d>` | g0344 g0345 g1629 g1673 g1674 g1676 |
+| 6 | the `{` row | left, unless `forceType` is set or the previous non-whitespace character is a look-behind operator (reads 3 and 4 apply to that test) | nothing to leave | concise `div x=a: T {b}<c> d` is one value (left at `{`, so the `>` is an operator); `div x=a: keyof {b}<c> d` is the value `a: keyof {b}<c>` and the attribute `d` | g0260 g0346 g1618 g1631 |
+| 7 | the look-ahead's keyword row, at `as` or `satisfies` | nothing changes: `forceType` is **not** set | the context is entered, and `forceType` set when `ternaryDepth` is 0 | concise `div x=a: T as U = b<c> d` is one value (the `=` leaves the context); `div x=a as U = b<c> d` is the value `a as U = b<c>` and the attribute `d` | g0347 g0348 g1626 |
+| 8, 9 | the tag variable's two stop functions, at `<` (E9) | not a hard stop | a hard stop | `<let/x: Map<K,V> = 1/>` is the variable `x: Map<K,V>`; `<let/x<T>=1/>` is the `Unexpected types. …` error | g0349 g0350 g0351 g0352 g1656 |
 
 Reads 3 and 4 are in the look-behind table. Its callers
 (`grep -n "lookBehindForOperator(" states/EXPRESSION.ts`), each with an input
@@ -1031,7 +1031,7 @@ inside and outside a type context:
 
 | Caller | In a type context | Outside one | Probes |
 | --- | --- | --- | --- |
-| the continuation test, step 2 | `div x=a as keyof\n  T` one value; `div x=a as void\n  b` ends at the newline | `div x=void\n  b` one value; `div x=keyof\n  b` ends at the newline | g0302 g0303 g0300 g0301 |
+| the continuation test, step 2 | `div x=a as keyof\n  T` one value; `div x=a as void\n  b` ends at the newline | `div x=void\n  b` one value; `div x=keyof\n  b` ends at the newline | g0302 g0303 g0300 g0301 g1623 |
 | the operator exemption (scan step 4) | `<div x=a as keyof, y/>` is the value `a as keyof,`; `<div x=a as void, y/>` is the value `a as void`; concise `div x=a as T<U> ,y=1` stops at the `,` | `<div x=void, y/>` is the value `void,`; concise `div x=f<T> ,y=1` is one value | g0817 g0818 g0819 g0820 g0666 |
 | the `{` row of the character table (read 6) | `div x=a: keyof {b}<c> d` stays in the context | `div x=a: T {b}<c> d` leaves it | g0346 g0260 |
 | the look-behind table's own `!` row | `div x=a as void!\n  b` ends at the newline | `div x=void!\n  b` one value | g0821 g0822 |
@@ -1044,16 +1044,16 @@ Consequences:
 
 | Input | Result | Why | Probes |
 | --- | --- | --- | --- |
-| `x=a as Map<K, V> y` | value `a as Map<K, V>` | `<` is a group in a type context | g0261 |
-| `x=f<T>(y)` | value `f<T`; the `>` ends the tag | not a type context, so `>` is E1's hard stop. **Recorded defect**, [below](#the-parser-grammar-open-questions-for-the-language-lead-recorded-defects-in-the-default). TODO `html-value-generic-call-cut-at-gt` | g0353 |
+| `x=a as Map<K, V> y` | value `a as Map<K, V>` | `<` is a group in a type context | g0261 g1358 |
+| `x=f<T>(y)` | value `f<T`; the `>` ends the tag | not a type context, so `>` is E1's hard stop. **Recorded defect**, [below](#the-parser-grammar-open-questions-for-the-language-lead-recorded-defects-in-the-default). TODO `html-value-generic-call-cut-at-gt` | g0353 g1502 |
 | `x=a: T<K> = f<K>(y)` | value `a: T<K> = f<K` | the `=` leaves the context (no `forceType`), then as the row above | g0354 |
-| `x=a as T = b y`, `x=a as T < b y` | one value up to `b` | `forceType`: the context never ends inside the value. In the second the look-ahead resumes after the `<`, so no group is opened | g0355 g0356 |
-| `x=a as T {k: T} y=1` | value `a as T {k: T}`, then `y=1` | the look-ahead continues at `{`; with `forceType` the `{` does not leave the context | g0357 |
+| `x=a as T = b y`, `x=a as T < b y` | one value up to `b` | `forceType`: the context never ends inside the value. In the second the look-ahead resumes after the `<`, so no group is opened | g0355 g0356 g1199 g1359 g1360 g1361 g1619 |
+| `x=a as T {k: T} y=1` | value `a as T {k: T}`, then `y=1` | the look-ahead continues at `{`; with `forceType` the `{` does not leave the context | g0357 g1200 |
 | `x=(a): T => a` | one value | the `:` enters the context; the arrow follows `T`, not `)`, so `=>` leaves it | g0358 |
-| concise `div x=a as T > b` | `Mismatched group. A closing ">" character was found but it is not matched …` | concise mode has no `>` hard stop, the look-ahead continues at `>`, and in a type context `>` is a closing bracket with no open group. **Valid TypeScript that the default rejects** (OQ 24). TODO `concise-as-type-gt-mismatched-group` | g0266 |
-| HTML `<div x=a as T > b/>` | `Ambiguous ">" in attribute. …` | the `>` is E1's hard stop; then [the ambiguous `>` check](#the-parser-grammar-attributes-the-ambiguous-check) | g0359 |
-| `<div x=a as T ? (b < c) : d/>`, `<div x=a: T ? (b < c) : d/>` | `Mismatched group. A ")" character was found when ">" was expected.` | reads 1 and 2 apply at any depth: the context entered before the group makes the `<` inside it a group, which the `)` fails to close. With `>` it is the mirror message (`(b > c)`, `[b > c]`). `<div x=(a as T) ? (b < c) : d/>` is one value: an `as` inside a group does not enter the context. Valid TypeScript that the default rejects. **A recorded limit, TODO `as-satisfies-type-context-any-depth`**: no action before MX2's TypeScript-aware expression boundary | g0360 g0361 g0362 g0363 g0364 |
-| `<div x=a as T ? b < c : d/>` | one value | at depth 0 the look-ahead resumes after the spaced `<`, so no group is opened | g0365 |
+| concise `div x=a as T > b` | `Mismatched group. A closing ">" character was found but it is not matched …` | concise mode has no `>` hard stop, the look-ahead continues at `>`, and in a type context `>` is a closing bracket with no open group. **Valid TypeScript that the default rejects** (OQ 24). TODO `concise-as-type-gt-mismatched-group` | g0266 g1670 |
+| HTML `<div x=a as T > b/>` | `Ambiguous ">" in attribute. …` | the `>` is E1's hard stop; then [the ambiguous `>` check](#the-parser-grammar-attributes-the-ambiguous-check) | g0359 g1669 |
+| `<div x=a as T ? (b < c) : d/>`, `<div x=a: T ? (b < c) : d/>` | `Mismatched group. A ")" character was found when ">" was expected.` | reads 1 and 2 apply at any depth: the context entered before the group makes the `<` inside it a group, which the `)` fails to close. With `>` it is the mirror message (`(b > c)`, `[b > c]`). `<div x=(a as T) ? (b < c) : d/>` is one value: an `as` inside a group does not enter the context. Valid TypeScript that the default rejects. **A recorded limit, TODO `as-satisfies-type-context-any-depth`**: no action before MX2's TypeScript-aware expression boundary | g0360 g0361 g0362 g0363 g0364 g1624 g1625 g1672 |
+| `<div x=a as T ? b < c : d/>` | one value | at depth 0 the look-ahead resumes after the spaced `<`, so no group is opened | g0365 g1364 g1671 |
 
 #### End of input
 
@@ -1067,10 +1067,10 @@ Consequences:
 | Owner | Message | Probes |
 | --- | --- | --- |
 | an attribute with no name and not a spread | `EOF reached while parsing attribute name for the "<tag>" tag` | g0198 |
-| any other attribute | `EOF reached while parsing attribute value for the "<name>" attribute` (`...` for a spread) | g0199 g0203 |
-| a tag name | `EOF reached while parsing tag name` | g0204 |
-| a placeholder | `EOF reached while parsing placeholder` | g0206 |
-| anything else | `EOF reached while parsing expression` | g0207 |
+| any other attribute | `EOF reached while parsing attribute value for the "<name>" attribute` (`...` for a spread) | g0199 g0203 g1217 g1218 |
+| a tag name | `EOF reached while parsing tag name` | g0204 g1477 |
+| a placeholder | `EOF reached while parsing placeholder` | g0206 g1491 |
+| anything else | `EOF reached while parsing expression` | g0207 g1110 g1111 g1531 |
 
 Per position:
 
@@ -1078,7 +1078,7 @@ Per position:
 | --- | --- | --- | --- |
 | `<div x=(a`, `div x=(a` | HTML, concise | the attribute-value error in both: rule 1 needs depth 0 | g0199 g0366 |
 | `<div x` | HTML | the attribute-name error: the name is not yet recorded while it is being read | g0197 |
-| `<div =(a` | HTML | the attribute-name error | g0198 |
+| `<div =(a` | HTML | the attribute-name error | g0198 g1122 |
 | `<div ...(` | HTML | the attribute-value error with `...` | g0367 |
 | `<div onClick(a` | HTML | the attribute-value error for `onClick`: arguments share the owner | g0200 |
 | `<div(a` | HTML | `EOF reached while parsing expression` | g0207 |
@@ -1087,15 +1087,15 @@ Per position:
 | `static const x = (` | concise | `EOF reached while parsing expression` | g0209 |
 | `$ {a` | concise | **no error**; the scriptlet `a` is reported | g0370 |
 | `<${a` | HTML | the tag-name error | g0204 |
-| `<div ${a` | HTML | the attribute-name error: after a space, `${` begins an attribute name | g0371 |
+| `<div ${a` | HTML | the attribute-name error: after a space, `${` begins an attribute name | g0371 g1324 |
 | `<foo<A` | HTML | `EOF reached while parsing expression` | g0208 |
 | `` div x=`a `` | concise | `EOF reached while parsing template string expression` (the template literal's own error) | g0372 |
 | `<div async(a` | HTML | the attribute-name error: with `async` pending, the attribute has no name yet | g0196 |
-| `div onClick(a) {b`, `div\|a`, `div<A`, `div (a` | concise | **no error**; the method, parameters, type arguments or tag arguments are reported | g0373 g0374 g0375 g0376 |
-| `script -- ${b`, `textarea\n  -- ${a` | concise text body | **no error**; the placeholder is reported (compare `div\n  -- ${a`, an HTML-mode block: the placeholder error) | g0377 g0378 g0379 |
-| `div.a${b` | concise | **no error, and no shorthand event**: only the tag `div` is reported (the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER`). TODO `concise-eof-interpolation-drops-event` | g0380 |
+| `div onClick(a) {b`, `div\|a`, `div<A`, `div (a` | concise | **no error**; the method, parameters, type arguments or tag arguments are reported | g0373 g0374 g0375 g0376 g1522 |
+| `script -- ${b`, `textarea\n  -- ${a` | concise text body | **no error**; the placeholder is reported (compare `div\n  -- ${a`, an HTML-mode block: the placeholder error) | g0377 g0378 g0379 g1318 |
+| `div.a${b` | concise | **no error, and no shorthand event**: only the tag `div` is reported (the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER`). TODO `concise-eof-interpolation-drops-event` | g0380 g1325 |
 | `${x` | concise | **no error and no event at all** | g0381 |
-| ``span\n  div x=`${a`` | concise | **no error, and no value event**: the tags and the name `x` are reported | g0382 |
+| ``span\n  div x=`${a`` | concise | **no error, and no value event**: the tags and the name `x` are reported | g0382 g1329 |
 
 `div(a` and `$ {a` end silently because their `(` and `{` were consumed by the
 owning state (`OPEN_TAG.parse`, `INLINE_SCRIPT.parse`) and are not on the
@@ -1115,19 +1115,19 @@ reads of that section it can then reach.
 | --- | --- | --- | --- | --- | --- |
 | `ATTRIBUTE.parse`, value branch | `operators`, `terminatedByWhitespace`, `triggers`; `attrValue` for a named attribute or a spread, `claimDefault` otherwise (with a dialect's value rows) | per mode, see E1/E2 | E1, E2, E3 | entered by `:` and by `as`/`satisfies`; reads 1 to 7 | g0383 g0287 |
 | `ATTRIBUTE.parse`, name branch | `terminatedByWhitespace` | per mode | [attribute name](#the-parser-grammar-attributes-attribute-names) | not entered: `div a:keyof\n  b` is the name `a:keyof` and a child | g0384 |
-| `ATTRIBUTE.parse`, `(` branch | `triggers` | `)` | E4, and the parameters of E5 | not entered: `>` after a `:` is a plain character | g0385 |
+| `ATTRIBUTE.parse`, `(` branch | `triggers` | `)` | E4, and the parameters of E5 | not entered: `>` after a `:` is a plain character | g0385 g1536 |
 | `ATTRIBUTE.parse`, `{` branch | `triggers` | `}` | E5, and the body of E17 | not entered | g0386 |
 | `ATTRIBUTE.parse`, `<` branch | `inType`, `forceType` | `>` | E16 | in it from creation; reads 1 and 2 | g0387 |
 | `OPEN_TAG.parse`, `/` case | `operators`, `terminatedByWhitespace` | per mode | E9 | entered by `:` and by `as`/`satisfies`; reads 1 to 9 | g0388 g0349 g0825 |
-| `OPEN_TAG.parse`, `(` case | `triggers` | `)` | E6, and the parameters of E17 | not entered | g0389 |
-| `OPEN_TAG.parse`, `\|` case | none | `\|` | E7 | not entered | g0390 |
+| `OPEN_TAG.parse`, `(` case | `triggers` | `)` | E6, and the parameters of E17 | not entered | g0389 g1403 g1406 |
+| `OPEN_TAG.parse`, `\|` case | none | `\|` | E7 | not entered | g0390 g1535 g1665 |
 | `OPEN_TAG.parse`, `<` case | `inType`, `forceType` | `>` | E14, E15 | in it from creation; reads 1 and 2 | g0391 |
 | `TAG_NAME.parse`, `${` branch | `triggers` | `}` | E13 | not entered | g0392 |
-| `TAG_NAME.exit`, statement branch (`prepareStatement`) | `operators`, `terminatedByEOL`, `consumeIndentedContent`; `inType` and `forceType` after a type keyword | none | E10 | after a type keyword: in it from creation, reads 1 to 4 (`static type A = void\nB` ends at the newline, `static type A = keyof\nB` continues). Otherwise entered by `:`, reads 1 to 6 (`static const x: void\ndiv` ends at the newline, `static const x: keyof\ndiv` continues; `static x = void\nB` continues, `static x = keyof\nB` ends) | g0395 g0396 g0393 g0394 g0397 g0398 g0399 g0400 g0401 g0402 |
-| `INLINE_SCRIPT.parse`, line form (`prepareScriptlet`) | `operators`, `terminatedByEOL`; `inType` and `forceType` after a type keyword | none | E11, line form | as the statement: `$ type A = void\n<b/>` ends at the newline; `$ let x: keyof\n<b/>` is one scriptlet and `$ let x: void\n<b/>` ends at the newline; `$ let x = void\n<b/>` is one scriptlet; `$ let x: (b > c)` is `Mismatched group` | g0405 g0406 g0403 g0404 g0407 g0408 g0409 g0410 |
+| `TAG_NAME.exit`, statement branch (`prepareStatement`) | `operators`, `terminatedByEOL`, `consumeIndentedContent`; `inType` and `forceType` after a type keyword | none | E10 | after a type keyword: in it from creation, reads 1 to 4 (`static type A = void\nB` ends at the newline, `static type A = keyof\nB` continues). Otherwise entered by `:`, reads 1 to 6 (`static const x: void\ndiv` ends at the newline, `static const x: keyof\ndiv` continues; `static x = void\nB` continues, `static x = keyof\nB` ends) | g0395 g0396 g0393 g0394 g0397 g0398 g0399 g0400 g0401 g0402 g1222 |
+| `INLINE_SCRIPT.parse`, line form (`prepareScriptlet`) | `operators`, `terminatedByEOL`; `inType` and `forceType` after a type keyword | none | E11, line form | as the statement: `$ type A = void\n<b/>` ends at the newline; `$ let x: keyof\n<b/>` is one scriptlet and `$ let x: void\n<b/>` ends at the newline; `$ let x = void\n<b/>` is one scriptlet; `$ let x: (b > c)` is `Mismatched group` | g0405 g0406 g0403 g0404 g0407 g0408 g0409 g0410 g1142 g1143 g1144 g1223 g1586 |
 | `INLINE_SCRIPT.parse`, block form | none | `}` | E11, block form | not entered | g0411 |
-| `checkForPlaceholder` (`PLACEHOLDER.ts`) | `triggers` | `}` | E8 | not entered | g0412 |
-| `TEMPLATE_STRING.parse`, `${` case | `triggers` when the position holding the template literal has it | `}` | a template literal's `${…}`, inside a position or a text body | not entered | g0413 g0414 |
+| `checkForPlaceholder` (`PLACEHOLDER.ts`) | `triggers` | `}` | E8 | not entered | g0412 g1345 |
+| `TEMPLATE_STRING.parse`, `${` case | `triggers` when the position holding the template literal has it | `}` | a template literal's `${…}`, inside a position or a text body | not entered | g0413 g0414 g1335 |
 
 The positions with the `triggers` flag are where a dialect's expression
 triggers run (spec §13.9.5). The default syntax table has none, so there the
@@ -1151,29 +1151,29 @@ The value starts after the `=` or `:=` and the whitespace that follows it
 
 | Character | Stop when | Probes |
 | --- | --- | --- |
-| `,` | always | g0415 |
+| `,` | always | g0415 g1053 |
 | `/` | the next character is `>` | g0416 g0417 |
 | `>` | the first of these that applies: (1) it is the value's first character: **stop**; (2) the previous character is `=` (an arrow): **no stop**; (3) the previous character is whitespace **and** the next character is `=` (a spaced `>=`): **no stop**; (4) otherwise: **stop** | g0418 g0265 g0419 g0420 g0421 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div x= :b/>` | the value starts at `:b` | g0534 |
-| `<div x=>a/>` | `Missing value for attribute` (`>` rule 1) | g0826 |
-| `<div x=a => b>c</div>` | the value `a => b` (rule 2) | g0827 |
-| `<if=count >= 10>a</if>`, `<div x=a >= b>c</div>` | one value (rule 3) | g0828 g0829 |
-| `<div x=a>= b>c</div>` | the value `a` and the body text `= b>c` (rule 4: no whitespace before the `>`) | g0830 |
-| `<div x=a>b>c</div>` | the value `a` (rule 4) | g0831 |
+| `<div x= :b/>` | the value starts at `:b` | g0534 g1286 |
+| `<div x=>a/>` | `Missing value for attribute` (`>` rule 1) | g0826 g1201 |
+| `<div x=a => b>c</div>` | the value `a => b` (rule 2) | g0827 g1182 |
+| `<if=count >= 10>a</if>`, `<div x=a >= b>c</div>` | one value (rule 3) | g0828 g0829 g1196 |
+| `<div x=a>= b>c</div>` | the value `a` and the body text `= b>c` (rule 4: no whitespace before the `>`) | g0830 g1247 g1370 |
+| `<div x=a>b>c</div>` | the value `a` (rule 4) | g0831 g1371 |
 | `<div x=a + ,b/>` | the single value `a + ,b`: the operator exemption (scan step 4) | g0788 |
 | `<div x=a +/>`, `<div x=a ? />` | `EOF reached while parsing regular expression`: the exempted `/` starts a regular expression (OQ 17). TODO `operator-exemption-consumes-hard-stop` | g0832 g0833 |
 | `<div x=async/>` | the value `async/`, then `Missing ending "div" tag`: an identifier spelled like a unary keyword is a look-behind operator (OQ 17, OQ 24). TODO `operator-exemption-consumes-hard-stop` | g0664 |
 | `<div x=async, y=1/>` | the value `async,`, then `y=1` | g0665 |
-| `<div x=a\n  + b/>`, `<div x=a\n\n  + b/>` | one value: in HTML mode the look-ahead crosses newlines | g0804 g0805 |
+| `<div x=a\n  + b/>`, `<div x=a\n\n  + b/>` | one value: in HTML mode the look-ahead crosses newlines | g0804 g0805 g1198 g1392 g1574 |
 | `<div x=a\n  <span/>` | the single value `a\n  <span` | g0633 |
-| `<div x=a // c\n  y=1/>` | the value `a // c`, then `y=1`: a `//` comment ends the value at the end of its line | g0834 |
+| `<div x=a // c\n  y=1/>` | the value `a // c`, then `y=1`: a `//` comment ends the value at the end of its line | g0834 g1331 |
 | `<div x=a + // c\n b/>` | the value `a + // c`, then `b` | g0835 |
-| `<div x=a\n  // c\n  y/>` | the value `a\n  // c`, then `y`: `/` is a look-ahead operator, so the comment line is drawn in | g0836 |
-| `<div x=a /* c */ + b/>` | one value | g0837 |
-| `<div x=a + /* c */ b/>` | the value `a + /* c */`, then the attribute `b`: the comment's closing `/` is no look-behind operator (OQ 24). TODO `value-block-comment-after-operator` | g0674 |
+| `<div x=a\n  // c\n  y/>` | the value `a\n  // c`, then `y`: `/` is a look-ahead operator, so the comment line is drawn in | g0836 g1056 |
+| `<div x=a /* c */ + b/>` | one value | g0837 g1496 |
+| `<div x=a + /* c */ b/>` | the value `a + /* c */`, then the attribute `b`: the comment's closing `/` is no look-behind operator (OQ 24). TODO `value-block-comment-after-operator` | g0674 g1108 |
 | `<div x=a  y/>` | the value `a` and the name `y`: the whitespace between belongs to neither | g0838 |
 | `<div x=(a` | an error at end of input ([End of input](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-end-of-input)) | g0199 |
 
@@ -1192,19 +1192,19 @@ regular-expression error) and before `>` (`Mismatched group`).
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `x=a :b` | one value `a :b`: a spaced `:b` after a value continues it, as in stock htmljs-parser | g0422 |
-| `x=a.b .c` | one value `a.b .c`: a spaced `.c` after a value continues it, as in stock htmljs-parser | g0429 |
+| `x=a :b` | one value `a :b`: a spaced `:b` after a value continues it, as in stock htmljs-parser | g0422 g1157 g1160 g1166 g1207 |
+| `x=a.b .c` | one value `a.b .c`: a spaced `.c` after a value continues it, as in stock htmljs-parser | g0429 g1266 g1269 |
 | `x=a \| :b` | one value `a \| :b`: the `\|` before the whitespace is a look-behind operator | g0839 |
 | `x=a ? b :c` | one value: a `?` is open | g0424 |
-| `x=a ? b : c :d` | one value `a ? b : c :d` | g0840 |
-| `<div x=a :/>`, `<div x=a :>` | `<div x=a :/>` is the regular-expression error; `<div x=a :>` is the `Mismatched group` error | g0426 g0841 |
+| `x=a ? b : c :d` | one value `a ? b : c :d` | g0840 g1158 |
+| `<div x=a :/>`, `<div x=a :>` | `<div x=a :/>` is the regular-expression error; `<div x=a :>` is the `Mismatched group` error | g0426 g0841 g1265 g1298 g1299 |
 | `x=a : b`, `x=(a) : T => a` | one value: a space follows the colon | g0425 g0611 |
-| `<div x=a :1/>` | one value `a :1` | g0427 |
+| `<div x=a :1/>` | one value `a :1` | g0427 g1165 |
 | `<div x=a .2xl y/>` | the value `a .2xl`, then `y` | g0430 |
 | `x=a . b`, `x=a .2xl` | one value | g0842 g0626 |
-| `x=a ?? b :c`, `x=a ?.b :c` | one value each, `a ?? b :c` and `a ?.b :c` (OQ 3) | g0431 g0432 |
+| `x=a ?? b :c`, `x=a ?.b :c` | one value each, `a ?? b :c` and `a ?.b :c` (OQ 3) | g0431 g0432 g1387 |
 | `x=a ?:b` | one value `a ?:b`: `?:` opens a ternary (OQ 3) | g0628 |
-| `<div x=a\n  .b/>` | one value across the newline, in HTML mode | g0843 |
+| `<div x=a\n  .b/>` | one value across the newline, in HTML mode | g0843 g1093 |
 | `<div ...a :b/>`, `<div ...a .b/>` | a spread's value includes the spaced `:b` or `.b`: `...a :b` spreads `a :b` (OQ 5) | g0844 g0845 |
 
 **Default attribute.** A value with no name has `attrValue` off, so not even
@@ -1213,13 +1213,13 @@ stock.
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<if=a .b>`, `<if=a :b>` | one value | g0327 g0428 |
-| `<if=:a :b>`, `<if= :a :b>`, `<if=:a\n :b>`, concise `if=:a :b`, `<const/x=:a :b/>` | one value `:a :b`, the same as stock | g0423 g0846 g0847 g0848 g0849 |
-| `<if=:a :b :c>` | one value `:a :b :c`, the same as stock | g0850 |
-| `<if=:a :>` | the `Mismatched group` error | g0851 |
-| `<if=:a .b>` | one value | g0630 |
-| `<if=:a.b :c>`, `<if=:a + :b :c>`, `<if=(:a) :b>` | one value each: `:a.b :c`, `:a + :b :c` and `(:a) :b` | g0852 g0853 g0854 |
-| `<if=:a ? :b :c>` | one value: a `?` is open | g0855 |
+| `<if=a .b>`, `<if=a :b>` | one value | g0327 g0428 g1094 g1267 g1268 |
+| `<if=:a :b>`, `<if= :a :b>`, `<if=:a\n :b>`, concise `if=:a :b`, `<const/x=:a :b/>` | one value `:a :b`, the same as stock | g0423 g0846 g0847 g0848 g0849 g1507 g1508 g1514 |
+| `<if=:a :b :c>` | one value `:a :b :c`, the same as stock | g0850 g1516 |
+| `<if=:a :>` | the `Mismatched group` error | g0851 g1509 |
+| `<if=:a .b>` | one value | g0630 g1510 |
+| `<if=:a.b :c>`, `<if=:a + :b :c>`, `<if=(:a) :b>` | one value each: `:a.b :c`, `:a + :b :c` and `(:a) :b` | g0852 g0853 g0854 g1511 g1512 g1515 |
+| `<if=:a ? :b :c>` | one value: a `?` is open | g0855 g1513 |
 
 ### E2 — Attribute value, concise mode
 
@@ -1227,11 +1227,11 @@ The value starts as in E1. Hard stops:
 
 | Where | Character | Stop when | Probes |
 | --- | --- | --- | --- |
-| outside `[ … ]` (`shouldTerminateConciseAttrValue`) | `,` | always | g0435 |
+| outside `[ … ]` (`shouldTerminateConciseAttrValue`) | `,` | always | g0435 g1083 |
 | | `;` | always | g0436 |
-| | `-` | the next character is `-` **and** the previous character is whitespace, ASCII or Unicode | g0437 g0438 g0439 g1680 |
-| inside `[ … ]` (`shouldTerminateConciseGroupedAttrValue`) | `,` | always | g0440 |
-| | `]` | always | g0441 |
+| | `-` | the next character is `-` **and** the previous character is whitespace, ASCII or Unicode | g0437 g0438 g0439 g1680 g1085 g1086 g1544 |
+| inside `[ … ]` (`shouldTerminateConciseGroupedAttrValue`) | `,` | always | g0440 g1088 |
+| | `]` | always | g0441 g1089 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
@@ -1246,7 +1246,7 @@ next line in these cases:
 
 | Case | Mechanism | Probes |
 | --- | --- | --- |
-| a group is open | step 1.1 of the scan | g0442 |
+| a group is open | step 1.1 of the scan | g0442 g1573 |
 | the character immediately before the newline is a look-behind operator, and no `//` comment precedes the newline | step 1.3 | g0290 g0443 |
 | whitespace before the newline follows a look-behind operator | step 3 of the scan: the continuation test consumes that whitespace and the newline together | g0444 |
 | whitespace, then on the same line `as`, `extends`, `instanceof`, `in` or `satisfies` followed by whitespace that contains the newline, then an operand that is not `:` `,` `=` `/` `>` or `;` | step 7, the keyword row: the scan resumes at the operand, on a later line, at any indentation, column 0 included | g0445 g0446 |
@@ -1260,28 +1260,28 @@ too, unless the next line begins with `,` or the tag is inside `[ … ]` (rows
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `div x=a\n  b` | value `a`; child tag `b` | g0307 |
+| `div x=a\n  b` | value `a`; child tag `b` | g0307 g1388 |
 | `div x=a\n  <span/>` | value `a`; child tag `span` | g0451 |
 | `div x=a\n  .b` | value `a`; an unnamed child tag with class `b` | g0452 |
 | `div x=a\n  :b` | value `a`; child tag `:b` | g0453 |
 | `div x=a\n  (b)` | value `a`; an unnamed child tag with tag arguments `b` | g0454 |
-| `div x=a\n  !b`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  {b}` | value `a`; child tags `!b`, `+`, `?`, `in`, `{b}` | g0455 g0456 g0457 g0458 g0459 |
+| `div x=a\n  !b`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  {b}` | value `a`; child tags `!b`, `+`, `?`, `in`, `{b}` | g0455 g0456 g0457 g0458 g0459 g1168 g1169 |
 | `div x=a   \n  b`, `div x=a as T\n  b` | value ends at the line's end; child tag `b` | g0460 g0461 |
-| `div x=a +\n  b`, `div x=a + \n  b` | one value | g0290 g0444 |
+| `div x=a +\n  b`, `div x=a + \n  b` | one value | g0290 g0444 g1389 g1390 |
 | `div x=a ?\n  b : c`, `div x=a <\n  b`, `div x=a /\n  b` | one value | g0277 g0274 g0448 |
 | `div x=(a,\n  b)` | one value | g0442 |
 | ``div x=`a\nb` c``, `div x=a /* \n */ + b` | one value (then the attribute `c` in the first) | g0449 g0450 |
 | `div x=a.\n  b` | one value: the look-behind `.` row | g0288 |
-| `div x=a in\n  b`, `div x=a as\n  T`, `div x=a extends\n  b`, `div x=a in \n  b` | one value: the keyword row | g0445 g0462 g0463 g0464 |
-| `div x=a instanceof\nB` | one value `a instanceof\nB`: the column-0 line is drawn into it | g0446 |
+| `div x=a in\n  b`, `div x=a as\n  T`, `div x=a extends\n  b`, `div x=a in \n  b` | one value: the keyword row | g0445 g0462 g0463 g0464 g1384 |
+| `div x=a instanceof\nB` | one value `a instanceof\nB`: the column-0 line is drawn into it | g0446 g1378 |
 | `div x=a satisfies\n  T y=1` | value `a satisfies\n  T`, then `y=1` | g0465 |
 | `div [x=a in\n  b]` | one value `a in\n  b` | g0466 |
-| `div x=a .\nspan`, `div x=a . \n  b` | one value: the `.` row | g0447 g0467 |
+| `div x=a .\nspan`, `div x=a . \n  b` | one value: the `.` row | g0447 g0467 g1379 g1380 |
 | `div x=a in\n  ,b`, `div x=a in\n  =b` | value `a`, then an attribute `in`: the operand is `,` or `=`. With `,` the open tag continues with `b`; with `=` the line `=b` is a child, an unnamed tag with a default value | g0468 g0469 |
 | `div x=a in`, `div x=a in\n` | value `a`, then an attribute `in`: no operand before end of input | g0470 g0471 |
 | `div x=a .\n  .b` | value `a`, an attribute `.`, then an unnamed child tag with class `b`: after the `.` the next word character is not found | g0472 |
-| `div x=a\n  ,y=b` | value `a`; the open tag continues with `y=b` | g0473 |
-| `div x=a + // c\n  b` | value `a + // c`; child tag `b` | g0443 |
+| `div x=a\n  ,y=b` | value `a`; the open tag continues with `y=b` | g0473 g1159 g1170 g1313 |
+| `div x=a + // c\n  b` | value `a + // c`; child tag `b` | g0443 g1034 g1391 |
 | `div [x=a\n  .b]` | value `a`; attribute `.b` | g0474 |
 | `div [x=a +\n  b]` | one value | g0475 |
 
@@ -1292,7 +1292,7 @@ at column 0, which spec §3 "Concise mode" calls a sibling (OQ 18).
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `div x=a` | the value ends silently at end of input | g0823 |
+| `div x=a` | the value ends silently at end of input | g0823 g1112 |
 | `div x=(a` | an error: a group is open ([End of input](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-end-of-input)) | g0366 |
 | `div x=a :b` | one value `a :b` (the overrides of E1); MX and stock agree | g0859 |
 | `div x=a :` | one value `a :` | g0860 |
@@ -1308,14 +1308,14 @@ E2.
 | Input | Result | Row | Probes |
 | --- | --- | --- | --- |
 | `<div ... props/>` | spread ` props` (the range includes the space) | look-behind `.` | g0015 |
-| `<div ...  (a)/>`, `<div ... {a}/>`, `<div ... -a/>` | spread, range including the whitespace | look-ahead `(`, `{`, `-` | g0476 g0477 g0478 |
+| `<div ...  (a)/>`, `<div ... {a}/>`, `<div ... -a/>` | spread, range including the whitespace | look-ahead `(`, `{`, `-` | g0476 g0477 g0478 g1381 |
 | `<div ... [a]/>`, `<div ... "s"/>` | `Missing value for attribute` | neither table: **valid TypeScript that the default rejects** (OQ 24). TODO `spread-value-starting-with-bracket-or-string` | g0479 g0480 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<div ...a, b/>`, concise `div ...a\n  b` | the spread `a`: the stops of E1 and of E2 | g0861 g0862 |
 | `<div ...:a/>` | the spread of `:a`, read as source text | g0863 |
-| `<div ...a .b/>`, `<div ...a :b/>` | the spread `a .b` / `a :b`: a spaced `.b` or `:b` after the value continues it (OQ 5) | g0845 g0844 |
+| `<div ...a .b/>`, `<div ...a :b/>` | the spread `a .b` / `a :b`: a spaced `.b` or `:b` after the value continues it (OQ 5) | g0845 g0844 g1095 |
 
 ### E4 — Attribute arguments
 
@@ -1324,11 +1324,11 @@ E2.
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<div onClick( a )/>` | the arguments ` a `: no whitespace is skipped | g0864 |
-| `<div onClick(a,\n b > c)/>` | one argument list: whitespace, a newline, `,` and `>` do not end it | g0865 |
+| `<div onClick(a,\n b > c)/>` | one argument list: whitespace, a newline, `,` and `>` do not end it | g0865 g1580 |
 | `<div onClick(a` | an error ([End of input](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-end-of-input)) | g0200 |
 | concise `div onClick(a` | the arguments `a`, no error | g0866 |
-| `<div x(a :b)/>` | one argument list | g0867 |
-| `<div x(:a)/>`, `<div x(a = :b) { c }/>` | the arguments `:a` and the parameters `a = :b`, read as source text | g0868 g0869 |
+| `<div x(a :b)/>` | one argument list | g0867 g1581 |
+| `<div x(:a)/>`, `<div x(a = :b) { c }/>` | the arguments `:a` and the parameters `a = :b`, read as source text | g0868 g0869 g1492 |
 
 ### E5 — Attribute method body
 
@@ -1337,7 +1337,7 @@ content is a statement list.
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div x(a) { if (b > c) { d } }/>` | one body: nested braces and `>` do not end it | g0870 |
+| `<div x(a) { if (b > c) { d } }/>` | one body: nested braces and `>` do not end it | g0870 g1471 |
 | `<div x(a) { return :c }/>` | the body ` return :c `, read as source text | g0871 |
 
 ### E6 — Tag arguments
@@ -1347,10 +1347,10 @@ content is a statement list.
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<foo( a )/>` | the arguments ` a ` | g0872 |
+| `<foo( a )/>` | the arguments ` a ` | g0872 g1202 |
 | `<foo(a) { b }/>` | `{` follows: the default method of [E17](#the-parser-grammar-expression-boundaries-e17-tag-level-default-method) | g0120 |
-| `<foo <A>(a)/>` | type parameters before the `(` and no `{`: `Unexpected types. …` | g0230 |
-| `<foo(:a)/>` | the tag arguments `:a`, read as source text | g0873 |
+| `<foo <A>(a)/>` | type parameters before the `(` and no `{`: `Unexpected types. …` | g0230 g1135 |
+| `<foo(:a)/>` | the tag arguments `:a`, read as source text | g0873 g1506 |
 
 ### E7 — Tag parameters
 
@@ -1359,10 +1359,10 @@ content is a parameter list (spec §8 "Tag params").
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<foo\| x \|/>` | the parameters ` x ` | g0874 |
-| `<foo\|a: b = c, d\|/>` | one list: `:`, `=` and `,` are plain characters | g0875 |
-| `<foo\|a = (b \| c)\|/>` | one list: a group shields the `\|` | g0876 |
-| `<foo\|x: A \| B\|/>` | the parameters `x: A ` and then an attribute named `B\|`: a union type at depth 0 ends the list. **Not settled** (OQ 6) | g0676 |
+| `<foo\| x \|/>` | the parameters ` x ` | g0874 g1400 |
+| `<foo\|a: b = c, d\|/>` | one list: `:`, `=` and `,` are plain characters | g0875 g1351 g1401 g1402 g1664 |
+| `<foo\|a = (b \| c)\|/>` | one list: a group shields the `\|` | g0876 g1398 |
+| `<foo\|x: A \| B\|/>` | the parameters `x: A ` and then an attribute named `B\|`: a union type at depth 0 ends the list. **Not settled** (OQ 6) | g0676 g1399 g1569 |
 | `<foo\|a = :b\|/>`, `<foo\|a::b\|/>` | the tag parameters `a = :b` and `a::b`: source text | g0877 g0878 |
 
 ### E8 — Placeholder
@@ -1372,9 +1372,9 @@ depth 0.
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<p>${ a }</p>` | the value ` a ` | g0018 |
-| `<p>${{a: 1}} ${a > b, c}</p>` | one value each: a group shields the `}`; `>` and `,` do not end it | g0879 |
-| `<p>${:a}</p>`, `<script>${:a}</script>` | the placeholder with the value `:a`: source text | g0880 g0750 |
+| `<p>${ a }</p>` | the value ` a ` | g0018 g1047 g1490 |
+| `<p>${{a: 1}} ${a > b, c}</p>` | one value each: a group shields the `}`; `>` and `,` do not end it | g0879 g1346 |
+| `<p>${:a}</p>`, `<script>${:a}</script>` | the placeholder with the value `:a`: source text | g0880 g0750 g1604 g1605 |
 | `<p>${a::b}</p>` | the placeholder with the value `a::b` | g0881 |
 
 ### E9 — Tag variable
@@ -1384,13 +1384,13 @@ depth 0.
 
 | Character | HTML mode | Concise mode | Probes |
 | --- | --- | --- | --- |
-| `\|` `,` `=` `(` | stop | stop | g0481 g0482 g0006 g0483 g0484 g0485 g0486 g0487 |
-| `:` | stop when the next character is `=` | same | g0488 g0489 |
-| `<` | stop **unless** the position is in a type context | same | g0350 g0349 g0352 g0351 |
-| `>` | stop | not a stop | g0490 g0491 |
-| `/` | stop when the next character is `>` | not a stop | g0054 g0492 |
+| `\|` `,` `=` `(` | stop | stop | g0481 g0482 g0006 g0483 g0484 g0485 g0486 g0487 g1203 g1257 g1353 g1354 g1426 g1452 |
+| `:` | stop when the next character is `=` | same | g0488 g0489 g1090 g1355 |
+| `<` | stop **unless** the position is in a type context | same | g0350 g0349 g0352 g0351 g1657 |
+| `>` | stop | not a stop | g0490 g0491 g1186 |
+| `/` | stop when the next character is `>` | not a stop | g0054 g0492 g1220 |
 | `;` | not a stop | stop | g0493 g0494 |
-| `-` | not a stop | stop when the next character is `-` (no whitespace needed before it, unlike E2) | g0495 g0496 |
+| `-` | not a stop | stop when the next character is `-` (no whitespace needed before it, unlike E2) | g0495 g0496 g1091 g1259 g1356 |
 
 The flags are E1's ([Inventory](#the-parser-grammar-expression-boundaries-inventory-of-positions)), so the scan, the
 continuation test and the type context apply as there.
@@ -1398,16 +1398,16 @@ continuation test and the type context apply as there.
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<div/ x/>`, `<div/=1/>` | `A slash was found that was not followed by a variable name or lhs expression`: whitespace after the `/`, or an empty variable | g0231 g0232 |
-| `<div/x y=1/>` | the variable `x` | g0882 |
-| `<div/x + 1 y=1/>` | the variable `x + 1` | g0883 |
+| `<div/x y=1/>` | the variable `x` | g0882 g1425 |
+| `<div/x + 1 y=1/>` | the variable `x + 1` | g0883 g1454 |
 | `<let/x + ,y/>` | the variable `x + ,y`: the operator exemption | g0884 |
 | `<let/foo : string/>`, concise `let/foo : string` | the variable `foo : string` | g0675 g0885 |
 | `<let/x\n  + 1/>` | the variable `x\n  + 1` | g0886 |
-| concise `let/x\n  + 1` | the variable `x` and a child tag `+` | g0887 |
-| concise `let/x as\n  T` | the variable `x as\n  T` (the keyword row) | g0888 |
-| `<let/x: Map<K,V> = 1/>` | the variable `x: Map<K,V>` and the default value `1`: after the `:`, `<` is no hard stop and opens a group | g0349 |
+| concise `let/x\n  + 1` | the variable `x` and a child tag `+` | g0887 g1285 g1453 |
+| concise `let/x as\n  T` | the variable `x as\n  T` (the keyword row) | g0888 g1427 |
+| `<let/x: Map<K,V> = 1/>` | the variable `x: Map<K,V>` and the default value `1`: after the `:`, `<` is no hard stop and opens a group | g0349 g1258 |
 | concise `let/x: keyof\n  T`, `let/x: void\n  T` | one variable; the variable `x: void` and a child tag `T`: the unary keyword list is the type list | g0388 g0889 |
-| `<let/x<T>=1/>` | `Unexpected types. …`: outside a type context `<` is a hard stop and the open tag reads a type list | g0350 |
+| `<let/x<T>=1/>` | `Unexpected types. …`: outside a type context `<` is a hard stop and the open tag reads a type list | g0350 g1092 |
 | `<let/x: A \| B = 1/>` | the variable `x: A`, then tag parameters to the end of the input: `EOF reached while parsing expression`. A `\|` is a hard stop inside a type too (OQ 6) | g0890 |
 | `<const/x=items\n .filter(Boolean)/>` | one default value: the value after the variable is the default attribute, and a spaced `.b` continues it, as in stock ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) | g0657 |
 | `<let/a::b/>` | the variable `a::b` | g0891 |
@@ -1425,24 +1425,24 @@ the flags of [the inventory](#the-parser-grammar-expression-boundaries-inventory
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `static x = 1\ndiv` | ends at the newline; `div` is a tag | g0497 |
-| `static x = (\n  a)\ndiv` | continues: a group is open | g0498 |
-| `static x = 1\n  y\nz` | continues onto the indented line; `z` is a tag | g0499 |
+| `static x = 1\ndiv` | ends at the newline; `div` is a tag | g0497 g1041 g1063 g1191 g1428 |
+| `static x = (\n  a)\ndiv` | continues: a group is open | g0498 g1197 g1429 |
+| `static x = 1\n  y\nz` | continues onto the indented line; `z` is a tag | g0499 g1204 g1393 g1520 g1568 |
 | `static x = 1 // c\n  y\nz` | continues: indentation wins over the comment | g0500 |
 | `static x = 1 // c\ny` | ends at the newline | g0501 |
 | `static a = b\n  && c\ndiv` | continues: indented | g0502 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<static x = 1/>` | `The "static" tag is reserved and cannot be used as an HTML tag.` | g0234 |
-| `div\n  static x = 1` | `"static" can only be used at the root of the template.` | g0235 |
-| `static x = 1 + \ny` | ends at the newline: the look-behind reads the character immediately before it, here a space | g0893 |
-| `static x = 1 +\ny` | continues: `+` is immediately before the newline | g0894 |
+| `<static x = 1/>` | `The "static" tag is reserved and cannot be used as an HTML tag.` | g0234 g1274 |
+| `div\n  static x = 1` | `"static" can only be used at the root of the template.` | g0235 g1275 |
+| `static x = 1 + \ny` | ends at the newline: the look-behind reads the character immediately before it, here a space | g0893 g1432 |
+| `static x = 1 +\ny` | continues: `+` is immediately before the newline | g0894 g1431 g1584 |
 | `static const x = 1\n, y` | an attribute `y`: after the statement, row 1 of [The open tag](#the-parser-grammar-tags-the-open-tag) still runs (OQ 24). TODO `statement-tag-comma-line-adds-attributes` | g0895 |
-| `static type A = B<C>\ndiv`, `export type X = { a: 1 }\ndiv`, `static declare const x: A<B>\ndiv`, `static interface A<T> {}\ndiv` | each ends at the newline: after `declare`, `interface` or `type` and a type name, the position is in the type context from its start | g0816 g0896 g0897 g0898 |
-| `import type { A } from "x"\ndiv` | ends at the newline: after `type`, `{` and `*` count as a type name | g0899 |
-| `static x = f<T>\ndiv`, `static type = f<T>\ndiv` | each continues onto the `div` line: not a type, so the `>` is a look-behind operator | g0900 g0901 |
-| `static type A = (b > c)` | `Mismatched group. A ">" character was found when ")" was expected.` | g0902 |
+| `static type A = B<C>\ndiv`, `export type X = { a: 1 }\ndiv`, `static declare const x: A<B>\ndiv`, `static interface A<T> {}\ndiv` | each ends at the newline: after `declare`, `interface` or `type` and a type name, the position is in the type context from its start | g0816 g0896 g0897 g0898 g1145 g1146 g1441 g1442 g1576 g1658 |
+| `import type { A } from "x"\ndiv` | ends at the newline: after `type`, `{` and `*` count as a type name | g0899 g1443 |
+| `static x = f<T>\ndiv`, `static type = f<T>\ndiv` | each continues onto the `div` line: not a type, so the `>` is a look-behind operator | g0900 g0901 g1659 |
+| `static type A = (b > c)` | `Mismatched group. A ">" character was found when ")" was expected.` | g0902 g1444 g1660 g1661 |
 | `static x = :a` | `:a` is source text of the statement | g0903 |
 
 The other type-context inputs are in
@@ -1458,26 +1458,26 @@ and anything else the line form, which has the flags of
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `$ const a = 1 +\n  2` | one scriptlet | g0503 |
-| `$ const a = 1 + \n  2` | ends after `+ ` (a space precedes the newline); the next line is then a concise line of its own. TODO `scriptlet-trailing-space-after-operator` | g0504 |
+| `$ const a = 1 +\n  2` | one scriptlet | g0503 g1439 |
+| `$ const a = 1 + \n  2` | ends after `+ ` (a space precedes the newline); the next line is then a concise line of its own. TODO `scriptlet-trailing-space-after-operator` | g0504 g1062 |
 | `$ a = b &&\n  c` | one scriptlet | g0505 |
-| `$ a = b\n  && c` | ends at the newline | g0506 |
+| `$ a = b\n  && c` | ends at the newline | g0506 g1440 |
 | `$ a =\n  1`, `$ a = b ?\n  c : d`, `$ a = b /\n  c` | one scriptlet: the character table consumes the newline | g0507 g0508 g0509 |
-| `$ foo(\n  a\n)` | one scriptlet: a group is open | g0510 |
-| `<p>\n$ a</p>` | the scriptlet `a</p>`, then `Missing ending "p" tag`: no hard stop, so the close tag on the line is part of it | g0511 |
-| `$ const a = 1 // c\n  2` | ends at the newline | g0512 |
+| `$ foo(\n  a\n)` | one scriptlet: a group is open | g0510 g1043 |
+| `<p>\n$ a</p>` | the scriptlet `a</p>`, then `Missing ending "p" tag`: no hard stop, so the close tag on the line is part of it | g0511 g1558 g1587 |
+| `$ const a = 1 // c\n  2` | ends at the newline | g0512 g1435 g1588 |
 
 The second row is OQ 24.
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<p>x $ y</p>`, `<p>$ x</p>` | text: in HTML content a scriptlet's `$` has only whitespace between it and the previous newline | g0904 g0905 |
-| `<p>\n$ x\n</p>` | a scriptlet | g0906 |
-| `$ { a; b };\ndiv`, `$ { a } ;\ndiv` | the block form; a `;` after the `}`, directly or after whitespace, is consumed | g0907 g0908 |
+| `<p>x $ y</p>`, `<p>$ x</p>` | text: in HTML content a scriptlet's `$` has only whitespace between it and the previous newline | g0904 g0905 g1557 g1585 |
+| `<p>\n$ x\n</p>` | a scriptlet | g0906 g1139 g1224 g1438 |
+| `$ { a; b };\ndiv`, `$ { a } ;\ndiv` | the block form; a `;` after the `}`, directly or after whitespace, is consumed | g0907 g0908 g1140 g1141 g1264 g1436 g1437 |
 | `$ a +` | the line form ends silently at end of input | g0909 |
 | concise `$ {a` | the block form ends silently | g0370 |
 | `<p>\n$ {a` | `EOF reached while parsing expression`: the block form in HTML content | g0910 |
-| `$ {(a`, `$ (a` | the same error: a group is open | g0911 g0912 |
+| `$ {(a`, `$ (a` | the same error: a group is open | g0911 g0912 g1302 |
 | `$ x = :a`, `$ { x = :a }` | `:a` is source text of the scriptlet | g0913 g0914 |
 
 ### E12 — Delimited HTML blocks
@@ -1490,9 +1490,9 @@ of its own or after a concise open tag (row 4 of [The open tag](#the-parser-gram
 | --- | --- | --- |
 | the run of hyphens | is the delimiter (`--`, `---`, …) | g0915 |
 | the run is followed directly by a newline | a multi-line block | g0916 |
-| otherwise | the one character after the run is skipped without being examined. When only whitespace remains on the line the block is multi-line (`--x\n  a`: the `x` is discarded); otherwise it is single-line, its content starts after the skipped character (`--abc` is the text `bc`) and it ends at the end of its line. This is stock Marko's behaviour; MX keeps it. | g0181 g0917 g0918 g0777 |
+| otherwise | the one character after the run is skipped without being examined. When only whitespace remains on the line the block is multi-line (`--x\n  a`: the `x` is discarded); otherwise it is single-line, its content starts after the skipped character (`--abc` is the text `bc`) and it ends at the end of its line. This is stock Marko's behaviour; MX keeps it. | g0181 g0917 g0918 g0777 g1589 |
 | the content | HTML content: tags and placeholders are parsed | g0919 g0920 |
-| the content, under a text tag | text content | g0921 |
+| the content, under a text tag | text content | g0921 g1039 g1317 |
 | a multi-line block's `indent`, hyphens on a line of their own | that line's indentation | g0922 |
 | a multi-line block's `indent`, hyphens after an open tag | the next line's indentation when it is longer than the tag line's, otherwise the tag line's | g0515 g0923 |
 
@@ -1509,15 +1509,15 @@ At each newline inside a multi-line block the following line is tested
 
 | # | The next line | Result | Probes |
 | --- | --- | --- | --- |
-| 1 | begins with `indent` + the delimiter | the block ends. Only whitespace may follow the delimiter on that line, otherwise `A concise mode closing block delimiter can only be followed by whitespace.` | g0513 g0240 |
+| 1 | begins with `indent` + the delimiter | the block ends. Only whitespace may follow the delimiter on that line, otherwise `A concise mode closing block delimiter can only be followed by whitespace.` | g0513 g0240 g1051 |
 | 2 | begins with `indent`, and `indent` is not empty | the block continues; the `indent` is not part of the text | g0514 |
-| 3 | does not begin with `indent`, `indent` is not empty, and the line is not blank | the block ends and the line is read as concise content | g0515 |
-| 4 | anything else: a blank line, or any line when `indent` is empty | the block continues | g0516 g0517 |
+| 3 | does not begin with `indent`, `indent` is not empty, and the line is not blank | the block ends and the line is read as concise content | g0515 g1315 |
+| 4 | anything else: a blank line, or any line when `indent` is empty | the block continues | g0516 g0517 g1189 g1233 g1591 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
 | `--\na\nb` | the text `a\nb`: at indentation zero the block runs to its delimiter or the end of input | g0924 |
-| `----\na\n--\nb\n----` | the text `a\n--\nb`: a longer delimiter lets a shorter one appear inside | g0925 |
+| `----\na\n--\nb\n----` | the text `a\n--\nb`: a longer delimiter lets a shorter one appear inside | g0925 g1050 g1232 |
 
 A line that ends the block by row 3 is then read by the concise indentation
 rules:
@@ -1525,7 +1525,7 @@ rules:
 | Input | Result | Probes |
 | --- | --- | --- |
 | `div --\n    a\n  b\nspan` | text `a`; child tag `b`; tag `span`. The `indent` is the four spaces of the `a` line, so `  b` ends the block (row 3) | g0515 |
-| `div\n  --\n    a\n  span\nb` | text `  a\n`; text `span`; `div` closes; tag `b`. The `indent` is the two spaces of the `--` line, so `  span` stays in the block (row 2) | g0514 |
+| `div\n  --\n    a\n  span\nb` | text `  a\n`; text `span`; `div` closes; tag `b`. The `indent` is the two spaces of the `--` line, so `  span` stays in the block (row 2) | g0514 g1188 |
 | `div\n  --\n    a\n span` | `Line indentation does not match indentation of previous line` | g0239 |
 
 ### E13 — Interpolation in a tag name or shorthand
@@ -1535,9 +1535,9 @@ rules:
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<${a}/>`, `<div.${x}/>`, `<div#${x}/>` | the interpolation in a name, a class part, an id part | g0926 g0927 g0928 |
+| `<${a}/>`, `<div.${x}/>`, `<div#${x}/>` | the interpolation in a name, a class part, an id part | g0926 g0927 g0928 g1410 g1475 |
 | `<a${b}c/>` | the name continues after the `}` | g0059 |
-| `<${a > b}/>` | one value: `>` does not end it | g0929 |
+| `<${a > b}/>` | one value: `>` does not end it | g0929 g1408 |
 | `<${}/>` | `Invalid placeholder, the expression cannot be missing` | g0191 |
 | `<${:a}/>`, `<div.${:a}/>` | the tag name `${:a}` and the class `.${:a}`: the interpolation's `:a` is source text | g0930 g0931 |
 
@@ -1550,12 +1550,12 @@ flags and the type-context reads are in
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<foo<A, B>/>` | type arguments: the `<` is directly after the tag name | g0745 |
-| `<foo.a<A>/>` | `Unexpected types. …`: after a shorthand the list is E15's | g0228 |
+| `<foo<A, B>/>` | type arguments: the `<` is directly after the tag name | g0745 g1414 |
+| `<foo.a<A>/>` | `Unexpected types. …`: after a shorthand the list is E15's | g0228 g1592 |
 | `<foo<Map<K, V>>/>` | nested `<…>` are groups | g0391 |
-| `<foo<() => void>/>` | the type arguments `() =`: with no `operators` flag the `>` of an arrow is the hard stop. **Valid TypeScript that the default cuts** (OQ 24). TODO `type-list-arrow-cut` | g0677 |
+| `<foo<() => void>/>` | the type arguments `() =`: with no `operators` flag the `>` of an arrow is the hard stop. **Valid TypeScript that the default cuts** (OQ 24). TODO `type-list-arrow-cut` | g0677 g1412 |
 | `<foo<(() => void)>/>` | whole | g0932 |
-| `<foo<A> x=1/>`, `<foo<A>>y</foo>`, `<foo<A> \|x\|/>` | type arguments, then an attribute, the body, parameters | g0933 g0934 g0935 |
+| `<foo<A> x=1/>`, `<foo<A>>y</foo>`, `<foo<A> \|x\|/>` | type arguments, then an attribute, the body, parameters | g0933 g0934 g0935 g1221 g1413 |
 | `<foo<A><B>/>` | the second list is read as E15: here `Unexpected types. …` | g0936 |
 
 ### E15 — Tag type parameters
@@ -1566,9 +1566,9 @@ skipped and then:
 
 | Next character | Condition | Result | Probes |
 | --- | --- | --- | --- |
-| `\|` | the tag has no parameters yet | the list is reported as type parameters; E7 follows | g0008 |
-| `(` | the tag has no type parameters, parameters or arguments yet | the list is held for a tag-level method; E6 follows, and its `)` **must** be followed by `{` (E17), otherwise `Unexpected types. …` | g0518 g0230 |
-| anything else, or a row whose condition fails | — | `Unexpected types. Type arguments must directly follow a tag name and type paremeters must precede a method or tag parameters.` | g0519 g0520 |
+| `\|` | the tag has no parameters yet | the list is reported as type parameters; E7 follows | g0008 g1136 g1138 g1478 g1482 |
+| `(` | the tag has no type parameters, parameters or arguments yet | the list is held for a tag-level method; E6 follows, and its `)` **must** be followed by `{` (E17), otherwise `Unexpected types. …` | g0518 g0230 g1479 g1481 g1494 |
+| anything else, or a row whose condition fails | — | `Unexpected types. Type arguments must directly follow a tag name and type paremeters must precede a method or tag parameters.` | g0519 g0520 g1137 g1480 |
 
 ### E16 — Attribute-method type parameters
 
@@ -1577,7 +1577,7 @@ skipped and then:
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div onClick<T>(a) {x}/>`, `<div onClick <T>(a) {x}/>`, `<div async <T>(a) {b}/>` | a method with type parameters: the `<` directly after the name, after whitespace, after a pending `async` | g0937 g0938 g0091 |
+| `<div onClick<T>(a) {x}/>`, `<div onClick <T>(a) {x}/>`, `<div async <T>(a) {b}/>` | a method with type parameters: the `<` directly after the name, after whitespace, after a pending `async` | g0937 g0938 g0091 g1416 g1418 g1666 |
 | `<div onClick<T>/>` | `Attribute cannot contain type parameters unless it is a shorthand method` | g0939 |
 | `<div onClick<T>(a)/>` | `An attribute cannot have both type parameters and arguments` | g0940 |
 | `<div onClick<T extends () => void>(a) {x}/>` | an error: the arrow cut of E14 (OQ 24) | g0941 |
@@ -1589,7 +1589,7 @@ skipped and then:
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<foo(a) { b }/>`, `<foo(a)\n  { b }/>` | a method with a zero-width name: `{` follows the `)`, after whitespace | g0120 g0942 |
+| `<foo(a) { b }/>`, `<foo(a)\n  { b }/>` | a method with a zero-width name: `{` follows the `)`, after whitespace | g0120 g0942 g1048 g1404 g1405 g1485 |
 | `<input:email(a) { return a; }/>` | the tag `input:email` and a default method. Core gives it its meaning ([dialect rule 5](#the-parser-grammar-dialect-rules)) | g0651 |
 
 ### Types inside the other positions
@@ -1636,12 +1636,12 @@ Every position reads it as source text:
 | a placeholder, in a text body too (E8) | source text of the placeholder's value | g0880 g0750 |
 | the `${…}` of a tag name or shorthand (E13) | source text of the name or shorthand | g0930 g0931 |
 | the `${…}` of a template literal inside a value | source text of the template literal | g0946 |
-| an attribute name | the name: `<div :a/>` is the name `:a` | g0947 |
+| an attribute name | the name: `<div :a/>` is the name `:a` | g0947 g1525 |
 | the tag variable (E9) | source text | g0891 |
 | tag parameters (E7) | source text | g0877 |
 | a statement tag (E10), a scriptlet (E11) | source text | g0903 g0913 g0914 |
-| a type list (E14 to E16) | source text | g0949 |
-| a string, a template literal's text, a regular expression, a comment | opaque, as always | g0950 g0951 g0952 g0953 |
+| a type list (E14 to E16) | source text | g0949 g1411 g1493 g1628 g1662 g1663 |
+| a string, a template literal's text, a regular expression, a comment | opaque, as always | g0950 g0951 g0952 g0953 g1276 g1495 |
 
 ### `::`
 
@@ -1685,11 +1685,11 @@ applies after it. These inputs are concise unless written with `<`:
 | `x=a ? :b :c` | one value: the `:` of `:b` closes the `?`, and ` :c` continues the value | g0533 |
 | `div x=:a<b, c> d` | the value `:a<b, c>`, then the attribute `d`: the `:` entered the type context, in which `<` opens a group | g0596 |
 | `<div x=:a<b>(c) y/>` | the value `:a<b>(c)`, then `y` | g0597 |
-| `div x=:a > b`, `div x=:a <b> c` | `Mismatched group` for both: a `>` in the type context is a closing bracket | g0598 g0599 |
+| `div x=:a > b`, `div x=:a <b> c` | `Mismatched group` for both: a `>` in the type context is a closing bracket | g0598 g0599 g1609 |
 | `div x=:a<b>\n  c` | the value `:a<b>` and a child `c` | g0600 |
-| `div x=:a + void\n  b`, `div x=:a + void!\n  b` | the value ends at the newline: the unary keyword list is the type context's, in which `void` is no keyword | g0601 g0602 |
-| `div x=:a + keyof\n  b` | one value: `keyof` continues the value | g0603 |
-| `<div x=:a + void, y/>` | the value `:a + void`, then `y` | g0604 |
+| `div x=:a + void\n  b`, `div x=:a + void!\n  b` | the value ends at the newline: the unary keyword list is the type context's, in which `void` is no keyword | g0601 g0602 g1517 g1610 |
+| `div x=:a + keyof\n  b` | one value: `keyof` continues the value | g0603 g1611 g1612 g1613 g1614 g1615 g1616 g1617 g1621 |
+| `<div x=:a + void, y/>` | the value `:a + void`, then `y` | g0604 g1620 g1622 |
 | `div x=:a as T = b<c> d` | one value: the `as` does not set `forceType`, so the `=` leaves the context | g0605 |
 | `<div x=:new :b/>`, `<div x=:typeof :b/>` | one value each: `new` and `typeof` continue the value | g0606 g0607 |
 | concise `div x=:new\n  span` | the single value `:new\n  span` | g0298 |
@@ -1765,22 +1765,22 @@ written text as one value (no event for any `:name`):
 | Rows | Inputs | Probes |
 | --- | --- | --- |
 | expected 1 | `x=:a`, `x= :b`, `${ :a}`, `x=(/* c */ :a)` | g0529 g0534 g0535 g0536 |
-| expected 2 | `(f() :a)`, `(a[0] :b)`, `({} :b)`, a string or template literal before `:b` | g0537 g0538 g0539 g0540 g0541 g0542 |
-| expected 3 | `[...:a]`, `a.:b` | g0543 g0544 |
+| expected 2 | `(f() :a)`, `(a[0] :b)`, `({} :b)`, a string or template literal before `:b` | g0537 g0538 g0539 g0540 g0541 g0542 g1498 |
+| expected 3 | `[...:a]`, `a.:b` | g0543 g0544 g1301 g1607 |
 | expected 4 | `?:a`, `(n === 1? :a : :b)`, `(a? :T) => a`, `(é? :T) => a`, `(a[0]? :b)`, `(c ? :a : b)` | g0545 g0546 g0547 g0548 g0549 g0550 |
 | expected 5 | `!:a`, `(a()! :b)`, `(!:a)`, `(typeof!:a)`, `(a! :b)`, `(é! :b)` | g0551 g0552 g0553 g0554 g0555 g0556 |
-| expected 6 | `a => :b`, `(c ? y as Array<T> :z)`, `(a > :b)`, `(a >> :b)`, `(c ? y as É<T> :z)` | g0557 g0558 g0559 g0560 g0561 |
-| expected 7 to 9 | `(a++ :b)`, `(a + :b)`, `(a - :b)`, `(/re/ :b)`, `a / :b`, `(:a)`, `[:a, :b]`, `a + :b`, `{ k: :a }` | g0562 g0563 g0564 g0565 g0566 g0567 g0568 g0569 g0570 |
-| expected 10, 11 | `({ new:a })`, `({ é:a })`, `(c ? b :c)`, `(é :b)`, `(return :a)`, `(éin :b)` | g0571 g0572 g0573 g0574 g0575 g0576 |
-| more | `(a :b)`, `c ? ...:a`, `c ? 1? :a : :b`, `(x in :a)`, `(for (x of :a))`, `await :b`, `({ new :a })`, `(a ?? :b)`, `(a?:b)`, `c ? of :b`, `f(await :b)`, `(yield :b)`, `(a, yield :b)`, `c ? a[0] :b`, `c ? "s" :b`, `(a /* c */ :b)`, `(a // c\n :b)` | g0528 g0577 g0578 g0579 g0580 g0581 g0582 g0583 g0586 g0588 g0589 g0590 g0591 g0592 g0593 g0594 g0595 |
+| expected 6 | `a => :b`, `(c ? y as Array<T> :z)`, `(a > :b)`, `(a >> :b)`, `(c ? y as É<T> :z)` | g0557 g0558 g0559 g0560 g0561 g1529 g1599 |
+| expected 7 to 9 | `(a++ :b)`, `(a + :b)`, `(a - :b)`, `(/re/ :b)`, `a / :b`, `(:a)`, `[:a, :b]`, `a + :b`, `{ k: :a }` | g0562 g0563 g0564 g0565 g0566 g0567 g0568 g0569 g0570 g1497 g1504 |
+| expected 10, 11 | `({ new:a })`, `({ é:a })`, `(c ? b :c)`, `(é :b)`, `(return :a)`, `(éin :b)` | g0571 g0572 g0573 g0574 g0575 g0576 g1632 g1636 |
+| more | `(a :b)`, `c ? ...:a`, `c ? 1? :a : :b`, `(x in :a)`, `(for (x of :a))`, `await :b`, `({ new :a })`, `(a ?? :b)`, `(a?:b)`, `c ? of :b`, `f(await :b)`, `(yield :b)`, `(a, yield :b)`, `c ? a[0] :b`, `c ? "s" :b`, `(a /* c */ :b)`, `(a // c\n :b)` | g0528 g0577 g0578 g0579 g0580 g0581 g0582 g0583 g0586 g0588 g0589 g0590 g0591 g0592 g0593 g0594 g0595 g1505 g1601 |
 | operator words 1, 2 | `(:delete :b)`, `(a.new :b)`, `[...await :b]`, `[...new :a]` | g0585 g0587 g0987 g0988 |
 | operator words 4 | `(for (é of :a))`, `(for (a() of :b))` | g0989 g0990 |
-| operator words 5 | `(c ? yield :b : 1)`, `x() { return await :a }`, `yield :b` | g0991 g0992 g1003 |
+| operator words 5 | `(c ? yield :b : 1)`, `x() { return await :a }`, `yield :b` | g0991 g0992 g1003 g1602 |
 | operator words 6 | `(case :a)`, `(delete :a)`, `(do :a)`, `(else :a)`, `(a extends :b)`, `(a instanceof :b)`, `(new :a)`, `(typeof :a)`, `(void :a)`, `(throw :a)` | g0993 g0994 g0995 g0996 g0997 g0998 g0999 g1000 g1001 g1002 |
-| type arguments | `(c ? y as Map<K, Array<V>> :z)`, `(c ? y as Array<() => T> :z)`, `(c ? a<b > :z)`, `(c ? a < b > :z)`, `c ? a < b > :z` | g1004 g1005 g1006 g0631 g0632 |
-| type arguments 2 to 6 | `x() { a < b; c > :d }`, `(a < b ? c > :d : e)`, `(c ? a < b && c > :z)`, `(c ? a < b \|\| c > :z)`, `a > :b`, `(a<b> :c)` | g1007 g1008 g1009 g1010 g1011 g1013 |
+| type arguments | `(c ? y as Map<K, Array<V>> :z)`, `(c ? y as Array<() => T> :z)`, `(c ? a<b > :z)`, `(c ? a < b > :z)`, `c ? a < b > :z` | g1004 g1005 g1006 g0631 g0632 g1593 g1594 |
+| type arguments 2 to 6 | `x() { a < b; c > :d }`, `(a < b ? c > :d : e)`, `(c ? a < b && c > :z)`, `(c ? a < b \|\| c > :z)`, `a > :b`, `(a<b> :c)` | g1007 g1008 g1009 g1010 g1011 g1013 g1595 g1596 g1597 g1598 |
 | `>` in an attribute | `<div x=c ? a < b > :z/>` | g1012 |
-| Unicode whitespace before the `:` | each of `({ é :a })`, `({ a :b })`, `(a! :b)`, `(a? :b : c)`, `(Array<T> :b)`, `(a, yield :b)`, `(x of :a)`, `[a, :b]`, with U+00A0 and with a space, and `[a,` + one of U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF + `:b]` | g0955 g0956 g0957 g0958 g0959 g0960 g0961 g0962 g0963 g0964 g0965 g0966 g0967 g0968 g0969 g0970 g0971 g0972 g0973 g0974 g0975 g0976 g0977 g0978 g0979 g0980 g0981 g0982 g0983 g0984 g0985 g0986 |
+| Unicode whitespace before the `:` | each of `({ é :a })`, `({ a :b })`, `(a! :b)`, `(a? :b : c)`, `(Array<T> :b)`, `(a, yield :b)`, `(x of :a)`, `[a, :b]`, with U+00A0 and with a space, and `[a,` + one of U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF + `:b]` | g0955 g0956 g0957 g0958 g0959 g0960 g0961 g0962 g0963 g0964 g0965 g0966 g0967 g0968 g0969 g0970 g0971 g0972 g0973 g0974 g0975 g0976 g0977 g0978 g0979 g0980 g0981 g0982 g0983 g0984 g0985 g0986 g1633 g1634 g1635 g1637 g1638 g1639 g1640 g1641 g1642 g1643 g1644 g1645 g1646 g1647 g1648 g1649 g1650 g1651 g1652 g1653 g1654 g1655 g1677 |
 
 ## Dialect rules
 
@@ -1827,14 +1827,14 @@ parser reports for each form is the table after it.
 | Rule | Input | What the parser reports | Probes |
 | --- | --- | --- | --- |
 | 2 | `<input :email type="email"/>`, `<input :email :other/>`, `<div a .b/>` | attributes named `:email`, `:other`, `.b` | g0646 g1016 g1017 |
-| 3 | `<div x=1 #y/>` | the value `1` and an attribute `#y`: `#` is in neither operator table | g1018 |
+| 3 | `<div x=1 #y/>` | the value `1` and an attribute `#y`: `#` is in neither operator table | g1018 g1163 g1603 |
 | 4 | `x=a .2xl` | one value | g0626 |
 | 4 | `x=a :b%c` | one value `a :b%c` | g1019 |
 | 4 | `x=a .é` | one value `a .é` | g1020 |
 | 5 | `<input:email=1/>` | the tag `input:email` with a default value | g0649 |
 | 5 | `<input :email=1/>` | an attribute named `:email` with the value `1` | g0650 |
 | 5 | `<input #main(a) {}/>` | a method named `#main` | g0652 |
-| 7 | `x=a :b :c` | one value `a :b :c`; MX and stock agree | g0627 |
+| 7 | `x=a :b :c` | one value `a :b :c`; MX and stock agree | g0627 g1296 |
 | 8 | `<input :/>`, `<input x=1 :/>` | `<input :/>`: an attribute named `:`; `<input x=1 :/>`: the regular-expression error | g0654 g0653 |
 | 9 | `<.a/>` | an empty name range | g1021 |
 | 10 | `<:att/>` | the name `:att` | g1022 |
@@ -1846,12 +1846,12 @@ The counter is the `?` and `:` rows of
 
 | Case | Result | Probes |
 | --- | --- | --- |
-| a `?` at depth 0 opens a ternary and a `:` at depth 0 closes one | `x=a ? b : c :d` is one value `a ? b : c :d` | g0840 |
+| a `?` at depth 0 opens a ternary and a `:` at depth 0 closes one | `x=a ? b : c :d` is one value `a ? b : c :d` | g0840 g1376 g1377 |
 | a `:` with no ternary open | enters the type context | g0383 |
-| a `:` right after a `?` | closes it, as every `:` does: `x=a ? :b :c` is one value, and ` :c` continues it | g0533 |
-| a `?` or `:` inside a group or a string | does not count: the ` :c` after it continues the value | g1023 g1024 |
-| `as` or `satisfies` found by the look-ahead | sets `forceType` when no ternary is open | g0348 g0815 |
-| `??` and `?.` in a named or spread attribute's value | do not open a ternary; `?.` followed by a digit does | g0431 g0432 g0433 |
+| a `:` right after a `?` | closes it, as every `:` does: `x=a ? :b :c` is one value, and ` :c` continues it | g0533 g1608 |
+| a `?` or `:` inside a group or a string | does not count: the ` :c` after it continues the value | g1023 g1024 g1131 g1132 g1133 g1134 g1499 |
+| `as` or `satisfies` found by the look-ahead | sets `forceType` when no ternary is open | g0348 g0815 g1363 |
+| `??` and `?.` in a named or spread attribute's value | do not open a ternary; `?.` followed by a digit does | g0431 g0432 g0433 g1292 |
 | `?:` | opens a ternary: `x=a ?:b` is one value (OQ 3) | g0628 |
 | `??` in a default attribute's value | opens a ternary: `<if=a ?? b :c>` is one value | g0434 |
 
@@ -1862,28 +1862,28 @@ reports a name and core gives it meaning, both are given.
 
 | Input | Required parse | Settled by | Probes |
 | --- | --- | --- | --- |
-| `x=a ? b : c` | one value | default (observed) | g0609 |
+| `x=a ? b : c` | one value | default (observed) | g0609 g1057 g1066 g1503 |
 | `x=a :b` | one value `a :b`; MX and stock agree | stock (observed) | g0422 |
-| `x=a.b .c` | one value `a.b .c`; MX and stock agree | stock (observed) | g0429 |
+| `x=a.b .c` | one value `a.b .c`; MX and stock agree | stock (observed) | g0429 g1161 g1293 |
 | `x=(a) :T => a` | one value `(a) :T => a`; MX and stock agree | stock (observed) | g0610 |
-| `x=(a): T => a` | one value | default (observed) | g0358 |
+| `x=(a): T => a` | one value | default (observed) | g0358 g1675 |
 | `x=(a) : T => a` | one value: a space follows the `:` | stock (observed) | g0611 |
-| `x=a ?? b` | one value | default (observed) | g0612 |
-| `x=a?.b` | one value | default (observed) | g0613 |
+| `x=a ?? b` | one value | default (observed) | g0612 g1058 g1385 g1395 |
+| `x=a?.b` | one value | default (observed) | g0613 g1059 g1386 |
 | `x=a?.b :c` | one value `a?.b :c`; MX and stock agree | stock for the extent; the `?.` skip is MX's, **not settled** (OQ 3) | g0614 |
-| `x=a < b` | one value | default (observed) | g0615 |
+| `x=a < b` | one value | default (observed) | g0615 g1368 g1369 |
 | `x=f<T>(y)` | observed: value `f<T`; the `>` ends the tag; `(y)/>` is body text. A recorded defect; the required parse is **not settled** | OQ 7 | g0353 |
 | `<div x=a > b</div>` | value `a`; the tag ends at `>`; body text ` b` | default: E1's `>` stop (observed) | g0143 |
 | `<div x=a > b/>`, `<div x=a > b>` | `Ambiguous ">" in attribute. …` | default: the ambiguous `>` check (observed); OQ 8 | g0135 g0616 |
 | concise `div x=a > b` | one value | default: `>` is not a concise stop (observed) | g0264 |
-| `x=a as T` | one value | default (observed) | g0617 |
+| `x=a as T` | one value | default (observed) | g0617 g1061 |
 | `x=a satisfies T` | one value | default (observed) | g0618 |
 | `x=a! .c` | one value `a! .c`; MX and stock agree | stock (observed) | g0619 |
 | `x=/re/ .c` | one value `/re/ .c`; MX and stock agree | stock (observed) | g0620 |
 | `x=a as Map<K, V>` | one value | default: the type context (observed) | g0621 |
-| `x=a [0]` | value `a`, then an attribute named `[0]` | default (observed); **not settled**, OQ 2 | g0622 |
-| `x=a {b}` | one value | default (observed); **not settled**, OQ 2 | g0623 |
-| `x=a: b` | one value | default (observed); OQ 2 | g0624 |
+| `x=a [0]` | value `a`, then an attribute named `[0]` | default (observed); **not settled**, OQ 2 | g0622 g1294 |
+| `x=a {b}` | one value | default (observed); **not settled**, OQ 2 | g0623 g1262 g1295 |
+| `x=a: b` | one value | default (observed); OQ 2 | g0624 g1281 |
 | `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | default (observed); **not settled**, OQ 2 | g0625 |
 | `x=a .2xl` | one value | stock (observed) | g0626 |
 | `x=a :b :c` | one value `a :b :c`; MX and stock agree | stock (observed) | g0627 |
@@ -1901,13 +1901,13 @@ reports a name and core gives it meaning, both are given.
 | `div x=a\n  + b` (concise) | value `a`, then the child tag `+` | same | g0456 |
 | `div x=a +\n  b` (concise) | one value | default: the look-behind (observed) | g0290 |
 | `<div x=a\n  <span/>` (HTML) | observed: the single value `a\n  <span`. **Not settled** | OQ 2, OQ 18 | g0633 |
-| `<input type="email" :email>` | the value of `type` is `"email" :email`; MX and stock agree | stock (observed) | g0634 |
+| `<input type="email" :email>` | the value of `type` is `"email" :email`; MX and stock agree | stock (observed) | g0634 g1300 |
 | `<:email/>` | parser: tag name `:email`. Core: the tag `:email`, as in Marko | stock (observed) | g0635 |
 | `<input:email/>` | parser: tag name `input:email`. Core: the tag `input:email`, as in Marko | stock (observed) | g0636 |
 | `<input :email/>` | parser: an attribute named `:email`. Core: `value:email`, Marko's default attribute with the modifier `email` | stock; spec §4 "`:modifier`" | g0637 |
 | `<input#main:email.big/>` | parser: id part `main:email`, class part `big`. Core: id `main:email`, class `big` | stock (observed) | g0638 |
 | the six orders of the three tag-adjacent parts: `<input:email.big#main/>`, `<input:email#main.big/>`, `<input.big:email#main/>`, `<input.big#main:email/>`, `<input#main:email.big/>`, `<input#main.big:email/>` | parser: the `:email` stays in the tag name (first two) or in the shorthand part it follows (`.big:email`, `#main:email`). Core: the same, so `<input.big:email#main/>` has the class `big:email` | stock (observed) | g0639 g0640 g0641 g0642 g0638 g0643 |
-| `<input #main/>`, `<input .big/>` | parser: attributes named `#main`, `.big`. Core: `Invalid attribute name`, unless the host accepts foreign attribute names (Angular's `#ref`) | stock | g0644 g0645 |
+| `<input #main/>`, `<input .big/>` | parser: attributes named `#main`, `.big`. Core: `Invalid attribute name`, unless the host accepts foreign attribute names (Angular's `#ref`) | stock | g0644 g0645 g1106 |
 | `<input :email type="email"/>` | parser: attributes `:email`, then `type`. Core: `value:email`, then `type` | stock | g0646 |
 | `<input x=1 #main .big :email/>` | parser: `x=1`, then attributes named `#main`, `.big`, `:email`. Core: `Invalid attribute name` at `#main` | stock (observed) | g0647 |
 | `<input x=a.b .c/>` | as `x=a.b .c` | stock | g0648 |
@@ -1917,13 +1917,13 @@ reports a name and core gives it meaning, both are given.
 | `<input #main(a) {}/>` | parser: a method named `#main`. Core: `Invalid attribute name` | stock | g0652 |
 | `<input x=1 :/>`, `<input :/>` | parser: `<input :/>` gives an attribute named `:` (the first not on stock); `<input x=1 :/>` is the regular-expression error. Core: `<input :/>` is `value:` | stock | g0653 g0654 |
 | `<a:b:c/>` | parser: tag name `a:b:c`. Core: the same | stock | g0655 |
-| `<if=a\n .b>x</if>` | one value, as stock | stock (observed) | g0656 |
+| `<if=a\n .b>x</if>` | one value, as stock | stock (observed) | g0656 g1519 |
 | `<const/x=items\n .filter(Boolean)/>` | one value | stock (observed) | g0657 |
-| `<div class:x=1/>`, `<div style:x=1/>` | parser: an attribute named `class:x` / `style:x`. Reserved on native elements | spec §4 "`class:foo` / `style:foo` modifiers" | g0658 g0659 |
+| `<div class:x=1/>`, `<div style:x=1/>` | parser: an attribute named `class:x` / `style:x`. Reserved on native elements | spec §4 "`class:foo` / `style:foo` modifiers" | g0658 g0659 g1303 |
 | `<input value:fn:=x/>` | parser: a bound attribute named `value:fn` | stock (observed) | g0660 |
 | `<div><@svg:rect/></div>` | parser: a tag named `@svg:rect`. An attribute tag on a native element is then an error | spec §8 "Deferred to MX 2" | g0661 |
-| `x=a ? b :c` | one value | default: `ternaryDepth` is 1 at the `:` (observed) | g0424 |
-| `x=a ?? b :c` | one value `a ?? b :c`; MX and stock agree | the `??` skip (observed); **not settled**, OQ 3 | g0431 |
+| `x=a ? b :c` | one value | default: `ternaryDepth` is 1 at the `:` (observed) | g0424 g1528 |
+| `x=a ?? b :c` | one value `a ?? b :c`; MX and stock agree | the `??` skip (observed); **not settled**, OQ 3 | g0431 g1194 |
 | `x=a ?.b :c` | one value `a ?.b :c`; MX and stock agree | the `?.` skip (observed); **not settled**, OQ 3 | g0432 |
 | `div x=a in\n  b` (concise) | one value | default: the look-ahead keyword row (observed); OQ 18 | g0445 |
 
@@ -2193,200 +2193,3 @@ exercise a section:
 | Atoms (a dialect's triggers), `:name` and `::` as source text | `packages/parser/src/template/mx-atoms.cases.ts` (run by `mx-sugar-module.test.ts` through the reference atom dialect); `packages/parser/src/template/mx-triggers.test.ts`; `packages/parser/src/frontend/triggers.test.ts`; `packages/core/src/expr-nodes.test.ts`; `packages/core/src/ir-entry/atom-fixture.test.ts` |
 | Base position | `packages/parser/src/template/__tests__/base-offset.test.ts` |
 | E2 continuation onto a later line | htmljs fixtures `attr-operators-newline-after` (unary keywords and a lone `.` at the end of a line, operand at column 0) and `attr-operators-newline-before` |
-
-## Further probes
-
-These probes are the inputs written in earlier review rounds to attack the
-rules above. They are grouped by the kinds of event the parser reports for
-the input, in order (`×n` is a run of the same kind; an error is given by the
-start of its message). A row states that sequence; the probes hold the ranges
-and the text.
-
-| Events, in order | Probes |
-| --- | --- |
-| Comment, Doctype, Declaration, CDATA | g1280 |
-| Comment, Error: In concise mode a javascript comment block can only be follo | g1566 |
-| Comment, OpenTagName, OpenTagEnd, CloseTagEnd | g1067 g1567 |
-| Comment, Text | g1104 g1307 |
-| Error: Line has extra indentation at the beginning | g1033 |
-| Error: Mismatched group. A ")" character was found when ">" was exp | g1660 |
-| Error: Mismatched group. A closing ">" character was found but it i | g1444 |
-| OpenTagName | g1325 |
-| OpenTagName, AttrName | g1329 |
-| OpenTagName, AttrName ×2, AttrValue, OpenTagEnd, CloseTagEnd | g1451 |
-| OpenTagName, AttrName ×2, OpenTagEnd, CloseTagEnd | g1127 g1236 g1251 |
-| OpenTagName, AttrName ×3, OpenTagEnd, CloseTagEnd | g1240 |
-| OpenTagName, AttrName, AttrArgs | g1522 |
-| OpenTagName, AttrName, AttrArgs, OpenTagEnd, CloseTagEnd | g1273 |
-| OpenTagName, AttrName, AttrMethod, OpenTagEnd, CloseTagEnd | g1045 g1405 g1550 |
-| OpenTagName, AttrName, AttrMethod, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1487 |
-| OpenTagName, AttrName, AttrValue, AttrName, AttrValue, OpenTagEnd, CloseTagEnd | g1107 g1170 g1192 g1313 |
-| OpenTagName, AttrName, AttrValue, AttrName, AttrValue, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1159 |
-| OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd, CloseTagEnd | g1083 g1086 g1088 g1089 g1108 g1603 g1618 |
-| OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1518 |
-| OpenTagName, AttrName, AttrValue, Error: EOF reached while within an attribute group (e.g. "[ ... ]") | g1523 |
-| OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagEnd | g1085 g1112 g1193 g1194 g1249 g1328 g1331 g1378 g1379 g1380 g1384 g1385 g1386 g1389 g1390 g1395 g1544 g1573 g1578 g1611 g1612 g1613 g1614 g1615 g1616 g1617 g1623 g1630 g1631 g1671 g1675 g1676 |
-| OpenTagName, AttrName, AttrValue, OpenTagEnd, Error: A semicolon indicates the end of a line. Only comments may f | g1084 g1087 |
-| OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagEnd ×2 | g1168 |
-| OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, AttrName, OpenTagEnd, CloseTagEnd ×2 | g1169 |
-| OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, Error: EOF reached while within an attribute group (e.g. "[ ... ]") | g1167 |
-| OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1034 g1342 g1387 g1388 g1391 g1517 g1575 g1610 |
-| OpenTagName, AttrName, Error: EOF reached while parsing multi-line JavaScript comment | g1330 |
-| OpenTagName, AttrName, Error: EOF reached while parsing regular expression | g1533 |
-| OpenTagName, AttrName, Error: EOF reached while parsing string expression | g1532 |
-| OpenTagName, AttrName, Error: Mismatched group. A closing ">" character was found but it i | g1609 g1670 |
-| OpenTagName, AttrName, Error: Unexpected "]" character within open tag. | g1241 |
-| OpenTagName, AttrName, OpenTagComment, AttrName, OpenTagEnd, CloseTagEnd | g1242 |
-| OpenTagName, AttrName, OpenTagComment, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1032 |
-| OpenTagName, AttrName, OpenTagEnd, CloseTagEnd | g1129 |
-| OpenTagName, AttrName, OpenTagEnd, Comment, CloseTagEnd | g1237 |
-| OpenTagName, AttrName, OpenTagEnd, Error: A semicolon indicates the end of a line. Only comments may f | g1238 |
-| OpenTagName, AttrName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1546 |
-| OpenTagName, AttrSpread, OpenTagEnd, CloseTagEnd | g1381 g1382 |
-| OpenTagName, Error: "-" not allowed as first character of attribute name | g1239 |
-| OpenTagName, Error: EOF reached while parsing attribute name for the "div" tag | g1324 |
-| OpenTagName, Error: EOF reached while parsing attribute value for the ... attrib | g1524 |
-| OpenTagName, Error: Mismatched group. A ">" character was found when ")" was exp | g1661 |
-| OpenTagName, OpenTagEnd | g1197 g1204 g1431 |
-| OpenTagName, OpenTagEnd, CloseTagEnd | g1042 g1305 g1306 |
-| OpenTagName, OpenTagEnd, Comment, Error: In concise mode a javascript comment block can only be follo | g1243 |
-| OpenTagName, OpenTagEnd, Error: A line within a tag that only allows text content must begin | g1565 |
-| OpenTagName, OpenTagEnd, Error: A semicolon indicates the end of a line. Only comments may f | g1250 |
-| OpenTagName, OpenTagEnd, Error: EOF reached while parsing string expression | g1319 |
-| OpenTagName, OpenTagEnd, OpenTagName, AttrName, OpenTagEnd, CloseTagEnd | g1582 |
-| OpenTagName, OpenTagEnd, OpenTagName, Error: "static" can only be used at the root of the template. | g1275 |
-| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd | g1041 g1063 g1145 g1146 g1222 g1393 g1428 g1429 g1430 g1432 g1433 g1434 g1441 g1442 g1443 g1520 g1568 g1576 g1583 g1584 |
-| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1539 |
-| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd, Error: Line indentation does not match indentation of previous line | g1310 g1311 g1563 |
-| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1312 |
-| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×3 | g1309 |
-| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd, Error: Line indentation does not match indentation of previous line | g1316 g1564 |
-| OpenTagName, OpenTagEnd, OpenTagStart, OpenTagName, OpenTagEnd | g1191 |
-| OpenTagName, OpenTagEnd, OpenTagStart, OpenTagName, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1279 |
-| OpenTagName, OpenTagEnd, Text ×2, CloseTagEnd | g1188 |
-| OpenTagName, OpenTagEnd, Text, CloseTagEnd | g1314 g1317 g1589 g1590 |
-| OpenTagName, OpenTagEnd, Text, CloseTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd | g1315 |
-| OpenTagName, OpenTagEnd, Text, Placeholder | g1318 |
-| OpenTagName, OpenTagEnd, Text, Placeholder, CloseTagEnd | g1039 |
-| OpenTagName, TagParams, OpenTagEnd, CloseTagEnd | g1402 |
-| OpenTagName, TagParams, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1401 |
-| OpenTagName, TagTypeArgs, AttrName, AttrValue, OpenTagEnd, CloseTagEnd | g1221 |
-| OpenTagName, TagVar, AttrName, AttrValue, OpenTagEnd, CloseTagEnd | g1203 g1452 |
-| OpenTagName, TagVar, AttrName, OpenTagEnd, CloseTagEnd | g1427 |
-| OpenTagName, TagVar, OpenTagEnd, CloseTagEnd | g1091 g1186 g1327 |
-| OpenTagName, TagVar, OpenTagEnd, OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagEnd ×2 | g1453 |
-| OpenTagName, TagVar, OpenTagEnd, OpenTagName, AttrName, OpenTagEnd, CloseTagEnd ×2 | g1285 |
-| OpenTagName, TagVar, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1656 |
-| OpenTagName, TagVar, OpenTagEnd, Text, CloseTagEnd | g1259 g1356 |
-| OpenTagStart, Error: EOF reached while parsing tag name | g1477 |
-| OpenTagStart, OpenTagName, AttrName ×2, AttrArgs, OpenTagEnd | g1548 |
-| OpenTagStart, OpenTagName, AttrName ×2, AttrMethod, OpenTagEnd | g1545 |
-| OpenTagStart, OpenTagName, AttrName ×2, AttrValue, AttrName, OpenTagEnd | g1052 |
-| OpenTagStart, OpenTagName, AttrName ×2, AttrValue, OpenTagEnd | g1547 |
-| OpenTagStart, OpenTagName, AttrName ×2, Error: EOF reached while parsing attribute name for the "div" tag | g1122 |
-| OpenTagStart, OpenTagName, AttrName ×2, OpenTagEnd | g1031 g1128 g1534 g1537 g1542 g1552 g1553 |
-| OpenTagStart, OpenTagName, AttrName ×3, AttrMethod, OpenTagEnd | g1121 |
-| OpenTagStart, OpenTagName, AttrName ×3, AttrValue, OpenTagEnd, Error: Missing ending "div" tag | g1190 |
-| OpenTagStart, OpenTagName, AttrName ×3, OpenTagEnd | g1037 g1579 |
-| OpenTagStart, OpenTagName, AttrName, AttrArgs, Error: An attribute can only have one set of arguments | g1526 |
-| OpenTagStart, OpenTagName, AttrName, AttrArgs, OpenTagEnd | g1449 g1536 g1570 g1580 g1581 |
-| OpenTagStart, OpenTagName, AttrName, AttrMethod, AttrName, AttrArgs, OpenTagEnd | g1484 |
-| OpenTagStart, OpenTagName, AttrName, AttrMethod, AttrName, AttrValue, OpenTagEnd | g1483 |
-| OpenTagStart, OpenTagName, AttrName, AttrMethod, AttrName, OpenTagEnd | g1486 |
-| OpenTagStart, OpenTagName, AttrName, AttrMethod, OpenTagEnd | g1044 g1048 g1261 g1272 g1404 g1416 g1417 g1418 g1419 g1471 g1472 g1473 g1474 g1479 g1492 g1494 g1549 g1551 g1666 g1667 |
-| OpenTagStart, OpenTagName, AttrName, AttrSpread, OpenTagEnd | g1450 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName ×2, OpenTagEnd | g1071 g1148 g1150 g1171 g1178 g1179 g1184 g1211 g1294 g1600 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, AttrValue, OpenTagEnd | g1053 g1173 g1174 g1200 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, Error: Ambiguous ">" in attribute. A ">" preceded by whitespace end | g1465 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd | g1038 g1049 g1055 g1056 g1057 g1058 g1059 g1060 g1061 g1069 g1070 g1072 g1073 g1074 g1077 g1078 g1079 g1080 g1081 g1082 g1098 g1100 g1101 g1102 g1103 g1106 g1130 g1147 g1149 g1151 g1152 g1153 g1154 g1157 g1162 g1163 g1164 g1176 g1177 g1205 g1208 g1212 g1213 g1215 g1263 g1276 g1277 g1278 g1281 g1282 g1283 g1284 g1287 g1332 g1333 g1334 g1336 g1338 g1339 g1340 g1341 g1357 g1358 g1359 g1360 g1361 g1362 g1363 g1365 g1366 g1374 g1375 g1376 g1377 g1577 g1619 g1620 g1622 g1626 g1627 g1629 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrSpread, OpenTagEnd | g1095 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, Error: A close tag was found before the "div" open tag was closed.  | g1270 g1291 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, Error: An html comment cannot be used within an open tag. Use a Jav | g1271 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd | g1035 g1046 g1054 g1064 g1065 g1066 g1075 g1076 g1093 g1097 g1099 g1131 g1132 g1133 g1134 g1158 g1160 g1161 g1165 g1166 g1172 g1180 g1181 g1182 g1183 g1185 g1195 g1196 g1198 g1206 g1207 g1209 g1210 g1216 g1219 g1255 g1256 g1262 g1266 g1269 g1286 g1289 g1290 g1292 g1293 g1295 g1296 g1297 g1300 g1301 g1335 g1337 g1364 g1368 g1369 g1373 g1383 g1392 g1495 g1496 g1497 g1498 g1499 g1501 g1503 g1504 g1505 g1525 g1527 g1528 g1529 g1571 g1572 g1574 g1593 g1594 g1595 g1596 g1597 g1598 g1599 g1601 g1602 g1606 g1607 g1608 g1621 g1632 g1633 g1634 g1635 g1636 g1637 g1638 g1639 g1640 g1641 g1642 g1643 g1644 g1645 g1646 g1647 g1648 g1649 g1650 g1651 g1652 g1653 g1654 g1655 g1677 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1094 g1246 g1247 g1267 g1268 g1466 g1507 g1508 g1510 g1511 g1512 g1513 g1514 g1515 g1516 g1519 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd, Error: Missing ending "div" tag | g1199 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd, Text, Error: Missing ending "div" tag | g1175 g1367 g1370 g1371 g1372 g1455 g1458 g1460 g1462 g1469 g1470 g1502 g1673 g1674 |
-| OpenTagStart, OpenTagName, AttrName, Error: Ambiguous ">" in attribute. A ">" preceded by whitespace end | g1245 g1288 g1456 g1457 g1459 g1461 g1463 g1464 g1467 g1468 g1556 g1669 |
-| OpenTagStart, OpenTagName, AttrName, Error: An html comment cannot be used within an open tag. Use a Jav | g1244 |
-| OpenTagStart, OpenTagName, AttrName, Error: Attribute cannot contain type parameters unless it is a shor | g1543 |
-| OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing attribute "a" for the "div" tag | g1447 |
-| OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing attribute value for the "onClick"  | g1109 |
-| OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing attribute value for the "x" attrib | g1126 g1217 g1218 g1448 |
-| OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing expression | g1531 |
-| OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing regular expression | g1298 g1299 |
-| OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing string expression | g1113 |
-| OpenTagStart, OpenTagName, AttrName, Error: EOL reached while parsing regular expression | g1114 |
-| OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A ")" character was found when ">" was exp | g1624 g1672 |
-| OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A ">" character was found when "]" was exp | g1625 |
-| OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A "]" character was found when ")" was exp | g1500 |
-| OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A closing ">" character was found but it i | g1265 g1509 |
-| OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A closing "}" character was found but it i | g1214 |
-| OpenTagStart, OpenTagName, AttrName, Error: Missing value for attribute | g1124 g1125 g1201 |
-| OpenTagStart, OpenTagName, AttrName, OpenTagEnd | g1303 g1538 |
-| OpenTagStart, OpenTagName, AttrName, OpenTagEnd, Text, Error: Missing ending "div" tag | g1554 g1555 |
-| OpenTagStart, OpenTagName, Error: EOF reached while parsing attribute name for the "div" tag | g1187 |
-| OpenTagStart, OpenTagName, Error: EOF reached while parsing attribute value for the "x" attrib | g1446 |
-| OpenTagStart, OpenTagName, Error: EOF reached while parsing expression | g1110 g1111 |
-| OpenTagStart, OpenTagName, Error: EOF reached while parsing tag name | g1326 |
-| OpenTagStart, OpenTagName, Error: Missing value for attribute | g1123 |
-| OpenTagStart, OpenTagName, Error: The "static" tag is reserved and cannot be used as an HTML t | g1274 |
-| OpenTagStart, OpenTagName, Error: Unexpected types. Type arguments must directly follow a tag  | g1135 |
-| OpenTagStart, OpenTagName, OpenTagComment, AttrName, OpenTagComment, AttrName, OpenTagEnd | g1036 |
-| OpenTagStart, OpenTagName, OpenTagEnd | g1304 g1408 g1475 g1476 |
-| OpenTagStart, OpenTagName, OpenTagEnd, CloseTagStart, Error: EOF reached while parsing closing tag | g1119 |
-| OpenTagStart, OpenTagName, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1227 g1557 g1585 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Declaration, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1105 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Error: EOF reached while parsing CDATA | g1115 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Error: EOF reached while parsing comment | g1116 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Error: EOF reached while parsing declaration | g1118 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Error: EOF reached while parsing document type | g1117 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Error: EOF reached while parsing multi-line JavaScript comment | g1320 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Error: EOF reached while parsing placeholder | g1491 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Error: Invalid placeholder, the expression cannot be missing | g1226 g1489 |
-| OpenTagStart, OpenTagName, OpenTagEnd, OpenTagStart, OpenTagName, AttrName, OpenTagEnd, CloseTagStart, CloseTagName, CloseTagEnd | g1155 |
-| OpenTagStart, OpenTagName, OpenTagEnd, OpenTagStart, Text, OpenTagName, OpenTagEnd, CloseTagStart, Error: The closing "p" tag does not match the corresponding opening | g1235 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Placeholder ×2, CloseTagStart, CloseTagName, CloseTagEnd | g1488 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Placeholder, CloseTagStart, CloseTagName, CloseTagEnd | g1040 g1047 g1225 g1345 g1346 g1347 g1348 g1349 g1350 g1490 g1604 g1605 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text | g1540 g1541 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, CloseTagStart, CloseTagName, CloseTagEnd | g1230 g1321 g1323 g1559 g1560 g1562 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, CloseTagStart, CloseTagName, CloseTagEnd, CloseTagStart, Error: The closing "script" tag was not expected | g1561 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Comment, Error: Missing ending "p" tag | g1308 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Comment, Text, Comment, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1234 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Error: EOF reached while parsing expression | g1302 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Error: Missing ending "script" tag | g1322 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, OpenTagName, OpenTagEnd, CloseTagEnd | g1068 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Placeholder, CloseTagStart, CloseTagName, CloseTagEnd | g1228 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Placeholder, Text, CloseTagStart, CloseTagName, CloseTagEnd | g1229 g1530 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Scriptlet, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1139 g1224 g1438 g1439 g1440 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Scriptlet, Error: Missing ending "p" tag | g1558 g1587 |
-| OpenTagStart, OpenTagName, TagArgs, Error: Unexpected types. Type arguments must directly follow a tag  | g1481 |
-| OpenTagStart, OpenTagName, TagArgs, OpenTagEnd | g1202 g1343 g1344 g1403 g1406 g1407 g1506 g1668 |
-| OpenTagStart, OpenTagName, TagArgs, TagTypeParams, TagParams, OpenTagEnd | g1136 |
-| OpenTagStart, OpenTagName, TagParams, AttrName, AttrValue, OpenTagEnd | g1260 |
-| OpenTagStart, OpenTagName, TagParams, AttrName, OpenTagEnd | g1397 |
-| OpenTagStart, OpenTagName, TagParams, AttrName, OpenTagEnd, Text, Error: Missing ending "foo" tag | g1399 g1569 |
-| OpenTagStart, OpenTagName, TagParams, Error: A tag can only specify parameters once | g1396 |
-| OpenTagStart, OpenTagName, TagParams, Error: Unexpected types. Type arguments must directly follow a tag  | g1137 g1138 g1480 |
-| OpenTagStart, OpenTagName, TagParams, OpenTagEnd | g1351 g1352 g1398 g1400 g1535 g1664 g1665 |
-| OpenTagStart, OpenTagName, TagShorthandClass ×2, TagShorthandId, OpenTagEnd | g1252 |
-| OpenTagStart, OpenTagName, TagShorthandClass, OpenTagEnd | g1409 |
-| OpenTagStart, OpenTagName, TagShorthandClass, OpenTagEnd, CloseTagStart, CloseTagName, CloseTagEnd | g1120 g1254 |
-| OpenTagStart, OpenTagName, TagShorthandClass, TagShorthandId, OpenTagEnd | g1410 |
-| OpenTagStart, OpenTagName, TagShorthandClass, TagVar, OpenTagEnd | g1096 |
-| OpenTagStart, OpenTagName, TagShorthandId, Error: Multiple shorthand ID parts are not allowed on the same tag | g1253 |
-| OpenTagStart, OpenTagName, TagShorthandId, Error: Unexpected types. Type arguments must directly follow a tag  | g1592 |
-| OpenTagStart, OpenTagName, TagTypeArgs, AttrName, AttrMethod, OpenTagEnd | g1485 |
-| OpenTagStart, OpenTagName, TagTypeArgs, AttrName, OpenTagEnd, Text, Error: Missing ending "foo" tag | g1412 g1413 |
-| OpenTagStart, OpenTagName, TagTypeArgs, OpenTagEnd | g1411 g1414 g1415 g1493 g1628 g1662 g1663 |
-| OpenTagStart, OpenTagName, TagTypeParams, TagParams, OpenTagEnd | g1478 g1482 |
-| OpenTagStart, OpenTagName, TagVar, AttrName, AttrValue, OpenTagEnd | g1090 g1257 g1258 g1353 g1354 g1355 g1423 g1426 |
-| OpenTagStart, OpenTagName, TagVar, AttrName, OpenTagEnd | g1421 g1424 g1425 g1657 |
-| OpenTagStart, OpenTagName, TagVar, Error: Unexpected types. Type arguments must directly follow a tag  | g1092 |
-| OpenTagStart, OpenTagName, TagVar, OpenTagEnd | g1220 g1248 g1420 g1422 g1454 |
-| Scriptlet | g1140 g1141 g1144 g1223 g1445 g1659 |
-| Scriptlet, Error: Line has extra indentation at the beginning | g1062 g1264 g1588 |
-| Scriptlet, OpenTagName, OpenTagEnd, CloseTagEnd | g1043 g1142 g1143 g1394 g1435 g1436 g1437 g1521 g1586 |
-| Scriptlet, OpenTagStart, OpenTagName, OpenTagEnd | g1658 |
-| Text | g1050 g1189 g1233 g1591 |
-| Text, Error: A concise mode closing block delimiter can only be followed  | g1051 g1156 |
-| Text, OpenTagName, OpenTagEnd, CloseTagEnd | g1231 g1232 |
