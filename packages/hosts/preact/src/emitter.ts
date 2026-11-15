@@ -330,6 +330,11 @@ interface ScopeOptions {
   hard?: boolean;
   /** The body declares tag params, which a lifted `<define>` could not see. */
   bindsParams?: boolean;
+  /**
+   * The body is a JSX callback (`#callbackBody`): the scope renders with
+   * `callbackScope` set, so a region `<define>` in it is refused.
+   */
+  callback?: boolean;
 }
 
 /** What `resolveDelegatedTag` records for a claimed tag. */
@@ -1095,9 +1100,11 @@ export class PreactEmitter implements Emitter<string> {
    * later, so `<Counter/>` in expression position never hands the
    * `{ value, output }` pair back to the caller at all.
    *
-   * Shared by reference through `#child()`, like the two sets above, so a
-   * call inside an `<if>` branch or a `<for>` body still reaches the one
-   * function body that can hold a statement.
+   * Shared by reference through `#child()`, like the two sets above, within
+   * one scope. A body that is its own scope (`#scopeOf`: a `<for>` body, an
+   * `<if>` branch, an attribute-tag or content body, a dynamic tag's or
+   * `<try>`'s body, a `<define>` body) starts a fresh list, and its
+   * statements run inside that body (`wrapStatements`).
    */
   readonly #varStatements: string[];
   /** Serial for the temps those statements bind, per emitted module. */
@@ -1113,15 +1120,11 @@ export class PreactEmitter implements Emitter<string> {
    *
    * Every structural kind on this target lowers to an expression — a `<for>`
    * to `.map((item) => …)`, an `<if>` to a ternary, an attribute tag to a
-   * prop — so the statements a `/var` needs have nowhere to go inside one.
-   * Hoisting them to the component body is what round 1 caught: the call
-   * escapes the scope it was written in, so it reads loop variables that do
-   * not exist there and runs once for a body that renders N times.
-   *
-   * Invariant §7.5-8 says the escape is rejected, never hoisted, so a `/var`
-   * here is a positioned error rather than a silent miscompile. Lifting the
-   * restriction means giving each callback its own statement position (an
-   * IIFE), which is filed as MX 2 work.
+   * prop. A callback body renders through `#callbackBody`, which gives it its
+   * own `/var` statements, run in an arrow called in place per row or branch,
+   * so this emitter never shares the component's `varStatements`. A region
+   * reads the flag to refuse a `<define>` nested in a callback body, which
+   * could not be lifted out of it without changing its scope.
    */
   readonly #callbackScope: boolean;
   /**
@@ -1346,8 +1349,8 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * Claims a lifted name in the shared JavaScript scope, refusing a second
    * `const` at the authored name with the region path's diagnostic text.
-   * Dynamic-tag and try bodies are scopes of their own (`#scoped`) and
-   * claim into a table of their own.
+   * Callback, dynamic-tag and try bodies are scopes of their own
+   * (`#callbackBody`, `#scoped`) and claim into a table of their own.
    */
   #claimName(
     name: string,
@@ -1408,10 +1411,24 @@ export class PreactEmitter implements Emitter<string> {
     return wrapStatements(statements, code, slot ? "slot" : "child");
   }
 
+  /**
+   * A JSX callback's body (a `<for>` row, an `<if>` branch, an attribute-tag
+   * or content body) as its own scope: a `/var` in it binds per row or branch
+   * in the body's own arrow, as Marko and the html target bind it per block,
+   * and can sit beside an outer `/var` of the same name. `slot` as in
+   * `#scoped`. A body with no `/var` returns its code unchanged.
+   */
+  #callbackBody(
+    slot: boolean,
+    build: (scope: PreactEmitter) => MappedCode,
+  ): MappedCode {
+    return this.#scoped(slot, build, { hard: false, callback: true });
+  }
+
   /** Runs `build` in a scope of its own and returns its code and `/var` statements. */
   #scopeOf(
     build: (scope: PreactEmitter) => MappedCode,
-    { hard = true, bindsParams = false }: ScopeOptions = {},
+    { hard = true, bindsParams = false, callback = false }: ScopeOptions = {},
   ): {
     code: MappedCode;
     statements: string;
@@ -1429,6 +1446,7 @@ export class PreactEmitter implements Emitter<string> {
       bindings: new Map<string, Position>(),
       scopedBody: hard ? true : this.#scopedBody,
       softLift: soft,
+      ...(callback ? { callbackScope: true } : {}),
     });
     const code = build(scope);
     const statements = scope.#varStatements.join(" ");
@@ -2033,15 +2051,18 @@ export class PreactEmitter implements Emitter<string> {
     // null sibling is invisible on every JSX host and preserves the ordinary
     // child semantics for strings, elements, arrays, false and null.
     const only = children.length === 1 ? children[0] : undefined;
-    let value =
+    // The body is a callback scope of its own, inside the params arrow and
+    // the key fragment, so its `/var` statements run per call.
+    let value = this.#callbackBody(key === undefined, (scope) =>
       only?.kind === "Element" ||
       only?.kind === "Component" ||
       only?.kind === "DelegatedTag"
         ? // Unkeyed, the value is a prop value, an object property or an arrow
           // body, an expression slot: a define call or dynamic tag is written
           // bare. A key wraps it in a fragment, where `{expr}` is the child.
-          this.#render(children, true, true, key === undefined)
-        : concatMapped("<>", this.#render(children, true), "{null}</>");
+          scope.#render(children, true, true, key === undefined)
+        : concatMapped("<>", scope.#render(children, true), "{null}</>"),
+    );
     // The renderable nested inside every array entry needs a key even when
     // the outer entry is data-shaped: consumers commonly render
     // `items.map((item) => item.content)`. Put the key inside parameterized
@@ -2823,18 +2844,10 @@ export class PreactEmitter implements Emitter<string> {
       // A `/var` on a dynamic tag binds the callee's render path's value
       // `__mxDynamicPair` returns the `{ value, output }` pair a returning
       // unit's `.render` hands back, with `undefined` for any callee
-      // without one. Same statement-position rule as the static path above:
-      // the call hoists to the component body, so a callback scope is
-      // rejected rather than silently relocated.
+      // without one. Same statement-position rule as the static path: the
+      // statements go to the innermost scope's list, which runs them ahead of
+      // that body's markup (`#callbackBody`, `#scopeOf`).
       if (node.var) {
-        if (this.#callbackScope) {
-          fail(
-            this.#region
-              ? `\`/var\` on a dynamic tag inside \`<for>\`, \`<if>\`, an attribute-tag body or a \`<define>\` body is not supported in a \`.${this.#region.segment}.mx\` region; bind it directly in the region's markup, outside those bodies`
-              : `\`/var\` on a dynamic tag inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
-            node,
-          );
-        }
         for (const { name: bound, span } of node.varBindings ?? []) {
           this.#claimName(bound, span, node.loc);
         }
@@ -3031,20 +3044,10 @@ export class PreactEmitter implements Emitter<string> {
     if (node.returnsValue) {
       const props = this.#propsObject(node);
       if (node.var) {
-        // Every structural kind on this target is an *expression*, so a
-        // callback scope has no statement position of its own. Hoisting the
-        // call to the component body would take it out of the scope it was
-        // written in: inside a `<for>` it would read a row binding that does
-        // not exist there and run once for a body that renders N times.
-        // Invariant §7.5-8 rejects the escape rather than emitting it.
-        if (this.#callbackScope) {
-          fail(
-            this.#region
-              ? `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`, \`<if>\`, an attribute-tag body or a \`<define>\` body is not supported in a \`.${this.#region.segment}.mx\` region; bind it directly in the region's markup, outside those bodies`
-              : `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
-            node,
-          );
-        }
+        // The statements go to the innermost scope's list: the component
+        // body's, or a callback body's own (`#callbackBody`), which runs them
+        // per row or branch, so the call never leaves the scope it was
+        // written in.
         for (const { name: bound, span } of node.varBindings ?? []) {
           this.#claimName(bound, span, node.loc);
         }
@@ -3087,10 +3090,14 @@ export class PreactEmitter implements Emitter<string> {
       content.hasParams
         ? concatMapped(
             `{(${content.params.join(", ")}) => `,
-            this.#expression(contentNodes, true, true),
+            this.#callbackBody(true, (scope) =>
+              scope.#expression(contentNodes, true, true),
+            ),
             "}",
           )
-        : this.#render(contentNodes, true),
+        : this.#callbackBody(false, (scope) =>
+            scope.#render(contentNodes, true),
+          ),
     );
     if (children.code === "") {
       this.#out.push(
@@ -3337,11 +3344,17 @@ export class PreactEmitter implements Emitter<string> {
           mappedExpr(branch.condition),
           " ? ",
           // A branch is a ternary arm: an expression, evaluated lazily.
-          this.#expression(branch.children, true, true),
+          this.#callbackBody(true, (scope) =>
+            scope.#expression(branch.children, true, true),
+          ),
           " : ",
         );
       } else {
-        parts.push(this.#expression(branch.children, true, true));
+        parts.push(
+          this.#callbackBody(true, (scope) =>
+            scope.#expression(branch.children, true, true),
+          ),
+        );
       }
     }
     if (node.branches.at(-1)?.condition) parts.push("null");
@@ -3364,11 +3377,12 @@ export class PreactEmitter implements Emitter<string> {
    * documented in the README as this host's rule rather than left implicit.
    */
   forLoop(node: Extract<IrNode, { kind: "For" }>): void {
-    // `.map((item) => …)`: the body is a callback, so a statement written
-    // here would have to be hoisted out of the loop to reach the component
-    // body — losing both the row binding and the per-row evaluation.
+    // `.map((item) => …)`: the body is a callback with its own scope, so a
+    // `/var` in it runs per row with the row binding in scope.
     const body = this.#inScope(node.bindings, node.children, () =>
-      this.#expression(node.children, true),
+      this.#callbackBody(false, (scope) =>
+        scope.#expression(node.children, true),
+      ),
     );
     const [first = "item", second] = node.params;
     const source = node.source;
@@ -3478,14 +3492,19 @@ export class PreactEmitter implements Emitter<string> {
         soft.defines.push(node);
       }
       // The whole-file statement text (`emitModuleWithMappings`). The body is
-      // a function of its own, so it renders as a callback: a `/var` inside
-      // it has no statement position and is refused, as in any callback.
+      // a function of its own: it renders as a callback (a `<define>` nested
+      // in it is refused) in a scope of its own, and a `/var` in it runs
+      // inside the lifted function ahead of its markup, as in a whole file.
+      const body = this.#inScope(node.bindings, node.children, () =>
+        this.#scopeOf((scope) => scope.#render(node.children, true), {
+          hard: false,
+        }),
+      );
       this.#region.defines.push(
         this.defineStatement(
           node,
-          this.#inScope(node.bindings, node.children, () =>
-            this.#render(node.children, true),
-          ),
+          body.code,
+          body.statements === "" ? [] : [body.statements],
         ),
       );
       return;

@@ -138,6 +138,15 @@ describe("an imported tag that declares <return>, rendered on Hono", () => {
     ).toBe("<div><span>1</span>body<p>2</p></div>");
   });
 
+  // One row on this dialect; preact pins the other callback bodies.
+  it("binds a /var in a <for> body per row", async () => {
+    expect(
+      await renderCaller(
+        "<for|i| of=[1,2]><Counter/n start=i/><p>${n}</p></for>",
+      ),
+    ).toBe("<span>1</span><p>2</p><span>2</span><p>3</p>");
+  });
+
   it("refuses /var on an imported tag without <return>, at the call", () => {
     const scratch = mkdtempSync(join(tmpdir(), "mx-hono-imported-none-"));
     try {

@@ -348,7 +348,7 @@ describe("region rule", () => {
     });
   });
 
-  it("refuses a /var inside a <for> with the region's wording", () => {
+  it("binds a /var inside a <for> in the row's own scope", () => {
     // `counter.mx` declares `<return>`, so `/doubled` is a real tag variable.
     const file = join(
       import.meta.dirname,
@@ -358,12 +358,19 @@ describe("region rule", () => {
       "loop.preact.mx",
     );
     const source = `import Counter from "./counter.mx";\nexport function Panel() {\n  return (\n    <div>\n      <for|n| of=[1]><Counter/doubled start=n/></for>\n    </div>\n  );\n}\n`;
-    expect(errorOf(source, file)).toEqual({
-      message:
-        "`/var` on `<Counter>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body is not supported in a `.preact.mx` region; bind it directly in the region's markup, outside those bodies",
-      line: 5,
-      column: 21,
+    const { code } = print(source, file, {
+      mx: true,
+      mxRegionCompile: (input) =>
+        compilePreactRegion(input.source, { ...input, targets }) as ReturnType<
+          NonNullable<
+            NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"]
+          >
+        >,
     });
+    expect(code.indexOf("const doubled = ")).toBeGreaterThan(
+      code.indexOf(".map("),
+    );
+    expect(code.indexOf(".map(")).toBeGreaterThan(-1);
   });
 
   it("names the region, not a standalone template, when refusing a tag variable", () => {
@@ -449,18 +456,24 @@ describe("region rule", () => {
       expect(out.code.match(/const x = /g)).toHaveLength(2);
     });
 
-    it("names a <define> body when a /var or <define> is refused inside one", () => {
-      expect(
-        errorOf(
-          withCounter("<define/Row><Counter/y start=1/></define><Row/>"),
-          file,
-        ),
-      ).toEqual({
-        message:
-          "`/var` on `<Counter>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body is not supported in a `.preact.mx` region; bind it directly in the region's markup, outside those bodies",
-        line: 5,
-        column: 18,
-      });
+    it("binds a /var in a <define> body inside the lifted define, and names a <define> body when a <define> is refused inside one", () => {
+      const { code } = print(
+        withCounter("<define/Row><Counter/y start=1/></define><Row/>"),
+        file,
+        {
+          mx: true,
+          mxRegionCompile: (input) =>
+            compilePreactRegion(input.source, {
+              ...input,
+              targets,
+            }) as ReturnType<
+              NonNullable<
+                NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"]
+              >
+            >,
+        },
+      );
+      expect(code).toMatch(/const \w*Row\w* = \(\) => \{[^;]*;const y = /);
       expect(
         errorOf(
           inRegion(

@@ -34,6 +34,13 @@ const BODY_COUNTER = [
 
 const PLAIN = "<b>x</b>";
 
+const BOX = "<section><${input.content}/></section>";
+
+const CARD = [
+  "export interface Input { body: any }",
+  "<div><${input.body}/></div>",
+].join("\n");
+
 async function renderCaller(callerSource: string): Promise<string> {
   const { render } = (await import("preact-render-to-string")) as {
     render: (vnode: unknown) => string;
@@ -71,6 +78,16 @@ async function renderCaller(callerSource: string): Promise<string> {
       join(scratch, "lib/plain.tsx"),
       compilePreactMx(PLAIN, join(scratch, "lib/plain.mx")).code,
     );
+    writeFileSync(join(scratch, "lib/box.mx"), BOX);
+    writeFileSync(
+      join(scratch, "lib/box.tsx"),
+      compilePreactMx(BOX, join(scratch, "lib/box.mx")).code,
+    );
+    writeFileSync(join(scratch, "lib/card.mx"), CARD);
+    writeFileSync(
+      join(scratch, "lib/card.tsx"),
+      compilePreactMx(CARD, join(scratch, "lib/card.mx")).code,
+    );
     // The verifier's second route: the same unit through a `.ts` barrel —
     // the re-exported default is the same function object, so its render
     // path travels with it.
@@ -83,12 +100,14 @@ async function renderCaller(callerSource: string): Promise<string> {
     writeFileSync(
       entry,
       compilePreactMx(
-        `import Counter from "./lib/counter.mx"\nimport Plain from "./lib/plain.mx"\nimport BodyCounter from "./lib/body-counter.mx"\n${callerSource}`,
+        `import Counter from "./lib/counter.mx"\nimport Plain from "./lib/plain.mx"\nimport BodyCounter from "./lib/body-counter.mx"\nimport Box from "./lib/box.mx"\nimport Card from "./lib/card.mx"\n${callerSource}`,
         callerPath,
       )
         .code.replace('"./lib/counter.mx"', '"./lib/counter.tsx"')
         .replace('"./lib/plain.mx"', '"./lib/plain.tsx"')
-        .replace('"./lib/body-counter.mx"', '"./lib/body-counter.tsx"'),
+        .replace('"./lib/body-counter.mx"', '"./lib/body-counter.tsx"')
+        .replace('"./lib/box.mx"', '"./lib/box.tsx"')
+        .replace('"./lib/card.mx"', '"./lib/card.tsx"'),
     );
     const mod = (await import(`${entry}?t=${Date.now()}`)) as {
       default: FunctionComponent<Record<string, unknown>>;
@@ -134,6 +153,46 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
         "<div><${BodyCounter}/n({ start: 1 })>body</><p>${n}</p></div>",
       ),
     ).toBe("<div><span>1</span>body<p>2</p></div>");
+  });
+
+  // A callback body is a `/var` scope of its own, per row and per branch, as
+  // in Marko 6.4.4 and the html target.
+  it("binds a /var in a <for> body per row", async () => {
+    expect(
+      await renderCaller(
+        "<for|i| of=[1,2]><Counter/n start=i/><p>${n}</p></for>",
+      ),
+    ).toBe("<span>1</span><p>2</p><span>2</span><p>3</p>");
+  });
+
+  it("binds a /var in an <if>/<else> branch, only in the branch that renders", async () => {
+    expect(
+      await renderCaller(
+        "<if=false><Counter/n start=1/>${n}</if><else><Counter/m start=5/><p>${m}</p></else>",
+      ),
+    ).toBe("<span>5</span><p>6</p>");
+  });
+
+  it("lets a /var in a <for> body shadow an outer /var of the same name", async () => {
+    expect(
+      await renderCaller(
+        "<Counter/n start=1/><for|i| of=[5]><Counter/n start=i/><b>${n}</b></for><i>${n}</i>",
+      ),
+    ).toBe("<span>1</span><span>5</span><b>6</b><i>2</i>");
+  });
+
+  it("binds a /var in a component's content body", async () => {
+    expect(
+      await renderCaller("<Box><Counter/n start=1/><p>${n}</p></Box>"),
+    ).toBe("<section><span>1</span><p>2</p></section>");
+  });
+
+  it("binds a /var in an attribute-tag body", async () => {
+    expect(
+      await renderCaller(
+        "<Card><@body><Counter/n start=1/><p>${n}</p></@body></Card>",
+      ),
+    ).toBe("<div><span>1</span><p>2</p></div>");
   });
 
   it("refuses /var on an imported tag without <return>, at the call", () => {
@@ -202,6 +261,14 @@ describe("a dynamic tag whose callee declares <return>, rendered on Preact", () 
         "<div><${1 ? Plain : null}/n/><p>${String(n)}</p></div>",
       ),
     ).toBe("<div><b>x</b><p>undefined</p></div>");
+  });
+
+  it("binds a dynamic tag's /var in a <for> body per row", async () => {
+    expect(
+      await renderCaller(
+        "<for|i| of=[1,2]><${Counter}/n start=i/><p>${n}</p></for>",
+      ),
+    ).toBe("<span>1</span><p>2</p><span>2</span><p>3</p>");
   });
 
   it("renders a string target as its element, /var or not", async () => {

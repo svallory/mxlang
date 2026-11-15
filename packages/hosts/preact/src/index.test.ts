@@ -1640,27 +1640,9 @@ describe("a unit that returns a value", () => {
     expect(code).toContain("const b = __mxRet1.value;");
   });
 
-  // Round 1, findings 1 and 2. Every structural kind on this target is an
-  // expression, so a callback scope has no statement position — and hoisting
-  // the call to the component body took it out of the scope it was written
-  // in: inside a `<for>` it read a row binding that did not exist there and
-  // ran once for a body rendered N times. Invariant §7.5-8 rejects the
-  // escape rather than emitting it.
-  it("rejects /var inside <for>, naming the tag as written", () => {
-    expect(() =>
-      callerCode("<for|i| of=[1,2]><counter/n start=i/><p>${n}</p></for>"),
-    ).toThrow(/`\/var` on `<counter>` inside `<for>`\/`<if>` is not supported/);
-  });
-
-  it("rejects /var inside <if>", () => {
-    expect(() =>
-      callerCode("<if=true><counter/n start=1/><p>${n}</p></if>"),
-    ).toThrow(/is not supported on Preact yet/);
-  });
-
   it("still allows a call with no /var inside <for>", () => {
-    // Only the *binding* is refused; the call itself is an ordinary one and
-    // its output renders per row (the default export already returns it).
+    // The call is an ordinary one and its output renders per row (the
+    // default export already returns it).
     const code = callerCode("<for|i| of=[1,2]><counter start=i/></for>");
 
     expect(code).toContain('$mx_Counter1({ "start": i })');

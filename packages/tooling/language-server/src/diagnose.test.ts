@@ -1946,7 +1946,7 @@ describe("a compile's dependencies", () => {
     [
       "page.preact.mx",
       { target: "preact-jsx", host: "preact" },
-      'import Card from "./card.mx";\nexport const view = () => <if=true><Card/y/></if>;\n',
+      'import Card from "./card.mx";\nexport const view = () => <div><Card/y/><p><Card/y/></p></div>;\n',
       RETURNING,
     ],
   ] as const)(

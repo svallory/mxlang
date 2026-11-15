@@ -139,10 +139,12 @@ describe.each(HOSTS)(
       expect(() => parseTsx(code)).not.toThrow();
     });
 
-    it("a dynamic-tag body inside a <for> still refuses a /var", async () => {
-      await expect(
-        compile("<for|i| of=input.xs><${input.t}><counter/x/>${x}</></for>"),
-      ).rejects.toThrow(/not supported/);
+    it("a dynamic-tag body inside a <for> is its own scope too", async () => {
+      const code = await compile(
+        "<for|i| of=input.xs><${input.t}><counter/x/>${x}</></for>",
+      );
+      expect(code).toMatch(/\.map\([\s\S]*const x = /);
+      expect(() => parseTsx(code)).not.toThrow();
     });
 
     it("the body of a direct define call is its own scope, beside an outer /x", async () => {
