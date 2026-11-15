@@ -3591,6 +3591,18 @@ class AngularEmitter implements Emitter<string> {
   }
 
   define(node: Extract<IrNode, { kind: "Define" }>): void {
+    // A `<define>` that declares `<return>` hands a value back to a `/var`
+    // call; an `<ng-template>` has no channel for one, as a page or tag has
+    // none for its own `<return>`. Refused at the value, as the page's is,
+    // rather than dropped.
+    if (node.returnValue) {
+      throw returnRefusal(
+        this.ctx,
+        this.filename,
+        node.returnValue.node?.loc?.start,
+        `\`<define/${node.name}>\` renders as an \`<ng-template>\`, which cannot hand a value back to its caller; compute the value in the component and pass it in.`,
+      );
+    }
     // Marko makes a `<define>`'s attributes properties of its value
     // (`${D.a}`). `#D` is a template reference, not an object, so the
     // attributes ride a `@let` of their own that every later read of `D` was

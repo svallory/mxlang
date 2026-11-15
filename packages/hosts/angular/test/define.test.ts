@@ -133,6 +133,20 @@ describe("Define", () => {
   });
 });
 
+describe("Define with <return>", () => {
+  it("refuses the <return> at its value: an ng-template hands no value back", () => {
+    let error: (Error & Record<string, unknown>) | undefined;
+    try {
+      emit("<define/T>\n  <return=1/>\n</define>");
+    } catch (caught) {
+      error = caught as Error & Record<string, unknown>;
+    }
+    expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+    // Line 2, at the value `1` (0-based column), as the page's refusal is.
+    expect([error?.line, error?.column]).toEqual([2, 10]);
+  });
+});
+
 describe("Define scope", () => {
   const FOO = "<define/Foo><p>inner</p></define>";
 
