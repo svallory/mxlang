@@ -291,6 +291,18 @@ describe("the typeCheck projection reads the public define name", () => {
     expect(code).toContain("{(__mxDef_Row as typeof Row)('a')}");
     expect(code).toContain('const Row = __mxDefine(__mxDef_Row, "Row");');
   });
+
+  it("casts a returning define's /var call to its pair function's type", () => {
+    const code = compilePreactMx(
+      "<define/Thing|input|>\n  <return=input.n * 2/>\n  <i>${input.n}</i>\n</define>\n<Thing/double n=21/>\n<p>${double}</p>\n",
+      "/f/t.mx",
+      { typeCheck: true },
+    ).code;
+    expect(code).toMatch(
+      /const (__mxRet\d+) = \(__mxDef_Thing as typeof __mxDef_Thing\)\(.*\);[\s\S]*const double = \1\.value;[\s\S]*\{\1\.output\}/,
+    );
+    expect(code).not.toContain("as typeof Thing)");
+  });
 });
 
 describe("a define param as the emitted arrow declares it", () => {

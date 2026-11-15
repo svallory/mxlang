@@ -126,3 +126,31 @@ describe("preact: a <define> call passes its attributes as the first param", () 
     ).toEqual([]);
   });
 });
+
+describe("preact: a <define> that declares <return>", () => {
+  // Expected HTML is stock Marko 6.4.4's render, its resume comments removed.
+  it.each([
+    [
+      "binds the returned value to the call's /var",
+      "<define/Thing|input|>\n  <return=input.n * 2/>\n  <i>${input.n}</i>\n</define>\n<Thing/double n=21/>\n<p>${double}</p>\n",
+      "<i>21</i><p>42</p>",
+    ],
+    [
+      "renders only the output for a call without /var",
+      "<define/T|{n}|><return=n/><b>${n}</b></define><T n=1/>",
+      "<b>1</b>",
+    ],
+  ])("%s", async (_what, source, html) => {
+    expect(await renderWhole(source)).toBe(html);
+  });
+
+  // Stock renders `1020`; a `/var` inside `<for>` is the unit path's
+  // refusal on this host until that refusal is lifted.
+  it("refuses a /var under <for> as a unit's /var call is", async () => {
+    await expect(
+      renderWhole(
+        "<define/T|{n}|><return=n * 10/></define><for|i| of=[1, 2]><T/v n=i/>${v}</for>",
+      ),
+    ).rejects.toThrow(/\/var.*inside .*<for>/);
+  });
+});

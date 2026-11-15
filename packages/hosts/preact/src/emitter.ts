@@ -2398,7 +2398,22 @@ export class PreactEmitter implements Emitter<string> {
     // when something reads it. A `/var` inside the body is the body's own: its
     // statements run inside the function ahead of the markup that reads the
     // binding, so each call evaluates them in its own scope (as Marko does).
+    //
+    // A define whose body declares `<return>` keeps the pair instead: the
+    // private function returns `{ value, output }`, the value evaluated
+    // beside the markup as a unit's own `<return>` is. Only a `/var` call
+    // reads the pair; a direct call without one takes `.output`, and the
+    // public value wraps an output-only function over it.
     const own = defineFunctionName(node.name);
+    const returned = node.returnValue
+      ? concatMapped(
+          "{ value: ",
+          mappedExpr(node.returnValue),
+          ", output: (<>",
+          closeFragmentBody(rendered),
+          "</>) }",
+        )
+      : null;
     const fn = concatMapped(
       "const ",
       mapped(own, this.#publicDefines ? null : (node.nameSpan ?? null)),
@@ -2407,18 +2422,28 @@ export class PreactEmitter implements Emitter<string> {
       "(",
       params,
       ") => ",
-      bodyVarStatements.length > 0
-        ? concatMapped(
-            wrapStatements(
-              bodyVarStatements.join(" "),
-              rendered,
-              "fragmentBlock",
-            ),
-            ";",
-          )
-        : concatMapped("(<>", closeFragmentBody(rendered), "</>);"),
+      returned
+        ? bodyVarStatements.length > 0
+          ? concatMapped(
+              `{ ${bodyVarStatements.join(" ")} return `,
+              returned,
+              "; };",
+            )
+          : concatMapped("(", returned, ");")
+        : bodyVarStatements.length > 0
+          ? concatMapped(
+              wrapStatements(
+                bodyVarStatements.join(" "),
+                rendered,
+                "fragmentBlock",
+              ),
+              ";",
+            )
+          : concatMapped("(<>", closeFragmentBody(rendered), "</>);"),
     );
-    const wrapped = `__mxDefine(${own}, ${JSON.stringify(node.name)})`;
+    const wrapped = returned
+      ? `__mxDefine((...a: Parameters<typeof ${own}>) => ${own}(...a).output, ${JSON.stringify(node.name)})`
+      : `__mxDefine(${own}, ${JSON.stringify(node.name)})`;
     // The public name maps to the define's name span too, so a go-to-definition
     // from a value read reaches the `<define/Row>` tag.
     const declared = [
@@ -2904,6 +2929,49 @@ export class PreactEmitter implements Emitter<string> {
           : node.target.params.length > 0
             ? this.#propsObject(node)
             : "";
+      const own = defineFunctionName(node.target.name);
+      // A define whose body declares `<return>`: its private function returns
+      // `{ value, output }`. Under `typeCheck` the cast is to that function's
+      // own type, so `.value` and `.output` type-check; the public value's
+      // type is the output-only wrapper.
+      const pairCallee = (): MappedCode =>
+        this.#publicDefines
+          ? concatMapped(`(${own} as typeof `, mapped(own, node.nameSpan), ")")
+          : mapped(own, node.nameSpan);
+      if (node.returnsValue && node.var) {
+        // As a returning unit's `/var` call (below): two statements above
+        // the `return`, the output rendered here. The callback-scope refusal
+        // is the unit path's, word for word, and goes when that one goes.
+        if (this.#callbackScope) {
+          fail(
+            this.#region
+              ? `\`/var\` on \`<${node.target.name}>\` inside \`<for>\`, \`<if>\`, an attribute-tag body or a \`<define>\` body is not supported in a \`.${this.#region.segment}.mx\` region; bind it directly in the region's markup, outside those bodies`
+              : `\`/var\` on \`<${node.target.name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
+            node,
+          );
+        }
+        if (local) {
+          // The call keeps the authored name, which a local scope also
+          // binds, so the pair function is out of reach (see `local` above).
+          fail(
+            `\`/var\` on \`<${node.target.name}>\` is not supported here: a local binding of the same name shadows the \`<define>\``,
+            node,
+          );
+        }
+        for (const { name: bound, span } of node.varBindings ?? []) {
+          this.#claimName(bound, span, node.loc);
+        }
+        const temp = `__mxRet${this.#varSerial.n++}`;
+        const call = concatMapped(pairCallee(), "(", args, ")");
+        this.#varStatements.push(`const ${temp} = ${call.code};`);
+        this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
+        this.#out.push(this.#slot(`${temp}.output`));
+        return;
+      }
+      if (node.returnsValue && !local) {
+        this.#out.push(this.#slot(pairCallee(), "(", args, ").output"));
+        return;
+      }
       this.#out.push(
         this.#slot(
           local
@@ -2913,11 +2981,11 @@ export class PreactEmitter implements Emitter<string> {
                 // as in a build); the cast types it and maps the hover and
                 // go-to-definition by the public name.
                 concatMapped(
-                  `(${defineFunctionName(node.target.name)} as typeof `,
+                  `(${own} as typeof `,
                   mapped(node.target.name, node.nameSpan),
                   ")",
                 )
-              : mapped(defineFunctionName(node.target.name), node.nameSpan),
+              : mapped(own, node.nameSpan),
           "(",
           args,
           ")",

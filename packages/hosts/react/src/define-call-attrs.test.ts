@@ -102,3 +102,14 @@ describe("react: a <define> call passes its attributes as the first param", () =
     expect(code).not.toContain("Row(undefined)");
   });
 });
+
+describe("react: a <define> that declares <return>", () => {
+  // Stock Marko 6.4.4 renders the same, its resume comments removed.
+  it("binds the returned value to the call's /var", async () => {
+    expect(
+      await renderWhole(
+        "<define/Thing|input|>\n  <return=input.n * 2/>\n  <i>${input.n}</i>\n</define>\n<Thing/double n=21/>\n<p>${double}</p>\n",
+      ),
+    ).toBe("<i>21</i><p>42</p>");
+  });
+});
