@@ -1590,21 +1590,28 @@ export function createEmitter(
       const value: string | MappedCode = pair
         ? `(...a: Parameters<typeof ${pair}>) => ${pair}(...a).output`
         : fn;
-      if (node.attrs.length === 0) {
+      const tree = node.attributeTagTree ?? [];
+      if (node.attrs.length === 0 && tree.length === 0) {
         push(concatMapped(`const ${node.name} = `, value, ";"));
         return;
       }
-      // Marko: the tag's attributes are properties of the define's value
-      // (`const D = { a: 1, content }`), so `${D.a}` reads them. The value here
-      // is the function a call runs, which carries them as own properties.
-      const { open, between } = defineValueWrapper(node.attrs);
+      // Marko: the tag's attributes, then its body's attribute tags, are
+      // properties of the define's value (`const D = { a: 1, item:
+      // attrTag({…}), content }`), so `${D.a}` and `${D.item.x}` read them.
+      // The value here is the function a call runs, which carries them as own
+      // properties. No callee `Input` types them, so the parts are untyped.
+      const { open, between } = defineValueWrapper(
+        node.attrs,
+        attributeTagNames(tree),
+      );
+      const { parts } = propsOf(node.attrs, tree, null, true, null);
       push(
         concatMapped(
           `const ${node.name} = ${open}`,
           value,
           between,
           "{ ",
-          joinParts(propPartsOfAttrs(node.attrs)),
+          joinParts(parts),
           " });",
         ),
       );

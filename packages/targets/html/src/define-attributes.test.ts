@@ -115,3 +115,28 @@ describe("html: a <define> carries its attributes as properties", () => {
     expect(code).not.toContain("Object.assign");
   });
 });
+
+// Stock Marko 6.4.4: `<define/Bar a=1><@item x=1/></define>` is
+// `const Bar = { a: 1, item: attrTag({ x: 1 }) }`, and `<@name/>` is a
+// `name` property (`typeof Bar.name` renders `object`).
+describe("html: a <define> body's attribute tags are properties too", () => {
+  it("one record per name, after the attributes", () => {
+    const code = emit(
+      "<define/Bar a=1><@item x=1/></define>\n<p>${Bar.item.x}</p>",
+    );
+    expect(code).toContain(
+      `const Bar = Object.assign(() => {
+    const __mxOut = __mxCreateOut();
+    return __mxOut.toString();
+  }, { a: 1, item: __mxAttrTag({ x: 1 }) });`,
+    );
+  });
+
+  it("an attribute tag named name makes the properties writable first", () => {
+    expect(
+      emit("<define/Bar><@name/></define>\n<p>${typeof Bar.name}</p>"),
+    ).toContain(
+      "}, { name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), { name: __mxAttrTag({  }) });",
+    );
+  });
+});
