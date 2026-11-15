@@ -248,22 +248,31 @@ const INTENDED: Record<
       "tag-with-type-arguments",
     ],
   },
+  // Marko refuses these too. Each case bundles many single forms of an
+  // operator, a block or a second value beside an attribute value, across a
+  // space or a newline; a case holds at least one form that stock Marko
+  // (`@marko/compiler` 5.42.11, the compiler Marko 6.4.4 runs, on the stock
+  // htmljs-parser 5.18.0) refuses with the same message at the same offset as
+  // the IR entry. Every whole case is refused by stock too. The forms are
+  // pinned one by one in "operators beside an attribute value, form by form"
+  // below (each case split into single forms, stock against `lowerSource`,
+  // default and `none`).
+  markoRefusesOperatorSpacing: {
+    pattern:
+      /^(?:Expected a single expression, but found `"` after it\.|Expected a single expression, but found `y` after it\.|Expected a single expression, but found `~` after it\.|Expected a single expression, but found `x` after it\.|Expected a single expression, but found `f` after it\.|Expected a single expression, but found `\{` after it\.|Expected a single expression, but found `=` after it\.|Expected a single expression, but found `!` after it\.|A close tag was found before the "a" open tag was closed\. If the "<\/" was intended as part of an attribute expression \(eg a less-than comparison\), wrap the value in parentheses\.)$/,
+    cases: [
+      "attr-non-literal",
+      "attr-operators-newline-after",
+      "attr-operators-newline-before",
+      "attr-operators-space-after",
+      "attr-operators-space-before",
+      "attr-operators-space-between",
+      "attr-without-delimiters",
+    ],
+  },
 };
 
-const KNOWN_GAPS: Record<string, string[]> = {
-  // Operators beside an attribute value across spaces or newlines, and
-  // non-literal or undelimited values: "Expected a single expression".
-  // htmljs-parser keeps one expression; the sugar rule covers only `x .y`.
-  "attribute-operator-spacing": [
-    "attr-non-literal",
-    "attr-operators-newline-after",
-    "attr-operators-newline-before",
-    "attr-operators-space-after",
-    "attr-operators-space-before",
-    "attr-operators-space-between",
-    "attr-without-delimiters",
-  ],
-};
+const KNOWN_GAPS: Record<string, string[]> = {};
 
 /**
  * Refusals of the `none` preset only (`tagRules: "none"`, Kit's): open-tag-only
@@ -413,6 +422,920 @@ for (const { label, tagRules, gapBy, refusalBy } of PRESETS) {
     }
   });
 }
+
+describe("operators beside an attribute value, form by form", () => {
+  // Each `markoRefusesOperatorSpacing` case split into single forms: a concise
+  // form is a column-0 `a`/`span` line and its continuation lines, an HTML form
+  // runs from `<a`/`<div` to its `/>` or close tag. The expected outcome of
+  // each is stock Marko's (`@marko/compiler` 5.42.11 on htmljs-parser 5.18.0,
+  // parse only): it compiles, or its one error's label and offset.
+  type Outcome = "compiles" | { message: string; offset: number };
+  const FORMS: Record<string, [string, Outcome][]> = {
+    "attr-non-literal": [
+      [
+        "<div data=('a') a=a+b b='foo'+'bar' template-string=`foo`></div>\n",
+        "compiles",
+      ],
+      [
+        "span test='123'\"abc\"\n",
+        {
+          message: 'Expected a single expression, but found `"` after it.',
+          offset: 15,
+        },
+      ],
+    ],
+    "attr-operators-newline-after": [
+      ["a= await\ny a\n", "compiles"],
+      ["a= new\ny a\n", "compiles"],
+      ["a= void\ny a\n", "compiles"],
+      ["a= typeof\ny a\n", "compiles"],
+      ["a= class\nY {} a\n", "compiles"],
+      ["a=x .\ny a\n", "compiles"],
+      [
+        "a=x !\ny a\n",
+        {
+          message: "Expected a single expression, but found `y` after it.",
+          offset: 6,
+        },
+      ],
+      ["a=x *\ny a\n", "compiles"],
+      ["a=x /\ny a\n", "compiles"],
+      ["a=x **\ny a\n", "compiles"],
+      ["a=x %\ny a\n", "compiles"],
+      ["a=x &\ny a\n", "compiles"],
+      ["a=x &&\ny a\n", "compiles"],
+      ["a=x ^\ny a\n", "compiles"],
+      [
+        "a=x ~\ny a\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 4,
+        },
+      ],
+      ["a=x |\ny a\n", "compiles"],
+      ["a=x ||\ny a\n", "compiles"],
+      ["a=x ??\ny a\n", "compiles"],
+      ["a=x ?\ny :\nz a\n", "compiles"],
+      ["a=x ==\ny a\n", "compiles"],
+      ["a=x ===\ny a\n", "compiles"],
+      ["a=x !=\ny a\n", "compiles"],
+      ["a=x !==\ny a\n", "compiles"],
+      ["a=x <=\ny a\n", "compiles"],
+      ["a=x >=\ny a\n", "compiles"],
+      ["a=x &=\ny a\n", "compiles"],
+      ["a=x &&=\ny a\n", "compiles"],
+      ["a=x |=\ny a\n", "compiles"],
+      ["a=x ||=\ny a\n", "compiles"],
+      ["a=x ^=\ny a\n", "compiles"],
+      [
+        "a=x ~=\ny a\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 4,
+        },
+      ],
+      ["a=x >>=\ny a\n", "compiles"],
+      ["a=x >>>=\ny a\n", "compiles"],
+      ["a=x -=\ny a\n", "compiles"],
+      ["a=x /=\ny a\n", "compiles"],
+      ["a=x *=\ny a\n", "compiles"],
+      ["a=x **=\ny a\n", "compiles"],
+      ["a=x %=\ny a\n", "compiles"],
+      ["a=x +=\ny a\n", "compiles"],
+      ["a=x ++ +\ny a\n", "compiles"],
+      ["a=x +\n++ y a\n", "compiles"],
+      ["a=x >>\ny a\n", "compiles"],
+      ["a=x >>>\ny a\n", "compiles"],
+      ["a=x =>\ny a\n", "compiles"],
+      ["a=x =>\n( y ) a\n", "compiles"],
+      ['a= (x) =>\n{ console.log("y") } a\n', "compiles"],
+      [
+        'a= async\nx =>\n{ console.log("y") }\n',
+        {
+          message: "Expected a single expression, but found `x` after it.",
+          offset: 9,
+        },
+      ],
+      ["a\n", "compiles"],
+      ['a= function\n(x) { console.log("y") }\n', "compiles"],
+      ["a\n", "compiles"],
+      ['a= x =>\n{ console.log("y") }\n', "compiles"],
+      ["a\n", "compiles"],
+      [
+        'a= async\nfunction\n(x) { console.log("y") }\n',
+        {
+          message: "Expected a single expression, but found `f` after it.",
+          offset: 9,
+        },
+      ],
+      ["a\n", "compiles"],
+      ["<a= await\ny a/>\n", "compiles"],
+      ["<a= new\ny a/>\n", "compiles"],
+      ["<a= void\ny a/>\n", "compiles"],
+      ["<a= typeof\ny a/>\n", "compiles"],
+      ["<a= class\nY\n{} a/>\n", "compiles"],
+      ["<a=x .\ny a/>\n", "compiles"],
+      [
+        "<a=x !\ny a/>\n",
+        {
+          message: "Expected a single expression, but found `y` after it.",
+          offset: 7,
+        },
+      ],
+      ["<a=x *\ny a/>\n", "compiles"],
+      ["<a=x /\ny a/>\n", "compiles"],
+      ["<a=x **\ny a/>\n", "compiles"],
+      ["<a=x %\ny a/>\n", "compiles"],
+      ["<a=x &\ny a/>\n", "compiles"],
+      ["<a=x &&\ny a/>\n", "compiles"],
+      ["<a=x ^\ny a/>\n", "compiles"],
+      [
+        "<a=x ~\ny a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x |\ny a/>\n", "compiles"],
+      ["<a=x ||\ny a/>\n", "compiles"],
+      ["<a=x ??\ny a/>\n", "compiles"],
+      ["<a=x ?\ny :\nz a/>\n", "compiles"],
+      ["<a=x ==\ny a/>\n", "compiles"],
+      ["<a=x ===\ny a/>\n", "compiles"],
+      ["<a=x !=\ny a/>\n", "compiles"],
+      ["<a=x !==\ny a/>\n", "compiles"],
+      ["<a=x <=\ny a/>\n", "compiles"],
+      [
+        "<a=x >=\ny </a>\n",
+        {
+          message:
+            'A close tag was found before the "a" open tag was closed. If the "</" was intended as part of an attribute expression (eg a less-than comparison), wrap the value in parentheses.',
+          offset: 10,
+        },
+      ],
+      ["<a=x &=\ny a/>\n", "compiles"],
+      ["<a=x &&=\ny a/>\n", "compiles"],
+      ["<a=x |=\ny a/>\n", "compiles"],
+      ["<a=x ||=\ny a/>\n", "compiles"],
+      ["<a=x ^=\ny a/>\n", "compiles"],
+      [
+        "<a=x ~=\ny a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x >>=\ny </a>\n", "compiles"],
+      ["<a=x >>>=\ny </a>\n", "compiles"],
+      ["<a=x -=\ny a/>\n", "compiles"],
+      ["<a=x /=\ny a/>\n", "compiles"],
+      ["<a=x *=\ny a/>\n", "compiles"],
+      ["<a=x **=\ny a/>\n", "compiles"],
+      ["<a=x %=\ny a/>\n", "compiles"],
+      ["<a=x +=\ny a/>\n", "compiles"],
+      ["<a=x ++ +\ny a/>\n", "compiles"],
+      ["<a=x +\n++ y a/>\n", "compiles"],
+      ["<a=x >>\ny </a>\n", "compiles"],
+      ["<a=x >>>\ny </a>\n", "compiles"],
+      ["<a=x\n( y ) a/>\n", "compiles"],
+      [
+        "<a=x\n{ y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 5,
+        },
+      ],
+      [
+        "<a=x\n=>\ny a/>\n",
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 5,
+        },
+      ],
+      [
+        "<a=x\n=>\n( y ) a/>\n",
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 5,
+        },
+      ],
+      [
+        "<a=x\n=>\n{ y } a/>\n",
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 5,
+        },
+      ],
+      [
+        "<a=( x )\n{ y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 9,
+        },
+      ],
+      [
+        '<a= (x)\n=>\n{ console.log("y") } a/>\n',
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 8,
+        },
+      ],
+      [
+        '<a= async\nx\n=>\n{ console.log("y") }\na/>\n',
+        {
+          message: "Expected a single expression, but found `x` after it.",
+          offset: 10,
+        },
+      ],
+      ['<a= function\n(x)\n{ console.log("y") }\na/>\n', "compiles"],
+      [
+        '<a= x\n=>\n{ console.log("y") }\na/>\n',
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 6,
+        },
+      ],
+      [
+        '<a= async\nfunction\n(x)\n{ console.log("y") }\na/>\n',
+        {
+          message: "Expected a single expression, but found `f` after it.",
+          offset: 10,
+        },
+      ],
+    ],
+    "attr-operators-newline-before": [
+      ["a=x\n.b\n", "compiles"],
+      ["<a=x\n.y a/>\n", "compiles"],
+      [
+        "<a=x\n! y a/>\n",
+        {
+          message: "Expected a single expression, but found `!` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x\n* y a/>\n", "compiles"],
+      ["<a=x\n/ y a/>\n", "compiles"],
+      ["<a=x\n** y a/>\n", "compiles"],
+      ["<a=x\n% y a/>\n", "compiles"],
+      ["<a=x\n& y a/>\n", "compiles"],
+      ["<a=x\n&& y a/>\n", "compiles"],
+      ["<a=x\n^ y a/>\n", "compiles"],
+      [
+        "<a=x\n~ y a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x\n| y a/>\n", "compiles"],
+      ["<a=x\n|| y a/>\n", "compiles"],
+      ["<a=x\n?? y a/>\n", "compiles"],
+      ["<a=x\n? y\n: z a/>\n", "compiles"],
+      ["<a=x\n== y a/>\n", "compiles"],
+      ["<a=x\n=== y a/>\n", "compiles"],
+      ["<a=x\n!= y a/>\n", "compiles"],
+      ["<a=x\n!== y a/>\n", "compiles"],
+      ["<a=x\n<= y a/>\n", "compiles"],
+      [
+        "<a=x\n>= y </a>\n",
+        {
+          message:
+            'A close tag was found before the "a" open tag was closed. If the "</" was intended as part of an attribute expression (eg a less-than comparison), wrap the value in parentheses.',
+          offset: 10,
+        },
+      ],
+      ["<a=x\n&= y a/>\n", "compiles"],
+      ["<a=x\n&&= y a/>\n", "compiles"],
+      ["<a=x\n|= y a/>\n", "compiles"],
+      ["<a=x\n||= y a/>\n", "compiles"],
+      ["<a=x\n^= y a/>\n", "compiles"],
+      [
+        "<a=x\n~= y a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x\n>>= y </a>\n", "compiles"],
+      ["<a=x\n>>>= y </a>\n", "compiles"],
+      ["<a=x\n-= y a/>\n", "compiles"],
+      ["<a=x\n/= y a/>\n", "compiles"],
+      ["<a=x\n*= y a/>\n", "compiles"],
+      ["<a=x\n**= y a/>\n", "compiles"],
+      ["<a=x\n%= y a/>\n", "compiles"],
+      ["<a=x\n+= y a/>\n", "compiles"],
+      ["<a=x ++\n+ y a/>\n", "compiles"],
+      ["<a=x +\n++ y a/>\n", "compiles"],
+      ["<a=x\n>>y </a>\n", "compiles"],
+      ["<a=x\n>>> y </a>\n", "compiles"],
+      ["<a=x\n( y ) a/>\n", "compiles"],
+      [
+        "<a=x\n{ y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 5,
+        },
+      ],
+      [
+        "<a=x\n=>\ny a/>\n",
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 5,
+        },
+      ],
+      [
+        "<a=x\n=>\n( y ) a/>\n",
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 5,
+        },
+      ],
+      [
+        "<a=x\n=>\n{ y } a/>\n",
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 5,
+        },
+      ],
+      [
+        "<a=( x )\n{ y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 9,
+        },
+      ],
+      [
+        '<a= (x)\n=>\n{ console.log("y") } a/>\n',
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 8,
+        },
+      ],
+      [
+        '<a= async\nx\n=>\n{ console.log("y") }\na/>\n',
+        {
+          message: "Expected a single expression, but found `x` after it.",
+          offset: 10,
+        },
+      ],
+      ['<a= function\n(x)\n{ console.log("y") }\na/>\n', "compiles"],
+      [
+        '<a= x\n=>\n{ console.log("y") }\na/>\n',
+        {
+          message: "Expected a single expression, but found `=` after it.",
+          offset: 6,
+        },
+      ],
+      [
+        '<a= async\nfunction\n(x)\n{ console.log("y") }\na/>\n',
+        {
+          message: "Expected a single expression, but found `f` after it.",
+          offset: 10,
+        },
+      ],
+    ],
+    "attr-operators-space-after": [
+      ["a=x. y a\n", "compiles"],
+      ["a=x! y a\n", "compiles"],
+      ["a=x* y a\n", "compiles"],
+      ["a=x/ y a\n", "compiles"],
+      ["a=x** y a\n", "compiles"],
+      ["a=x% y a\n", "compiles"],
+      ["a=x& y a\n", "compiles"],
+      ["a=x&& y a\n", "compiles"],
+      ["a=x^ y a\n", "compiles"],
+      [
+        "a=x~ y a\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 3,
+        },
+      ],
+      ["a=x| y a\n", "compiles"],
+      ["a=x|| y a\n", "compiles"],
+      ["a=x?? y a\n", "compiles"],
+      ["a=x? y: z a\n", "compiles"],
+      ["a=x== y a\n", "compiles"],
+      ["a=x=== y a\n", "compiles"],
+      ["a=x!= y a\n", "compiles"],
+      ["a=x!== y a\n", "compiles"],
+      ["a=x<= y a\n", "compiles"],
+      ["a=x>= y a\n", "compiles"],
+      ["a=x&= y a\n", "compiles"],
+      ["a=x&&= y a\n", "compiles"],
+      ["a=x|= y a\n", "compiles"],
+      ["a=x||= y a\n", "compiles"],
+      ["a=x^= y a\n", "compiles"],
+      [
+        "a=x~= y a\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 3,
+        },
+      ],
+      ["a=x>>= y a\n", "compiles"],
+      ["a=x>>>= y a\n", "compiles"],
+      ["a=x-= y a\n", "compiles"],
+      ["a=x/= y a\n", "compiles"],
+      ["a=x*= y a\n", "compiles"],
+      ["a=x**= y a\n", "compiles"],
+      ["a=x%= y a\n", "compiles"],
+      ["a=x+= y a\n", "compiles"],
+      ["a=x++ + y a\n", "compiles"],
+      ["a=x+ ++ y a\n", "compiles"],
+      ["a=x> y a\n", "compiles"],
+      ["a=x>> y a\n", "compiles"],
+      ["a=x>>> y a\n", "compiles"],
+      ["a=x( y) a\n", "compiles"],
+      [
+        "a=x{ y} a\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 3,
+        },
+      ],
+      ["a=x=> y a\n", "compiles"],
+      ["a=x=> (y ) a\n", "compiles"],
+      ["a=x=> {y } a\n", "compiles"],
+      [
+        "a=(x ) {y } a\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 7,
+        },
+      ],
+      ["<a=x. y a/>\n", "compiles"],
+      ["<a=x! y a/>\n", "compiles"],
+      ["<a=x* y a/>\n", "compiles"],
+      ["<a=x/ y a/>\n", "compiles"],
+      ["<a=x** y a/>\n", "compiles"],
+      ["<a=x% y a/>\n", "compiles"],
+      ["<a=x& y a/>\n", "compiles"],
+      ["<a=x&& y a/>\n", "compiles"],
+      ["<a=x^ y a/>\n", "compiles"],
+      [
+        "<a=x~ y a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 4,
+        },
+      ],
+      ["<a=x| y a/>\n", "compiles"],
+      ["<a=x|| y a/>\n", "compiles"],
+      ["<a=x?? y a/>\n", "compiles"],
+      ["<a=x? y: z a/>\n", "compiles"],
+      ["<a=x== y a/>\n", "compiles"],
+      ["<a=x=== y a/>\n", "compiles"],
+      ["<a=x!= y a/>\n", "compiles"],
+      ["<a=x!== y a/>\n", "compiles"],
+      ["<a=x<= y a/>\n", "compiles"],
+      ["<a=x>= y </a>\n", "compiles"],
+      ["<a=x&= y a/>\n", "compiles"],
+      ["<a=x&&= y a/>\n", "compiles"],
+      ["<a=x|= y a/>\n", "compiles"],
+      ["<a=x||= y a/>\n", "compiles"],
+      ["<a=x^= y a/>\n", "compiles"],
+      [
+        "<a=x~= y a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 4,
+        },
+      ],
+      ["<a=x>>= y </a>\n", "compiles"],
+      ["<a=x>>>= y </a>\n", "compiles"],
+      ["<a=x-= y a/>\n", "compiles"],
+      ["<a=x/= y a/>\n", "compiles"],
+      ["<a=x*= y a/>\n", "compiles"],
+      ["<a=x**= y a/>\n", "compiles"],
+      ["<a=x%= y a/>\n", "compiles"],
+      ["<a=x+= y a/>\n", "compiles"],
+      ["<a=x++ + y a/>\n", "compiles"],
+      ["<a=x+ ++ y a/>\n", "compiles"],
+      ["<a=x> y </a>\n", "compiles"],
+      ["<a=x>> y </a>\n", "compiles"],
+      ["<a=x>>> y </a>\n", "compiles"],
+      ["<a=x(y ) a/>\n", "compiles"],
+      [
+        "<a=z {y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x=> y a/>\n", "compiles"],
+      ["<a=x=> (y ) a/>\n", "compiles"],
+      ["<a=x=> {y } a/>\n", "compiles"],
+      [
+        "<a=(x ) {y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 8,
+        },
+      ],
+    ],
+    "attr-operators-space-before": [
+      ["a=x .y a\n", "compiles"],
+      [
+        "a=x !y a\n",
+        {
+          message: "Expected a single expression, but found `y` after it.",
+          offset: 5,
+        },
+      ],
+      ["a=x *y a\n", "compiles"],
+      ["a=x /y a\n", "compiles"],
+      ["a=x **y a\n", "compiles"],
+      ["a=x %y a\n", "compiles"],
+      ["a=x &y a\n", "compiles"],
+      ["a=x &&y a\n", "compiles"],
+      ["a=x ^y a\n", "compiles"],
+      [
+        "a=x ~y a\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 4,
+        },
+      ],
+      ["a=x |y a\n", "compiles"],
+      ["a=x ||y a\n", "compiles"],
+      ["a=x ??y a\n", "compiles"],
+      ["a=x ?y :z a\n", "compiles"],
+      ["a=x ==y a\n", "compiles"],
+      ["a=x ===y a\n", "compiles"],
+      ["a=x !=y a\n", "compiles"],
+      ["a=x !==y a\n", "compiles"],
+      ["a=x <=y a\n", "compiles"],
+      ["a=x >=y a\n", "compiles"],
+      ["a=x &=y a\n", "compiles"],
+      ["a=x &&=y a\n", "compiles"],
+      ["a=x |=y a\n", "compiles"],
+      ["a=x ||=y a\n", "compiles"],
+      ["a=x ^=y a\n", "compiles"],
+      [
+        "a=x ~=y a\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 4,
+        },
+      ],
+      ["a=x >>=y a\n", "compiles"],
+      ["a=x >>>=y a\n", "compiles"],
+      ["a=x -=y a\n", "compiles"],
+      ["a=x /=y a\n", "compiles"],
+      ["a=x *=y a\n", "compiles"],
+      ["a=x **=y a\n", "compiles"],
+      ["a=x %=y a\n", "compiles"],
+      ["a=x +=y a\n", "compiles"],
+      ["a=x++ +y a\n", "compiles"],
+      ["a=x+ ++y a\n", "compiles"],
+      ["a=x >y a\n", "compiles"],
+      ["a=x >>y a\n", "compiles"],
+      ["a=x >>>y a\n", "compiles"],
+      ["a=x (y ) a\n", "compiles"],
+      [
+        "a=x {y } a\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 4,
+        },
+      ],
+      ["a=x =>y a\n", "compiles"],
+      ["a=x => (y ) a\n", "compiles"],
+      ["a=x => {y } a\n", "compiles"],
+      [
+        "a=( x ) {y } a\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 8,
+        },
+      ],
+      ["<a=x .y a/>\n", "compiles"],
+      [
+        "<a=x !y a/>\n",
+        {
+          message: "Expected a single expression, but found `y` after it.",
+          offset: 6,
+        },
+      ],
+      ["<a=x *y a/>\n", "compiles"],
+      ["<a=x /y a/>\n", "compiles"],
+      ["<a=x **y a/>\n", "compiles"],
+      ["<a=x %y a/>\n", "compiles"],
+      ["<a=x &y a/>\n", "compiles"],
+      ["<a=x &&y a/>\n", "compiles"],
+      ["<a=x ^y a/>\n", "compiles"],
+      [
+        "<a=x ~y a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x |y a/>\n", "compiles"],
+      ["<a=x ||y a/>\n", "compiles"],
+      ["<a=x ??y a/>\n", "compiles"],
+      ["<a=x ?y :z a/>\n", "compiles"],
+      ["<a=x ==y a/>\n", "compiles"],
+      ["<a=x ===y a/>\n", "compiles"],
+      ["<a=x !=y a/>\n", "compiles"],
+      ["<a=x !==y a/>\n", "compiles"],
+      ["<a=x <=y a/>\n", "compiles"],
+      [
+        "<a=x >=y </a>\n",
+        {
+          message:
+            'A close tag was found before the "a" open tag was closed. If the "</" was intended as part of an attribute expression (eg a less-than comparison), wrap the value in parentheses.',
+          offset: 9,
+        },
+      ],
+      ["<a=x &=y a/>\n", "compiles"],
+      ["<a=x &&=y a/>\n", "compiles"],
+      ["<a=x |=y a/>\n", "compiles"],
+      ["<a=x ||=y a/>\n", "compiles"],
+      ["<a=x ^=y a/>\n", "compiles"],
+      [
+        "<a=x ~=y a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x >>=y </a>\n", "compiles"],
+      ["<a=x >>>=y </a>\n", "compiles"],
+      ["<a=x -=y a/>\n", "compiles"],
+      ["<a=x /=y a/>\n", "compiles"],
+      ["<a=x *=y a/>\n", "compiles"],
+      ["<a=x **=y a/>\n", "compiles"],
+      ["<a=x %=y a/>\n", "compiles"],
+      ["<a=x +=y a/>\n", "compiles"],
+      ["<a=x++ +y a/>\n", "compiles"],
+      ["<a=x+ ++y a/>\n", "compiles"],
+      ["<a=x >y </a>\n", "compiles"],
+      ["<a=x >>y </a>\n", "compiles"],
+      ["<a=x >>>y </a>\n", "compiles"],
+      ["<a=x (y ) a/>\n", "compiles"],
+      [
+        "<a=x {y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x =>y a/>\n", "compiles"],
+      ["<a=x => (y ) a/>\n", "compiles"],
+      ["<a=x => {y } a/>\n", "compiles"],
+      [
+        "<a=( x ) {y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 9,
+        },
+      ],
+    ],
+    "attr-operators-space-between": [
+      ["a = x as string a\n", "compiles"],
+      ["a = x as keyof other a\n", "compiles"],
+      ["a= await y a\n", "compiles"],
+      ["a= new y a\n", "compiles"],
+      ["a= void y a\n", "compiles"],
+      ["a= typeof y a\n", "compiles"],
+      ["a= class A extends Y {} a\n", "compiles"],
+      ["a=x . y a\n", "compiles"],
+      [
+        "a=x ! y a\n",
+        {
+          message: "Expected a single expression, but found `y` after it.",
+          offset: 6,
+        },
+      ],
+      ["a=x * y a\n", "compiles"],
+      ["a=x / y a\n", "compiles"],
+      ["a=x ** y a\n", "compiles"],
+      ["a=x % y a\n", "compiles"],
+      ["a=x & y a\n", "compiles"],
+      ["a=x && y a\n", "compiles"],
+      ["a=x ^ y a\n", "compiles"],
+      [
+        "a=x ~ y a\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 4,
+        },
+      ],
+      ["a=x | y a\n", "compiles"],
+      ["a=x || y a\n", "compiles"],
+      ["a=x ?? y a\n", "compiles"],
+      ["a=x ? y : z a\n", "compiles"],
+      ["a=x == y a\n", "compiles"],
+      ["a=x === y a\n", "compiles"],
+      ["a=x != y a\n", "compiles"],
+      ["a=x !== y a\n", "compiles"],
+      ["a=x <= y a\n", "compiles"],
+      ["a=x >= y a\n", "compiles"],
+      ["a=x &= y a\n", "compiles"],
+      ["a=x &&= y a\n", "compiles"],
+      ["a=x |= y a\n", "compiles"],
+      ["a=x ||= y a\n", "compiles"],
+      ["a=x ^= y a\n", "compiles"],
+      [
+        "a=x ~= y a\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 4,
+        },
+      ],
+      ["a=x >>= y a\n", "compiles"],
+      ["a=x >>>= y a\n", "compiles"],
+      ["a=x -= y a\n", "compiles"],
+      ["a=x /= y a\n", "compiles"],
+      ["a=x *= y a\n", "compiles"],
+      ["a=x **= y a\n", "compiles"],
+      ["a=x %= y a\n", "compiles"],
+      ["a=x += y a\n", "compiles"],
+      ["a=x in;\n", "compiles"],
+      ["a=x in y a\n", "compiles"],
+      ["a=x in=y\n", "compiles"],
+      ["a=x in, y\n", "compiles"],
+      ["a=x instanceof y a\n", "compiles"],
+      ["a=x satisfies y a\n", "compiles"],
+      ["a=x ++ + y a\n", "compiles"],
+      ["a=x+ ++ y a\n", "compiles"],
+      ["a=x ++ y a\n", "compiles"],
+      ["a=x > y a\n", "compiles"],
+      ["a=x >> y a\n", "compiles"],
+      ["a=x >>> y a\n", "compiles"],
+      ["a=x ( y ) a\n", "compiles"],
+      [
+        "a=x { y } a\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 4,
+        },
+      ],
+      ["a=x => y a\n", "compiles"],
+      ["a=x => ( y ) a\n", "compiles"],
+      ["a=x => { y } a\n", "compiles"],
+      [
+        "a=( x ) { y } a\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 8,
+        },
+      ],
+      ['a = (x) => { console.log("y") } a\n', "compiles"],
+      ['a = async x => { console.log("y") } a\n', "compiles"],
+      ['a = function (x) { console.log("y") } a\n', "compiles"],
+      ['a = x => { console.log("y") } a\n', "compiles"],
+      ['a = async function (x) { console.log("y") } a\n', "compiles"],
+      ["<a= await y a/>\n", "compiles"],
+      ["<a= new y a/>\n", "compiles"],
+      ["<a= void y a/>\n", "compiles"],
+      ["<a= typeof y a/>\n", "compiles"],
+      ["<a= class A extends Y {} a/>\n", "compiles"],
+      ["<a=x . y a/>\n", "compiles"],
+      [
+        "<a=x ! y a/>\n",
+        {
+          message: "Expected a single expression, but found `y` after it.",
+          offset: 7,
+        },
+      ],
+      ["<a=x * y a/>\n", "compiles"],
+      ["<a=x / y a/>\n", "compiles"],
+      ["<a=x ** y a/>\n", "compiles"],
+      ["<a=x % y a/>\n", "compiles"],
+      ["<a=x & y a/>\n", "compiles"],
+      ["<a=x && y a/>\n", "compiles"],
+      ["<a=x ^ y a/>\n", "compiles"],
+      [
+        "<a=x ~ y a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x | y a/>\n", "compiles"],
+      ["<a=x || y a/>\n", "compiles"],
+      ["<a=x ?? y a/>\n", "compiles"],
+      ["<a=x ? y : z a/>\n", "compiles"],
+      ["<a=x == y a/>\n", "compiles"],
+      ["<a=x === y a/>\n", "compiles"],
+      ["<a=x != y a/>\n", "compiles"],
+      ["<a=x !== y a/>\n", "compiles"],
+      ["<a=x <= y a/>\n", "compiles"],
+      [
+        "<a=x >= y </a>\n",
+        {
+          message:
+            'A close tag was found before the "a" open tag was closed. If the "</" was intended as part of an attribute expression (eg a less-than comparison), wrap the value in parentheses.',
+          offset: 10,
+        },
+      ],
+      ["<a=x &= y a/>\n", "compiles"],
+      ["<a=x &&= y a/>\n", "compiles"],
+      ["<a=x |= y a/>\n", "compiles"],
+      ["<a=x ||= y a/>\n", "compiles"],
+      ["<a=x ^= y a/>\n", "compiles"],
+      [
+        "<a=x ~= y a/>\n",
+        {
+          message: "Expected a single expression, but found `~` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x >>= y </a>\n", "compiles"],
+      ["<a=x >>>= y </a>\n", "compiles"],
+      ["<a=x -= y a/>\n", "compiles"],
+      ["<a=x /= y a/>\n", "compiles"],
+      ["<a=x *= y a/>\n", "compiles"],
+      ["<a=x **= y a/>\n", "compiles"],
+      ["<a=x %= y a/>\n", "compiles"],
+      ["<a=x += y a/>\n", "compiles"],
+      // Stock's parser reads `in;` as a boolean attribute and its translator
+      // refuses it, "Invalid attribute name." at offset 5 (`stockMarkoCompile`);
+      // MX refuses the same name at the same offset while parsing.
+      [
+        "<a=x in;/>\n",
+        {
+          message:
+            "Invalid attribute name `in;` — an attribute name may use letters, digits and `._:-`",
+          offset: 5,
+        },
+      ],
+      ["<a=x in y a/>\n", "compiles"],
+      ["<a=x in=y/>\n", "compiles"],
+      ["<a=x in, y/>\n", "compiles"],
+      ["<a=x instanceof y a/>\n", "compiles"],
+      ["<a=x satisfies y a/>\n", "compiles"],
+      ["<a=x ++ + y a/>\n", "compiles"],
+      ["<a=x + ++ y a/>\n", "compiles"],
+      ["<a=typeof ++ y a/>\n", "compiles"],
+      ["<a=typeof y ++ a/>\n", "compiles"],
+      ["<a=x ++ y a/>\n", "compiles"],
+      ["<a=x > y </a>\n", "compiles"],
+      ["<a=x >> y </a>\n", "compiles"],
+      ["<a=x >>> y </a>\n", "compiles"],
+      ["<a=x ( y ) a/>\n", "compiles"],
+      [
+        "<a=x { y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 5,
+        },
+      ],
+      ["<a=x => y a/>\n", "compiles"],
+      ["<a=x => ( y ) a/>\n", "compiles"],
+      ["<a=x => { y } a/>\n", "compiles"],
+      [
+        "<a=( x ) { y } a/>\n",
+        {
+          message: "Expected a single expression, but found `{` after it.",
+          offset: 9,
+        },
+      ],
+      ['<a= (x) => { console.log("y") } a/>\n', "compiles"],
+      ['<a= async x => { console.log("y") } a/>\n', "compiles"],
+      ['<a= function (x) { console.log("y") } a/>\n', "compiles"],
+      ['<a= x => { console.log("y") } a/>\n', "compiles"],
+      ['<a= async function (x) { console.log("y") } a/>\n', "compiles"],
+      ["<a= x / (y[z])/>\n", "compiles"],
+    ],
+    "attr-without-delimiters": [
+      [
+        '<a data=123"abc"></a>\n',
+        {
+          message: 'Expected a single expression, but found `"` after it.',
+          offset: 11,
+        },
+      ],
+    ],
+  };
+
+  function outcome(
+    source: string,
+    tagRules?: "none",
+  ): Outcome | { message: string; offset: number }[] {
+    const errors = run(source, tagRules)
+      .diagnostics.filter((d) => d.severity === "error")
+      .map(({ message, offset }) => ({ message, offset }));
+    if (errors.length === 0) return "compiles";
+    // Several errors never equal a pinned outcome: stock reports one.
+    return errors.length === 1 ? (errors[0] as Outcome) : errors;
+  }
+
+  for (const [label, tagRules] of [
+    ["default (strict) tag rules", undefined],
+    ['`tagRules: "none"`', "none" as const],
+  ] as const) {
+    for (const [name, forms] of Object.entries(FORMS)) {
+      it(`${name}: every form gives stock Marko's outcome, ${label}`, () => {
+        const actual = forms.map(([form]) => [form, outcome(form, tagRules)]);
+        expect(actual).toEqual(forms);
+      });
+    }
+  }
+});
 
 describe("valid TypeScript in a tag head", () => {
   // The variants of the `markoRefusesToo` cases that stock Marko compiles
