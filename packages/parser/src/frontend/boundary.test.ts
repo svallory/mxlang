@@ -108,7 +108,7 @@ describe("internal failures", () => {
       expect.objectContaining({
         code: "MX_FRONT_END_INTERNAL",
         message:
-          "The MX template parser threw instead of reporting an error (not yours: an MX bug): injected template parser failure",
+          "The template parser threw instead of reporting an error (not yours: an internal bug): injected template parser failure",
       }),
     ]);
   });
@@ -121,7 +121,7 @@ describe("internal failures", () => {
     };
     const document = parse("div(a", OPTIONS);
     expect(document.errors.at(-1)?.message).toBe(
-      "The MX front end failed while building the syntax tree (not yours: an MX bug): injected after parse",
+      "The front end failed while building the syntax tree (not yours: an internal bug): injected after parse",
     );
   });
 
@@ -137,7 +137,7 @@ describe("internal failures", () => {
       code: "MX_FRONT_END_INTERNAL",
       origin: "front-end",
       message:
-        "The MX front end failed while building the syntax tree (not yours: an MX bug): injected",
+        "The front end failed while building the syntax tree (not yours: an internal bug): injected",
     });
     const a = document.body[0] as unknown as {
       incomplete: boolean;

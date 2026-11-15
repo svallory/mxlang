@@ -115,8 +115,8 @@ class ClaimThrow {
   readonly error: unknown;
 }
 
-/** The wording for an error that is never the author's. */
-const MX_BUG = "not yours: an MX bug";
+/** The wording for an error that is never the author's: a defect of the front end or the template parser. */
+const INTERNAL_BUG = "not yours: an internal bug";
 
 const BODY_MODES: ReadonlySet<string> = new Set<MxBodyMode>([
   "html",
@@ -1824,8 +1824,8 @@ class FrontEnd {
       origin: "front-end",
       message:
         !this.inTemplate || this.inHandler
-          ? `The MX front end failed while building the syntax tree (${MX_BUG}): ${raw}`
-          : `The MX template parser threw instead of reporting an error (${MX_BUG}): ${raw}`,
+          ? `The front end failed while building the syntax tree (${INTERNAL_BUG}): ${raw}`
+          : `The template parser threw instead of reporting an error (${INTERNAL_BUG}): ${raw}`,
       context: null,
     });
     this.internal = true;

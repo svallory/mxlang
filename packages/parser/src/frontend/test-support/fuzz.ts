@@ -231,7 +231,7 @@ export interface FuzzResult {
   readonly templateThrows: { seed: number; input: string; problem: string }[];
 }
 
-const TEMPLATE_THREW = "The MX template parser threw";
+const TEMPLATE_THREW = "The template parser threw";
 
 /** Parses each generated input: a throw, an internal error or a broken invariant is a failure. */
 export function run(
