@@ -1,0 +1,15 @@
+<define/Thing|input|>
+  <return=input.n * 2/>
+  <i>${input.n}</i>
+</define>
+<Thing/double n=21/>
+<define/T|{n}|>
+  <return=n/>
+  <b>${n}</b>
+</define>
+<T n=1/>
+<define/D|{n}|>
+  <return=n * 2/>
+</define>
+<D/d n=2/>
+<p data-double=double data-d=d/>

@@ -278,6 +278,8 @@ interface State {
    * (invariant §7.5-6).
    */
   tryTemp: number;
+  /** Serial for the `{ value, output }` pair a `/var` call of a returning `<define>` binds. */
+  defineReturnTemp: number;
 }
 
 export interface StringEmitter extends Emitter<string[]> {
@@ -329,6 +331,7 @@ export function createEmitter(
     forParamTemp: 0,
     sink: "__mxOut",
     tryTemp: 0,
+    defineReturnTemp: 0,
   };
 
   const push = (line: string | MappedCode): void => {
@@ -396,11 +399,16 @@ export function createEmitter(
    * that receives it. Blocks stay string-returning: `content` and renderable
    * attribute tags are `() => string` to every callee, hand-written ones
    * included.
+   *
+   * With `returnValue` (a `<define>` whose body declares `<return>`) the
+   * function returns `{ value, output }` instead: the value is evaluated
+   * after the body, where a unit's own `render` evaluates its `<return>`.
    */
   const blockFunction = (
     children: IrNode[],
     params = "",
     typeParams?: { code: string; span: SourceSpan },
+    returnValue?: Expr,
   ): MappedCode => {
     const outerBody = state.body;
     const outerBodyMappings = state.bodyMappings;
@@ -414,7 +422,15 @@ export function createEmitter(
     state.sink = "__mxOut";
     push("const __mxOut = __mxCreateOut();");
     drive(emitter, children);
-    push("return __mxOut.toString();");
+    push(
+      returnValue
+        ? concatMapped(
+            "return { value: ",
+            mappedExpr(returnValue),
+            ", output: __mxOut.toString() };",
+          )
+        : "return __mxOut.toString();",
+    );
     state.sink = outerSink;
     const lines = state.body;
     const lineMappings = state.bodyMappings;
@@ -1389,13 +1405,31 @@ export function createEmitter(
             : target.params.length > 0
               ? [propsObject]
               : [];
+        const argList = args.flatMap((arg, index) =>
+          index === 0 ? [arg] : [", ", arg],
+        );
+        if (node.var && node.returnsValue) {
+          // A `/var` call of a define that declares `<return>` calls its
+          // private pair function: the value binds, the output is written.
+          const pair = `__mxRet${state.defineReturnTemp++}`;
+          push(
+            concatMapped(
+              `const ${pair} = `,
+              mapped(defineFunctionName(target.name), node.nameSpan),
+              "(",
+              ...argList,
+              ");",
+            ),
+          );
+          push(`const ${node.var} = ${pair}.value;`);
+          write(`${pair}.output`);
+          return;
+        }
         write(
           concatMapped(
             mapped(target.name, node.nameSpan),
             "(",
-            ...args.flatMap((arg, index) =>
-              index === 0 ? [arg] : [", ", arg],
-            ),
+            ...argList,
             ")",
           ),
         );
@@ -1545,9 +1579,19 @@ export function createEmitter(
         node.children,
         node.params.join(", "),
         node.typeParams,
+        node.returnValue,
       );
+      // A define that declares `<return>`: its block returns `{ value, output }`
+      // under a private name, which only a `/var` call reaches. Its public
+      // value (calls without `/var`, `content` reads, dynamic tags) is the
+      // output alone, as for any other define.
+      const pair = node.returnValue ? defineFunctionName(node.name) : null;
+      if (pair) push(concatMapped(`const ${pair} = `, fn, ";"));
+      const value: string | MappedCode = pair
+        ? `(...a: Parameters<typeof ${pair}>) => ${pair}(...a).output`
+        : fn;
       if (node.attrs.length === 0) {
-        push(concatMapped(`const ${node.name} = `, fn, ";"));
+        push(concatMapped(`const ${node.name} = `, value, ";"));
         return;
       }
       // Marko: the tag's attributes are properties of the define's value
@@ -1557,7 +1601,7 @@ export function createEmitter(
       push(
         concatMapped(
           `const ${node.name} = ${open}`,
-          fn,
+          value,
           between,
           "{ ",
           joinParts(propPartsOfAttrs(node.attrs)),
@@ -1939,6 +1983,14 @@ export function createEmitter(
   }
 
   return emitter;
+}
+
+/**
+ * The private name of a `<define>` that declares `<return>`: the function that
+ * returns `{ value, output }` (Preact's `defineFunctionName` convention).
+ */
+function defineFunctionName(name: string): string {
+  return `__mxDef_${name}`;
 }
 
 /**

@@ -7,6 +7,7 @@
  * the warning for a define with several params.
  */
 import { describe, expect, it } from "vitest";
+import { mx } from "./helpers.ts";
 import { compile } from "./index.ts";
 
 const emit = (source: string) => compile(source, "/fixtures/row.mx").code;
@@ -64,5 +65,33 @@ describe("html: a <define> call passes its attributes as the first param", () =>
         ),
       ).toEqual([]);
     });
+  });
+});
+
+describe("html: a <define> that declares <return>", () => {
+  // The escape helper is a bare import, so the renderer needs a file to
+  // resolve it from; nothing is written there.
+  const filename = new URL("../define-return.mx", import.meta.url).pathname;
+  const render = (source: string) => mx(source, { filename })({});
+
+  // Expected HTML is stock Marko 6.4.4's render, its resume comments removed.
+  it.each([
+    [
+      "binds the returned value to the call's /var",
+      "<define/Thing|input|>\n  <return=input.n * 2/>\n  <i>${input.n}</i>\n</define>\n<Thing/double n=21/>\n<p>${double}</p>\n",
+      "<i>21</i><p>42</p>",
+    ],
+    [
+      "renders only the output for a call without /var",
+      "<define/T|{n}|><return=n/><b>${n}</b></define><T n=1/>",
+      "<b>1</b>",
+    ],
+    [
+      "binds a /var per <for> row",
+      "<define/T|{n}|><return=n * 10/></define><for|i| of=[1, 2]><T/v n=i/>${v}</for>",
+      "1020",
+    ],
+  ])("%s", (_what, source, html) => {
+    expect(render(source)).toBe(html);
   });
 });
