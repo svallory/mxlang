@@ -33,6 +33,8 @@ const REQUEST_TIMEOUT_MS = 20_000;
  * response. A request rejects, with tsserver's stderr and the tail of its log
  * in the message, when tsserver exits first or answers nothing in
  * {@link REQUEST_TIMEOUT_MS}; a hung tsserver is killed, never left running.
+ * Every event tsserver sends is recorded from spawn on, so `waitForEvent`
+ * also sees an event that arrived before anyone waited for it.
  */
 function startTsserver(args: string[], cwd: string, logFile: string) {
   const child: ChildProcess = spawn(process.execPath, [TSSERVER, ...args], {
@@ -47,20 +49,32 @@ function startTsserver(args: string[], cwd: string, logFile: string) {
     number,
     { resolve: (body: unknown) => void; reject: (error: Error) => void }
   >();
-  const failAll = (reason: string) => {
+  type ServerEvent = { event: string; body?: unknown };
+  const events: ServerEvent[] = [];
+  const eventWaiters = new Set<{
+    accepts: (event: ServerEvent) => boolean;
+    resolve: (body: unknown) => void;
+    reject: (error: Error) => void;
+  }>();
+  const failure = (reason: string) => {
     const logTail = existsSync(logFile)
       ? readFileSync(logFile, "utf8").split("\n").slice(-30).join("\n")
       : "(no log file)";
-    const error = new Error(
-      `${reason}\n--- tsserver stderr ---\n${stderr || "(empty)"}\n--- tsserver log tail ---\n${logTail}`,
+    return new Error(
+      `${reason}\n--- tsserver events seen ---\n${events.map((e) => e.event).join(", ") || "(none)"}\n--- tsserver stderr ---\n${stderr || "(empty)"}\n--- tsserver log tail ---\n${logTail}`,
     );
+  };
+  let exited: string | undefined;
+  const failAll = (reason: string) => {
+    const error = failure(reason);
     for (const { reject } of waiting.values()) reject(error);
     waiting.clear();
+    for (const { reject } of eventWaiters) reject(error);
+    eventWaiters.clear();
   };
   child.on("exit", (code, signal) => {
-    failAll(
-      `tsserver exited (code ${code}, signal ${signal}) before answering`,
-    );
+    exited = `tsserver exited (code ${code}, signal ${signal}) before answering`;
+    failAll(exited);
   });
   let buffer = "";
   child.stdout?.on("data", (chunk: Buffer) => {
@@ -74,11 +88,19 @@ function startTsserver(args: string[], cwd: string, logFile: string) {
       const message = JSON.parse(line) as {
         type: string;
         request_seq?: number;
+        event?: string;
         body?: unknown;
       };
       if (message.type === "response" && message.request_seq !== undefined) {
         waiting.get(message.request_seq)?.resolve(message.body);
         waiting.delete(message.request_seq);
+      }
+      if (message.type === "event" && message.event !== undefined) {
+        const event = { event: message.event, body: message.body };
+        events.push(event);
+        for (const waiter of eventWaiters) {
+          if (waiter.accepts(event)) waiter.resolve(event.body);
+        }
       }
     }
   });
@@ -106,6 +128,45 @@ function startTsserver(args: string[], cwd: string, logFile: string) {
         child.stdin?.write(
           `${JSON.stringify({ seq: id, type: "request", command, arguments: args })}\n`,
         );
+      });
+    },
+    /**
+     * Resolves with the body of the first event named `name`, already
+     * recorded or still to come, that `match` accepts; rejects when tsserver
+     * exits or no such event arrives in `timeoutMs`.
+     */
+    waitForEvent<Body>(
+      name: string,
+      match: (body: Body) => boolean,
+      timeoutMs: number,
+    ): Promise<Body> {
+      const accepts = (event: ServerEvent) =>
+        event.event === name && match(event.body as Body);
+      const seen = events.find(accepts);
+      if (seen) return Promise.resolve(seen.body as Body);
+      if (exited !== undefined) return Promise.reject(failure(exited));
+      return new Promise((resolve, reject) => {
+        const waiter = {
+          accepts,
+          resolve: (body: unknown) => {
+            clearTimeout(timer);
+            eventWaiters.delete(waiter);
+            resolve(body as Body);
+          },
+          reject: (error: Error) => {
+            clearTimeout(timer);
+            eventWaiters.delete(waiter);
+            reject(error);
+          },
+        };
+        const timer = setTimeout(() => {
+          waiter.reject(
+            failure(
+              `tsserver sent no matching "${name}" event in ${timeoutMs} ms`,
+            ),
+          );
+        }, timeoutMs);
+        eventWaiters.add(waiter);
       });
     },
     kill: () => child.kill("SIGKILL"),
@@ -392,15 +453,18 @@ describe.skipIf(!built)("Angular tag calls through a real tsserver", () => {
         text: string;
         start: { line: number; offset: number };
       };
-      let found: ProtocolDiagnostic[] = [];
-      const deadline = Date.now() + 30_000;
-      do {
-        found = (await server.request("semanticDiagnosticsSync", {
-          file,
-        })) as ProtocolDiagnostic[];
-        if (found.some((d) => d.code === 2339 || d.code === -991010)) break;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } while (Date.now() < deadline);
+      // The Angular check runs in the background after the compile on open
+      // and, once its results are stored, asks tsserver for a fresh round
+      // (`Project.refreshDiagnostics`), which tsserver announces with this
+      // event naming the open files.
+      await server.waitForEvent<{ openFiles: string[] }>(
+        "projectsUpdatedInBackground",
+        (body) => body.openFiles.includes(file),
+        30_000,
+      );
+      const found = (await server.request("semanticDiagnosticsSync", {
+        file,
+      })) as ProtocolDiagnostic[];
       expect(found.map((d) => d.code)).not.toContain(-991010);
       const before = (needle: string) => {
         const lines = source.slice(0, source.indexOf(needle)).split("\n");
