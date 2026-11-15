@@ -1847,8 +1847,27 @@ function resolveDefineFns(
   );
 }
 
-/** A define's scope: the siblings after it, rendered where `name` is its attributes. */
-type DefineScope = { name: string; attrs: Attr[]; rest: IrNode[] };
+/**
+ * A define's scope: the siblings after it, rendered where `name` is its
+ * attributes and its body's attribute tags.
+ */
+type DefineScope = {
+  name: string;
+  attrs: Attr[];
+  attributeTagTree: AttributeTagNode[];
+  rest: IrNode[];
+};
+
+/**
+ * Whether a define's value has properties: its attributes, or the attribute
+ * tags in its body, which Marko makes properties the same way (`D.item`).
+ */
+function hasDefineProps(node: {
+  attrs: Attr[];
+  attributeTagTree?: AttributeTagNode[];
+}): boolean {
+  return node.attrs.length > 0 || (node.attributeTagTree?.length ?? 0) > 0;
+}
 
 /** The nodes `withDefineAttributeReads` stands in for a define's later siblings. */
 let defineScopes = new WeakMap<IrNode, DefineScope>();
@@ -1879,6 +1898,10 @@ let defineScopeAuthorNames = new Map<string, string>();
  *   when a signal an attribute reads changes. A define hoisted to module
  *   scope cannot read it (it cannot close over a region-local value).
  *
+ * The body's attribute tags count as attributes here (`<define/D><@item/>
+ * </define>` makes `D.item`), except that a define with any always takes the
+ * `<Show>` path: an inlined record would be a new one at each read.
+ *
  * A define that has attributes and a body is `D.content`'s owner in Marko;
  * here the body is a hoisted function, so only `D.<attribute>` reads are
  * lowered. Any other read (a bare `D`, `D.content`, `D[key]`, `(D)`) is a
@@ -1892,7 +1915,10 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
     seen.add(value);
     if (Array.isArray(value)) return value.some(hasAttributes);
     const record = value as Record<string, unknown>;
-    if (record.kind === "Define" && (record.attrs as Attr[]).length > 0) {
+    if (
+      record.kind === "Define" &&
+      hasDefineProps(record as unknown as Extract<IrNode, { kind: "Define" }>)
+    ) {
       return true;
     }
     return Object.entries(record).some(
@@ -1922,14 +1948,16 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
     );
     const sites = defineReadSites(later);
     const hasBody = meaningful(node.children).length > 0;
+    const tree = node.attributeTagTree ?? [];
     if (hasBody) {
+      const props = node.attrs.length > 0 ? "attributes" : "attribute tags";
       for (const site of sites) {
         const bad = site.reads.find((read) => read.kind !== "member");
         if (!bad || !site.at) continue;
         fail(
           bad.kind === "content"
-            ? `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with attributes cannot expose on Solid: the define is hoisted to a function. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``
-            : `\`${node.name}\` is read as a whole here, but \`<define/${node.name}>\` has attributes and a body, and on Solid only \`${node.name}.<attribute>\` can be read from it: the define is hoisted to a function. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``,
+            ? `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with ${props} cannot expose on Solid: the define is hoisted to a function. Call it as \`<${node.name}/>\`, or move the ${props} to a second \`<define>\``
+            : `\`${node.name}\` is read as a whole here, but \`<define/${node.name}>\` has ${props} and a body, and on Solid only \`${node.name}.<${props === "attributes" ? "attribute" : "attribute tag"}>\` can be read from it: the define is hoisted to a function. Call it as \`<${node.name}/>\`, or move the ${props} to a second \`<define>\``,
           site.at,
         );
       }
@@ -1941,7 +1969,11 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
     const onlyMembers = sites.every((site) =>
       site.reads.every((read) => read.kind === "member"),
     );
-    if (onlyMembers && literals.every((part) => part !== null)) {
+    if (
+      tree.length === 0 &&
+      onlyMembers &&
+      literals.every((part) => part !== null)
+    ) {
       const parts = literals as string[];
       for (const site of sites) {
         replaceDefineReads(site, `({ ${parts.join(", ")} })`);
@@ -1952,7 +1984,7 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
     const name = `__mxDefine${serial}`;
     defineScopeAuthorNames.set(name, node.name);
     for (const site of sites) replaceDefineReads(site, `${name}()`);
-    return { name, attrs: node.attrs, rest: later };
+    return { name, attrs: node.attrs, attributeTagTree: tree, rest: later };
   };
 
   const lower = (value: unknown): void => {
@@ -1968,7 +2000,7 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
   const lowerList = (list: IrNode[]): void => {
     for (let index = 0; index < list.length; index++) {
       const item = list[index] as IrNode;
-      if (item?.kind === "Define" && item.attrs.length === 0) {
+      if (item?.kind === "Define" && !hasDefineProps(item)) {
         // A define without attributes is the function it is hoisted as, and a
         // dynamic tag renders it (`<${D}/>`, `<${c ? D : "span"}/>`).
         rewriteAccessorReads(
@@ -1984,15 +2016,17 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
           ]),
         );
       }
-      if (item?.kind === "Define" && item.attrs.length > 0) {
+      if (item?.kind === "Define" && hasDefineProps(item)) {
         const later = list.slice(index + 1);
         const scope = lowerDefine(item, later);
         lower(item.children);
+        if (item.attributeTagTree) lower(item.attributeTagTree);
         if (scope) {
           lowerList(later);
           const marker = {
             ...item,
             attrs: [],
+            attributeTagTree: undefined,
             params: [],
             children: [],
           } as IrNode;
@@ -2049,7 +2083,10 @@ function readsPlainDefine(body: IrNode[]): boolean {
       return;
     }
     const record = value as Record<string, unknown>;
-    if (record.kind === "Define" && (record.attrs as Attr[]).length === 0) {
+    if (
+      record.kind === "Define" &&
+      !hasDefineProps(record as unknown as Extract<IrNode, { kind: "Define" }>)
+    ) {
       names.add(record.name as string);
     }
     for (const [key, child] of Object.entries(record)) {
@@ -3347,9 +3384,10 @@ export class SolidEmitter implements Emitter<string> {
       // The marker `withDefineAttributeReads` left for the siblings after a
       // define whose attributes are evaluated once: they render inside the
       // `<Show>` that holds the attributes.
-      const parts: MappedCode[] = scope.attrs.map((attr, index) =>
-        concatMapped(
-          index > 0 ? ", " : "",
+      // The attributes, then one record per attribute-tag name, as Marko's
+      // `{ a: 1, item: attrTag({…}) }`.
+      const parts: MappedCode[] = [
+        ...scope.attrs.map((attr) =>
           attr.kind === "spread"
             ? concatMapped("...", mappedExpr(attr.value))
             : concatMapped(
@@ -3357,7 +3395,8 @@ export class SolidEmitter implements Emitter<string> {
                 attributeTagAttrValue(attr),
               ),
         ),
-      );
+        ...attributeTagEntries(scope.attributeTagTree),
+      ].map((part, index) => concatMapped(index > 0 ? ", " : "", part));
       this.#out.push(
         concatMapped(
           "<Show when={{ ",

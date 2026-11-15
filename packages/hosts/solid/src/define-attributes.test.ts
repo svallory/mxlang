@@ -247,6 +247,12 @@ const CASES: Array<[string, string, string, string]> = [
     INPUT,
     "<ul><p>hi</p></ul>",
   ],
+  [
+    "an attribute tag in the body is a property too",
+    "<define/Bar><@item x=1/></define><p>${Bar.item.x}</p>",
+    "",
+    "<ul><p>1</p></ul>",
+  ],
 ];
 
 describe("solid: a <define>'s attributes are properties of its value", () => {
@@ -428,6 +434,15 @@ describe("solid: what stays refused", () => {
       expect(error.column).toBeGreaterThanOrEqual(source.indexOf(read));
     },
   );
+
+  it("a bare read of a define with attribute tags and a body is refused, at the read", () => {
+    const source = "<define/Bar><@item/><p>b</p></define>${typeof Bar}";
+    const error = thrown(source);
+    expect(error.message).toBe(
+      "`Bar` is read as a whole here, but `<define/Bar>` has attribute tags and a body, and on Solid only `Bar.<attribute tag>` can be read from it: the define is hoisted to a function. Call it as `<Bar/>`, or move the attribute tags to a second `<define>`",
+    );
+    expect([error.line, error.column]).toEqual([1, source.indexOf("${typeof")]);
+  });
 
   it("a define with a body and attributes is fine when nothing reads D.content", () => {
     expect(thrown("<define/D a=1><i>b</i></define><D/><p>${D.a}</p>")).toBe(
