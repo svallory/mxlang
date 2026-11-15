@@ -594,16 +594,18 @@ describe("a failed compile still reports the dependencies it read", () => {
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   it("compileSolidUnit attaches them to an error raised after lowering", () => {
-    // `/var` inside an `<if>` lowers, then the emitter refuses it: a Solid
-    // callback scope has no statement position. Whether the call returns a
-    // value is read from the callee.
+    // A destructured `/var` that repeats a name another body binds lowers,
+    // then `scopeReturnVars` refuses it. Whether the call returns a value is
+    // read from the callee.
     const error = failure(() =>
-      compileSolidUnit('import Ret from "./ret.mx"\n<if=true><Ret/x/></if>\n', {
-        filename: caller,
-        targets: solidTargets,
-      }),
+      compileSolidUnit(
+        'import Ret from "./ret.mx"\n<Ret/x/><div><Ret/{ x }/></div>\n',
+        { filename: caller, targets: solidTargets },
+      ),
     );
-    expect(error.message).toContain("is not supported on Solid yet");
+    expect(error.message).toContain(
+      "which a `/var` in another body of this component already binds",
+    );
     expect(error.dependencies).toEqual([returning]);
   });
 
@@ -1562,28 +1564,6 @@ describe("a unit that returns a value", () => {
     // accessor call wrapped around it. A tag wanting reactivity returns an
     // accessor and the author calls it.
     expect(code).toContain("<p>{n}</p>");
-  });
-
-  // Round 1, finding 3. The `let` this host declares sits at the component's
-  // head, so one binding was shared by every `<For>` row, and a read beside
-  // the call ran while the fragment was being built — before that row's
-  // callback had fired. Invariant §7.5-8 rejects the escape.
-  it("rejects /var inside <for>, naming the tag as written", () => {
-    expect(() =>
-      compileSolidUnit(
-        "<for|i| of=[1,2]><counter/n start=i/><p>${n}</p></for>",
-        { filename: "/fixtures/page.mx", customTags: { counter } },
-      ),
-    ).toThrow(/`\/var` on `<counter>` inside `<for>`\/`<if>` is not supported/);
-  });
-
-  it("rejects /var inside <if>", () => {
-    expect(() =>
-      compileSolidUnit("<if=true><counter/n start=1/><p>${n}</p></if>", {
-        filename: "/fixtures/page.mx",
-        customTags: { counter },
-      }),
-    ).toThrow(/is not supported on Solid yet/);
   });
 
   // Every `/var` is declared with one `let` at the component's head, so a
