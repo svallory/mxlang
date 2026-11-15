@@ -2071,6 +2071,31 @@ describe("<return>", () => {
       "<return value=1>x</return>\n",
       /does not support body content/,
     ],
+    // Stock Marko 6.4.4: "can not be used under the `<"if">` tag"
+    [
+      "one under a control-flow tag in a `<define>` body",
+      "<define/T><if=true><return=1/></if></define>",
+      /must be at the top level/,
+    ],
+    // Stock Marko 6.4.4: "can not be used in a native tag"
+    [
+      "one inside a native tag in a `<define>` body",
+      "<define/T><div><return=1/></div></define>",
+      /must be at the top level/,
+    ],
+    // Stock Marko 6.4.4: "Cannot have multiple `<return>` tags within a
+    // tag's body content"
+    [
+      "more than one per `<define>` body",
+      "<define/T><return=1/><return=2/></define>",
+      /multiple `<return>` tags/,
+    ],
+    // Stock Marko 6.4.4: "Duplicate declaration of `T`."
+    [
+      "a define call's `/var` that repeats the define's name",
+      "<define/T|{n}|><return=n/></define><T/T n=1/>",
+      /Duplicate declaration of `T`/,
+    ],
   ])("rejects %s", (_what, source, message) => {
     expect(() => lowerSource(source)).toThrow(message);
   });
@@ -2085,6 +2110,34 @@ describe("<return>", () => {
     expect(() =>
       lowerSource("<p>a</p>\n<return value=1/>\n<return value=2/>\n"),
     ).toThrow(expect.objectContaining({ line: 3 }));
+  });
+
+  it("lowers a `<define>`'s `<return>` onto the define, and its `/var` call", () => {
+    const ir = lowerSource(
+      "<define/Thing|input|>\n  <return=input.n * 2/>\n  <i>${input.n}</i>\n</define>\n<Thing/double n=21/>\n<p>${double}</p>\n",
+    );
+
+    expect(find(ir.body, "Define").returnValue?.code).toBe("input.n * 2");
+    expect(ir.returnValue).toBeNull();
+    const call = find(ir.body, "Component");
+    expect(call.target).toMatchObject({ kind: "define", name: "Thing" });
+    expect(call.var).toBe("double");
+    expect(call.returnsValue).toBe(true);
+  });
+
+  it("keeps a `<define>`'s `<return>` and the file's apart", () => {
+    const ir = lowerSource("<define/T><return=1/></define><return=2/>");
+
+    expect(find(ir.body, "Define").returnValue?.code).toBe("1");
+    expect(ir.returnValue?.code).toBe("2");
+  });
+
+  it("does not lend a returning define's flag to a same-named one in a block", () => {
+    expect(() =>
+      lowerSource(
+        "<define/T><return=1/></define><if=true><define/T><b/></define><T/x/></if>",
+      ),
+    ).toThrow(/tag variable `\/x` on `<T>` is not supported/);
   });
 });
 

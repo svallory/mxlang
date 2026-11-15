@@ -552,6 +552,13 @@ export function calleeReturn(
   shape: "returns" | "none" | "unknown";
   unreadable?: { path: string; reason: string };
 } {
+  // A `<define>` in scope whose body declares `<return>`: its call's `/var`
+  // binds that value. Any other define carries no claim.
+  if (target.kind === "define") {
+    return ctx.returningDefines?.has(target.name)
+      ? { shape: "returns" }
+      : { shape: "unknown" };
+  }
   if (target.kind !== "name") return { shape: "unknown" };
   if (target.name === ctx.exportName) return { shape: "unknown" };
   const resolved = resolveTarget(target, {

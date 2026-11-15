@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 14;
+export const IR_VERSION = 15;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -769,9 +769,10 @@ export type IrNode =
       /**
        * The `/var` binding this call declares, as source text.
        *
-       * Only ever set on a call to a unit that declares `<return>` — the
-       * core rejects `/var` on one that does not, so an emitter never has to
-       * decide what an unbackable binding means. Null for every other call.
+       * Only ever set on a call to a unit or a `<define>` that declares
+       * `<return>` — the core rejects `/var` on one that does not, so an
+       * emitter never has to decide what an unbackable binding means. Null
+       * for every other call.
        */
       var?: string | null;
       /**
@@ -791,6 +792,11 @@ export type IrNode =
        * cannot compile the callee to find out. It is set even when the call
        * declares no `/var`: the output still has to be unwrapped out of the
        * pair.
+       *
+       * Also set on a call to an in-scope `<define>` whose body declares
+       * `<return>` (`Define.returnValue`), with or without `/var`: the
+       * emitter's define-call branch, which runs before its unit branch,
+       * reads the value only for a call that declares `/var`.
        */
       returnsValue?: boolean;
       /**
@@ -884,6 +890,14 @@ export type IrNode =
        * carries them. Absent when none were written.
        */
       typeParams?: { code: string; span: SourceSpan };
+      /**
+       * The value of the `<return>` written at the top level of the define's
+       * body (`<define/D|input|><return=input.n * 2/>…</define>`), read with
+       * the params in scope. A call that declares `/var` binds it, as a call
+       * of a returning unit does (Marko: `const D = { content: (input) => {
+       * …; return $return } }`). Absent when the body declares no `<return>`.
+       */
+      returnValue?: Expr;
       /**
        * The tag's own attributes, resolved like a component call's: Marko
        * lowers `<define/D a=1 b="s"/>` to `const D = { a: 1, b: "s" }`, so

@@ -3529,6 +3529,19 @@ A template may end with `<return value=EXPR/>`: **value only**, no
 `valueChange` — MX deliberately subtracts Marko's two-way channel. At most one
 per template, at the **top level** only.
 
+A `<define>` body is a `<return>` position of its own, as in Marko 6.4.4:
+`<define/Thing|input|><return=input.n * 2/><i>${input.n}</i></define>` makes
+`<Thing/double n=21/>` bind `double` to `42` while it renders `<i>21</i>`. The
+same rules hold inside the body (at most one, at its top level only), counted
+per define, and a define's `<return>` is independent of the file's own. Only a
+direct call with `/var` reads the value; every other read of the define (a
+call without `/var`, `Thing.content`, a dynamic tag `<${Thing}/>`) gets its
+output alone, and `/var` on a dynamic tag naming a define stays refused. A
+`/var` on a call of a define without `<return>` is refused as on any tag that
+returns nothing. Every host but Angular carries the value; Angular refuses the
+`<return>` (`MX_UNSUPPORTED_CONSTRUCT`, at its value), as it refuses a page's or
+a tag's own, because an `<ng-template>` has no channel to hand a value back.
+
 `<return>` keeps Marko's meaning on every target: the tag variable at the call
 site (`<Counter/n/>`) equals `value`, set synchronously during the parent's
 render, and is in scope for the siblings after the tag only. Reading a tag's own
@@ -3553,8 +3566,8 @@ the same thing.
 | `invalid duplicate \`value\` attribute` | Two `value`s. |
 | `` `<return>` requires a `value=` attribute `` | No value. |
 | `` The `<log>` tag requires a `value=` attribute. `` | `<log/>` or concise `log` with no value (`MX_INVALID_ATTRIBUTE`, at the tag name); `<debug/>` is exempt. |
-| `` `<return>` must be at the top level of its template; it declares the value the whole unit returns, so it cannot be conditional or nested `` | Inside a native tag, `<if>`, `<for>`, an attribute tag or a `<define>`. |
-| `cannot have multiple \`<return>\` tags for the template` | Two `<return>`s. |
+| `` `<return>` must be at the top level of its template or `<define>` body; it declares the value the whole unit or define returns, so it cannot be conditional or nested `` | Inside a native tag, `<if>`, `<for>`, an attribute tag or a tag's content, in a template or a `<define>` body. |
+| `cannot have multiple \`<return>\` tags for the template` | Two `<return>`s in one template or one `<define>` body. |
 
 Plus the four generic field rejections (§4) with `` `<return>` `` as the label.
 

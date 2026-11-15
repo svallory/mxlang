@@ -430,6 +430,12 @@ export interface Ctx {
   /** `<define>`s bound so far, name -> declared parameter names in order. */
   defines: Map<string, string[]>;
   /**
+   * The names in `defines` whose body declares a `<return>`, so a call's
+   * `/var` binds its value (`calleeReturn`). Scoped with `defines` by
+   * `scopeDefines`; a define of the same name without `<return>` removes it.
+   */
+  returningDefines?: Set<string>;
+  /**
    * Local *value* bindings introduced by the template's `import` statements
    * — never a type-only one (a whole `import type` or an inline
    * `{ type X }` specifier), since neither introduces a value a capitalized
@@ -602,23 +608,26 @@ export interface Ctx {
   /** Imports synthesized while lowering discovered template calls. */
   customTagImportNodes?: Array<Extract<IrNode, { kind: "Import" }>>;
   /**
-   * The `<return>` this unit has already declared, if any.
+   * The `<return>` this unit, or the `<define>` body being lowered, has
+   * already declared, if any.
    *
-   * Only ever set while lowering a file's own top-level body, which is the
-   * single legal position (design §3.3). It exists so the second `<return>`
-   * is a positioned error naming the construct rather than a silent
-   * last-one-wins, and it is read back into `Ir.returnValue` when the walk
-   * ends.
+   * Only ever set while lowering a file's own top-level body or a
+   * `<define>`'s, the two legal positions (design §3.3). It exists so the
+   * second `<return>` is a positioned error naming the construct rather than
+   * a silent last-one-wins. The file's is read back into `Ir.returnValue`
+   * when the walk ends; a define saves the file's around its body and reads
+   * its own into `Define.returnValue`.
    */
   returnValue?: { expr: Expr; loc: Position } | null;
   /**
    * How many containers deep the walk currently is, for `<return>`'s
    * unconditionality rule.
    *
-   * Zero means the file's own top-level body — the only position a `<return>`
-   * is legal in. Anything that makes its evaluation conditional or scoped (a
-   * native element, `<if>`, `<for>`, an attribute tag, a `<define>` body, a
-   * tag's content block) raises it while lowering its children, so the check
+   * Zero means the file's own top-level body or a `<define>`'s — the only
+   * positions a `<return>` is legal in (a define resets it around its body).
+   * Anything that makes its evaluation conditional or scoped (a native
+   * element, `<if>`, `<for>`, an attribute tag, a tag's content block)
+   * raises it while lowering its children, so the check
    * is one comparison instead of a parent-chain walk Marko needs because it
    * validates from a Babel path rather than during the walk.
    */
@@ -1673,7 +1682,11 @@ export function scopeBindings(
 export function scopeDefines(ctx: Ctx): () => void {
   const saved = new Map(ctx.defines);
   const savedSites = new Map(ctx.bindingSites);
+  const savedReturning = ctx.returningDefines
+    ? new Set(ctx.returningDefines)
+    : undefined;
   return () => {
+    ctx.returningDefines = savedReturning;
     for (const name of [...ctx.defines.keys()]) {
       if (saved.has(name)) continue;
       ctx.defines.delete(name);

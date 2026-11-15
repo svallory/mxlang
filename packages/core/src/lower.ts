@@ -4476,8 +4476,9 @@ function rejectMarkoImportTag(
  * `/var` needs a `<return>` to bind just as `<Child/x/>` does (Marko 6.4
  * refuses both). Judged only where the callee is known by name: a default
  * import of a `.mx` unit that declares none (the imported-unit error, at the
- * tag variable), or a `<define>`, which cannot declare a `<return>` here (the
- * `/var` is refused outright, as on `<Foo/x/>`). Any other expression, an alias
+ * tag variable), or a `<define>` (the `/var` is refused outright, even on a
+ * define whose body declares a `<return>`: only the direct call `<Foo/x/>`
+ * binds a define's value). Any other expression, an alias
  * through `<const>`, a `.ts` module or an unreadable unit carries no claim.
  */
 function rejectDynamicTagVarWithoutReturn(
@@ -4744,15 +4745,38 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   // A define's own body may refer to its value, unlike reads above the tag.
   const binding = ctx.tagVars?.get(name);
   if (binding?.define) binding.pending = false;
-  const [children, prelude] = withPrelude(ctx, () =>
-    withTagParams(ctx, node, "define", () =>
-      lowerChildren(ctx, bodyChildren(node)),
-    ),
-  );
+  // A define's body is a `<return>` position of its own (Marko: the define's
+  // `content` function returns `$return`): its child list sits at depth 0,
+  // where the file's own top level does, and it counts its own `<return>`.
+  // The file's depth and `<return>` are put back however the body ends.
+  const outerReturnDepth = ctx.returnDepth;
+  const outerReturnValue = ctx.returnValue;
+  ctx.returnDepth = -1;
+  ctx.returnValue = null;
+  let returnValue: Expr | undefined;
+  let lowered: [IrNode[], Ctx["prelude"]];
+  try {
+    lowered = withPrelude(ctx, () =>
+      withTagParams(ctx, node, "define", () =>
+        lowerChildren(ctx, bodyChildren(node)),
+      ),
+    );
+    // Read through the field's type: TypeScript keeps the `null` assigned
+    // above, not what the body's `<return>` wrote.
+    returnValue = (ctx.returnValue as Ctx["returnValue"])?.expr;
+  } finally {
+    ctx.returnDepth = outerReturnDepth;
+    ctx.returnValue = outerReturnValue;
+  }
+  const [children, prelude] = lowered;
   restore();
   unscope();
 
   ctx.defines.set(name, params);
+  if (returnValue) {
+    ctx.returningDefines ??= new Set();
+    ctx.returningDefines.add(name);
+  } else ctx.returningDefines?.delete(name);
   ctx.bindingSites.set(name, {
     kind: "defined",
     ...posOf(ctx, tagVarOf(node) ?? node),
@@ -4775,6 +4799,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     bindings,
     paramSpans: paramSpansOf(ctx, node),
     ...(typeParams ? { typeParams } : {}),
+    ...(returnValue ? { returnValue } : {}),
     attrs: dropContentAttrBesideBody(ctx, node, attrs, children.length > 0),
     children: [...hoisted, ...children],
     loc,
@@ -5713,9 +5738,12 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
  * is rejected by name like any other unknown attribute.
  *
  * `nested` is the whole unconditionality check. Reaching this function from
- * anywhere but the file's own top-level body — inside a native tag, under
- * `<if>`/`<for>`, inside an attribute tag or a `<define>` — means the return
+ * anywhere but the file's own top-level body or a `<define>`'s — inside a
+ * native tag, under `<if>`/`<for>`, inside an attribute tag — means the return
  * would be conditional or scoped, so it is refused there rather than lowered.
+ * A `<define>`'s body is a position of its own (`lowerDefineChecked` resets
+ * the depth and the declared value around it), so its `<return>` lands on
+ * `Define.returnValue` and the file's on `Ir.returnValue`, independently.
  */
 function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   const returnTag = (): string => tagText(ctx, "return", node);
@@ -5774,7 +5802,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   if (nested) {
     raise(
       INVALID_RETURN_CODE,
-      `${returnTag()} must be at the top level of its template; it declares the value the whole unit returns, so it cannot be conditional or nested`,
+      `${returnTag()} must be at the top level of its template or \`<define>\` body; it declares the value the whole unit or define returns, so it cannot be conditional or nested`,
       node,
     );
   }
@@ -6620,8 +6648,9 @@ function lowerComponent(
     );
   }
   // `/var` binds an imported `.mx` unit's `<return>` the way it does a
-  // discovered tag's. Any other target (a `.ts` module, a `<define>`, a
-  // dynamic tag) has no return shape the core can read, so it stays refused.
+  // discovered tag's, and an in-scope `<define>`'s whose body declares one.
+  // Any other target (a `.ts` module, a define without `<return>`, a dynamic
+  // tag) has no return shape the core can read, so it stays refused.
   const { shape: returnShape, unreadable } = calleeReturn(target, ctx);
   if (tagVarOf(node) && returnShape === "none") {
     raise(
@@ -6701,8 +6730,8 @@ function lowerComponent(
     attributeTags: loweredTags.flat,
     attributeTagTree: loweredTags.tree,
     args: (tagArgsOf(node) ?? []).map((a: Node) => exprOf(ctx, a)),
-    // An imported `.mx` unit that declares `<return>` hands back
-    // `{ value, output }`; a discovered one already says so through
+    // An imported `.mx` unit or a `<define>` that declares `<return>` hands
+    // back `{ value, output }`; a discovered one already says so through
     // `routeTemplateCall`, which also carries the `/var` the emitters bind.
     var: callVar,
     varBindings: varBindingsOf(ctx, tagVarOf(node)),
@@ -7944,12 +7973,24 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // body is its own scope (`<div><const/x/></div>` beside another), the arms
   // of an `<if>` are separate bodies, and a `<script>`'s own `const` is
   // JavaScript's, not a tag variable.
+  // A call to a `<define>` (one in scope, or one an earlier sibling declares)
+  // binds its `/var` here too, now that a define's `<return>` gives it one:
+  // stock refuses `<define/T>…</define><T/T/>` as a duplicate of `T`.
+  const siblingDefines = new Set<string>();
   const declaredNames =
     ctx.tagRules === "none"
       ? []
       : children.map((child) => {
-          if (!isTagNode(child) || !tagVarOf(child)) return [];
+          if (!isTagNode(child)) return [];
           const name = tagNameOf(child);
+          const definedHere =
+            typeof name === "string" &&
+            (ctx.defines.has(name) || siblingDefines.has(name));
+          if (name === "define" && tagVarOf(child)) {
+            for (const binding of bindingIdentifierNodes(tagVarOf(child)))
+              siblingDefines.add(binding.name);
+          }
+          if (!tagVarOf(child)) return [];
           const builtin =
             name === "const" ||
             name === "let" ||
@@ -7959,7 +8000,8 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             typeof name === "string" &&
             (Object.hasOwn(ctx.customTags ?? {}, name) ||
               ctx.importSpecifiers.has(name) ||
-              importsName(name));
+              importsName(name) ||
+              definedHere);
           const dynamic = !hasStaticName(child);
           return builtin || call || dynamic
             ? bindingIdentifierNodes(tagVarOf(child))
@@ -8760,6 +8802,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   customTagImports: "fresh",
   customTagImportNodes: "fresh",
   returnValue: "fresh",
+  returningDefines: "fresh",
   tagVars: "fresh",
   tagVarBlock: "fresh",
   tagVarShadowed: "fresh",
