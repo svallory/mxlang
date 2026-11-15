@@ -1153,15 +1153,14 @@ Five facts worth knowing before editing it:
   the default export and gets the markup (the value stays in `render`); a `.astro.mx` template may
   *call* a returning tag but cannot bind one, since it has no statement
   position of its own (`/var` in `.astro.mx` is a positioned error).
-  **`/var` is top-level-only on the JSX hosts and Solid.** Every structural
-  kind lowers to an expression there — a ternary, a `.map` callback, a `<For>`
-  render prop — so a callback scope has no statement position for the binding.
-  Hoisting the call to the component body took it out of the scope it was
-  written in (it read row bindings that did not exist there, and ran once for
-  a body rendered N times), so invariant §7.5-8's "reject the escape" applies:
-  a positioned error naming the tag. html keeps supporting the nested case,
-  where the temp lands inside the emitted `for`/`if` block. Lifting the
-  restriction means a statement position per callback scope — MX 2.
+  **`/var` binds in its callback body's own scope on the JSX hosts and
+  Solid.** Every structural kind lowers to an expression there — a ternary, a
+  `.map` callback, a `<For>` render prop — so each callback body gets a
+  statement position of its own: Preact's `#callbackBody` runs the body's
+  statements in a function called in place, and Solid's `inLazyScope` declares
+  a lazy body's own `let`s. Hoisting the call to the component body instead
+  would take it out of the scope it was written in (invariant §7.5-8). html
+  binds it inside the emitted `for`/`if` block.
   **A returning unit on a JSX host may not import hooks.** It is invoked as a
   plain function, so Preact's/React's dispatcher would bind its hooks to the
   *calling* component's hook list — order-dependent, broken under conditional

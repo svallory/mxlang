@@ -138,14 +138,16 @@ On `@mxlang/target-html` both render the body: the call dispatches at run time, 
 
 On **html** and **Astro `.mx`** components, a `/var` works anywhere a call does — including inside `<if>` and `<for>`, where the binding lands in that block and the call runs per iteration.
 
-On the **JSX hosts** (Preact, React, Hono) and **Solid**, a `/var` must be at the **top level of the template**. Those targets lower `<if>` and `<for>` to expressions — a ternary, a `.map` callback, a `<For>` render prop — and an expression has no statement position to hold the binding. Writing one there is a positioned compile error rather than a silent miscompile:
+On the **JSX hosts** (Preact, React, Hono) and **Solid** too, a `/var` inside an `<if>` branch, a `<for>` body, an attribute-tag body or a call's content binds in that body's own scope, as in Marko: once per row or rendered branch, with the row's own bindings in scope, and beside an outer `/var` of the same name, which a read after the body still sees.
 
-```
-`/var` on `<counter>` inside `<for>`/`<if>` is not supported on Preact yet;
-bind it at the top level of the template
+```marko
+<for|i| of=[1, 2]>
+  <counter/n start=i/>
+  <p>${n}</p>
+</for>
 ```
 
-Calling the tag *without* `/var` works everywhere; only the binding is restricted. Lifting the restriction is planned for MX 2.
+renders `<span>1</span><p>2</p><span>2</span><p>3</p>`. On the JSX hosts a returning tag's call runs when the markup around it is built, so a `/var` call in an attribute-tag body without parameters runs once at the call site, even when the callee never renders that body. On Solid, a component's attribute-tag bodies share the component's binding: a `/var` there that repeats a name another body binds gets a generated binding of its own, and a destructured one is refused.
 
 `/var` is not supported in a `.astro.mx` (AstroMX) file at all — an Astro template has no statement position of its own. Calling a returning tag from `.astro.mx` works, and renders its output.
 
@@ -209,7 +211,7 @@ A template can arrange markup and use MX's structural language, but it cannot ex
 - **Content on an `openTagOnly` tag.** The tag declared that it takes no body.
 - **`<x>` does not return a value.** A `/var` on a tag whose template declares no `<return>`.
 - **A `/var` read out of scope**, or read before the call that binds it.
-- **`/var` inside `<for>`/`<if>` on a JSX host or Solid**, where those constructs are expressions with no statement position; bind it at the top level.
+- **A destructured `/var` that repeats a name another body binds, on Solid**, which declares a component's `/var`s at its head; rename one of them.
 - **A hook in a returning unit** on a JSX host, where the unit is called as a plain function.
 - **`<return>` must be at the top level**, and there may be only one per template.
 

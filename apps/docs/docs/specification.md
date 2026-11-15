@@ -3628,33 +3628,39 @@ own value and the outer read after it sees the outer one. A destructured `/var`
 and so is an assignment to a repeated `/var`'s generated binding; rename one of
 them. A define body's parameters share the body's scope with its `/var`,
 so a `/var` that reuses a parameter's name is a duplicate. A region refuses a
-`<define>` inside a dynamic-tag or `<try>` body, inside the body of an imported
-tag or of a `<define>` call that declares a `/var` or tag parameters, and a `/var` in a `<define>`
-body (`<define>` is lifted to the region's one arrow, outside those scopes).
+`<define>` inside a dynamic-tag or `<try>` body, and inside the body of an imported
+tag or of a `<define>` call that declares a `/var` or tag parameters (`<define>` is
+lifted to the region's one arrow, outside those scopes). A `/var` in a region
+`<define>`'s own body is that body's: its statements run inside the lifted
+function, as in a whole file.
 
-**`/var` is top-level-only in a callback on the JSX hosts and Solid.** Every
-structural kind
-lowers to an *expression* there — a ternary, a `.map` callback, a `<For>` render
-prop — so a callback scope has no statement position for the binding. Hoisting
-the call to the component body took it out of the scope it was written in (it
-read row bindings that did not exist there, and ran once for a body rendered N
-times), so the escape is rejected rather than silently relocated. A body that is
-its own scope (above) has a statement position of its own, but the rule still
-applies to the callback that holds it: a dynamic-tag or `<try>` body inside a
-`<for>` keeps the refusal. **html** keeps
-supporting the nested case, where the temp lands inside the emitted `for`/`if`
-block. **Angular** rejects `/var` entirely.
+**A `/var` binds in its callback body's own scope.** As in Marko 6.4.4, a
+`<for>` body, each `<if>`/`<else-if>`/`<else>` branch, an attribute-tag body and
+a call's content body are scopes of their own on every host but Angular and
+`.astro.mx`: a `/var` there binds once per row, per rendered branch or per call,
+reads the row's own bindings, and can sit beside an outer `/x` of the same name,
+which a read after the body still sees. **html** binds it inside the emitted
+`for`/`if` block. On **Preact, React and Hono** every structural kind lowers to
+an expression (a ternary, a `.map` callback, a prop), so the body's statements
+run in a function called in place in that expression, ahead of the body's
+markup; a whole-file or region `<define>` body runs them inside the define's
+function. On **Solid** a `<For>` row, a `<Show>`/`<Match>` branch, a call's
+content and a `<define>` body declare their own `let` for the binding, filled
+by the call before the reads after it; a component's attribute-tag bodies keep
+the component's head `let`. A dynamic-tag or `<try>` body inside a `<for>` is
+its own scope too. A returning unit's call on the JSX hosts runs when the
+markup around it is built, so a `/var` call in an attribute-tag body without
+parameters runs once at the call site, even when the callee never renders that
+body. **Angular** rejects `/var` entirely.
 
 **`.astro.mx` rejects `/var` entirely too, and for a different, structural reason**
 (host-cannot, ruled 2026-09-28 on TODO `amx-tag-var`): Astro runs the `---`
 fence to completion *before* Astro's own compiler ever lowers or calls the
 template's tags, so by the time a returning tag is actually called there is no
 statement position left anywhere — not in the fence (already finished), and
-not in the template (markup, not statements) — to bind a value into. This is
-unlike the JSX-host/Solid restriction above, which is a real MX 2 gap
-(`tag-var-in-callback-scope`); `.astro.mx`'s case cannot be lifted by giving a
-callback scope a statement position, because there is no callback scope here
-at all. The workaround is to call the unit directly from the fence's own
+not in the template (markup, not statements) — to bind a value into. Unlike the
+JSX hosts and Solid, which give a callback body a statement position of its
+own (above), `.astro.mx` has no callback scope here at all to give one. The workaround is to call the unit directly from the fence's own
 TypeScript instead of from the template, through the unit's sink entry
 (§13.8), which returns the value and writes the output to a sink the fence
 creates:
@@ -3667,9 +3673,6 @@ const value = Counter.render({ start: 1 }, createOut());
 ---
 <p>{value}</p>
 ```
-
-Lifting the restriction means a statement position per callback scope — **MX 2,
-`tag-var-in-callback-scope`**.
 
 A `/var` needs a `<return>` to bind: a call to a discovered tag or an imported
 `.mx` unit whose template declares none is a compile error, reported at the tag
@@ -3735,10 +3738,10 @@ unrelated to this gap) on both the `.solid.mx` region path
 (`@mxlang/tsx-bridge`'s `hoistRegionImports`) and the whole-file `.mx` path
 (`@mxlang/host-solid`'s `compileSolidUnit`). A misuse of the bound value (e.g.
 calling a string method on a `<return>`'d number) type-checks clean today —
-pinned by a regression test on each path, named so a future fix (MX 2's
-per-callback-scope statement position, `tag-var-in-callback-scope`, would
-also let Solid's `/var` bind synchronously instead of through a callback)
-flips the assertion.
+pinned by a regression test on each path, named so a future fix flips the
+assertion. A `/var` in a lazy body (a `<For>` row, a `<Show>` branch, a call's
+content or a `<define>` body) is declared `let n: any` inside that body for the
+same reason.
 
 ---
 
@@ -4123,7 +4126,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `try` | **error** (no `<@catch>`; §6) | same | `<Loading>` | body inline | **error** | **error** |
 | `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React/Hono; Hono's wraps `hono/jsx`'s `ErrorBoundary`), body passed as a thunk | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
-| `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | a generated `$mxReturn` callback prop the unit calls during setup; one-shot (§10) | `.render(props)` returns `{ value, output }` (§13.3); `/var` top-level only; dynamic tags included | renders through Astro's renderer, which unwraps the pair (§10) | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
+| `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | a generated `$mxReturn` callback prop the unit calls during setup; one-shot (§10) | `.render(props)` returns `{ value, output }` (§13.3); `/var` in any scope, dynamic tags included | renders through Astro's renderer, which unwraps the pair (§10) | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
 
 ### 13.2 Markup and attributes
 
@@ -6079,7 +6082,6 @@ lowering yet" error, and never silently dropped.
 | `resolve` | A Vite-style hook name; the current hook is `transform` | 87c |
 | `migrate` | A source-printing mode | 87b |
 | `mode: "inline"` | The inline-vs-component hybrid for custom tags | 94d |
-| `tag-var-in-callback-scope` | Per-scope `/var` binding inside `<for>`/`<if>`/attribute-tag/content scopes | 97f, 98 |
 | `lowercase-local-component-diagnostic` | Marko's PascalCase rule as one positioned core error on every host | 94c |
 | Tag params on `<if>` | `<if\|u\|=cond>` — Marko rejects it | `divergences.md` |
 | Tag params on native elements | `<div\|x\|>` — Marko rejects it | `divergences.md` |

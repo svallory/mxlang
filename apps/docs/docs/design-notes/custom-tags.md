@@ -293,15 +293,16 @@ emits an import plus a call.*
   returns an accessor. Astro renders an MX component through its own renderer,
   which unwraps the pair there.
 
-  **`/var` is top-level-only on the JSX hosts and Solid.** Those targets lower
-  `<if>` and `<for>` to expressions (a ternary, a `.map` callback, a `<For>`
-  render prop), so a callback scope has no statement position for the binding —
-  hoisting the call out of it reads bindings that do not exist there and runs
-  once for a body rendered N times. Invariant §7.5-8 applies: the escape is a
-  positioned error, never emitted. The call itself, without `/var`, works
-  everywhere. html and Astro `.mx` support the nested case; `/var` in a `.astro.mx`
+  **`/var` binds in its callback body's own scope.** The JSX hosts and Solid
+  lower `<if>` and `<for>` to expressions (a ternary, a `.map` callback, a
+  `<For>` render prop), so each callback body gets a statement position of its
+  own: on the JSX hosts its statements run in a function called in place ahead
+  of the body's markup, and on Solid a lazy body (a `<For>` row, a `<Show>`
+  branch, a call's content, a `<define>` body) declares its own `let`. Hoisting
+  the call to the component body instead would read bindings that do not exist
+  there and run once for a body rendered N times (invariant §7.5-8). html and
+  Astro `.mx` bind it inside the emitted block; `/var` in a `.astro.mx`
   template is refused outright, since it has no statement position at all.
-  Lifting the restriction means a declaration per callback scope — MX 2.
 
   **A returning unit on a JSX host may not import hooks**, because it is
   invoked as a plain function rather than mounted: the hook dispatcher would

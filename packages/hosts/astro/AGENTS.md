@@ -168,10 +168,9 @@ Four facts worth knowing before editing `src/astro-template.ts` or
   same tag *without* `/var` already works today: `server.ts`'s
   `renderToStaticMarkup` calls the unit's default export, which returns the
   markup (the `<return>` value lives only in `render`), deep in Astro's own
-  render pass, long after the fence ran. This is not the same gap
-  as the JSX-host/Solid `/var`-in-callback-scope restriction (spec's `/var`
-  section, MX 2 `tag-var-in-callback-scope`) — that one is liftable by giving
-  a callback scope a statement position; `.astro.mx` has no callback scope to give
+  render pass, long after the fence ran. The JSX hosts and Solid
+  bind a `/var` in a callback body by giving that body a statement position of
+  its own (spec's `/var` section); `.astro.mx` has no callback scope to give
   one to. The error message explains the ordering and points at the
   workaround: call the unit directly from the fence's own TypeScript, an
   ordinary function call: `X.render(input, createOut())` returns the value, and
