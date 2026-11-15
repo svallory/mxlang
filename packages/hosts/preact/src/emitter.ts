@@ -104,7 +104,7 @@ function statefulErrors(
     },
     client: {
       kind: "error",
-      reason: `a \`client\` block is Marko's client-runtime split; a ${dialectName} component is already client code`,
+      reason: `a \`client\` block holds code that runs only in the browser; a ${dialectName} component is already client code`,
     },
     server: {
       kind: "error",
@@ -723,7 +723,7 @@ export function createJsxDeclarations(
     resolveDelegatedTag(name, node): DelegatedTagData {
       if (name === "html-comment") {
         rawFail(
-          `an HTML comment (<html-comment>) cannot appear in a ${dialectName} component: JSX has no comment node, so it cannot render Marko's <!--…-->; write the comment in the HTML shell that mounts the app`,
+          `an HTML comment (<html-comment>) cannot appear in a ${dialectName} component: JSX has no comment node, so it cannot render <!--…-->; write the comment in the HTML shell that mounts the app`,
           node,
         );
       }
@@ -740,7 +740,7 @@ export function createJsxDeclarations(
       const remainder = fullName.slice(colon + 1);
       const event = remainder.charAt(0).toUpperCase() + remainder.slice(1);
       const fixIts: Record<string, string> = {
-        on: `\`${fullName}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${remainder}=fn\` for a custom event name (Marko rejects this form too)`,
+        on: `\`${fullName}=fn\` is not ${dialectName} syntax; write \`on${event}=fn\` for a DOM event or \`on-${remainder}=fn\` for a custom event name`,
         style: `attribute modifier \`${fullName}\` is not ${dialectName} syntax; write the prop directly (\`style={{ color: value }}\` rather than \`style:color\`)`,
       };
       rawFail(
@@ -1522,7 +1522,7 @@ export class PreactEmitter implements Emitter<string> {
         return JSON.stringify(attr.value);
       case "bound":
         return fail(
-          `\`:=\` is Marko's two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
+          `\`:=\` is a two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
       // Phase B of `dom-events`: recompose the prop from the DOM event name
@@ -1695,7 +1695,7 @@ export class PreactEmitter implements Emitter<string> {
         // value prop plus an explicit handler — so emitting only the value
         // would produce an input the user cannot type into.
         return fail(
-          `\`:=\` is Marko's two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
+          `\`:=\` is a two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
       // Phase B of `dom-events`: the prop is recomposed from

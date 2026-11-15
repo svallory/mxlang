@@ -1385,18 +1385,25 @@ describe("stateful Marko tags are errors naming the Preact equivalent", () => {
       "<script>go();</script>",
       "`<script>` is not supported in embedded MX on Preact. Write client code in a module the component imports.",
     ],
-    [
-      "a client block",
-      "client const x = 1;\n<p>${x}</p>",
-      "client-runtime split",
-    ],
   ])("rejects %s", (_name, source, hint) => {
     expect(errorOf(source)).toContain(hint);
   });
 
+  it("rejects a client block, whose reason is the whole message", () => {
+    expect(errorOf("client const x = 1;\n<p>${x}</p>")).toBe(
+      "a `client` block holds code that runs only in the browser; a Preact component is already client code",
+    );
+  });
+
   it("rejects `:=`, which has no Preact equivalent", () => {
-    expect(errorOf("<input value:=input.v>")).toContain(
-      "Marko's two-way binding",
+    expect(errorOf("<input value:=input.v>")).toBe(
+      "`:=` is a two-way binding; Preact has no equivalent — pass the value and an explicit `onInput` handler",
+    );
+  });
+
+  it("rejects `:=` on a native element with a spread, which goes through the spread path", () => {
+    expect(errorOf("<input ...input.rest value:=input.v>")).toBe(
+      "`:=` is a two-way binding; Preact has no equivalent — pass the value and an explicit `onInput` handler",
     );
   });
 
@@ -1828,8 +1835,8 @@ describe("event attributes (phase B of dom-events)", () => {
   });
 
   it("rejects on: with a fix-it naming on-<exact>", () => {
-    expect(errorOf("<div on:click=fn>x</div>")).toContain(
-      "write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+    expect(errorOf("<div on:click=fn>x</div>")).toBe(
+      "`on:click=fn` is not Preact syntax; write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
     );
   });
 
@@ -1998,8 +2005,14 @@ describe("text with JSX-significant characters (rendered)", () => {
     // JSX has no comment node; before the claim, the tag fell through to
     // the native-element path and silently rendered `<html-comment>` where
     // Marko renders `<!--…-->`.
-    expect(() => markup("<html-comment>hi</html-comment>")).toThrow(
-      /cannot appear in a Preact component/,
+    let message = "";
+    try {
+      markup("<html-comment>hi</html-comment>");
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toBe(
+      "an HTML comment (<html-comment>) cannot appear in a Preact component: JSX has no comment node, so it cannot render <!--…-->; write the comment in the HTML shell that mounts the app",
     );
   });
 
