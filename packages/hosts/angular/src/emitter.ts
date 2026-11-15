@@ -642,6 +642,17 @@ function handlerShape(code: string):
 }
 
 /** The error for assigning a `<define>`'s value; names how to read its attributes when it has some. */
+/**
+ * Whether a define's value has properties: its attributes, or the attribute
+ * tags in its body, which Marko makes properties the same way (`D.item`).
+ */
+function hasDefineProps(node: {
+  attrs: Attr[];
+  attributeTagTree?: AttributeTagNode[];
+}): boolean {
+  return node.attrs.length > 0 || (node.attributeTagTree?.length ?? 0) > 0;
+}
+
 function defineAssignError(name: string, hasAttrs: boolean): string {
   return `\`${name}\` is a \`<define>\`'s value and cannot be assigned${
     hasAttrs ? `; read its attributes as \`${name}.name\`` : ""
@@ -3603,11 +3614,11 @@ class AngularEmitter implements Emitter<string> {
         `\`<define/${node.name}>\` renders as an \`<ng-template>\`, which cannot hand a value back to its caller; compute the value in the component and pass it in.`,
       );
     }
-    // Marko makes a `<define>`'s attributes properties of its value
-    // (`${D.a}`). `#D` is a template reference, not an object, so the
-    // attributes ride a `@let` of their own that every later read of `D` was
-    // pointed at (`lowerDefineAttributes`).
-    if (node.attrs.length > 0) this.defineAttributeLet(node);
+    // Marko makes a `<define>`'s attributes, and its body's attribute tags,
+    // properties of its value (`${D.a}`, `${D.item.x}`). `#D` is a template
+    // reference, not an object, so they ride a `@let` of their own that every
+    // later read of `D` was pointed at (`lowerDefineAttributes`).
+    if (hasDefineProps(node)) this.defineAttributeLet(node);
     this.defineScopes.at(-1)?.set(node.name, node.params.length);
     // A bare `let-x` binds `$implicit`, so emitting one per param gives every
     // param the *first* outlet argument — `${v}` reads the key, silently, with
@@ -3636,7 +3647,8 @@ class AngularEmitter implements Emitter<string> {
   }
 
   /**
-   * `@let __mxRow = { "a": 1, ...rest };`: the attributes of a `<define>`,
+   * `@let __mxRow = { "a": 1, ...rest, "item": { "x": 1 } };`: the attributes
+   * of a `<define>`, then one record per attribute-tag name in its body,
    * declared where the define is so a `<for>` row or an `@if` it sits in is in
    * scope for them. The name is the one `lowerDefineAttributes` rewrote the
    * later reads of the define to.
@@ -3652,7 +3664,100 @@ class AngularEmitter implements Emitter<string> {
     }
     this.scopes.at(-1)?.add(name);
     this.out.write(`@let ${name} = { `);
-    node.attrs.forEach((attr, i) => {
+    this.defineAttributeEntries(node.attrs);
+    const tree = node.attributeTagTree ?? [];
+    attributeTagNames(tree).forEach((tagName, i) => {
+      if (i > 0 || node.attrs.length > 0) this.out.write(", ");
+      this.out.write(`${JSON.stringify(tagName)}: `);
+      this.defineAttributeTagValue(filterAttributeTagTree(tree, tagName));
+    });
+    this.out.write(" }; ");
+  }
+
+  /**
+   * One attribute-tag name's record in a define's `@let`: the occurrence's
+   * attributes as an object, under the `<if>` chain around it as a ternary
+   * (`undefined` when no branch writes it), as Marko's `attrTag({...})`.
+   * An `@let` holds a template expression, which has no value for a body
+   * (`content`), a nested attribute tag or a repeated (`<for>`) one.
+   */
+  private defineAttributeTagValue(source: AttributeTagNode[]): void {
+    const voice = voiceOfCtx(this.ctx);
+    if (maxOccurrences(source) > 1) {
+      const first = this.firstDefineAttributeTag(source);
+      fail(
+        `a repeated ${voice.attributeTag} \`<@${first?.name ?? ""}>\` in a \`<define>\` body isn't supported by @mxlang/host-angular: its value is an \`@let\` object, which has no repeatable record`,
+        first ?? (source[0] as AttributeTagNode),
+        "MX_UNSUPPORTED_CONSTRUCT",
+      );
+    }
+    const write = (nodes: AttributeTagNode[]): void => {
+      const node = nodes[0];
+      if (!node) {
+        this.out.write("undefined");
+        return;
+      }
+      if (node.kind === "AttributeTag") {
+        this.defineAttributeTagRecord(node.tag);
+        return;
+      }
+      if (node.kind === "AttributeTagFor") {
+        // Unreachable: a `<for>` around an occurrence counts as repeated.
+        write(node.nodes);
+        return;
+      }
+      this.out.write("(");
+      for (const branch of node.branches) {
+        if (!branch.test) {
+          write(branch.nodes);
+          this.out.write(")");
+          return;
+        }
+        this.out.write("(");
+        this.out.writeMapped(branch.test.code, branch.test.span);
+        this.out.write(") ? ");
+        write(branch.nodes);
+        this.out.write(" : ");
+      }
+      this.out.write("undefined)");
+    };
+    write(source);
+  }
+
+  private firstDefineAttributeTag(
+    nodes: AttributeTagNode[],
+  ): AttributeTag | undefined {
+    let first: AttributeTag | undefined;
+    this.visitAttributeTags(nodes, (tag) => {
+      first ??= tag;
+    });
+    return first;
+  }
+
+  private defineAttributeTagRecord(tag: AttributeTag): void {
+    const voice = voiceOfCtx(this.ctx);
+    if (tag.hasBody) {
+      fail(
+        `a body on \`<@${tag.name}>\` in a \`<define>\` body isn't supported by @mxlang/host-angular: its value is an \`@let\` object, which cannot hold content`,
+        tag,
+        "MX_UNSUPPORTED_CONSTRUCT",
+      );
+    }
+    if (tag.attributeTagTree.length > 0) {
+      fail(
+        `nested ${voice.attributeTags} inside \`<@${tag.name}>\` in a \`<define>\` body aren't supported by @mxlang/host-angular: its value is an \`@let\` object`,
+        tag.attributeTagTree[0] ?? tag,
+        "MX_UNSUPPORTED_CONSTRUCT",
+      );
+    }
+    this.out.write("{ ");
+    this.defineAttributeEntries(tag.attrs);
+    this.out.write(" }");
+  }
+
+  /** A define's (or its attribute tag's) attributes as `@let` object entries. */
+  private defineAttributeEntries(attrs: Attr[]): void {
+    attrs.forEach((attr, i) => {
       if (i > 0) this.out.write(", ");
       if (attr.kind === "spread") {
         this.out.write("...");
@@ -3678,7 +3783,6 @@ class AngularEmitter implements Emitter<string> {
           this.out.writeMapped(attr.value.code, attr.value.span);
       }
     });
-    this.out.write(" }; ");
   }
 
   /**
@@ -3889,7 +3993,7 @@ class AngularEmitter implements Emitter<string> {
                     read: renamed,
                     assignError: defineAssignError(
                       child.name,
-                      child.attrs.length > 0,
+                      hasDefineProps(child),
                     ),
                   },
                 ],
@@ -3977,7 +4081,10 @@ class AngularEmitter implements Emitter<string> {
       seen.add(value);
       if (Array.isArray(value)) return value.some(hasAttributes);
       const record = value as Record<string, unknown>;
-      if (record.kind === "Define" && (record.attrs as Attr[]).length > 0) {
+      if (
+        record.kind === "Define" &&
+        hasDefineProps(record as unknown as Extract<IrNode, { kind: "Define" }>)
+      ) {
         return true;
       }
       return Object.entries(record).some(
@@ -3994,7 +4101,7 @@ class AngularEmitter implements Emitter<string> {
       if (Array.isArray(value)) {
         value.forEach((item, index) => {
           const node = item as IrNode;
-          if (node?.kind !== "Define" || node.attrs.length === 0) return;
+          if (node?.kind !== "Define" || !hasDefineProps(node)) return;
           const later = value.slice(index + 1) as IrNode[];
           const written = this.authored(node.name);
           const row = this.gensym("__mxDefine");
@@ -4024,13 +4131,16 @@ class AngularEmitter implements Emitter<string> {
               !(child.kind === "Text" && child.value.trim() === ""),
           );
           if (hasBody) {
+            const props =
+              node.attrs.length > 0 ? "attributes" : "attribute tags";
+            const prop = node.attrs.length > 0 ? "attribute" : "attribute tag";
             for (const site of sites) {
               const bad = site.reads.find((read) => read.kind !== "member");
               if (!bad || !site.at) continue;
               fail(
                 bad.kind === "content"
-                  ? `\`${written}.content\` is the body of \`<define/${written}>\`, which a define with attributes cannot expose in an Angular template: \`#${written}\` is a template reference. Call it as \`<${written}/>\`, or move the attributes to a second \`<define>\``
-                  : `\`${written}\` is read as a whole here, but \`<define/${written}>\` has attributes and a body, and in an Angular template only \`${written}.<attribute>\` can be read from it: \`#${written}\` is a template reference. Call it as \`<${written}/>\`, or move the attributes to a second \`<define>\``,
+                  ? `\`${written}.content\` is the body of \`<define/${written}>\`, which a define with ${props} cannot expose in an Angular template: \`#${written}\` is a template reference. Call it as \`<${written}/>\`, or move the ${props} to a second \`<define>\``
+                  : `\`${written}\` is read as a whole here, but \`<define/${written}>\` has ${props} and a body, and in an Angular template only \`${written}.<${prop}>\` can be read from it: \`#${written}\` is a template reference. Call it as \`<${written}/>\`, or move the ${props} to a second \`<define>\``,
                 site.at,
                 "MX_UNSUPPORTED_CONSTRUCT",
               );

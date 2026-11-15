@@ -207,6 +207,11 @@ const CASES: Array<[string, string, string]> = [
     "<define/D a=input.x/><for|n| of=input.items><p>${D.a}${n}</p></for>",
     "<p>71</p><p>72</p>",
   ],
+  [
+    "an attribute tag in the body is a property too",
+    "<define/Bar><@item x=1/></define><p>${Bar.item.x}</p>",
+    "<p>1</p>",
+  ],
 ];
 
 describe("angular: a <define>'s attributes are properties of its value", () => {
