@@ -389,6 +389,15 @@ export interface HoistedSolidDefine {
 let defineBindings: Map<string, string> | null = null;
 
 /**
+ * A returning `<define>`'s output-only binding (a `defineBindings` value) ->
+ * the hoisted component a `/var` call renders: it calls the define's pair
+ * function (`{ value, output }`), hands the value to its `v` callback and
+ * renders the output. Keyed by the generated binding, which is never reused
+ * within a compile, so it needs no scoping beyond `collectReturnVars`.
+ */
+let definePairs: Map<string, string> | null = null;
+
+/**
  * Mints a fresh module-scope binding for a hoisted `<define>`.
  *
  * Always gensym'd, never the author's own name: unlike an authored import
@@ -538,6 +547,7 @@ export function collectReturnVars(
   const outerAttrGuardUse = attrGuardUse;
   const outerHoistedDefines = hoistedDefines;
   const outerDefineBindings = defineBindings;
+  const outerDefinePairs = definePairs;
   const collected = new Set<string>();
   const collectedEscapeUse = { used: false };
   const collectedAttrGuardUse = {
@@ -555,6 +565,7 @@ export function collectReturnVars(
   attrGuardUse = collectedAttrGuardUse;
   hoistedDefines = allowHoist ? collectedDefines : null;
   defineBindings = allowHoist ? new Map() : null;
+  definePairs = allowHoist ? new Map() : null;
   try {
     return {
       code: emit(),
@@ -570,6 +581,7 @@ export function collectReturnVars(
     attrGuardUse = outerAttrGuardUse;
     hoistedDefines = outerHoistedDefines;
     defineBindings = outerDefineBindings;
+    definePairs = outerDefinePairs;
   }
 }
 
@@ -2855,18 +2867,30 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     if (node.var) {
-      // `/var` on a plain function call has no callback prop to ride: the
-      // call itself already hands the value back as its return, so bind it
-      // directly rather than inventing a Solid-only prop channel a
-      // `<define>`'s hoisted function was never given.
+      const varCall = definePairs?.get(binding);
+      // Core accepts `/var` only on a call of a define that declares
+      // `<return>`, and every such define has a `/var` component.
+      if (!varCall || !node.returnsValue) {
+        fail(
+          `\`/var\` on \`<${target.name}>\` has no \`<return>\` value to bind`,
+          node,
+        );
+      }
+      // `/var` on a call of a define that declares `<return>`. The binding
+      // has to be written before the siblings after the call read it, and
+      // Solid's compiler defers every call expression in JSX (a thunk on
+      // both SSR and DOM) while it reads a bare name at once; a component is
+      // created in place, so the call renders the define's `/var` component,
+      // which calls the pair function, hands the value back through `v` and
+      // renders the output.
       bindReturnVar({ ...node, var: node.var });
       this.#out.push(
         concatMapped(
-          "{(() => { const __mxV = ",
-          mapped(binding, node.nameSpan),
-          "(",
+          "<",
+          mapped(varCall, node.nameSpan),
+          " a={[",
           ...args.flatMap((a, i) => (i === 0 ? [a] : [", ", a])),
-          `); ${node.var} = __mxV; return __mxV; })()}`,
+          `]} v={(__mxV) => { ${node.var} = __mxV; }} />`,
         ),
       );
       return;
@@ -3365,6 +3389,9 @@ export class SolidEmitter implements Emitter<string> {
     const bodyCode = inLazyScope(() =>
       jsxValue(blockExpression(node.children)),
     ).code;
+    // A `<return>` in the body is evaluated inside the hoisted function too,
+    // so its expression goes through the same capture check as the markup.
+    const returnCode = node.returnValue ? `(${node.returnValue.code})` : null;
     // `params` is source text, so `|{ n }, i|` is `"{ n }"` and `"i"`: the
     // names a pattern binds are core's (`bindings`); a hand-built node
     // without them falls back to the raw strings, which only under-binds (a
@@ -3382,7 +3409,10 @@ export class SolidEmitter implements Emitter<string> {
     // components, not captures; text Babel cannot parse is the emitter's own
     // bug, read as no names.
     const captured = [
-      ...(freeIdentifiersInProgram(bodyCode, { jsxTagNames: false }) ?? []),
+      ...(freeIdentifiersInProgram(
+        returnCode ? `[${bodyCode}, ${returnCode}]` : bodyCode,
+        { jsxTagNames: false },
+      ) ?? []),
     ].filter(
       (freeName) =>
         !bound.has(freeName) &&
@@ -3412,17 +3442,40 @@ export class SolidEmitter implements Emitter<string> {
     // `defineBindings` above was necessarily minted by an *earlier* call to
     // this method in the same region, and minting this one fresh now can
     // never collide with one still to come.
-    const binding = generatedDefineBinding(
-      node.name,
-      new Set([
-        ...defineBindings.values(),
-        ...hoistedDefines.map((hoisted) => hoisted.binding),
-      ]),
-    );
+    const taken = new Set([
+      ...defineBindings.values(),
+      ...hoistedDefines.map((hoisted) => hoisted.binding),
+    ]);
+    const binding = generatedDefineBinding(node.name, taken);
     defineBindings.set(node.name, binding);
+    const typeParams = node.typeParams ? `<${node.typeParams.code}>` : "";
+    if (returnCode) {
+      // A define that declares `<return>`: a second hoisted function returns
+      // `{ value, output }`, which only a `/var` call reaches; the define's
+      // own binding stays the output-only function every other read gets.
+      const pair = generatedDefineBinding(node.name, taken.add(binding));
+      const varCall = generatedDefineBinding(node.name, taken.add(pair));
+      definePairs?.set(binding, varCall);
+      hoistedDefines.push(
+        {
+          code: `function ${pair}${typeParams}(${node.params.join(", ")}) { return { value: ${returnCode}, output: ${bodyCode} }; }`,
+          binding: pair,
+        },
+        {
+          code: `function ${binding}(...a: Parameters<typeof ${pair}>) { return ${pair}(...a).output; }`,
+          binding,
+        },
+        {
+          // The component a `/var` call renders (`#defineComponent`).
+          code: `function ${varCall}(p: { a: Parameters<typeof ${pair}>; v: (value: ReturnType<typeof ${pair}>["value"]) => void }) { const r = ${pair}(...p.a); p.v(r.value); return r.output; }`,
+          binding: varCall,
+        },
+      );
+      return;
+    }
     hoistedDefines.push({
       // A declaration, so `<T>` cannot read as JSX: no trailing comma needed.
-      code: `function ${binding}${node.typeParams ? `<${node.typeParams.code}>` : ""}(${node.params.join(", ")}) { return ${bodyCode}; }`,
+      code: `function ${binding}${typeParams}(${node.params.join(", ")}) { return ${bodyCode}; }`,
       binding,
     });
   }

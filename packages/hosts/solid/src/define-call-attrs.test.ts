@@ -33,11 +33,16 @@ function compile(
 }
 
 function render(region: string, setup = ""): string {
-  const { code, hoistedImports, hoistedDefines } = compile(region, setup);
+  const { code, hoistedImports, hoistedDefines, returnVars } = compile(
+    region,
+    setup,
+  );
   const imports = [...hoistedImports, ...hoistedDefines]
     .map((entry) => entry.code)
     .join("\n");
-  const jsxSource = `${imports}\n${setup}\nexport function App() {\n  return <ul>${code}</ul>;\n}\n`;
+  // A region's caller declares the `/var` names it binds (`returnVars`).
+  const lets = returnVars.length > 0 ? `  let ${returnVars.join(", ")};\n` : "";
+  const jsxSource = `${imports}\n${setup}\nexport function App() {\n${lets}  return <ul>${code}</ul>;\n}\n`;
   const ssr = transformSync(jsxSource, {
     filename: "fixture.tsx",
     presets: [[typescriptPreset, {}]],
@@ -371,5 +376,24 @@ describe("solid: a <define> call passes its attributes as the first param", () =
         '<define/Card|{ title, head }|><div>${title}</div></define>\n<Card title="a"/>',
       ),
     ).toEqual([]);
+  });
+});
+
+describe("solid: a <define> that declares <return>", () => {
+  // Expected HTML is stock Marko 6.4.4's render, its resume comments removed,
+  // inside the helper's `<ul>`.
+  it.each([
+    [
+      "binds the returned value to the call's /var",
+      "<define/Thing|input|>\n  <return=input.n * 2/>\n  <i>${input.n}</i>\n</define>\n<Thing/double n=21/>\n<p>${double}</p>\n",
+      "<ul><i>21</i><p>42</p></ul>",
+    ],
+    [
+      "binds the value of a define with no markup",
+      "<define/D|{n}|><return=n * 2/></define><D/d n=2/><p>${d}</p>",
+      "<ul><p>4</p></ul>",
+    ],
+  ])("%s", (_what, source, html) => {
+    expect(render(source)).toBe(html);
   });
 });
