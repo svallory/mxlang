@@ -58,15 +58,20 @@ describe("linear scaling", () => {
 
   // An armed expression row looks behind past the comments read so far in
   // its expression at every candidate character; one flat array literal keeps
-  // Babel's tree shallow while every item puts a comment before a trigger.
+  // Babel's tree shallow while every item puts comments before a trigger.
+  // Three comments per item make each look-behind step over several, so a
+  // per-step scan of every comment read so far clearly breaks the bound. One
+  // item per line: Babel scans from each block comment to the next line
+  // break, so on a single line that scan alone grows quadratically.
   it("many-comments-in-one-expression: 10x the input takes at most ~10x the time", () => {
+    const item = (i: number) => `/*c${i}*/ /*d${i}*/ /*e${i}*/ &a${i}`;
     const shape = (n: number) =>
-      `<p>\${[${Array.from({ length: n }, (_, i) => `/*c${i}*/ &a${i}`).join(", ")}]}</p>`;
+      `<p>\${[${Array.from({ length: n }, (_, i) => item(i)).join(",\n")}]}</p>`;
     const options = {
       ...OPTIONS,
       syntax: { ...DEFAULT_SYNTAX, expressionTriggers: [MEMBER] },
     };
-    expect(scaling(shape, 2_500, options)).toBeLessThan(30);
+    expect(scaling(shape, 2_000, options)).toBeLessThan(30);
   }, 60_000);
 
   it("20,000 nested tags build a tree without overflowing the stack", () => {
