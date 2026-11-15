@@ -1,0 +1,19 @@
+<const/x=1/>
+<define/A><@item x=1/></define>
+<define/B a=1><@item>hi</@item><p>b</p></define>
+<define/C><@item x=1/><@item x=2/></define>
+<define/D|x|><@item v=x/></define>
+<define/E|x|><@item v=x/><p>${x}</p></define>
+<define/F><if=input.a><@item x=1/></if></define>
+<define/G><if=input.b><@item x=1/></if></define>
+
+<p>${A.item.x}</p>
+<p>${B.a}</p>
+<${B.item}/>
+<B/>
+<for|i| of=C.item>${i.x}</for>
+<p>${D.item.v}</p>
+<p>${E.item.v}</p>
+<E(5)/>
+<p>${F.item?.x}</p>
+<p>${G.item?.x}</p>

@@ -1,0 +1,6 @@
+---
+packages: [core, html, preact, solid, angular]
+kind: Fixed
+---
+
+An attribute tag in a `<define>` body (`<define/Bar><@item x=1/></define>`) is no longer refused: as in Marko, each attribute-tag name is a property of the define's value, after its attributes (`${Bar.item.x}` reads `1`), evaluated where the `<define>` is written and outside its params; the rest of the body stays the define's content. Repeated, `<if>`/`<for>`-wrapped and bodied attribute tags fold into Marko's attribute-tag record on html, Preact, React, Hono and Solid. On Solid, a define with attribute tags reads them like its attributes, and a whole-value read of one that also has a body stays refused. On Angular, the record goes into the define's `@let` for attribute tags with attributes only, including under an `<if>`. The IR `Define` gains an optional `attributeTagTree` (`IR_VERSION` 16), and `defineValueWrapper` takes the attribute-tag names as an optional second argument, so `<@name>`, `<@length>`, `<@caller>` and `<@arguments>` get the same writable wrapper an attribute of that name gets.

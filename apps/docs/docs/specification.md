@@ -1936,7 +1936,11 @@ outside. A `<let>` written in one is refused like in any attribute
 (`MX_LET_WRITE_IN_RENDER`). A body is the define's `content`, so a `content`
 attribute beside a body is dropped, as Marko does, with a warning at the
 attribute (`MX_DEFINE_CONTENT_DROPPED`; never an error, `mx.strict` included);
-with no body it is an ordinary property. On html, preact, react and hono the attributes are own
+with no body it is an ordinary property. Attribute tags written in a `<define>`'s body are
+properties of its value too, after its attributes, as Marko does
+(`<define/D><@item x=1/></define>` makes `${D.item.x}` read `1`): each name is
+one attribute-tag record (§8), evaluated where the `<define>` is written,
+outside its params, and the rest of the body is `content`. On html, preact, react and hono the attributes are own
 properties of the function a call runs. Solid and Angular lower them: Solid
 evaluates the attributes once, where the `<define>` is written, and reads `D.a`
 from that value (a define whose attributes are all literals inlines them at each
