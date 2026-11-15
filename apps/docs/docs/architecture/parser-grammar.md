@@ -1938,16 +1938,22 @@ the normative one.
 1. **End offset from the expression parser.** The vendored `@babel/parser` has
    no entry point that returns where an expression stopped; `startIndex` fixes
    only the start. *Recommendation:* a thin wrapper, owned by the parser lead,
-   that returns the node and its end index, built first.
+   that returns the node and its end index, built first. Stock 5.18.0: no
+   input to compare; the question is about the expression parser the
+   boundary calls.
 2. **Where the default and a TypeScript parser end a value differently.** The
    cases are in [the table below](#the-parser-grammar-open-questions-for-the-language-lead-where-a-real-typescript-parser-would-end-the-value-differently),
    each with its class under the 2026-10-05 ruling. *Recommendation:* rule the
    rows of class (c) one by one; until then the boundary reproduces the default
-   for them, as the default rule requires.
+   for them, as the default rule requires. Stock 5.18.0: every class (c)
+   row's inputs give the same events as main (the Basis column says so per
+   row).
 3. **`??`, `?.` and `?:`.** In a named attribute's value MX stops `??` and `?.` from opening a
    ternary, and tests pin it, but no spec paragraph or decision states it, and
    `?:` still counts as a ternary (`x=a ?:b` is one value). *Recommendation:* state `??` and `?.` in the
    spec as what "no open `?`" means, and decide whether `x=a ?:b` is an error.
+   Stock 5.18.0: the same events for `x=a ?:b`, `x=a ?? b :c` and
+   `x=a ?.b :c`; each is one value there too.
 4. **`.` followed by a digit.** *Settled*: core has no after-value rule, so a
    spaced `.2xl` after a value continues it, as in stock.
 5. **Spreads.** *Settled*: a spread's value continues at a spaced `.b` or
@@ -1955,19 +1961,24 @@ the normative one.
 6. **`|` inside tag parameters and tag variables.** `<foo|x: A | B|/>` ends the
    parameters at the first `|`, and `<let/x: A | B = 1/>` ends the variable
    there. *Recommendation:* require parentheses around a union or bitwise or in
-   both positions, and say so in spec §8.
+   both positions, and say so in spec §8. Stock 5.18.0: the same events; both
+   lists end at the first `|`.
 7. **Generic calls and generic arrows in an HTML-mode value.** `x=f<T>(y)` and
    `x=<T,>(a) => a` are cut at `>` with no error. *Recommendation:* the
    TypeScript-aware boundary consumes the type arguments; rule whether E1's `>`
-   stop yields to it.
+   stop yields to it. Stock 5.18.0: the same events; both inputs are cut at
+   the `>` there too.
 8. **The ambiguous `>` error.** *Recommendation:* keep it; a TypeScript parser
-   cannot tell `>` the operator from `>` the tag end either.
+   cannot tell `>` the operator from `>` the tag end either. Stock 5.18.0:
+   the same error for `<div x=a > b/>`.
 9. **Atoms in a ternary.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle. `x=a ? :b :c` is one value, as in stock
    ([Ternary depth](#the-parser-grammar-dialect-rules-ternary-depth)).
 10. **Wording of the parser's own errors.** Messages such as `A semicolon
     indicates the end of a line. Only comments may follow it.` and the HTML
     comment error are the stock parser's; no MX source says whether MX keeps
     the wording. *Recommendation:* keep them and pin each with a fixture.
+    Stock 5.18.0: the same events and the same messages for `div a; b` and
+    `<div a <!-- c -->/>`.
 11. **A bare `:foo`.** *Settled*: core has no name sugar, so `<div :foo="y"/>`
     is Marko's attribute `value:foo` and `<div :/>` is `value:`, as spec §4
     "`:modifier`" states.
@@ -1975,6 +1986,7 @@ the normative one.
     text; spec §3 "Interpolation" says "Marko's parser rejects it". With
     the MX parser there is no Marko compiler; which MX layer raises it?
     *Recommendation:* the expression parse at the boundary, with an MX message.
+    Stock 5.18.0: the same events; the parser reads `$!{a}` as value text.
 13. **Text bodies.** The parser recognises placeholders, strings and template
     literals in a `TagType.text` body, and an unbalanced quote there is an
     end-of-input error (`<textarea>don't</textarea>`), and a backslash does not
@@ -1984,13 +1996,15 @@ the normative one.
     `<title>`, which the consumer's `TEXT` set does not contain.
     *Recommendation:* amend the spec to "text and placeholders", decide whether
     quotes stay significant in `textarea`, honour `\` escapes in a
-    text-body string, and settle `title`.
+    text-body string, and settle `title`. Stock 5.18.0: the same
+    end-of-input error for both inputs.
 14. **Atoms outside the first ruled positions.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle.
 15. **The stock-parser diagnostic.** *Settled*: core has no after-value rule,
     so the diagnostic for a consumer on a stock parser has no split left to
     describe: both parsers end an attribute value at the same place.
 16. **A tag name's first character.** A leading digit is accepted (`<1abc/>`). *Recommendation:* state the
-    terminator rule in the spec, or add a rule and a diagnostic.
+    terminator rule in the spec, or add a rule and a diagnostic. Stock
+    5.18.0: the same events; `<1abc/>` is the tag `1abc`.
 17. **The operator exemption.** A hard stop written directly after an operator
     is consumed (`x=a + ,b` is one value; `x=a +/>` is a regular-expression
     error). Valid TypeScript is affected, because the look-behind table counts
@@ -1999,7 +2013,7 @@ the normative one.
     `async,`, concise `div x=async\n  span` swallows the child, and
     `div x=f<T> ,y=1` (a trailing instantiation expression) is one value.
     *Recommendation:* make the stop unconditional and let the expression parser
-    report `a +`.
+    report `a +`. Stock 5.18.0: the same events for all six inputs.
 18. **Newline continuation.** In concise mode a value continues past a newline
     only in the cases E2 lists. Some of them reach a line that spec §3 "Concise
     mode" would call a child or a sibling: a keyword operator or a lone `.` at
@@ -2009,14 +2023,15 @@ the normative one.
     crosses newlines, which yields values such as `a\n  <span`.
     *Recommendation:* keep the concise rule, and rule whether a continuation may
     reach a line at column 0, and whether HTML mode keeps the look-ahead across
-    a newline.
+    a newline. Stock 5.18.0: the same events for the three inputs.
 19. **End of input with an open delimiter, in concise mode.** `div x=(a` is an
     error; `div(a`, `$ {a`, `div|a`, `div<A`, `div (a`, `div onClick(a) {b` and,
     under a concise text tag, `script -- ${b` end silently, because the
     delimiter is not on the position's group stack. These lose an event
     entirely: `div.a${b` (no shorthand event), `${x` (no event at all) and a
     template literal's `${` in a concise value (``span\n  div x=`${a``: no value
-    event). *Recommendation:* an error in each case.
+    event). *Recommendation:* an error in each case. Stock 5.18.0: the same
+    events for all eleven inputs, the silent ends and dropped events included.
 20. **`::` followed by whitespace.** *Retired*: `::` is no token of the
     template parser, so `x=a :: b` is one value, as in stock
     ([Atoms](#the-parser-grammar-atoms)).
@@ -2026,28 +2041,34 @@ the normative one.
 22. **The 2026-10-05 boundary ruling is stated only here**, so nothing
     outside this document can cite it and `divergences.md` has no row for it.
     *Recommendation:* write it into the spec section that fixes the boundary mechanism
-    (OQ 1).
+    (OQ 1). Stock 5.18.0: no input to compare; the question is where the
+    ruling is written.
 23. **`x=a !b` and `x=a ++b`.** The default reads each as one value, which is
     not a TypeScript expression; TypeScript reads `a!` and `a++` and stops. No
     spec text covers either. *Recommendation:* let the boundary end the value
     after `a!` and `a++`, which turns a later compile error into `x` plus a
-    boolean attribute `b`; confirm that this is wanted.
+    boolean attribute `b`; confirm that this is wanted. Stock 5.18.0: the
+    same events; each is one value there too.
 24. **Valid TypeScript that the default rejects or cuts**, beyond OQ 7: concise
     `div x=a as T > b` (`Mismatched group`); an arrow type at the top level of a
     type list (`<foo<() => void>>`, `onClick<T extends () => void>(a) {}`); a
     block comment after an operator (`x=a + /* c */ b` ends at the comment); a
-    space between a trailing operator and the newline in a scriptlet or
-    statement (`$ a = 1 + ⏎`); `... [a]` and `... "s"`; `<div x=/* c */ a/>`, a block comment at the
+    space between a trailing operator and the newline in a statement
+    (`static x = 1 + ⏎`; the same input in a scriptlet, `$ a = 1 + ⏎`, is
+    *Settled*: scriptlets are rejected on every host, spec §3 "Scriptlets",
+    so whether it parses as one scriptlet is moot); `... [a]` and `... "s"`; `<div x=/* c */ a/>`, a block comment at the
     value's start, is the value `/* c */` and then an attribute `a`; and the
     exemption cases of OQ 17. One oddity on the other
     side: a `,` line after a statement tag adds attributes to it.
     *Recommendation:* treat each as a defect for the TypeScript-aware boundary
-    to remove; none is covered by spec text.
+    to remove; none is covered by spec text. Stock 5.18.0: the same events
+    for every input listed, the scriptlet one included.
 25. **`div` in close-tag matching.** `<.a></div>` is accepted because the parser
     compares against the literal `div` for an unnamed tag, whatever `defaultTag`
     resolves to. The htmljs fixture `shorthand-closing-html2` pins it.
     *Recommendation:* accept only `</>` for an
-    unnamed tag, or compare against the resolved name in core.
+    unnamed tag, or compare against the resolved name in core. Stock 5.18.0:
+    the same events; `<.a></div>` is accepted there too.
 26. **A close tag in a concise region.** *Settled*: `div\n  </div>` and
     `div\n  </>` close the concise `div`, as in stock Marko. Spec §3 "Concise
     mode" follows this behaviour; an unexpected or mismatched close tag is
@@ -2063,7 +2084,8 @@ the normative one.
     words". With the statement set supplied, the parser reports no attributes
     for them ([E10](#the-parser-grammar-expression-boundaries-e10-statement-tags)); without the set the words are
     attributes. *Recommendation:* correct spec §2 when MX1
-    TODO `statement-tags-not-declared-on-five-hosts` lands.
+    TODO `statement-tags-not-declared-on-five-hosts` lands. Stock 5.18.0: the
+    same events with the statement set and without.
 31. **A template literal's `${}` in a text body.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle.
 32. **Non-ASCII identifiers before an atom.** *Retired* as an atom question.
     The word-character and Unicode-whitespace look-behinds remain where the
@@ -2072,28 +2094,28 @@ the normative one.
 
 The inputs the open questions mention:
 
-| OQ | Inputs | Probes |
-| --- | --- | --- |
-| 3 | `x=a ?:b`, `x=a ?? b :c`, `x=a ?.b :c` | g0628 g0431 g0432 |
-| 4 | `x=a .2xl` | g0626 |
-| 5 | `<div ...props .b/>` | g1025 |
-| 6 | `<foo\|x: A \| B\|/>`, `<let/x: A \| B = 1/>` | g0676 g0890 |
-| 7 | `x=f<T>(y)`, `x=<T,>(a) => a`. TODO `html-value-generic-call-cut-at-gt` | g0353 g0670 |
-| 8 | `<div x=a > b/>` | g0135 |
-| 10 | `div a; b`, `<div a <!-- c -->/>` | g0236 g0049 |
-| 12 | `<div x=$!{a}/>` | g0755 |
-| 13 | `<textarea>don't</textarea>`, `<script>var s = "a\"b";</script>`. TODO `text-body-string-backslash-escape` | g0763 g0176 |
-| 16 | `<1abc/>` | g0704 |
-| 17 | `<div x=a + ,b/>`, `<div x=a +/>`, `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span`, `div x=f<T> ,y=1`. TODO `operator-exemption-consumes-hard-stop` | g0788 g0832 g0664 g0665 g0306 g0666 |
-| 18 | concise `div x=a instanceof\nB`, `div x=a +\nspan`; `<div x=a\n  <span/>` | g0446 g1026 g0633 |
-| 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a``. The front end reports `MX_INPUT_ENDS_IN_DELIMITER` for the silent ones; TODO `concise-eof-interpolation-drops-event` | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
-| 23 | `x=a !b`, `x=a ++b` | g0668 g0669 |
-| 24 | concise `div x=a as T > b`; `<foo<() => void>/>`; `<div onClick<T extends () => void>(a) {x}/>`; `x=a + /* c */ b`; `$ const a = 1 + \n  2`; `<div ... [a]/>`, `<div ... "s"/>`; `<div x=/* c */ a/>`; `static const x = 1\n, y`. TODO `concise-as-type-gt-mismatched-group`, `type-list-arrow-cut`, `value-block-comment-after-operator`, `scriptlet-trailing-space-after-operator`, `spread-value-starting-with-bracket-or-string`, `statement-tag-comma-line-adds-attributes` | g0266 g0677 g0941 g0674 g0504 g0479 g0480 g0667 g0895 |
-| 25 | `<.a></div>`. TODO `unnamed-tag-close-compares-literal-div` | g0686 |
-| 26 | `div\n  </div>`. Settled: closes the concise tag, as in stock Marko | g0690 |
-| 27 | `--abc`. Settled: the text `bc`, as in stock Marko | g0917 |
-| 28 | `x=(a) : T => a` | g0611 |
-| 30 | `static const a = 1`, with `static` in the supplied statement set and without | g0758 g0759 |
+| OQ | Inputs | Stock 5.18.0 | Probes |
+| --- | --- | --- | --- |
+| 3 | `x=a ?:b`, `x=a ?? b :c`, `x=a ?.b :c` | same | g0628 g0431 g0432 |
+| 4 | `x=a .2xl` | same | g0626 |
+| 5 | `<div ...props .b/>` | same | g1025 |
+| 6 | `<foo\|x: A \| B\|/>`, `<let/x: A \| B = 1/>` | same | g0676 g0890 |
+| 7 | `x=f<T>(y)`, `x=<T,>(a) => a`. TODO `html-value-generic-call-cut-at-gt` | same | g0353 g0670 |
+| 8 | `<div x=a > b/>` | same | g0135 |
+| 10 | `div a; b`, `<div a <!-- c -->/>` | same | g0236 g0049 |
+| 12 | `<div x=$!{a}/>` | same | g0755 |
+| 13 | `<textarea>don't</textarea>`, `<script>var s = "a\"b";</script>`. TODO `text-body-string-backslash-escape` | same | g0763 g0176 |
+| 16 | `<1abc/>` | same | g0704 |
+| 17 | `<div x=a + ,b/>`, `<div x=a +/>`, `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span`, `div x=f<T> ,y=1`. TODO `operator-exemption-consumes-hard-stop` | same | g0788 g0832 g0664 g0665 g0306 g0666 |
+| 18 | concise `div x=a instanceof\nB`, `div x=a +\nspan`; `<div x=a\n  <span/>` | same | g0446 g1026 g0633 |
+| 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a``. The front end reports `MX_INPUT_ENDS_IN_DELIMITER` for the silent ones; TODO `concise-eof-interpolation-drops-event` | same | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
+| 23 | `x=a !b`, `x=a ++b` | same | g0668 g0669 |
+| 24 | concise `div x=a as T > b`; `<foo<() => void>/>`; `<div onClick<T extends () => void>(a) {x}/>`; `x=a + /* c */ b`; `$ const a = 1 + \n  2`; `<div ... [a]/>`, `<div ... "s"/>`; `<div x=/* c */ a/>`; `static const x = 1\n, y`. TODO `concise-as-type-gt-mismatched-group`, `type-list-arrow-cut`, `value-block-comment-after-operator`, `scriptlet-trailing-space-after-operator`, `spread-value-starting-with-bracket-or-string`, `statement-tag-comma-line-adds-attributes` | same | g0266 g0677 g0941 g0674 g0504 g0479 g0480 g0667 g0895 |
+| 25 | `<.a></div>`. TODO `unnamed-tag-close-compares-literal-div` | same | g0686 |
+| 26 | `div\n  </div>`. Settled: closes the concise tag, as in stock Marko | same | g0690 |
+| 27 | `--abc`. Settled: the text `bc`, as in stock Marko | same | g0917 |
+| 28 | `x=(a) : T => a` | same | g0611 |
+| 30 | `static const a = 1`, with `static` in the supplied statement set and without | same | g0758 g0759 |
 
 ### Where a real TypeScript parser would end the value differently
 
@@ -2117,24 +2139,24 @@ the name-sugar rules under the 2026-10-05 ruling:
 | `x=a ?? b :c`, `x=a ?.b :c` | one value | `??` and `?.` are not ternaries; the expression ends before `:c` | **(a)** | the rule says "`:` … with no open `?`"; whether `??` or `?.` opens one is a fact of TypeScript's grammar. OQ 3 | g0431 g0432 |
 | `x=a ? :b :c` | one value | `a ? :b : c` is no TypeScript: the `:b` is an error in either reading | **(b)**, no difference | stock reads it as one value | g0533 |
 | concise `div x=a\n  .b` | value `a`, then an unnamed child tag with class `b` | member access across the newline | **(b)** | spec §3 "Concise mode": an indented line is a child | g0452 |
-| concise `div x=a\n  (b)`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  <span/>` | value `a`, then a child | continues across the newline | **(c)** | spec §3 "Concise mode" says a concise tag's "children are the lines indented under it" but says nothing about attribute values, and the default itself continues a value onto such lines in other cases (`div x=a +\n  b`, `div x=a in\n  b`). Whether §3 governs value continuation is OQ 18 | g0454 g0456 g0457 g0458 g0451 |
-| `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span` | `async/`, then a missing close tag; `async,` then `y=1`; one value swallowing the child | the identifier `async`, then stops | **(c)** | spec silent. OQ 17 | g0664 g0665 g0306 |
-| concise `div x=f<T> ,y=1` | one value | an instantiation expression `f<T>`, then stops | **(c)** | spec silent. OQ 17 | g0666 |
-| `<div x=/* c */ a/>` | value `/* c */`, then an attribute `a` | the expression `a` after a comment | **(c)** | spec silent. OQ 24. TODO `value-block-comment-after-operator` | g0667 |
-| `x=a [0]` | value `a`, then an attribute named `[0]` | `a[0]` | **(c)** | spec silent. In concise mode `[` begins an attribute group, so continuing would change `div x=a [y=1]` | g0622 |
-| `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | a tagged template, `` a`t` `` | **(c)** | spec silent; accepts nothing the spec rejects | g0625 |
-| `x=a {b}` | one value | stops after `a` | **(c)** | spec silent | g0623 |
-| `x=a: b` | one value | stops after `a`; `: b` is not part of an expression | **(c)** | spec silent | g0624 |
-| `x=a !b`, `x=a ++b` | one value | `a!`, `a++`, then stops | **(c)** | spec silent. OQ 23 | g0668 g0669 |
-| `x=f<T>(y)`, `x=<T,>(a) => a` | cut at the `>` | a generic call; a generic arrow | **(c)** | spec silent; accepts nothing the spec rejects. Recorded defect. OQ 7 | g0353 g0670 |
-| `x=a as T = b`, `x=a as T < b`, `x=a as T {k: T}` | one value | the type ends at `T` | **(c)** | spec silent | g0671 g0672 g0673 |
-| concise `div x=a as T > b` | `Mismatched group` | a comparison | **(c)** | spec silent. OQ 24 | g0266 |
-| `x=a + /* c */ b` | value `a + /* c */`, then an attribute `b` | one expression | **(c)** | spec silent. OQ 24 | g0674 |
-| `<div x=a\n  <span/>` (HTML) | the single value `a\n  <span` | `a < span`, then stops at `/` | **(c)** | spec silent on newlines inside an HTML-mode value. OQ 18 | g0633 |
-| `<div ... [a]/>`, `<div ... "s"/>` | `Missing value for attribute` | a spread of `[a]`, of `"s"` | **(c)** | spec silent. OQ 24 | g0479 g0480 |
-| `<let/foo : string/>` | the variable `foo : string` | as a pattern with a type annotation, the same; as an expression, stops after `foo` | **(c)** | spec silent on how the boundary reads a tag variable; it must be read as a binding pattern for the two to agree | g0675 |
-| `<foo\|x: A \| B\|/>` | parameters end at the first `\|` | a union type | **(c)** | spec silent. OQ 6 | g0676 |
-| `<foo<() => void>/>` | type arguments `() =` | a function type | **(c)** | spec silent. OQ 24 | g0677 |
+| concise `div x=a\n  (b)`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  <span/>` | value `a`, then a child | continues across the newline | **(c)** | spec §3 "Concise mode" says a concise tag's "children are the lines indented under it" but says nothing about attribute values, and the default itself continues a value onto such lines in other cases (`div x=a +\n  b`, `div x=a in\n  b`). Whether §3 governs value continuation is OQ 18. Stock: same | g0454 g0456 g0457 g0458 g0451 |
+| `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span` | `async/`, then a missing close tag; `async,` then `y=1`; one value swallowing the child | the identifier `async`, then stops | **(c)** | spec silent. OQ 17. Stock: same | g0664 g0665 g0306 |
+| concise `div x=f<T> ,y=1` | one value | an instantiation expression `f<T>`, then stops | **(c)** | spec silent. OQ 17. Stock: same | g0666 |
+| `<div x=/* c */ a/>` | value `/* c */`, then an attribute `a` | the expression `a` after a comment | **(c)** | spec silent. OQ 24. TODO `value-block-comment-after-operator`. Stock: same | g0667 |
+| `x=a [0]` | value `a`, then an attribute named `[0]` | `a[0]` | **(c)** | spec silent. In concise mode `[` begins an attribute group, so continuing would change `div x=a [y=1]`. Stock: same | g0622 |
+| `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | a tagged template, `` a`t` `` | **(c)** | spec silent; accepts nothing the spec rejects. Stock: same | g0625 |
+| `x=a {b}` | one value | stops after `a` | **(c)** | spec silent. Stock: same | g0623 |
+| `x=a: b` | one value | stops after `a`; `: b` is not part of an expression | **(c)** | spec silent. Stock: same | g0624 |
+| `x=a !b`, `x=a ++b` | one value | `a!`, `a++`, then stops | **(c)** | spec silent. OQ 23. Stock: same | g0668 g0669 |
+| `x=f<T>(y)`, `x=<T,>(a) => a` | cut at the `>` | a generic call; a generic arrow | **(c)** | spec silent; accepts nothing the spec rejects. Recorded defect. OQ 7. Stock: same | g0353 g0670 |
+| `x=a as T = b`, `x=a as T < b`, `x=a as T {k: T}` | one value | the type ends at `T` | **(c)** | spec silent. Stock: same | g0671 g0672 g0673 |
+| concise `div x=a as T > b` | `Mismatched group` | a comparison | **(c)** | spec silent. OQ 24. Stock: same | g0266 |
+| `x=a + /* c */ b` | value `a + /* c */`, then an attribute `b` | one expression | **(c)** | spec silent. OQ 24. Stock: same | g0674 |
+| `<div x=a\n  <span/>` (HTML) | the single value `a\n  <span` | `a < span`, then stops at `/` | **(c)** | spec silent on newlines inside an HTML-mode value. OQ 18. Stock: same | g0633 |
+| `<div ... [a]/>`, `<div ... "s"/>` | `Missing value for attribute` | a spread of `[a]`, of `"s"` | **(c)** | spec silent. OQ 24. Stock: same | g0479 g0480 |
+| `<let/foo : string/>` | the variable `foo : string` | as a pattern with a type annotation, the same; as an expression, stops after `foo` | **(c)** | spec silent on how the boundary reads a tag variable; it must be read as a binding pattern for the two to agree. Stock: same | g0675 |
+| `<foo\|x: A \| B\|/>` | parameters end at the first `\|` | a union type | **(c)** | spec silent. OQ 6. Stock: same | g0676 |
+| `<foo<() => void>/>` | type arguments `() =` | a function type | **(c)** | spec silent. OQ 24. Stock: same | g0677 |
 
 ### Recorded defects in the default
 
