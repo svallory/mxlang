@@ -2450,19 +2450,26 @@ export class PreactEmitter implements Emitter<string> {
       " const ",
       mapped(node.name, node.nameSpan ?? null),
     ] as const;
-    if (node.attrs.length === 0) {
+    const tree = node.attributeTagTree ?? [];
+    if (node.attrs.length === 0 && tree.length === 0) {
       return {
         name: node.name,
         fn,
         value: concatMapped(...declared, ` = ${wrapped};`),
       };
     }
-    const { open, between } = defineValueWrapper(node.attrs);
+    // The body's attribute tags follow the attributes, one record per name,
+    // as Marko's `{ a: 1, item: attrTag({…}) }` does.
+    const { open, between } = defineValueWrapper(
+      node.attrs,
+      attributeTagNames(tree),
+    );
     const props = concatMapped(
       "{ ",
-      ...this.#propParts(node.attrs).flatMap((part, index) =>
-        index === 0 ? [part] : [", ", part],
-      ),
+      ...[
+        ...this.#propParts(node.attrs),
+        ...this.#attributeTagEntries(tree),
+      ].flatMap((part, index) => (index === 0 ? [part] : [", ", part])),
       " });",
     );
     return {

@@ -98,3 +98,13 @@ describe("preact: a <define> carries its attributes as properties", () => {
     );
   });
 });
+
+// Stock Marko 6.4.4: `<define/Bar><@item x=1/></define>` is
+// `const Bar = { item: attrTag({ x: 1 }) }`.
+describe("preact: a <define> body's attribute tags are properties too", () => {
+  it("one record per name on the define's value", () => {
+    expect(whole("<define/Bar><@item x=1/></define>${Bar.item.x}")).toContain(
+      'const __mxDef_Bar = () => (<></>); const Bar = Object.assign(__mxDefine(__mxDef_Bar, "Bar"), { "item": __mxAttrTag({ "x": 1 }) });',
+    );
+  });
+});
