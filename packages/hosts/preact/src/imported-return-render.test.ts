@@ -167,7 +167,7 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
     ).toBe("<span>1</span><p>2</p><span>2</span><p>3</p>");
   });
 
-  it("binds a /var in an <if>/<else> branch, only in the branch that renders", async () => {
+  it("binds a /var in each <if>/<else> branch's own scope", async () => {
     expect(
       await renderCaller(
         "<Counter/n start=1/><if=false><Counter/n start=9/>${n}</if><else><Counter/n start=5/><b>${n}</b></else><i>${n}</i>",
