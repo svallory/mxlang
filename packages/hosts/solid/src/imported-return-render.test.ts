@@ -39,6 +39,18 @@ const ssr = (code: string, filename: string): string => {
  * 6.4.4.
  */
 function renderImported(fragment: string): string {
+  return renderWithHeadVars(fragment).html;
+}
+
+/**
+ * {@link renderImported}, plus the names the caller hoists to the component
+ * head (`returnVars`). A `/var` in a lazy body declares its own `let` in that
+ * body, so its name never reaches this list.
+ */
+function renderWithHeadVars(fragment: string): {
+  html: string;
+  returnVars: readonly string[];
+} {
   const dir = mkdtempSync(join(packageRoot, ".ssr-imported-return-"));
   try {
     const counterPath = join(dir, "counter.mx");
@@ -72,10 +84,11 @@ function renderImported(fragment: string): string {
       join(dir, "run.mjs"),
       `import { renderToString } from "@solidjs/web";\nimport { App } from "./app.mjs";\nprocess.stdout.write(renderToString(() => App()));\n`,
     );
-    return execFileSync("bun", ["run", join(dir, "run.mjs")], {
+    const html = execFileSync("bun", ["run", join(dir, "run.mjs")], {
       cwd: packageRoot,
       encoding: "utf8",
     });
+    return { html, returnVars: caller.returnVars };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -99,8 +112,9 @@ describe("an imported tag that declares <return>, rendered on Solid", () => {
 });
 
 /** A render without Solid's hydration keys and SSR comment markers. */
-const markup = (fragment: string): string =>
-  renderImported(fragment).replace(/ _hk=[^\s>]+|<!--[\s\S]*?-->/g, "");
+const strip = (html: string): string =>
+  html.replace(/ _hk=[^\s>]+|<!--[\s\S]*?-->/g, "");
+const markup = (fragment: string): string => strip(renderImported(fragment));
 
 describe("a /var in a lazy body, rendered on Solid", () => {
   // Each `<For>` row, `<Show>` branch, content body and `<define>` body
@@ -112,12 +126,14 @@ describe("a /var in a lazy body, rendered on Solid", () => {
     ).toBe("<ul><span>1</span><p>2</p><span>2</span><p>3</p></ul>");
   });
 
-  it("binds a /var in an <if>/<else> branch, only in the branch that renders", () => {
-    expect(
-      markup(
-        "<if=false><Counter/n start=1/>${n}</if><else><Counter/m start=5/><p>${m}</p></else>",
-      ),
-    ).toBe("<ul><span>5</span><p>6</p></ul>");
+  it("binds a /var in each <if>/<else> branch's own scope", () => {
+    const { html, returnVars } = renderWithHeadVars(
+      "<if=false><Counter/n start=1/>${n}</if><else><Counter/m start=5/><p>${m}</p></else>",
+    );
+    expect(strip(html)).toBe("<ul><span>5</span><p>6</p></ul>");
+    // SSR renders the same markup from a head `let`; the branch's names
+    // staying off the component head is what pins the per-branch scope.
+    expect(returnVars).toEqual([]);
   });
 
   it("gives a repeated /var its own binding across element and lazy scopes", () => {
@@ -131,9 +147,14 @@ describe("a /var in a lazy body, rendered on Solid", () => {
   });
 
   it("binds a /var in a component's content body", () => {
-    expect(markup("<Box><Counter/n start=1/><p>${n}</p></Box>")).toBe(
+    const { html, returnVars } = renderWithHeadVars(
+      "<Box><Counter/n start=1/><p>${n}</p></Box>",
+    );
+    expect(strip(html)).toBe(
       "<ul><section><span>1</span><p>2</p></section></ul>",
     );
+    // The content body's names stay off the component head.
+    expect(returnVars).toEqual([]);
   });
 
   it("binds a /var in a <define> body per call", () => {
