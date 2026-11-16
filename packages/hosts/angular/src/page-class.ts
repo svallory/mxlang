@@ -17,8 +17,14 @@
 
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import * as babelParser from "@babel/parser";
+import { parseBabel, parseBabelExpression } from "@mxlang/tsx-bridge";
 import { ALL_HELPER_NAMES, RUNTIME_SPECIFIER } from "./emitter.ts";
+
+/** MX's Babel fork, in the shape of the `@babel/parser` namespace the calls below read. */
+const babelParser = {
+  parse: parseBabel,
+  parseExpression: parseBabelExpression,
+};
 
 /** One component class in the file, and which invoker members it lacks. */
 export interface PageClassReport {

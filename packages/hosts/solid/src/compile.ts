@@ -17,10 +17,6 @@
  */
 
 import {
-  parse as parseBabel,
-  parseExpression as parseBabelExpression,
-} from "@babel/parser";
-import {
   ATTR_TAG_RECORD,
   ATTR_TAG_RUNTIME,
   attachDependencies,
@@ -41,6 +37,7 @@ import {
   TranslateError,
   usesAttrTagRuntime,
 } from "@mxlang/core";
+import { parseBabel, parseBabelExpression } from "@mxlang/tsx-bridge";
 import MagicString from "magic-string";
 /** Local names for the body-channel helpers a unit imports from `solid-js`. */
 import {

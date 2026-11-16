@@ -16,8 +16,10 @@ bun add @mxlang/host-solid
 
 Workspace-internal today: `@mxlang/tsx-bridge` depends on it directly for the
 `.solid.mx` bridge (see below), and no other package or example imports it.
-Pinned dependencies: `@babel/parser` at `7.29.8` (matching the parser
-package's own pin) and `magic-string` at `0.30.21`. There is no `@babel/generator` dependency: expression nodes print
+Pinned dependencies: `magic-string` at `0.30.21`. Expressions and
+statements are re-parsed with MX's Babel fork through `@mxlang/tsx-bridge`'s
+`parseBabel`/`parseBabelExpression`; npm `@babel/parser` (`7.29.8`) is only a
+test dependency, which two tests compare against. There is no `@babel/generator` dependency: expression nodes print
 back to source text through `@mxlang/core`'s `printExpression`, the same
 Babel instance that parsed them (`@marko/compiler/internal/babel`'s own
 generator) rather than a second one. Solid 2 itself (`solid-js`,

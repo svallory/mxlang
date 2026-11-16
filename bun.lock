@@ -330,7 +330,6 @@
         "mx-angular": "./dist/bin.js",
       },
       "dependencies": {
-        "@babel/parser": "7.29.8",
         "@jridgewell/sourcemap-codec": "1.6.0",
         "@mxlang/core": "workspace:*",
         "@mxlang/tsx-bridge": "workspace:*",
@@ -425,7 +424,6 @@
       "name": "@mxlang/host-solid",
       "version": "0.0.0",
       "dependencies": {
-        "@babel/parser": "7.29.8",
         "@mxlang/core": "workspace:*",
         "@mxlang/tsx-bridge": "workspace:*",
         "@mxlang/web-elements": "workspace:*",
@@ -434,6 +432,7 @@
       },
       "devDependencies": {
         "@babel/core": "7.29.7",
+        "@babel/parser": "7.29.8",
         "@babel/preset-typescript": "7.29.7",
         "@solidjs/babel-plugin": "2.0.0-rc.7",
         "@solidjs/web": "2.0.0-rc.7",
@@ -521,11 +520,11 @@
       "name": "@mxlang/target-html",
       "version": "0.1.0",
       "dependencies": {
-        "@babel/parser": "7.29.8",
         "@mxlang/core": "workspace:*",
         "@mxlang/web-elements": "workspace:*",
       },
       "devDependencies": {
+        "@mxlang/parser": "workspace:*",
         "@types/bun": "1.4.2",
       },
       "peerDependencies": {

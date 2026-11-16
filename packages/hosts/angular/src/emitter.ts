@@ -6,7 +6,6 @@
 
 import { readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
-import * as babelParser from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -42,6 +41,7 @@ import {
   voiceOfCtx,
   warn,
 } from "@mxlang/core";
+import { parseBabel, parseBabelExpression } from "@mxlang/tsx-bridge";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import {
   AngularCompilerUnavailableError,
@@ -54,6 +54,12 @@ import {
   type NodeAnchor,
   TemplateWriter,
 } from "./mapping.ts";
+
+/** MX's Babel fork, in the shape of the `@babel/parser` namespace the calls below read. */
+const babelParser = {
+  parse: parseBabel,
+  parseExpression: parseBabelExpression,
+};
 
 /** A Babel node read structurally, by its `type` and its children. */
 type BabelNode = Record<string, unknown> & { type: string };
@@ -1536,7 +1542,7 @@ export function unreadableSelectorMessage(fallback: string): string {
  * The module specifier of an authored `import` statement, or undefined.
  *
  * A synthesized import carries `specifier` structurally; an authored one
- * carries only its source text, so it is parsed with `@babel/parser`
+ * carries only its source text, so it is parsed with MX's Babel fork
  * rather than scraped with a regex, which would trip over a specifier
  * containing an escape or a quote of the other kind.
  */

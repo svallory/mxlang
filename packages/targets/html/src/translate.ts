@@ -27,7 +27,6 @@
  * synchronous string render genuinely cannot express is an error.
  */
 
-import * as babelParser from "@babel/parser";
 import {
   ATTR_TAG_RUNTIME,
   ATTRIBUTE_VALUE_EXPRESSION,
@@ -57,8 +56,15 @@ import {
   usesAttrTagRuntime,
   voiceOfCtx,
 } from "@mxlang/core";
+import { parseBabel, parseBabelExpression } from "@mxlang/parser/frontend";
 import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
 import { type ConstEnums, collectConstEnums } from "./const-enum.ts";
+
+/** MX's Babel fork, in the shape of the `@babel/parser` namespace the calls below read. */
+const babelParser = {
+  parse: parseBabel,
+  parseExpression: parseBabelExpression,
+};
 
 export { TranslateError } from "@mxlang/core";
 
@@ -683,7 +689,7 @@ function clientProjection(
   // to it, so the server view reads the name as `undefined` (`var` line) and
   // client code keeps every meaning of the export (value, type, namespace).
   // An alias keeps its `import` keyword on a line of its own under
-  // `@ts-ignore`: the alias is not erasable syntax, and the ignore must not
+  // `@ts-expect-error`: the alias is not erasable syntax, and the ignore must not
   // reach the name, where an unknown or unused name is reported.
   const valueImport = (statement: Node, serial: number): void => {
     const from = text(statement.source);

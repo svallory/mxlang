@@ -1,4 +1,3 @@
-import { parseExpression as parseBabelExpression } from "@babel/parser";
 import {
   ATTR_TAG_BUILD,
   ATTR_TAG_FOLD,
@@ -37,7 +36,7 @@ import {
   unresolvedCustomTagMessage,
   voiceOfCtx,
 } from "@mxlang/core";
-import { SOLID_BUILTIN_TAGS } from "@mxlang/tsx-bridge";
+import { parseBabelExpression, SOLID_BUILTIN_TAGS } from "@mxlang/tsx-bridge";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { decodeHTML } from "entities";
 import {

@@ -32,7 +32,6 @@
  *   line array and pushing in the same order.
  */
 
-import * as babelParser from "@babel/parser";
 import {
   ATTR_TAG_BUILD,
   ATTR_TAG_FOLD,
@@ -69,6 +68,7 @@ import {
   TranslateError,
   withUse,
 } from "@mxlang/core";
+import { parseBabel, parseBabelExpression } from "@mxlang/parser/frontend";
 import type {
   ClientPiece,
   ClientType,
@@ -81,6 +81,12 @@ import {
   escapeScript,
   escapeStyle,
 } from "./translate.ts";
+
+/** MX's Babel fork, in the shape of the `@babel/parser` namespace the calls below read. */
+const babelParser = {
+  parse: parseBabel,
+  parseExpression: parseBabelExpression,
+};
 
 const INDENT = "  ";
 
@@ -2321,7 +2327,7 @@ function placeClientCode(state: State): ClientExports {
       "})();",
     ),
   ];
-  // `@ts-ignore` covers only the generated `namespace` line: it is not
+  // `@ts-expect-error` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
@@ -2418,7 +2424,7 @@ function reservedExport(
   const base = fileName.slice(
     Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1,
   );
-  // The self-import always resolves (to this module); `@ts-ignore` keeps a
+  // The self-import always resolves (to this module); `@ts-expect-error` keeps a
   // project without `jsx` from reporting TS6142 on it, since a `.mx` module
   // is TSX, and the namespace still reads the module's exports.
   return concatMapped(

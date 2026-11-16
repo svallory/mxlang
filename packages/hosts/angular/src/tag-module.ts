@@ -11,7 +11,6 @@
  */
 
 import { readFileSync } from "node:fs";
-import * as babelParser from "@babel/parser";
 import {
   type CompileResult,
   type Ctx,
@@ -29,6 +28,7 @@ import {
   voiceOfCtx,
   warn,
 } from "@mxlang/core";
+import { parseBabel, parseBabelExpression } from "@mxlang/tsx-bridge";
 import { directivesFor } from "./directives.ts";
 import {
   angularDeclarations,
@@ -51,6 +51,12 @@ import {
 } from "./mapping.ts";
 import { angularOwnTargets } from "./own-targets.ts";
 import { compileSourceWithHint } from "./structural-attr-hint.ts";
+
+/** MX's Babel fork, in the shape of the `@babel/parser` namespace the calls below read. */
+const babelParser = {
+  parse: parseBabel,
+  parseExpression: parseBabelExpression,
+};
 
 export interface CompileTagModuleOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
@@ -165,7 +171,7 @@ interface InputProp {
 /**
  * Every top-level identifier the given module-level statements bind.
  *
- * Parsed with `@babel/parser` — the parser the rest of this file uses —
+ * Parsed with MX's Babel fork — the parser the rest of this file uses —
  * rather than scanned as text: an emitted alias is
  * only correct if the set is, and a regex over `import`/`export` lines misses
  * a destructuring pattern, a multi-declarator `const`, and an aliased named
@@ -355,7 +361,7 @@ function uniqueName(base: string, taken: ReadonlySet<string>): string {
 /**
  * Parses the property list of an `export interface Input { … }`.
  *
- * Babel's own TypeScript parse (`@babel/parser`, the parser `packages/core`
+ * Babel's own TypeScript parse (MX's Babel fork, the parser `packages/core`
  * uses too). Each
  * property's type is taken as the **verbatim source slice** of its type
  * annotation rather than re-printed from the AST, so the emitted `@Input()`
