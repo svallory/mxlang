@@ -36,7 +36,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/code-frame --external @babel/core --external @babel/generator --external @babel/parser --external @babel/plugin-transform-typescript --external htmljs-parser --external cosmiconfig --define MX_MARKO_FRONTEND='\"./marko-frontend.cjs\"' --define process.env.BABEL_8_BREAKING=false --define process.env.IS_PUBLISH=true && bun build/frontend.ts && bun build/third-party-notices.ts && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/code-frame --external @babel/core --external @babel/generator --external @babel/parser --external @babel/plugin-transform-typescript --external htmljs-parser --external cosmiconfig --define MX_MARKO_FRONTEND='\"./marko-frontend.cjs\"' --define process.env.BABEL_8_BREAKING=false --define process.env.IS_PUBLISH=true && bun build/frontend.ts && bun ../../scripts/third-party-notices.ts dist && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
