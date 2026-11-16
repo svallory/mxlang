@@ -123,6 +123,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
+import * as babelParser from "@babel/parser";
 import {
   getCustomTags,
   isMarkoOrMxSpecifier,
@@ -132,20 +133,13 @@ import {
   type TargetLookup,
   TranslateError,
 } from "@mxlang/core";
-import { parseBabel, parseBabelExpression } from "@mxlang/parser/frontend";
 import type { PluginBuilder } from "bun";
 import { configuredDefaultTag } from "./default-tag.ts";
 import { type CompileOptions, compile, htmlTargets } from "./index.ts";
 
-/** MX's Babel fork, in the shape of the `@babel/parser` namespace the calls below read. */
-const babelParser = {
-  parse: parseBabel,
-  parseExpression: parseBabelExpression,
-};
-
 /**
- * MX's Babel fork (`@mxlang/parser/frontend`'s `parseBabel`), the parser
- * `@mxlang/core` itself parses whole modules with (no Marko Babel). Round 2, finding 3: the original rewrite pass scanned the
+ * `@babel/parser`, the parser `@mxlang/core` itself parses whole modules with
+ * (no Marko Babel). Round 2, finding 3: the original rewrite pass scanned the
  * compiled module line by line with `importedNames` (a single-*line* parse),
  * which silently skipped an author-written multi-line import and never even
  * attempted an `export … from` re-export (`importedNames` only recognizes

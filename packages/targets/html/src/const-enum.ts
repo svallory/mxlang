@@ -1,11 +1,5 @@
+import * as babelParser from "@babel/parser";
 import type { Node } from "@mxlang/core";
-import { parseBabel, parseBabelExpression } from "@mxlang/parser/frontend";
-
-/** MX's Babel fork, in the shape of the `@babel/parser` namespace the calls below read. */
-const babelParser = {
-  parse: parseBabel,
-  parseExpression: parseBabelExpression,
-};
 
 /**
  * Stock Marko's TypeScript pass replaces every read of an unexported

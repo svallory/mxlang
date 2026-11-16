@@ -125,9 +125,9 @@ describe("vendored @babel/parser equivalence", () => {
 
 /**
  * The option sets the compilers pass when they re-parse with the fork in
- * place of npm `@babel/parser` (core's `coreParser()`, the html target, the
- * Solid and Angular hosts). Each case's `valid` snippet puts several block
- * comments on one line; `invalid` is a parse error under those options. The
+ * place of npm `@babel/parser` (core's `coreParser()`, the Solid and Angular
+ * hosts). Each case's `valid` snippet puts several block comments on one
+ * line; `invalid` is a parse error under those options. The
  * fork must give npm's AST, `errors` under `errorRecovery`, and thrown
  * message and `loc`, or the site would have to stay on npm.
  */
@@ -139,19 +139,9 @@ type SiteCase = {
   invalid: string;
 };
 
-const MARKO_STATEMENT_OPTIONS = {
-  sourceType: "module",
-  allowAwaitOutsideFunction: true,
-  allowImportExportEverywhere: true,
-  allowReturnOutsideFunction: true,
-  allowSuperOutsideMethod: true,
-  allowUndeclaredExports: true,
-  allowNewTargetOutsideFunction: true,
-};
-
 const siteCases: SiteCase[] = [
   {
-    // core `core.ts`, `mapping.ts`; html `emitter.ts`; Solid `emitter.ts`; Angular `emitter.ts`, `tag-module.ts`
+    // core `core.ts`, `mapping.ts`; Solid `emitter.ts`; Angular `emitter.ts`, `tag-module.ts`
     name: 'parseExpression, plugins ["typescript"]',
     entry: "parseExpression",
     options: { plugins: ["typescript"] },
@@ -200,7 +190,7 @@ const siteCases: SiteCase[] = [
     invalid: 'import { /*a*/ a /*b*/ from "m";',
   },
   {
-    // core `scan.ts`; html `helpers.ts`
+    // core `scan.ts`
     name: "parse, module, typescript, configFile/babelrc false",
     entry: "parse",
     options: {
@@ -337,35 +327,6 @@ const siteCases: SiteCase[] = [
     valid:
       "/*a*/ let q = super.x; /*b*/ export { q, u }; /*c*/ return new.target;",
     invalid: "/*a*/ let q = /*b*/ super;",
-  },
-  {
-    // html `translate.ts` (Marko's sub-parse options)
-    name: "parse, Marko statement options, objectRestSpread/classProperties/explicitResourceManagement",
-    entry: "parse",
-    options: {
-      ...MARKO_STATEMENT_OPTIONS,
-      plugins: [
-        "objectRestSpread",
-        "classProperties",
-        "explicitResourceManagement",
-        ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
-      ],
-    },
-    valid:
-      '/*a*/ using r = f(); /*b*/ let { a, ...b } = await g(); /*c*/ import h from "h"; /*d*/ return super.x;',
-    invalid: "/*a*/ let { a, /*b*/ ...b, c } = o;",
-  },
-  {
-    // html `const-enum.ts`
-    name: 'parse, module, [["typescript", { disallowAmbiguousJSXLike: false }]]',
-    entry: "parse",
-    options: {
-      sourceType: "module",
-      plugins: [["typescript", { disallowAmbiguousJSXLike: false }]],
-    },
-    valid:
-      "/*a*/ const enum E { /*b*/ A = 1, /*c*/ B = A << 1 } /*d*/ const x = <T>E.B;",
-    invalid: "/*a*/ const enum E { /*b*/ A = 1 /*c*/ B }",
   },
   {
     // Angular `page-class.ts`

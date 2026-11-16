@@ -8,9 +8,8 @@
 /**
  * The vendored `@babel/parser` entry points, unchanged: without the `mx`
  * option they behave exactly like npm `@babel/parser` 7.29.8, with the
- * fork's bounded block-comment line count. Core and the html target parse
- * through these, so their typecheck never reads the fork's source (see
- * `public.d.ts`).
+ * fork's bounded block-comment line count. Core parses through these, so
+ * its typecheck never reads the fork's source (see `public.d.ts`).
  */
 export {
   parse as parseBabel,

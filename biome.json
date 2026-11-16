@@ -137,7 +137,6 @@
     },
     {
       "includes": [
-        "packages/targets/html/src/**",
         "packages/hosts/solid/src/**",
         "packages/hosts/angular/src/**",
         "!**/*.test.ts"
@@ -149,7 +148,7 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@babel/parser": "Parse with MX's Babel fork instead: `parseBabel`/`parseBabelExpression` from `@mxlang/parser/frontend` (html target) or `@mxlang/tsx-bridge` (Solid, Angular). npm `@babel/parser` re-scans to the end of the line from every block comment."
+                  "@babel/parser": "Parse with MX's Babel fork instead: `parseBabel`/`parseBabelExpression` from `@mxlang/tsx-bridge`. npm `@babel/parser` re-scans to the end of the line from every block comment."
                 }
               }
             }
