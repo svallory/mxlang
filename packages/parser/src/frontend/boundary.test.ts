@@ -207,7 +207,12 @@ describe("exposed as the package's second entry point", () => {
       string,
       unknown
     >;
-    expect(Object.keys(frontend).sort()).toEqual(["lineColumnAt", "parse"]);
+    expect(Object.keys(frontend).sort()).toEqual([
+      "lineColumnAt",
+      "parse",
+      "parseBabel",
+      "parseBabelExpression",
+    ]);
   });
 
   it("package.json exposes the template parser, its lexer types and the front end", () => {

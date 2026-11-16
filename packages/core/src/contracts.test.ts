@@ -564,6 +564,9 @@ describe("mx.contracts", () => {
       const firstProcess = spawnSync(
         process.execPath,
         [
+          // Core's source reaches MX's Babel fork, whose TypeScript source has
+          // `const enum`s that Node's default type stripping rejects.
+          "--experimental-transform-types",
           "--input-type=module",
           "--eval",
           `${imports}
@@ -586,6 +589,7 @@ describe("mx.contracts", () => {
       const restarted = spawnSync(
         process.execPath,
         [
+          "--experimental-transform-types",
           "--input-type=module",
           "--eval",
           `${imports}
@@ -862,9 +866,16 @@ console.log(JSON.stringify({
 }));
 `,
     );
+    // `scan.ts` reaches MX's Babel fork, whose TypeScript source has
+    // `const enum`s that Node's default type stripping rejects.
     probe = spawnSync(
       "node",
-      [script, join(import.meta.dirname, "scan.ts"), dir],
+      [
+        "--experimental-transform-types",
+        script,
+        join(import.meta.dirname, "scan.ts"),
+        dir,
+      ],
       { encoding: "utf8" },
     );
     rmSync(dir, { recursive: true, force: true });
