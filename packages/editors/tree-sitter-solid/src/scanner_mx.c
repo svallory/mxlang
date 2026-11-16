@@ -127,8 +127,31 @@ static inline void advance_mx(TSLexer *lexer) { lexer->advance(lexer, false); }
 
 static inline bool is_eof(TSLexer *lexer) { return lexer->eof(lexer); }
 
-// htmljs treats any code <= 32 as whitespace (scanner-rules §4).
+// Whitespace classes of MX's patched htmljs-parser
+// (`patches/htmljs-parser@5.18.0.patch`). Since PR #784 the tag grammar reads
+// Pattern_White_Space, not only codes <= 32, so each site below uses the
+// predicate the bridge's parser uses at the state it mirrors.
+//
+// `is_ws`: htmljs's `isWhitespaceCode`, any code <= 32 (scanner-rules §4). Kept
+// for TypeScript trivia (`mx_scan_at_lt`) and as the base of the two below.
 static inline bool is_ws(int32_t c) { return c > 0 && c <= 32; }
+
+// `isPatternWhiteSpaceCode`: `is_ws` plus U+0085, U+200E, U+200F, U+2028 and
+// U+2029. The tag-grammar whitespace: tag-name end, open-tag gaps, the gap
+// after `=`, a whitespace-terminated value's end, `<` + whitespace as text.
+static inline bool is_pattern_ws(int32_t c) {
+    return is_ws(c) || c == 0x85 || c == 0x200E || c == 0x200F || c == 0x2028 ||
+           c == 0x2029;
+}
+
+// `isUnicodeWhitespaceCode`: `is_ws` plus Unicode's space separators, U+2028,
+// U+2029 and U+FEFF (not U+0085, U+200E or U+200F). The parser skips these in
+// `getPreviousNonWhitespaceCharCode`, the regex-vs-division look-behind.
+static inline bool is_unicode_ws(int32_t c) {
+    return is_ws(c) || c == 0xA0 || c == 0x1680 || (c >= 0x2000 && c <= 0x200A) ||
+           c == 0x2028 || c == 0x2029 || c == 0x202F || c == 0x205F || c == 0x3000 ||
+           c == 0xFEFF;
+}
 
 static inline bool is_name_start(int32_t c) {
     return iswalpha(c) || c == '_' || c == '$';
@@ -397,7 +420,7 @@ static bool scan_expression(TSLexer *lexer, unsigned *budget, int32_t closer, bo
                 return true;
             }
             if (terminated_by_ws) {
-                if (is_ws(c)) {
+                if (is_pattern_ws(c)) {
                     return true; // value ends; caller re-reads the delimiter
                 }
                 if (c == ',') {
@@ -591,7 +614,7 @@ static bool scan_expression(TSLexer *lexer, unsigned *budget, int32_t closer, bo
                 break;
         }
 
-        if (!is_ws(c)) {
+        if (!is_unicode_ws(c)) {
             prev = c;
         }
         advance_mx(lexer);
@@ -668,7 +691,7 @@ static bool scan_tag_name(TSLexer *lexer, unsigned *budget, char *name_out, unsi
             continue;
         }
 
-        if (is_ws(c) || c == '=' || c == '(' || c == '/' || c == '|' || c == '<' ||
+        if (is_pattern_ws(c) || c == '=' || c == '(' || c == '/' || c == '|' || c == '<' ||
             c == ',' || c == '>') {
             return true;
         }
@@ -713,7 +736,7 @@ static bool scan_open_tag(TSLexer *lexer, unsigned *budget, bool *self_closed) {
         }
         int32_t c = lexer->lookahead;
 
-        if (is_ws(c)) {
+        if (is_pattern_ws(c)) {
             advance_mx(lexer);
             continue;
         }
@@ -819,7 +842,7 @@ static bool scan_open_tag(TSLexer *lexer, unsigned *budget, bool *self_closed) {
         // terminatedByWhitespace and shouldTerminateHtmlAttrValue (§6).
         if (c == '=') {
             advance_mx(lexer);
-            while (is_ws(lexer->lookahead)) {
+            while (is_pattern_ws(lexer->lookahead)) {
                 advance_mx(lexer);
             }
             if (lexer->lookahead == '"' || lexer->lookahead == '\'') {
@@ -992,7 +1015,7 @@ static bool scan_mx_element_body(TSLexer *lexer) {
 
             // `<` is literal text when followed by `>`, `<` or whitespace
             // (§9.2) — this is why `<div>a < b</div>` works.
-            if (next == '>' || next == '<' || is_ws(next) || is_eof(lexer)) {
+            if (next == '>' || next == '<' || is_pattern_ws(next) || is_eof(lexer)) {
                 continue;
             }
 

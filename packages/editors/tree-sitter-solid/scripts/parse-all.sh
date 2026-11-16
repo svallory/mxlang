@@ -34,7 +34,7 @@ mapfile -t FILES < <(
 #
 # For testing the guard itself there is an explicit, obviously-named opt-out
 # below that can only RAISE the requirement, never lower it.
-MIN_FILES=14
+MIN_FILES=19
 
 # Testing hook: raise the floor to prove the guard fires. It cannot lower the
 # floor, so it cannot be used to disable the check.

@@ -1,0 +1,34 @@
+// Tag-grammar whitespace (Pattern_White_Space) inside MX regions.
+// Each line holds the code point its comment names as a literal character.
+// The region scanner must end every region where @mxlang/tsx-bridge does.
+
+const x = 4;
+
+// U+0085 NEXT LINE: `<` + it is text; it ends a tag name
+export const text1 = <p>a <b</p>;
+export const name1 = <inputclass="x">;
+
+// U+200E LEFT-TO-RIGHT MARK: `<` + it is text; it ends a tag name
+export const text2 = <p>a <‎b</p>;
+export const name2 = <input‎class="x">;
+
+// U+200F RIGHT-TO-LEFT MARK: `<` + it is text; it ends a tag name
+export const text3 = <p>a <‏b</p>;
+export const name3 = <input‏class="x">;
+
+// U+2028 LINE SEPARATOR: `<` + it is text; it ends a tag name
+export const text4 = <p>a < b</p>;
+export const name4 = <input class="x">;
+
+// U+2029 PARAGRAPH SEPARATOR: `<` + it is text; it ends a tag name
+export const text5 = <p>a < b</p>;
+export const name5 = <input class="x">;
+
+// U+2028 LINE SEPARATOR: skipped before `/`, so `/` is a division
+export const division6 = <div a=(x / 2)>t</div>;
+
+// U+2029 PARAGRAPH SEPARATOR: skipped before `/`, so `/` is a division
+export const division7 = <div a=(x / 2)>t</div>;
+
+// U+3000 IDEOGRAPHIC SPACE: skipped before `/`, so `/` is a division
+export const division8 = <div a=(x　/ 2)>t</div>;
