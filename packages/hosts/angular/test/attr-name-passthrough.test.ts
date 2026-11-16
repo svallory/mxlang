@@ -105,7 +105,10 @@ describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
 
   it("still refuses a real modifier, in this host's words", () => {
     expect(() => emit(`<div class:active="x"/>`, "x.ng.mx")).toThrow(
-      /attribute modifier `class:active` is not Marko syntax/,
+      expect.objectContaining({
+        message:
+          "attribute modifier `class:active` is not supported in an Angular template; use an object/array `class=` value, lowered to `[ngClass]` instead",
+      }),
     );
   });
 });

@@ -255,7 +255,7 @@ describe("angular: what stays refused", () => {
     const source = "<define/D a:=input.x/><p>${D.a}</p>";
     const error = thrown(source);
     expect(error.message).toBe(
-      "bound attribute (`:=`) is Marko reactive state; use a signal and an explicit event handler",
+      "bound attribute (`:=`) is a two-way binding; use a signal and an explicit event handler",
     );
     expect([error.line, error.column]).toEqual([1, source.indexOf("a:=")]);
     expect(error.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");

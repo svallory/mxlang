@@ -172,7 +172,7 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
   client: {
     kind: "error",
     reason:
-      "a `client` block is Marko's client-runtime split; an Angular component is already client code — move its statements into the component class",
+      "a `client` block holds code that runs only in the browser; an Angular component is already client code — move its statements into the component class",
   },
   server: {
     kind: "error",
@@ -301,7 +301,7 @@ export const angularDeclarations: HostDeclarations = {
     if (prefix === "on") {
       const event = target.charAt(0).toUpperCase() + target.slice(1);
       rawFail(
-        `\`on:${target}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${target}=fn\` for a custom event name (Marko rejects this form too)`,
+        `\`on:${target}=fn\` is not an event binding; write \`on${event}=fn\` for a DOM event or \`on-${target}=fn\` for a custom event name`,
         attr,
       );
     }
@@ -310,7 +310,7 @@ export const angularDeclarations: HostDeclarations = {
         ? "an object/array `class=` value, lowered to `[ngClass]`"
         : "an object `style=` value, lowered to `[ngStyle]`";
     rawFail(
-      `attribute modifier \`${fullName}\` is not Marko syntax; use ${replacement} instead`,
+      `attribute modifier \`${fullName}\` is not supported in an Angular template; use ${replacement} instead`,
       attr,
     );
   },
@@ -1927,7 +1927,7 @@ function lowerConstPattern(
             (key?.type !== "Identifier" && key?.type !== "StringLiteral")
           ) {
             fail(
-              "only an identifier or a string literal key is supported in a `<const>` pattern (`{ [k]: v }` and `{ 0: v }` are not), as in Marko. Use a name or a quoted key.",
+              "only an identifier or a string literal key is supported in a `<const>` pattern (`{ [k]: v }` and `{ 0: v }` are not). Use a name or a quoted key.",
               at((property.start ?? 1) - 1),
             );
           }
@@ -3774,7 +3774,7 @@ class AngularEmitter implements Emitter<string> {
           return;
         case "bound":
           fail(
-            "bound attribute (`:=`) is Marko reactive state; use a signal and an explicit event handler",
+            "bound attribute (`:=`) is a two-way binding; use a signal and an explicit event handler",
             attr,
             "MX_UNSUPPORTED_CONSTRUCT",
           );

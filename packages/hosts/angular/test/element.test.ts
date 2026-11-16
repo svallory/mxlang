@@ -115,7 +115,10 @@ describe("Element", () => {
 
   it("rejects reserved on: but preserves ordinary oncapture:", () => {
     expect(() => emit("<a on:click=f>x</a>")).toThrow(
-      /`on:click=fn` is not MX syntax; write `onClick=fn`.*or `on-click=fn`/,
+      expect.objectContaining({
+        message:
+          "`on:click=fn` is not an event binding; write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+      }),
     );
     const out = emit('<a oncapture:click="s">x</a>');
     expect(out).toBe('<a oncapture:click="s">x</a>');
@@ -195,10 +198,16 @@ describe("Element", () => {
     );
     assertAngularParses(out);
     expect(() => emit("<a class:on=c>x</a>")).toThrow(
-      /attribute modifier `class:on` is not Marko syntax.*\[ngClass\]/,
+      expect.objectContaining({
+        message:
+          "attribute modifier `class:on` is not supported in an Angular template; use an object/array `class=` value, lowered to `[ngClass]` instead",
+      }),
     );
     expect(() => emit("<a style:width=w>x</a>")).toThrow(
-      /attribute modifier `style:width` is not Marko syntax.*\[ngStyle\]/,
+      expect.objectContaining({
+        message:
+          "attribute modifier `style:width` is not supported in an Angular template; use an object `style=` value, lowered to `[ngStyle]` instead",
+      }),
     );
   });
 

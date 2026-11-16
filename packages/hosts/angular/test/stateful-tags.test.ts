@@ -48,7 +48,10 @@ describe("stateful tags: positioned errors, not literal elements", () => {
 
   it("rejects a client block", () => {
     expect(() => emit("client { const x = 1; }")).toThrow(
-      /a `client` block is Marko's client-runtime split/,
+      expect.objectContaining({
+        message:
+          "a `client` block holds code that runs only in the browser; an Angular component is already client code — move its statements into the component class",
+      }),
     );
   });
 

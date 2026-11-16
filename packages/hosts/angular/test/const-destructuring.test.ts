@@ -397,13 +397,6 @@ describe("a form Angular cannot express is refused at the <const>", () => {
       9,
     ],
     [
-      "a computed key naming a const",
-      "<const/k='a'/>\n<const/{ [k]: v }=input.o/>${v}",
-      "only an identifier or a string literal key",
-      2,
-      9,
-    ],
-    [
       "a numeric key",
       "<const/{ 0: z }=input.o/>${z}",
       "only an identifier or a string literal key",
@@ -425,4 +418,12 @@ describe("a form Angular cannot express is refused at the <const>", () => {
       expect(error).toMatchObject({ line, column });
     });
   }
+
+  it("a computed key naming a const", () => {
+    const error = refusal("<const/k='a'/>\n<const/{ [k]: v }=input.o/>${v}");
+    expect(error.message).toBe(
+      "only an identifier or a string literal key is supported in a `<const>` pattern (`{ [k]: v }` and `{ 0: v }` are not). Use a name or a quoted key.",
+    );
+    expect(error).toMatchObject({ line: 2, column: 9 });
+  });
 });

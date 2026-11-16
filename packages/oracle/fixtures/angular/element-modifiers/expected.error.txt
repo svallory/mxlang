@@ -1,1 +1,1 @@
-attribute modifier `class:on` is not Marko syntax; use an object/array `class=` value, lowered to `[ngClass]` instead
+attribute modifier `class:on` is not supported in an Angular template; use an object/array `class=` value, lowered to `[ngClass]` instead
