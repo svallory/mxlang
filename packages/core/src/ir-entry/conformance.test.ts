@@ -226,9 +226,10 @@ const INTENDED: Record<
   // on an attribute tag) and a scriptlet block, but each case below holds a
   // form that stock Marko 6.4.4 rejects with "Unexpected token" at the same
   // position the IR entry does. The valid variants of the same constructs
-  // lower (see "valid TypeScript in a tag head" below). Probe:
-  // scratch/reports/probes/ts-syntax-in-tag-head-7cfaa606/ (each corpus case
-  // split into single forms, stock against `lowerSource`, default and `none`).
+  // lower (see "valid TypeScript in a tag head" below). Probe (main at
+  // 7cfaa606): each case from the tree-sitter grammar's test corpus split into
+  // single forms, compiled by stock Marko (`stockMarkoCompile`, marko 6.4.4 /
+  // @marko/compiler 5.42.11) and by `lowerSource`, default and `none`.
   markoRefusesToo: {
     pattern: /Unexpected token/,
     cases: [
@@ -1338,8 +1339,8 @@ describe("operators beside an attribute value, form by form", () => {
 });
 
 describe("valid TypeScript in a tag head", () => {
-  // The variants of the `markoRefusesToo` cases that stock Marko compiles
-  // (probe `tsv.json`, 6.4.4): each lowers, default and `none` alike.
+  // The variants of the `markoRefusesToo` cases that stock Marko 6.4.4
+  // compiles (via `stockMarkoCompile`): each lowers, default and `none` alike.
   const VALID: [string, string][] = [
     ["type arguments", "<foo<string> value=1/>\n"],
     ["type arguments on a tag with a body", "<foo<A>>\n  hi\n</>\n"],
