@@ -546,10 +546,7 @@ describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", 
   const REACHED: Array<[string, string]> = [
     ["the same body", "<Make/T/><T n=1/>"],
     ["a body nested under the /T", "<Make/T/><div><T n=1/></div>"],
-    [
-      "a nested body below its own /T",
-      "<Make/T/><div><Make/T/><T n=1/></div>",
-    ],
+    ["a nested body below its own /T", "<Make/T/><div><Make/T/><T n=1/></div>"],
   ];
   for (const [label, source] of REACHED) {
     it(`with no <define/T>, ${label}: <T> calls the /T`, () => {
