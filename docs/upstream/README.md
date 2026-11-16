@@ -1,12 +1,18 @@
 # Upstream fragment-offset API
 
-MX's `packages/core/src/fragment.ts` post-shifts every
-node and error position after parsing a Marko fragment with `@marko/compiler`,
-because neither `@marko/compiler` nor `htmljs-parser` accept a base position
-for a substring parse (measured: neither accepts a start offset, line or
-column). This directory is the concrete
-patch pair that would remove the need for that stopgap, plus the mx-side
-proof that switching to it changes nothing observable.
+> **Status**: these patches are kept as a record and are not sent. MX sends
+> no patches upstream (`apps/docs/docs/specification.md`). `parseFragment`
+> now gets file-absolute positions from MX's own front end
+> (`@mxlang/parser/frontend`), which adds the fragment's base when it creates
+> each node.
+
+MX's `packages/core/src/fragment.ts` post-shifted every node and error
+position after parsing a Marko fragment with `@marko/compiler`, because
+neither `@marko/compiler` nor `htmljs-parser` accepted a base position for a
+substring parse (measured: neither accepted a start offset, line or column).
+This directory is the concrete patch pair that would have
+removed the need for that stopgap, plus the mx-side proof that switching to it
+changed nothing observable.
 
 ## Tags patched
 

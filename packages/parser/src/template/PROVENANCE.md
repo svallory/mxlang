@@ -4,10 +4,12 @@
 that reads MX templates. This directory is MX's own code now. Licence:
 `LICENSE` (MIT, copied from upstream).
 
-It is **not wired into core**. Core still parses through `@marko/compiler`
-and the `patches/htmljs-parser@5.18.0.patch` entry in `patchedDependencies`.
-`corpus-equivalence.test.ts` pins that this copy and that patched npm build
-produce identical event streams.
+MX's front end (`src/frontend/`) tokenizes with this copy, and core parses
+templates through that front end (`@mxlang/parser/frontend`). The npm build,
+patched by the `patches/htmljs-parser@5.18.0.patch` entry in
+`patchedDependencies`, remains the parser of the workspace's
+`@marko/compiler`. `corpus-equivalence.test.ts` pins that this copy and that
+patched npm build produce identical event streams.
 
 ## Pin
 
