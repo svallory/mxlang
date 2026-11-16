@@ -169,25 +169,33 @@ that wants the table a compile reads must hand the same object to `tagTable`.
 No `marko.json` is read, and no template is parsed by `@marko/compiler`.
 
 **`parseFragment(source, { filename, baseOffset, baseLine, baseColumn, nativeTags })`** — an
-MX *substring* of a larger file, with every position shifted to the
+MX *substring* of a larger file, with every position reported against the
 enclosing file. The consumer is a host whose MX lives inside another language
-(Solid's `.solid.mx`). This is the stopgap
-a seam spike measured, not a fix: the fix is an
-additive base-position parameter upstream, which MX still intends to send.
-Solid's own bridge (`packages/tsx-bridge/src/mx/bridge.ts`) now calls this
-front door for every MX region it finds — see `packages/hosts/solid/README.md`
-for the bridge's own side of that hand-off. Documented limits:
+(Solid's `.solid.mx`). MX's front end parses the fragment and adds the base
+when it creates each node, so positions are file-absolute at creation: no walk
+shifts the tree afterwards. Only a thrown error's `loc`, which lives on the
+exception and is measured in the fragment, is shifted by the base before it is
+rethrown. `@mxlang/tsx-bridge` finds the MX regions in a host file, and the
+host's region entry parses each one with `parseFragment`: the Solid host
+(`packages/hosts/solid/src/compile.ts`), the shared JSX region path of the
+Preact, React and Hono hosts (`packages/hosts/preact/src/region.ts`), the
+Angular host (`packages/hosts/angular/src/ng-mx.ts`), the Astro host
+(`packages/hosts/astro/src/astro-template.ts`), and the TypeScript plugin
+(`packages/tooling/typescript-plugin/src/mx-language.ts`,
+`authored-spans.ts`). See `packages/hosts/solid/README.md` for the Solid
+side of that hand-off. Documented limits:
 
 - `FragmentResult.body` is the MX body and `FragmentResult.ast` the
   `MxDocument`. Their nodes carry file-absolute UTF-16 offsets
   (`start`/`end`, and `span` on field shapes) computed from the fragment's
   base, so a consumer slices the enclosing file with them directly.
 - The Babel expression nodes nested in a container carry their offset at
-  `loc.*.index`, shifted the same way.
+  `loc.*.index`, computed from the base the same way.
 - An expression error stays on its container and is raised when the fragment
   is lowered; `parseFragment` itself throws for a template error, a bare `,`
   line, and any expression error when a method's type parameters fail.
-- Comments are `MxComment` nodes in the body and shift like any other node.
+- Comments are `MxComment` nodes in the body, positioned from the base like
+  any other node.
 - `stripTagTypes: true` removes only tag type-argument and type-parameter
   containers, for a tool re-lowering a type-check projection that already
   erased them. Expression and pattern types (`as`, `satisfies`, `!`, and

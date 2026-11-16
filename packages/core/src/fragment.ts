@@ -1,36 +1,26 @@
 /**
- * The fragment front door: parse a *substring* of a larger file as Marko,
- * with positions reported against the enclosing file.
+ * The fragment front door: parse a *substring* of a larger file with MX's
+ * front end, with positions reported against the enclosing file.
  *
- * The consumer is a host whose MX lives inside another language — the Solid host's
- * `.solid.mx`, where an MX region starts partway into a TSX file. Marko's
- * parser has no base-position parameter, so every `loc` it produces is
- * relative to the substring it was given. This shifts them afterwards.
+ * The consumer is a host whose MX lives inside another language — the Solid
+ * host's `.solid.mx`, where an MX region starts partway into a TSX file.
+ * `parseFragment` hands the fragment's base (`baseOffset`, `baseLine`,
+ * `baseColumn`) to `parseMx`, and the front end adds it when it creates each
+ * node, so every position in the returned tree is file-absolute from the
+ * start: there is no walk over the tree and no shift afterwards.
  *
- * It is the stopgap a seam spike measured,
- * not a fix: the fix is an additive `parseFragment({ start, line, column })`
- * upstream, which MX still intends to send once a host consumes this door.
- * The Solid host's own bridge (`packages/tsx-bridge/src/mx/bridge.ts`) is untouched
- * until phase 4 switches it over.
+ * ## Documented limits
  *
- * ## Documented limits (all measured, spike 1)
- *
- * - **Marko's own nodes carry no numeric offsets at all.** `MarkoTag`,
- *   `MarkoAttribute`, `MarkoTagBody`, `MarkoComment`, `MarkoPlaceholder` and
- *   the tag-name `StringLiteral` have `start`/`end` `undefined`; only
- *   `loc.start`/`loc.end` (`{ line, column }`) are populated. There is
- *   nothing to shift there, and nothing this function can invent.
- * - **Nested expression nodes carry their index inside `loc`.** A Babel
- *   expression under a Marko node (an attribute's value, an identifier) has
- *   `loc.start.index`/`loc.end.index` but no top-level `start`/`end`. Both
- *   shapes are shifted here — the `index` one explicitly, because the naive
- *   spike walk missed it and left indexes substring-relative while the
- *   line/column half was file-relative: an internally inconsistent node.
- * - **A thrown parse error's position lives on the exception**, not in a
- *   tree, so no walk can reach it. `parseFragment` catches, shifts `err.loc`
- *   and rethrows the same error object.
- * - **Comments**: Marko does not populate Babel's file-level `comments`
- *   array; `MarkoComment` nodes in the body are shifted like any other node.
+ * - **Only a thrown error is shifted.** A thrown parse error's position lives
+ *   on the exception, not in the tree, and is measured in the fragment, as
+ *   Marko's parse measured it. `parseFragment` shifts `err.loc` (and each
+ *   aggregated error's) by the base and rethrows the same error object.
+ * - **Positions are only as right as the base.** `parseFragment` sees the
+ *   fragment, never the file, so it checks the base's numbers
+ *   (`assertBaseContract`) but not that they match the file; see the padding
+ *   contract on `FragmentBase`.
+ * - **Comments** are `MxComment` nodes in the body, positioned from the base
+ *   like every other node; Babel's file-level `comments` array is not built.
  */
 
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
@@ -82,10 +72,10 @@ import { registerSyntax } from "./triggers.ts";
 /**
  * A translator that translates nothing: the parse-only configuration.
  *
- * `@marko/compiler` requires *a* translator and resolves `marko/translator`
- * when none is given. This one registers no taglibs beyond Marko's own
- * built-ins and core's (the statement tags are the language's, so every parse
- * knows them) and no `translate` visitors, so `compileSync` parses and stops.
+ * Its only reader is `tagTable(translator, …)`, which builds the tag shapes
+ * the front end parses with. It registers core's taglibs (the statement tags
+ * are the language's, so every parse knows them) plus any custom tags, and
+ * no `translate` visitors.
  */
 const STATEMENT_ENTRY: [string, unknown] = [
   STATEMENT_TAGLIB_ID,
@@ -150,9 +140,9 @@ function parseOnlyTranslator(
  * 3. exactly `baseColumn` characters on the fragment's own line, then
  * 4. the fragment.
  *
- * Why: Marko reports most nodes as `{ line, column }` only, with no index.
- * Such a position is shifted by `baseLine` lines and, on the fragment's first
- * line only, by `baseColumn`; an index is shifted by `baseOffset`. The two
+ * Why: the front end computes a node's `{ line, column }` from `baseLine`
+ * and, on the fragment's first line only, `baseColumn`, and its index from
+ * `baseOffset`. The two
  * systems then agree with the file only if the filler sits *before* the
  * newlines (inert to line/column readers) and the fragment's line carries
  * exactly `baseColumn` characters. Padding the fragment's line out to
@@ -162,8 +152,8 @@ function parseOnlyTranslator(
  *
  * Conventions (what each number counts): all are UTF-16 code units, the unit
  * of a JS string index and of Babel/Marko columns. `baseLine` is zero-based
- * (the count of `\n` before the fragment; Marko's own lines are one-based and
- * shifted by it). `baseColumn` is zero-based: the units between the last `\n`
+ * (the count of `\n` before the fragment; reported lines are one-based and
+ * include it). `baseColumn` is zero-based: the units between the last `\n`
  * before the fragment (or the file start) and the fragment's first unit.
  * `baseOffset` is the unit count of everything before the fragment.
  *
@@ -214,8 +204,8 @@ export interface FragmentBase {
   baseOffset?: number;
   /**
    * Zero-based line offset: the number of newlines before the fragment. Added
-   * to Marko's one-based lines, so a fragment starting on file line 6 passes
-   * 5.
+   * to the fragment's own one-based lines, so a fragment starting on file
+   * line 6 passes 5.
    */
   baseLine?: number;
   /**
@@ -291,12 +281,10 @@ function shiftPosition(
   seen?: Set<object>,
 ): void {
   if (!position || typeof position !== "object") return;
-  // Position objects are *shared* between nodes in Marko's tree — an
-  // attribute's `loc.start` is the same object as its value expression's, so
-  // the walk reaches it more than once and a second shift lands at
-  // `base + base`. Measured: `href=input.url` at raw index 16 with
-  // `baseOffset: 42` came out at 100 instead of 58. Deduping whole nodes is
-  // not enough; the positions themselves have to be tracked.
+  // A position object can be reached more than once: a point error's `loc`
+  // shares one object between `start` and `end`, and a second shift lands at
+  // `base + base`. `seen` tracks the position objects themselves, so each is
+  // shifted once.
   if (seen) {
     if (seen.has(position)) return;
     seen.add(position);
@@ -434,7 +422,7 @@ export function positionRegionSource(
 }
 
 /**
- * Parses `source` as an MX fragment, with every position shifted by `base`.
+ * Parses `source` as an MX fragment, with every position counted from `base`.
  *
  * Port PR 5: the MX front end parses (offsets are file-absolute at creation,
  * ast §5.3), with the tag shapes core's tag table gives (`base.nativeTags`
@@ -553,8 +541,8 @@ export function parseFragment(
     );
   }
   if (error) {
-    // A thrown error's position is on the exception, never in a tree, so the
-    // walk below can never reach it (spike 1, limit 2).
+    // A thrown error's position is on the exception, never in the tree, and
+    // is measured in the fragment, so it is shifted by the base here.
     const positioned = error as PositionedError;
     // A failure inside a tag's `|params|` becomes a positioned MX error; the
     // fragment's own coordinates are shifted like the parse error's.
