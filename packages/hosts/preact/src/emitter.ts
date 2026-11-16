@@ -2966,11 +2966,12 @@ export class PreactEmitter implements Emitter<string> {
         if (local) {
           // The call keeps the authored name, which a local scope also
           // binds, so the pair function is out of reach (see `local` above).
-          // A tag param, loop variable or `<const>` of the name never gets
-          // here: core lowers that call to a `dynamic` target over the local.
-          // This fires only for a binding core does not track as a tag name
-          // (a call tag's `/T` in the body, a `/var` hoisted out of an `<if>`
-          // branch or an element) or a name `EVERY_NAME` claims. Stock Marko
+          // A tag param, loop variable, `<const>` or tag call's `/var` of the
+          // name never gets here: core lowers that call to a `dynamic` target
+          // over the local. This fires only for a `/var` hoisted out of an
+          // `<if>` branch or an element body (`scopeLocals` counts it as this
+          // body's, core scopes it to its own body) or a name `EVERY_NAME`
+          // claims. Stock Marko
           // calls the local there, so emitting the define's pair function
           // would silently bind the wrong value.
           fail(

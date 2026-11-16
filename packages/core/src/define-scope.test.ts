@@ -477,3 +477,65 @@ describe("a local binding of a <define>'s name makes the tag a dynamic call", ()
     ).toBe("dynamic");
   });
 });
+
+describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", () => {
+  // mx-bk8r: stock Marko 6.4.4 reads `<T/>` through Babel's innermost binding,
+  // and a tag call's `/T` is one, so `<Make/T/><T n=1/>` is
+  // `_dynamic_tag(…, T, …)` over the call's value, not the outer define.
+  const D =
+    "<define/T|{n}|><b>${n}</b></define><define/U|{n}|><i>${n}</i></define><define/Make><return=U/></define>";
+  const HIDDEN: Array<[string, string]> = [
+    ["a <define> body", "<define/W><Make/T/><T n=1/></define>"],
+    ["a <for> body", "<for|i| of=[1]><Make/T/><T n=1/></for>"],
+    ["an <if> body", "<if=true><Make/T/><T n=1/></if>"],
+    ["an element body", "<div><Make/T/><T n=1/></div>"],
+    [
+      "a body nested under the /T",
+      "<define/W><Make/T/><div><T n=1/></div></define>",
+    ],
+  ];
+  for (const [label, source] of HIDDEN) {
+    it(`${label}: <T> calls the /T, not the define`, () => {
+      expect(lastCall(`${D}${source}`).kind).toBe("dynamic");
+    });
+  }
+
+  it("a call after the hiding body still reaches the define", () => {
+    expect(lastCall(`${D}<define/W><Make/T/></define><T n=1/>`)).toEqual({
+      kind: "define",
+      params: ["{n}"],
+    });
+  });
+
+  it("an inner define under the /T is the innermost binding", () => {
+    expect(
+      lastCall(
+        `${D}<define/W><Make/T/><if=true><define/T|{n}|><b/></define><T n=1/></if></define>`,
+      ),
+    ).toEqual({ kind: "define", params: ["{n}"] });
+  });
+
+  it("a <const> keeps its route", () => {
+    expect(
+      lastCall(`${D}<for|i| of=[1]><const/T=(() => 1)/><T n=3/></for>`).kind,
+    ).toBe("name");
+  });
+
+  it("/var on the hidden call is not a define call", () => {
+    expect(
+      lastCall(`${D}<define/W><Make/T/><T/x n=1/>\${x}</define>`, {
+        bindsDynamicTagVar: true,
+      }).kind,
+    ).toBe("dynamic");
+  });
+
+  it("an authored <${T}/x/> under the /T is not refused as a define /var", () => {
+    expect(() =>
+      lowerSource(
+        `${D}<define/W><Make/T/><\${T}/x n=1/>\${x}</define>`,
+        undefined,
+        { bindsDynamicTagVar: true },
+      ),
+    ).not.toThrow();
+  });
+});

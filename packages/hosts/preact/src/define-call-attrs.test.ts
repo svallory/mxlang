@@ -144,19 +144,21 @@ describe("preact: a <define> that declares <return>", () => {
     expect(await renderWhole(source)).toBe(html);
   });
 
-  // Lead choice 3 (mx-nh8x): a call tag's `/T` is a binding core does not
-  // track as a tag name, so `<T/x/>` stays a `define` call this host sees as
-  // local; stock calls the local there, so the refusal must still fire.
-  it("refuses /var on a define call a call tag's /T shadows", () => {
+  // Lead choice 3 (mx-nh8x, mx-bk8r): a call tag's `/T` inside an `<if>`
+  // branch is scoped to that branch by core, so `<T/x/>` after it stays a
+  // `define` call, while this host hoists the branch's statements and sees
+  // `T` as local; emitting the define's pair function there would bind the
+  // wrong value, so the refusal must still fire.
+  it("refuses /var on a define call a call tag's /T hoisted out of an <if> shadows", () => {
     const source =
-      "<define/T|{n}|><return=n/></define><define/Make><return=(() => 1)/></define><define/W><Make/T/><T/x n=1/><p>${x}</p></define><W/>";
+      "<define/T|{n}|><return=n/></define><define/Make><return=(() => 1)/></define><define/W><if=true><Make/T/></if><T/x n=1/><p>${x}</p></define><W/>";
     expect(() => compilePreactMx(source, "/fixtures/page.mx")).toThrow(
       expect.objectContaining({
         message: expect.stringContaining(
           "a local binding of the same name shadows the `<define>`",
         ),
         line: 1,
-        column: 95,
+        column: 109,
       }),
     );
   });

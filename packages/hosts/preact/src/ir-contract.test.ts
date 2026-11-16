@@ -158,11 +158,12 @@ describe("shared JSX emitter: what it assumes about the IR (ir-spec 10.2)", () =
   it("shadowedCalls (deprecated) names a call a local binding of the define's name reaches, and no other", () => {
     let calls: WeakSet<object> | undefined;
     let ir: Ir | undefined;
-    // A define param of the name makes the call a `dynamic` target in core;
-    // a call tag's `/Row` is a binding core does not track as a tag name, so
-    // the call stays a `define` call that this host treats as local.
+    // A define param or a call tag's `/Row` of the name makes the call a
+    // `dynamic` target in core; a `/Row` inside an `<if>` branch is scoped to
+    // the branch by core, so the call after it stays a `define` call that this
+    // host, which hoists the branch's statements, treats as local.
     emitted(
-      "<define/Row|x|><p>r</p></define><define/Make><return=(() => 1)/></define><define/List><Make/Row/><Row(1)/></define><List/><Row(2)/>",
+      "<define/Row|x|><p>r</p></define><define/Make><return=(() => 1)/></define><define/List><if=true><Make/Row/></if><Row(1)/></define><List/><Row(2)/>",
       (lowered) => {
         ir = lowered;
         calls = shadowedCalls(lowered);

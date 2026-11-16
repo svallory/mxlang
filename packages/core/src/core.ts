@@ -712,6 +712,17 @@ export interface Ctx {
    */
   tagVarShadowed?: ReadonlySet<string>;
   /**
+   * The names of `<define>`s that a tag call's `/var`, declared in an
+   * enclosing body, hides there.
+   *
+   * `<define/W><Make/T/><T n=1/></define>` calls the local `T` as a dynamic
+   * tag, not the outer `<define/T>` (stock's innermost binding). Kept apart
+   * from `tagVarShadowed`, which `checkTagVarReads` skips: the `/T` is itself
+   * a tag variable whose reads are still checked. Maintained by
+   * `lowerChildList`; replaced, never mutated.
+   */
+  hiddenDefines?: ReadonlySet<string>;
+  /**
    * The names the params of the *enclosing* tag bind, with
    * the kind of tag that binds them. A body declaration of the same spelling
    * is a duplicate of the parameter (`<for|x| of=…><const/x=1/></for>`).

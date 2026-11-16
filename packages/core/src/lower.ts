@@ -4486,7 +4486,12 @@ function rejectDynamicTagVarWithoutReturn(
   binding: string,
   node: Node,
 ): void {
-  if (!tagVarOf(node) || ctx.tagVarShadowed?.has(binding)) return;
+  if (
+    !tagVarOf(node) ||
+    ctx.tagVarShadowed?.has(binding) ||
+    ctx.hiddenDefines?.has(binding)
+  )
+    return;
   if (ctx.defines.has(binding)) {
     rejectUnsupportedFields(ctx, node, voiceOfCtx(ctx).tag(binding), {
       attributeTags: true,
@@ -5990,7 +5995,8 @@ function capitalBinding(ctx: Ctx, name: string): boolean {
  * wins there.
  */
 function defineInScope(ctx: Ctx, name: string): string[] | undefined {
-  if (ctx.tagVarShadowed?.has(name)) return undefined;
+  if (ctx.tagVarShadowed?.has(name) || ctx.hiddenDefines?.has(name))
+    return undefined;
   return ctx.defines.get(name);
 }
 
@@ -7565,8 +7571,14 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // pattern; `const Foo = lazy(...)`, a conditional, a string, or a tag param
     // (whose runtime value can never be inspected here) is "unknown" and routes
     // here instead. Same `valueImportBinding` provenance channel as above, so
-    // typed attribute-tag checking is unaffected.
-    if (ctx.unknownLocalValue.has(name)) {
+    // typed attribute-tag checking is unaffected. A `<define>` a tag call's
+    // `/var` hides here (`ctx.hiddenDefines`) is that call's value, unknown
+    // too; it is not added to the file-wide `unknownLocalValue`, which never
+    // shrinks.
+    if (
+      ctx.unknownLocalValue.has(name) ||
+      (ctx.hiddenDefines?.has(name) ?? false)
+    ) {
       // SAFETY: a named binding is synthetic expression code, not an authored Babel expression; consumers allow no node.
       return lowerComponent(ctx, node, {
         kind: "dynamic",
@@ -7875,6 +7887,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       savedTagVars.set(name, outer);
   };
   const outerShadowed = ctx.tagVarShadowed;
+  const outerHidden = ctx.hiddenDefines;
   let defineShadowed: Set<string> | undefined;
   // Every `/var` this block declares is registered *before* the walk, at the
   // sibling index it is declared at. A read earlier in the same block then
@@ -7932,6 +7945,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         defineShadowed ??= new Set(outerShadowed);
         defineShadowed.delete(defineName);
         ctx.tagVarShadowed = defineShadowed;
+      }
+      if (ctx.hiddenDefines?.has(defineName)) {
+        const hidden = new Set(ctx.hiddenDefines);
+        hidden.delete(defineName);
+        ctx.hiddenDefines = hidden;
       }
       ctx.tagVars.set(defineName, {
         block: [...(ctx.tagVarBlock ?? [])],
@@ -8001,6 +8019,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // binds its `/var` here too, now that a define's `<return>` gives it one:
   // stock refuses `<define/T>…</define><T/T/>` as a duplicate of `T`.
   const siblingDefines = new Set<string>();
+  // A tag call's `/var` hides a `<define>` of the same name in this body and
+  // the bodies nested in it (`ctx.hiddenDefines`): stock reads the tag name
+  // through Babel's innermost binding, the call's local. The test is the
+  // duplicate rule's own `call || dynamic`, so the two cannot drift.
+  const hiding = new Set<string>();
   const declaredNames =
     ctx.tagRules === "none"
       ? []
@@ -8027,6 +8050,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
               importsName(name) ||
               definedHere);
           const dynamic = !hasStaticName(child);
+          if (!builtin && (call || dynamic)) {
+            for (const binding of bindingIdentifierNodes(tagVarOf(child))) {
+              if (!declaredDefines.has(binding.name)) hiding.add(binding.name);
+            }
+          }
           return builtin || call || dynamic
             ? bindingIdentifierNodes(tagVarOf(child))
             : [];
@@ -8160,6 +8188,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     declared.some(([, names]) => names.length > 0) ||
     constDeclared.some(([, names]) => names.length > 0);
 
+  // Set next to the `try` whose `finally` restores it.
+  if (hiding.size > 0)
+    ctx.hiddenDefines = new Set([...(ctx.hiddenDefines ?? []), ...hiding]);
   try {
     while (index < children.length) {
       if (hasLater) {
@@ -8408,6 +8439,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     ctx.laterPlainConsts = entryLaterPlainConsts;
     ctx.enclosingTagParams = enclosingParams;
     ctx.tagVarShadowed = outerShadowed;
+    ctx.hiddenDefines = outerHidden;
     // Restore every outer entry shadowed by this body, including a
     // still-pending outer define. A body `/var` with no outer entry keeps its
     // existing lifetime (escape tracking).
@@ -8830,6 +8862,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   tagVars: "fresh",
   tagVarBlock: "fresh",
   tagVarShadowed: "fresh",
+  hiddenDefines: "fresh",
   enclosingTagParams: "fresh",
   renderLets: "fresh",
   writeGuards: "fresh",

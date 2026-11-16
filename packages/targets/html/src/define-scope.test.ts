@@ -85,4 +85,13 @@ describe("html: a local binding of a <define>'s name hides the define", () => {
     expect(code).toContain("__mxRenderDynamic(__mxOut, T, {");
     expect(code).not.toContain("__mxOut.write(T(");
   });
+
+  // mx-bk8r: a tag call's `/T` hides the define in its body too.
+  it("a tag call's /var is rendered as a dynamic tag", () => {
+    const code = emit(
+      "<define/T|{n}|><b>${n}</b></define><define/U|{n}|><i>${n}</i></define><define/Make><return=U/></define><define/W><Make/T/><T n=1/></define><W/>",
+    );
+    expect(code).toContain("__mxRenderDynamic(__mxOut, T, {");
+    expect(code).not.toContain("__mxOut.write(T(");
+  });
 });

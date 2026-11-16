@@ -645,8 +645,9 @@ export type ComponentTarget =
     }
   /**
    * A `<define>` in scope, with the parameter names it declared. A tag param,
-   * loop variable or `<const>` of the same name in a nested body hides the
-   * `<define>` there, and `<T/>` calls that value as a dynamic tag.
+   * loop variable, `<const>` or a tag call's `/var` of the same name in a
+   * nested body hides the `<define>` there, and `<T/>` calls that value as a
+   * dynamic tag.
    */
   | { kind: "define"; name: string; params: string[] }
   /**
