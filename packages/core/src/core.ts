@@ -716,8 +716,9 @@ export interface Ctx {
    * body.
    *
    * A PascalCase tag of such a name is a dynamic call over the `/var`'s
-   * value, whether or not a `<define>` of the name exists, and it hides such
-   * a define: `<Make/T/><T n=1/>` calls the value `Make` returns, and
+   * value and hides a `<define>` of the name; with no such define it is one
+   * only once the walk has reached the `/var` in scope (`capitalBinding`):
+   * `<Make/T/><T n=1/>` calls the value `Make` returns, and
    * `<define/W><Make/T/><T n=1/></define>` calls the local `T`, not the
    * outer `<define/T>` (stock's innermost binding). Kept apart
    * from `tagVarShadowed`, which `checkTagVarReads` skips: the `/T` is itself

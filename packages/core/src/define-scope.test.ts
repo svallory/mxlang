@@ -558,4 +558,21 @@ describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", 
       lowerSource(`${NO_T}<define/W><Make/T/></define><T n=1/>`),
     ).toThrow(/`<T>` has no matching import or `<define>` in scope/);
   });
+
+  // Not reached yet: the tag keeps today's unknown-tag error rather than
+  // reading the value in its temporal dead zone (stock hoists it instead;
+  // that design question is mx-edza's).
+  // A `<define>` body is lowered where the define is written, so a body above
+  // the `/T` is not reached either, even when the define is called after it.
+  it.each([
+    ["a <T> above its /T", "<T n=1/><Make/T/>"],
+    [
+      "a define body above the /T, called after it",
+      "<define/W><T n=1/></define><Make/T/><W/>",
+    ],
+  ])("with no <define/T>, %s is unbound", (_what, source) => {
+    expect(() => lowerSource(`${NO_T}${source}`)).toThrow(
+      /`<T>` has no matching import or `<define>` in scope/,
+    );
+  });
 });

@@ -5985,7 +5985,28 @@ function capitalBinding(ctx: Ctx, name: string): boolean {
     (ctx.defines.has(name) ||
       ctx.imports.has(name) ||
       (ctx.tagVarShadowed?.has(name) ?? false) ||
-      (ctx.hiddenDefines?.has(name) ?? false))
+      hiddenTagVarReached(ctx, name))
+  );
+}
+
+/**
+ * Has the walk reached, in scope, the tag call's or dynamic tag's `/var` that
+ * binds `name` in an enclosing body (`ctx.hiddenDefines`)? Only then is a
+ * PascalCase tag of that name with no `<define>` a dynamic call over the
+ * value. `lowerComponent` registers the `/var`, not pending, when it reaches
+ * the call, so an entry exists only after it; it is in scope when its
+ * declaring block is this block or an ancestor (the prefix test
+ * `checkTagVarReads` uses). A `<T/>` above its `<Make/T/>` keeps the
+ * unknown-tag error instead of reading the value in its temporal dead zone.
+ */
+function hiddenTagVarReached(ctx: Ctx, name: string): boolean {
+  if (!ctx.hiddenDefines?.has(name)) return false;
+  const bound = ctx.tagVars?.get(name);
+  if (!bound || bound.pending || bound.define) return false;
+  const here = ctx.tagVarBlock ?? [];
+  return (
+    bound.block.length <= here.length &&
+    bound.block.every((id, index) => here[index] === id)
   );
 }
 
