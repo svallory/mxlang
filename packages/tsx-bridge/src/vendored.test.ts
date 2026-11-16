@@ -125,8 +125,10 @@ describe("vendored @babel/parser equivalence", () => {
 
 /**
  * The option sets the Solid and Angular hosts pass when they re-parse with
- * the fork (through this package's `parseBabel`/`parseBabelExpression`) in
- * place of npm `@babel/parser`. Each case's `valid` snippet puts several
+ * the fork (through this package's `parseBabel`/`parseBabelExpression`), and
+ * that `@mxlang/core` passes through `coreParser()`/`coreBabel()` (through
+ * `@mxlang/parser/frontend/babel`), in place of npm `@babel/parser`. Each
+ * case's comment names its sites. Each case's `valid` snippet puts several
  * block comments on one line; `invalid` is a parse error under those
  * options. The fork must give npm's AST and its thrown message and `loc`,
  * or the site would have to stay on npm.
@@ -141,7 +143,8 @@ type SiteCase = {
 
 const siteCases: SiteCase[] = [
   {
-    // Solid `emitter.ts`; Angular `emitter.ts`, `tag-module.ts`
+    // Solid `emitter.ts`; Angular `emitter.ts`, `tag-module.ts`; core
+    // `core.ts` (`coreParser().parseExpression`), `mapping.ts`
     name: 'parseExpression, plugins ["typescript"]',
     entry: "parseExpression",
     options: { plugins: ["typescript"] },
@@ -149,7 +152,8 @@ const siteCases: SiteCase[] = [
     invalid: "(/*a*/ x: /*b*/) => 0",
   },
   {
-    // Angular `emitter.ts`
+    // Angular `emitter.ts`; core `accessor-reads.ts` (the expression, a
+    // read's rewrite, a pattern)
     name: 'parseExpression, plugins [["typescript", {}]]',
     entry: "parseExpression",
     options: { plugins: [["typescript", {}]] },
@@ -157,7 +161,9 @@ const siteCases: SiteCase[] = [
     invalid: "/*a*/ a + /*b*/ * b",
   },
   {
-    // Angular `emitter.ts`, `tag-module.ts`
+    // Angular `emitter.ts`, `tag-module.ts`; core `core.ts` (`importBindings`,
+    // type-only imports, an arrow statement), `lower.ts` (function
+    // declarations of a static unit)
     name: 'parse, module, plugins ["typescript"]',
     entry: "parse",
     options: { sourceType: "module", plugins: ["typescript"] },
@@ -205,6 +211,228 @@ const siteCases: SiteCase[] = [
     valid: "(/*a*/ x: T, /*b*/ { y } = <i />, /*c*/ ...z) => {}",
     invalid: "(/*a*/ x: T, /*b*/ 1 = y) => {}",
   },
+  {
+    // core `core.ts` (`coreBabel().parseExpression` of a rewritten name)
+    name: "parseExpression, no options",
+    entry: "parseExpression",
+    options: {},
+    valid: "/*a*/ x /*b*/ + /*c*/ y.z",
+    invalid: "/*a*/ x + /*b*/",
+  },
+  {
+    // core `scan.ts` (a sidecar module, `readDefaultExport`)
+    name: 'parse, module, plugins ["typescript"], configFile/babelrc false',
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      plugins: ["typescript"],
+      configFile: false,
+      babelrc: false,
+    },
+    valid:
+      'import /*a*/ type { T } from "t"; /*b*/ export default { /*c*/ name: "x" as T };',
+    invalid: "export default { /*a*/ name: /*b*/ };",
+  },
+  {
+    // core `template-tag.ts` (`registerAuthoredTemplateImport`), `core.ts`
+    // (a `static` line)
+    name: "parse, module, no plugins",
+    entry: "parse",
+    options: { sourceType: "module" },
+    valid: 'import /*a*/ X /*b*/ from /*c*/ "./x.mx";',
+    invalid: "import /*a*/ X from /*b*/;",
+  },
+  {
+    // core `template-tag.ts` (`FRAGMENT_OPTIONS`: `parseSnippet`, a pattern)
+    name: 'parse, plugins [["typescript", {}]], return/await outside a function',
+    entry: "parse",
+    options: {
+      plugins: [["typescript", {}]],
+      allowReturnOutsideFunction: true,
+      allowAwaitOutsideFunction: true,
+    },
+    valid:
+      "/*a*/ const v = /*b*/ await f(input as any, /*c*/ input!.x); /*d*/ return v;",
+    invalid: "/*a*/ return /*b*/ );",
+  },
+  {
+    // core `template-tag.ts` (`FRAGMENT_OPTIONS`: an attribute's expression)
+    name: 'parseExpression, plugins [["typescript", {}]], return/await outside a function',
+    entry: "parseExpression",
+    options: {
+      plugins: [["typescript", {}]],
+      allowReturnOutsideFunction: true,
+      allowAwaitOutsideFunction: true,
+    },
+    valid: "/*a*/ await g(/*b*/ input satisfies T, /*c*/ (x: U) => x)",
+    invalid: "/*a*/ await g(/*b*/ x as)",
+  },
+  {
+    // core `accessor-reads.ts` (the names a statement declares)
+    name: 'parse, module, plugins ["jsx", "typescript"], return/await outside a function',
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      allowReturnOutsideFunction: true,
+      allowAwaitOutsideFunction: true,
+      plugins: ["jsx", "typescript"],
+    },
+    valid: "/*a*/ const x = /*b*/ await <b>{/*c*/ y}</b>; /*d*/ return x;",
+    invalid: "/*a*/ const x = /*b*/ <b>{y};",
+  },
+  {
+    // core `callee-input.ts` (`parseDeclarationModule`)
+    name: 'parse, module, plugins ["typescript", "jsx"]',
+    entry: "parse",
+    options: { sourceType: "module", plugins: ["typescript", "jsx"] },
+    valid:
+      "export interface Input { /*a*/ x: string /*b*/ } /*c*/ export default function C() { return /*d*/ <i />; }",
+    invalid: "export interface /*a*/ { /*b*/ x: string }",
+  },
+  {
+    // core `lower.ts` (where a decorator in a statement starts)
+    name: "parse, module, errorRecovery, start line/column, typescript+decorators+decoratorAutoAccessors",
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      allowReturnOutsideFunction: true,
+      errorRecovery: true,
+      startLine: 3,
+      startColumn: 7,
+      plugins: ["typescript", "decorators", "decoratorAutoAccessors"],
+    },
+    valid:
+      "/*a*/ export @d class C { /*b*/ @e accessor x = 1; /*c*/ } /*d*/ return C;",
+    invalid: "/*a*/ let a = 1; /*b*/ let a = 2;",
+  },
+  {
+    // core `lower.ts` (`firstJsxStart`: statement plugins plus "jsx", import
+    // and export anywhere)
+    name: 'parse, module, plugins ["typescript", "jsx"], return outside a function, import/export anywhere',
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      allowReturnOutsideFunction: true,
+      allowImportExportEverywhere: true,
+      plugins: ["typescript", "jsx"],
+    },
+    valid: '/*a*/ { import x from "m"; } /*b*/ const y = <b>{/*c*/ x}</b>;',
+    invalid: "/*a*/ <b>hi</b> /*b*/ <i />",
+  },
+  {
+    // core `lower.ts` (Input references in a static unit's types)
+    name: 'parse, module, plugins ["typescript"], errorRecovery',
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      plugins: ["typescript"],
+      errorRecovery: true,
+    },
+    valid: "/*a*/ type A = /*b*/ { x: Input /*c*/ };",
+    invalid: "/*a*/ let a: T; /*b*/ let a: U;",
+  },
+  {
+    // core `reserved-bindings.ts` (`parseAuthoredSource`, JSX first)
+    name: "parse, module, Marko's plugins + jsx, start line/column, errorRecovery, return outside a function",
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      startLine: 4,
+      startColumn: 2,
+      allowReturnOutsideFunction: true,
+      errorRecovery: true,
+      plugins: [
+        "objectRestSpread",
+        "classProperties",
+        ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
+        "jsx",
+      ],
+    },
+    valid:
+      "/*a*/ const { /*b*/ ...rest } = input; /*c*/ const el = <b {...rest} />; /*d*/ return el;",
+    invalid: "/*a*/ const input = 1; /*b*/ let input = 2;",
+  },
+  {
+    // core `reserved-bindings.ts` (`parseAuthoredSource`, TypeScript only)
+    name: "parse, module, Marko's plugins, start line/column",
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      startLine: 4,
+      startColumn: 2,
+      plugins: [
+        "objectRestSpread",
+        "classProperties",
+        ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
+      ],
+    },
+    valid: "/*a*/ const v = /*b*/ <T>x; /*c*/ class K { /*d*/ p = 1; }",
+    invalid: "/*a*/ const el = /*b*/ <b />;",
+  },
+  {
+    // core `lower.ts` (`rejectInvalidStatement`, `statementParseOptions("client")`)
+    name: "parse, statement options for `client`",
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      allowSuperOutsideMethod: true,
+      allowNewTargetOutsideFunction: true,
+      allowUndeclaredExports: true,
+      plugins: ["typescript"],
+      allowReturnOutsideFunction: true,
+    },
+    valid: "/*a*/ let q = super.x; /*b*/ const t = new.target; /*c*/ return q;",
+    invalid: '/*a*/ { import x from "m"; }',
+  },
+  {
+    // core `static-triggers.ts` (`parseStatement` of a `client` statement),
+    // `lower.ts` (the relaxed re-read)
+    name: "parse, statement options for `client`, import/export anywhere",
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      allowSuperOutsideMethod: true,
+      allowNewTargetOutsideFunction: true,
+      allowUndeclaredExports: true,
+      plugins: ["typescript"],
+      allowReturnOutsideFunction: true,
+      allowImportExportEverywhere: true,
+    },
+    valid: '/*a*/ { import x from "m"; } /*b*/ let q = super.x;',
+    invalid: "/*a*/ let q = /*b*/ ;",
+  },
+  {
+    // core `lower.ts` (`rejectInvalidStatement`, `statementParseOptions("static")`)
+    name: "parse, statement options for `static`",
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      allowSuperOutsideMethod: false,
+      allowNewTargetOutsideFunction: false,
+      allowUndeclaredExports: true,
+      plugins: ["typescript"],
+      allowReturnOutsideFunction: true,
+    },
+    valid: "/*a*/ export { q }; /*b*/ const r: T = /*c*/ 1;",
+    invalid: "/*a*/ let q = /*b*/ super.x;",
+  },
+  {
+    // core `static-triggers.ts` (`parseStatement` of a `static` statement),
+    // `lower.ts` (the relaxed re-read)
+    name: "parse, statement options for `static`, import/export anywhere",
+    entry: "parse",
+    options: {
+      sourceType: "module",
+      allowSuperOutsideMethod: false,
+      allowNewTargetOutsideFunction: false,
+      allowUndeclaredExports: true,
+      plugins: ["typescript"],
+      allowReturnOutsideFunction: true,
+      allowImportExportEverywhere: true,
+    },
+    valid: '/*a*/ { import x from "m"; } /*b*/ export { x as y };',
+    invalid: "/*a*/ const t = /*b*/ new.target;",
+  },
 ];
 
 /** A parse error as plain data: its message plus every own enumerable field (`loc`, `pos`, `code`, `reasonCode`, …). */
@@ -231,7 +459,7 @@ function outcome(
   }
 }
 
-describe("vendored @babel/parser equivalence under the option sets the hosts pass", () => {
+describe("vendored @babel/parser equivalence under the option sets the hosts and core pass", () => {
   for (const { name, entry, options, valid, invalid } of siteCases) {
     it(`matches node_modules/@babel/parser for ${name}`, () => {
       const vendored =
