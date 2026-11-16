@@ -5996,19 +5996,38 @@ function capitalBinding(ctx: Ctx, name: string): boolean {
  * value. `lowerComponent` registers the `/var`, not pending, when it reaches
  * the call, so an entry exists only after it; it is in scope when its
  * declaring block is this block or an ancestor (the prefix test
- * `checkTagVarReads` uses). A `<T/>` above its `<Make/T/>` keeps the
- * unknown-tag error instead of reading the value in its temporal dead zone.
+ * `checkTagVarReads` uses), and when it was declared in the innermost body
+ * that declares a `/T` (`hidingBlocks`) or inside it. A `<T/>` above its
+ * `<Make/T/>`, in that body or a body nested in it, keeps the unknown-tag
+ * error instead of reading the value in its temporal dead zone.
  */
 function hiddenTagVarReached(ctx: Ctx, name: string): boolean {
   if (!ctx.hiddenDefines?.has(name)) return false;
   const bound = ctx.tagVars?.get(name);
   if (!bound || bound.pending || bound.define) return false;
   const here = ctx.tagVarBlock ?? [];
+  // An outer `/T` the walk has reached is not this body's: when a body
+  // between it and here declares its own `/T` (`<Make/T/><div><T n=1/>
+  // <Make/T/></div>`), the emitted `<T/>` reads that body's `let T`, which
+  // is still in its temporal dead zone.
+  const hidingBlock = hidingBlocks.get(ctx.hiddenDefines)?.get(name) ?? [];
   return (
+    bound.block.length >= hidingBlock.length &&
     bound.block.length <= here.length &&
     bound.block.every((id, index) => here[index] === id)
   );
 }
+
+/**
+ * For each `ctx.hiddenDefines` set, the block path of the innermost body
+ * whose own children declare the `/var` that hides each name. Keyed by the
+ * set, which `lowerChildList` replaces and never mutates, so a ctx copy reads
+ * the same table and a fresh walk, with a fresh set, starts without one.
+ */
+const hidingBlocks = new WeakMap<
+  ReadonlySet<string>,
+  ReadonlyMap<string, readonly number[]>
+>();
 
 /**
  * The params of the `<define>` a tag named `name` calls here, or nothing when
@@ -7974,6 +7993,8 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       if (ctx.hiddenDefines?.has(defineName)) {
         const hidden = new Set(ctx.hiddenDefines);
         hidden.delete(defineName);
+        const blocks = hidingBlocks.get(ctx.hiddenDefines);
+        if (blocks) hidingBlocks.set(hidden, blocks);
         ctx.hiddenDefines = hidden;
       }
       ctx.tagVars.set(defineName, {
@@ -8214,8 +8235,15 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     constDeclared.some(([, names]) => names.length > 0);
 
   // Set next to the `try` whose `finally` restores it.
-  if (hiding.size > 0)
-    ctx.hiddenDefines = new Set([...(ctx.hiddenDefines ?? []), ...hiding]);
+  if (hiding.size > 0) {
+    const outer = ctx.hiddenDefines;
+    const hidden = new Set([...(outer ?? []), ...hiding]);
+    const blocks = new Map(outer ? hidingBlocks.get(outer) : undefined);
+    const here = [...(ctx.tagVarBlock ?? [])];
+    for (const name of hiding) blocks.set(name, here);
+    hidingBlocks.set(hidden, blocks);
+    ctx.hiddenDefines = hidden;
+  }
   try {
     while (index < children.length) {
       if (hasLater) {

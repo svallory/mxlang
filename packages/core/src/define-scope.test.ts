@@ -543,11 +543,15 @@ describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", 
   // `let T = Make.content({})` and `_dynamic_tag(…, T, …)` for each of these.
   const NO_T =
     "<define/U|{n}|><i>${n}</i></define><define/Make><return=U/></define>";
-  const UNDEFINED: Array<[string, string]> = [
+  const REACHED: Array<[string, string]> = [
     ["the same body", "<Make/T/><T n=1/>"],
     ["a body nested under the /T", "<Make/T/><div><T n=1/></div>"],
+    [
+      "a nested body below its own /T",
+      "<Make/T/><div><Make/T/><T n=1/></div>",
+    ],
   ];
-  for (const [label, source] of UNDEFINED) {
+  for (const [label, source] of REACHED) {
     it(`with no <define/T>, ${label}: <T> calls the /T`, () => {
       expect(lastCall(`${NO_T}${source}`).kind).toBe("dynamic");
     });
@@ -570,9 +574,36 @@ describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", 
       "a define body above the /T, called after it",
       "<define/W><T n=1/></define><Make/T/><W/>",
     ],
+    // An outer /T is reached, but the body declares its own /T below the
+    // <T>, and the emitted <T> reads that body's `let T`.
+    [
+      "a define body's <T> above its own /T",
+      "<Make/T/><define/W><T n=1/><Make/T/></define><W/>",
+    ],
+    [
+      "an element body's <T> above its own /T",
+      "<Make/T/><div><T n=1/><Make/T/></div>",
+    ],
+    [
+      "an <if> in a body whose own /T is below it",
+      "<Make/T/><div><if=true><T n=1/></if><Make/T/></div>",
+    ],
+    // A /T in a sibling block is reached but not in scope here.
+    [
+      "a <T> after a sibling block's /T, above its own",
+      "<div><Make/T/></div><T n=1/><Make/T/>",
+    ],
   ])("with no <define/T>, %s is unbound", (_what, source) => {
     expect(() => lowerSource(`${NO_T}${source}`)).toThrow(
       /`<T>` has no matching import or `<define>` in scope/,
     );
+  });
+
+  // An import call's /T is registered pending before the walk, so it is not
+  // reached at a <T> above it either.
+  it("with no <define/T>, a <T> above an import call's /T is unbound", () => {
+    expect(() =>
+      lowerSource('import Lib from "./lib.js"\n<T n=1/><Lib/T/>'),
+    ).toThrow(/`<T>` has no matching import or `<define>` in scope/);
   });
 });
