@@ -38,13 +38,22 @@ import {
   SUGARS_SYNTAX,
 } from "./test-support/sugar-rows.ts";
 
+// Babel's answer for a string never changes, and the systematic sets check
+// the same expression up to three times (wraps and tails that differ only in
+// the source), so both share one cache.
+const validTs = new Map<string, boolean>();
 const isValidTs = (expression: string) => {
-  try {
-    parseBabelExpression(expression, { plugins: ["typescript"] });
-    return true;
-  } catch {
-    return false;
+  let valid = validTs.get(expression);
+  if (valid === undefined) {
+    try {
+      parseBabelExpression(expression, { plugins: ["typescript"] });
+      valid = true;
+    } catch {
+      valid = false;
+    }
+    validTs.set(expression, valid);
   }
+  return valid;
 };
 
 const DEFAULT = template as unknown as AtomParserModule;
