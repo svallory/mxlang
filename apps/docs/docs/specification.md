@@ -3544,7 +3544,8 @@ html, Preact, React and Hono a dynamic tag naming the define
 hosts a dynamic tag over a local that holds the define (a loop variable or tag
 param `V`, called as `<V/x/>` or `<${V}/x/>`) binds the `<return>` value too.
 A `/var` on a call of a define without `<return>`, direct or through a dynamic
-tag, is refused as on any tag that returns nothing, as Marko 6.4.4 refuses it. Every host but Angular carries the value; Angular refuses the
+tag, is refused as on any tag that returns nothing, as Marko 6.4.4 refuses
+it. Every host but Angular carries the value; Angular refuses the
 `<return>` (`MX_UNSUPPORTED_CONSTRUCT`, at its value), as it refuses a page's or
 a tag's own, because an `<ng-template>` has no channel to hand a value back.
 
