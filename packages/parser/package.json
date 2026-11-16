@@ -12,9 +12,15 @@
     "./frontend": {
       "types": "./src/frontend/public.d.ts",
       "default": "./src/frontend/index.ts"
+    },
+    "./frontend/babel": {
+      "types": "./src/frontend/babel-public.d.ts",
+      "mx-source": "./src/frontend/babel.ts",
+      "default": "./dist/babel.js"
     }
   },
   "scripts": {
+    "build": "rm -rf dist && bun build src/frontend/babel.ts --outdir dist --target node --format esm --define process.env.BABEL_8_BREAKING=false --define process.env.USE_ESM=true --define process.env.IS_PUBLISH=true",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -4,6 +4,8 @@
  * the two cannot drift.
  */
 import { describe, expectTypeOf, it } from "vitest";
+import type { parseBabel, parseBabelExpression } from "./babel.ts";
+import type * as DeclaredBabel from "./babel-public.d.ts";
 import type { lineColumnAt, ParseOptions, parse } from "./index.ts";
 import type * as Declared from "./public.d.ts";
 
@@ -22,6 +24,17 @@ describe("public.d.ts", () => {
     expectTypeOf<ParseOptions>().toExtend<Declared.ParseOptions>();
     expectTypeOf<keyof ParseOptions>().toEqualTypeOf<
       keyof Declared.ParseOptions
+    >();
+  });
+});
+
+describe("babel-public.d.ts", () => {
+  it("declares parseBabel and parseBabelExpression as babel.ts exports them", () => {
+    expectTypeOf<typeof parseBabel>().toExtend<
+      typeof DeclaredBabel.parseBabel
+    >();
+    expectTypeOf<typeof parseBabelExpression>().toExtend<
+      typeof DeclaredBabel.parseBabelExpression
     >();
   });
 });

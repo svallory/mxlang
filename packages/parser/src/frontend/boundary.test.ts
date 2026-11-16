@@ -210,7 +210,7 @@ describe("exposed as the package's second entry point", () => {
     expect(Object.keys(frontend).sort()).toEqual(["lineColumnAt", "parse"]);
   });
 
-  it("package.json exposes the template parser, its lexer types and the front end", () => {
+  it("package.json exposes the template parser, its lexer types, the front end and its built Babel entry", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
     );
@@ -223,6 +223,11 @@ describe("exposed as the package's second entry point", () => {
       "./frontend": {
         types: "./src/frontend/public.d.ts",
         default: "./src/frontend/index.ts",
+      },
+      "./frontend/babel": {
+        types: "./src/frontend/babel-public.d.ts",
+        "mx-source": "./src/frontend/babel.ts",
+        default: "./dist/babel.js",
       },
     });
     expect(manifest.private).toBe(true);

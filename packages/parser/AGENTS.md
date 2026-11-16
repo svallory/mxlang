@@ -3,8 +3,23 @@
 `packages/parser` holds `src/template/`, the htmljs-parser-derived template
 parser and its tests, and `src/frontend/`, the MX2 front end that builds the
 MX AST from the template parser's events (PR 2 of the parser port; see
-below). It is private and has no build; the entry is `src/template/index.ts`. The Babel fork is `packages/babel` and the bridge is
+below). It is private; the entry is `src/template/index.ts`. The Babel fork is `packages/babel` and the bridge is
 `packages/tsx-bridge`; neither depends on this package.
+
+It has one build, `dist/babel.js` (`bun run build`, first step of the root
+`build`), the entry of the `./frontend/babel` subpath: the fork's `parse` and
+`parseExpression` as `parseBabel`/`parseBabelExpression`
+(`src/frontend/babel.ts`, typed by `babel-public.d.ts`), bundled with
+tsx-bridge's three `--define`s. Its one consumer is `@mxlang/core`'s
+`coreParser()`. It exists because plain Node cannot load the fork's source
+(`const enum`s, stage-3 accessor decorators), and core's source must load
+under plain Node (`contracts.test.ts`'s probes). The subpath's `default` is
+the dist; its private `mx-source` condition resolves to source, and only
+core's build passes it (`--conditions mx-source`), so core's dist bundles the
+one fork copy `mx-parse.ts` already does. Rebuild rule: an edit to
+`packages/babel/src` reaches core's tests only after `bun run build` here
+(`vendored.test.ts` tests the source directly). `./frontend` itself keeps
+resolving to source.
 `@mxlang/babel` is a devDependency for `src/template/mx-sugar-module.test.ts`,
 which checks the atom row's claims against Babel's `parseExpression`, and for the front end's
 type-only imports of the MX AST types (`@mxlang/babel/mx-ast`).

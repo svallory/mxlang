@@ -15,6 +15,8 @@ for the pin and every local modification) plus `src/mx-hooks.ts` and
 - `mxHooks` must stay in `OptionsWithDefaults`' defaults and `KeepOptionalKeys`
   (`src/options.ts`), or `getOptions` drops it.
 - `mx: true` without `mxHooks` is a thrown error in `getParser`, on purpose.
+- An edit to `src/` reaches `@mxlang/core`'s tests only after `bun run build`
+  in `packages/parser` (they parse through its `dist/babel.js`).
 - Typecheck with `bun run typecheck` (relaxed tsconfig, whole package). The tests
   for the fork run in `packages/tsx-bridge` (`vendored.test.ts` pins that,
   without `mx`, it equals npm `@babel/parser`).
