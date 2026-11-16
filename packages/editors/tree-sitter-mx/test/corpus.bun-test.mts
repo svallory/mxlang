@@ -275,7 +275,13 @@ describe("tag-grammar whitespace", () => {
   // a shorthand or an attribute name. The inputs are literal copies of
   // PATTERN_WS_TAG_FORMS and REFUSED_SPACE_ROWS in
   // packages/parser/src/template/mx-unicode-words.cases.ts.
-  const PATTERN_WHITE_SPACE = ["\u0085", "\u200e", "\u200f", "\u2028", "\u2029"];
+  const PATTERN_WHITE_SPACE = [
+    "\u0085",
+    "\u200e",
+    "\u200f",
+    "\u2028",
+    "\u2029",
+  ];
   const PATTERN_WS_TAG_FORMS = [
     "<divWa/>",
     "<div aWb/>",
