@@ -10,6 +10,7 @@
  * several programs include core's source. `public-types.test.ts` pins this
  * file to the source.
  */
+import type { Expression, File } from "@babel/types";
 import type {
   MxBlockTag,
   MxBodyMode,
@@ -77,3 +78,17 @@ export declare function lineColumnAt(
   document: { readonly source: string; readonly base: MxFragmentBase },
   offset: number,
 ): { line: number; column: number };
+
+/**
+ * The vendored `@babel/parser`'s `parse`, unchanged: without the `mx` option
+ * it behaves exactly like npm `@babel/parser` 7.29.8. `options` are
+ * `@babel/parser`'s `ParserOptions`, declared as a plain object so no
+ * consumer's program typechecks the fork's source.
+ */
+export declare function parseBabel(input: string, options?: object): File;
+
+/** The vendored `@babel/parser`'s `parseExpression`, unchanged (see `parseBabel`). */
+export declare function parseBabelExpression(
+  input: string,
+  options?: object,
+): Expression;

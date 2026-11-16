@@ -4,6 +4,18 @@
  * `apps/docs/docs/architecture/ast.md`; the option types are re-exported
  * from `@mxlang/babel/mx-ast`, where the AST's types live.
  */
+
+/**
+ * The vendored `@babel/parser` entry points, unchanged: without the `mx`
+ * option they behave exactly like npm `@babel/parser` 7.29.8, with the
+ * fork's bounded block-comment line count. Core and the html target parse
+ * through these, so their typecheck never reads the fork's source (see
+ * `public.d.ts`).
+ */
+export {
+  parse as parseBabel,
+  parseExpression as parseBabelExpression,
+} from "@mxlang/babel";
 export type {
   MxBodyMode,
   MxFragmentBase,
