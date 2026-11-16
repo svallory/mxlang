@@ -141,11 +141,6 @@ describe("preact: a <define> that declares <return>", () => {
       "<b>1</b>",
     ],
     [
-      "calls a tag call's /T as a tag with no <define/T>",
-      "<define/U|{n}|><i>${n}</i></define><define/Make><return=U/></define><Make/T/><T n=1/>",
-      "<i>1</i>",
-    ],
-    [
       "binds /var on a dynamic tag naming the define",
       "<define/U|{n}|><return=n * 2/><i>${n}</i></define><${U}/z n=3/><p>${z}</p>",
       "<i>3</i><p>6</p>",

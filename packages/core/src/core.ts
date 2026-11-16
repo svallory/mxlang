@@ -712,18 +712,11 @@ export interface Ctx {
    */
   tagVarShadowed?: ReadonlySet<string>;
   /**
-   * The names a tag call's or dynamic tag's `/var` binds in an enclosing
-   * body.
+   * The names of `<define>`s that a tag call's `/var`, declared in an
+   * enclosing body, hides there.
    *
-   * Where a `<define>` of such a name exists, a PascalCase tag of the name is
-   * a dynamic call over the `/var`'s value instead:
-   * `<define/W><Make/T/><T n=1/></define>` calls the local `T`, not the outer
-   * `<define/T>` (stock's innermost binding). With no such define, only a
-   * `/T` that `lowerComponent` registers makes `<T>` dynamic (not a dynamic
-   * tag's own `/T` where the host claims the dynamic tag), and only once the
-   * walk has reached that call in scope, with no body between it and the tag
-   * binding the name again (`capitalBinding`):
-   * `<Make/T/><T n=1/>` calls the value `Make` returns. Kept apart
+   * `<define/W><Make/T/><T n=1/></define>` calls the local `T` as a dynamic
+   * tag, not the outer `<define/T>` (stock's innermost binding). Kept apart
    * from `tagVarShadowed`, which `checkTagVarReads` skips: the `/T` is itself
    * a tag variable whose reads are still checked. Maintained by
    * `lowerChildList`; replaced, never mutated.

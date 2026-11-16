@@ -41,16 +41,11 @@ function emit(region: string, setup = "") {
 }
 
 function render(region: string, setup = ""): string {
-  const { code, hoistedImports, hoistedDefines, returnVars } = compile(
-    region,
-    setup,
-  );
+  const { code, hoistedImports, hoistedDefines } = compile(region, setup);
   const imports = [...hoistedImports, ...hoistedDefines]
     .map((entry) => entry.code)
     .join("\n");
-  // A region's caller declares the `/var` names it binds (`returnVars`).
-  const lets = returnVars.length > 0 ? `  let ${returnVars.join(", ")};\n` : "";
-  const source = `${imports}\n${setup}\nexport function App() {\n${lets}  return <ul>${code}</ul>;\n}\n`;
+  const source = `${imports}\n${setup}\nexport function App() {\n  return <ul>${code}</ul>;\n}\n`;
   const out = transformSync(source, {
     filename: "fixture.tsx",
     presets: [[typescriptPreset, {}]],
@@ -144,19 +139,6 @@ describe("solid: a dynamic tag reads a <define> without attributes", () => {
   it("a name that is not a define is left alone", () => {
     const { code } = emit("<${input.D}/>");
     expect(code).toContain("let __mxDyn = input.D;");
-  });
-
-  // mx-vgbp: stock 6.4.4 emits `_dynamic_tag(…, T, …)` over the call's value.
-  // Solid hoists `<define/Make>` to module scope, where it can close over
-  // neither a region-local `<define/U>` nor a module binding, so `Make`
-  // returns the component it is passed.
-  it("a tag call's /T is called as a tag with no <define/T>", () => {
-    expect(
-      render(
-        "<define/Make|{c}|><return=c/></define><Make/T c=U/><T n=1/>",
-        "function U(props: { n: number }) { return <i>{props.n}</i>; }",
-      ),
-    ).toBe("<ul><i>1</i></ul>");
   });
 
   // mx-l4m0: core admits `/var` on a dynamic tag naming a returning define

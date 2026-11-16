@@ -5973,8 +5973,8 @@ function activeWildcard(ctx: Ctx, node: Node): WildcardMatch | undefined {
 
 /**
  * Is `name` a PascalCase name a file-local binding (an import, a `<const>`, a
- * `<define>`, a loop or define parameter, a tag call's `/var`) has in scope?
- * Such a binding is always a component call, unless the file's dialect sets
+ * `<define>`, a loop or define parameter) has in scope? Such a binding is
+ * always a component call, unless the file's dialect sets
  * `bindingsCallTags: false`: then no binding makes a tag a call, and the
  * wildcard, the contract and the unknown-tag rules read the name as if it
  * were unbound.
@@ -5984,54 +5984,9 @@ function capitalBinding(ctx: Ctx, name: string): boolean {
     /^[A-Z]/.test(name) &&
     (ctx.defines.has(name) ||
       ctx.imports.has(name) ||
-      (ctx.tagVarShadowed?.has(name) ?? false) ||
-      hiddenTagVarReached(ctx, name))
+      (ctx.tagVarShadowed?.has(name) ?? false))
   );
 }
-
-/**
- * Has the walk reached, in scope, the tag call whose `/var` binds `name` in
- * an enclosing body (`ctx.hiddenDefines`)? Only then is a PascalCase tag of
- * that name with no `<define>` a dynamic call over the value. Only a call
- * core lowers itself qualifies: `lowerComponent` registers its `/var`, not
- * pending, when it reaches the call, so an entry exists only after it. A
- * dynamic tag a host claims (`isDelegatedTag`) registers nothing, so there
- * `<${Make}/T/>` alone does not make `<T>` dynamic. The entry is in scope
- * when its declaring block is this block or an ancestor (the prefix test
- * `checkTagVarReads` uses), and when no body between it and here binds the
- * name again (`hidingBlocks`). A `<T/>` above its `<Make/T/>`, or in a
- * nested body with any binding of `T` in that body (other than that body's
- * own call, once reached), keeps the unknown-tag error instead of reading a
- * value in its temporal dead zone.
- */
-function hiddenTagVarReached(ctx: Ctx, name: string): boolean {
-  if (!ctx.hiddenDefines?.has(name)) return false;
-  const bound = ctx.tagVars?.get(name);
-  if (!bound || bound.pending || bound.define) return false;
-  const here = ctx.tagVarBlock ?? [];
-  // An outer `/T` the walk has reached is not this body's: when a body
-  // between it and here binds `T` again (`<Make/T/><div><T n=1/>
-  // <let/T=U/></div>`, or a call, `<const>`, `<id>` or element ref), the
-  // emitted `<T/>` reads that body's `T`, still in its temporal dead zone.
-  const hidingBlock = hidingBlocks.get(ctx.hiddenDefines)?.get(name) ?? [];
-  return (
-    bound.block.length >= hidingBlock.length &&
-    bound.block.length <= here.length &&
-    bound.block.every((id, index) => here[index] === id)
-  );
-}
-
-/**
- * For each `ctx.hiddenDefines` set, the block path of the innermost body
- * whose own children bind each name (any tag variable, not only the `/var`
- * that hides it). Keyed by the set, which `lowerChildList` replaces and
- * never mutates, so a ctx copy reads the same table and a fresh walk, with a
- * fresh set, starts without one.
- */
-const hidingBlocks = new WeakMap<
-  ReadonlySet<string>,
-  ReadonlyMap<string, readonly number[]>
->();
 
 /**
  * The params of the `<define>` a tag named `name` calls here, or nothing when
@@ -7619,10 +7574,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // pattern; `const Foo = lazy(...)`, a conditional, a string, or a tag param
     // (whose runtime value can never be inspected here) is "unknown" and routes
     // here instead. Same `valueImportBinding` provenance channel as above, so
-    // typed attribute-tag checking is unaffected. A name a tag call's `/var`
-    // binds in an enclosing body (`ctx.hiddenDefines`), with or without a
-    // `<define>` of that name, is that call's value, unknown too; it is not
-    // added to the file-wide `unknownLocalValue`, which never shrinks.
+    // typed attribute-tag checking is unaffected. A `<define>` a tag call's
+    // `/var` hides here (`ctx.hiddenDefines`) is that call's value, unknown
+    // too; it is not added to the file-wide `unknownLocalValue`, which never
+    // shrinks.
     if (
       ctx.unknownLocalValue.has(name) ||
       (ctx.hiddenDefines?.has(name) ?? false)
@@ -7997,8 +7952,6 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       if (ctx.hiddenDefines?.has(defineName)) {
         const hidden = new Set(ctx.hiddenDefines);
         hidden.delete(defineName);
-        const blocks = hidingBlocks.get(ctx.hiddenDefines);
-        if (blocks) hidingBlocks.set(hidden, blocks);
         ctx.hiddenDefines = hidden;
       }
       ctx.tagVars.set(defineName, {
@@ -8238,26 +8191,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     declared.some(([, names]) => names.length > 0) ||
     constDeclared.some(([, names]) => names.length > 0);
 
-  // Set next to the `try` whose `finally` restores it. Every name this body
-  // binds itself (`declaredHere`: a tag call, `<let>`, `<const>`, `<id>`, an
-  // element ref, any tag variable) and that a `/var` hides here records this
-  // body as the innermost one that rebinds it, so an outer `/T` the walk has
-  // reached is not in scope below it (`hiddenTagVarReached`).
-  const outer = ctx.hiddenDefines;
-  const hidden =
-    hiding.size > 0 ? new Set([...(outer ?? []), ...hiding]) : outer;
-  const rebound = [...declaredHere].filter((name) => hidden?.has(name));
-  if (hidden && rebound.length > 0) {
-    // A fresh set even when `hiding` added nothing: the table is keyed by it.
-    const keyed = hidden === outer ? new Set(hidden) : hidden;
-    const blocks = new Map(outer ? hidingBlocks.get(outer) : undefined);
-    const here = [...(ctx.tagVarBlock ?? [])];
-    for (const name of rebound) blocks.set(name, here);
-    hidingBlocks.set(keyed, blocks);
-    ctx.hiddenDefines = keyed;
-  } else {
-    ctx.hiddenDefines = hidden;
-  }
+  // Set next to the `try` whose `finally` restores it.
+  if (hiding.size > 0)
+    ctx.hiddenDefines = new Set([...(ctx.hiddenDefines ?? []), ...hiding]);
   try {
     while (index < children.length) {
       if (hasLater) {
