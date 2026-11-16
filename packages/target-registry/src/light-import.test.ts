@@ -21,19 +21,20 @@ afterAll(() => rmSync(work, { recursive: true, force: true }));
 const COMPILERS = String.raw`/node_modules\/(\.bun\/)?(@marko[+/]compiler|@astrojs[+/]compiler|@babel[+/](core|generator|traverse)[@/])|\/marko-frontend\.cjs$/`;
 
 /**
- * A host's compile entry: `src/index.ts` of a source-loaded host, or
- * `dist/index.js` of a packed one. Importing the registry must pull in only
- * descriptor modules and their light dependencies — never a compile entry —
- * so a descriptor that eagerly imports its host (e.g. a top-level
- * `import "@mxlang/target-html"` in the astro descriptor) fails the import test
- * below even though the host's index is itself compiler-lazy today.
+ * A host's or target's compile entry: `src/index.ts` of a source-loaded
+ * package, or `dist/index.js` of a packed one (`@mxlang/target-html` resolves
+ * to `packages/targets/html/dist/index.js`). Importing the registry must pull
+ * in only descriptor modules and their light dependencies — never a compile
+ * entry — so a descriptor that eagerly imports its compile entry (e.g. a
+ * top-level `import "@mxlang/target-html"` in the astro descriptor) fails the
+ * import test below even though that entry is itself compiler-lazy today.
  */
-const HOST_ENTRIES =
-  /packages\/hosts\/[^/]+\/(src\/index\.ts|dist\/index\.js)$/;
+const COMPILE_ENTRIES =
+  /packages\/(hosts|targets)\/[^/]+\/(src\/index\.ts|dist\/index\.js)$/;
 
 function probe(body: string): {
   loaded: string[];
-  hosts: string[];
+  entries: string[];
   value: unknown;
 } {
   const file = join(
@@ -44,9 +45,9 @@ function probe(body: string): {
     file,
     `import { builtinTargets } from "./index.ts";
 const compilers = () => Object.keys(require.cache).filter((k) => ${COMPILERS}.test(k));
-const hostEntries = () => Object.keys(require.cache).filter((k) => ${HOST_ENTRIES}.test(k));
+const compileEntries = () => Object.keys(require.cache).filter((k) => ${COMPILE_ENTRIES}.test(k));
 const value = (() => { ${body} })();
-console.log(JSON.stringify({ loaded: compilers(), hosts: hostEntries(), value }));
+console.log(JSON.stringify({ loaded: compilers(), entries: compileEntries(), value }));
 `,
   );
   try {
@@ -60,12 +61,12 @@ console.log(JSON.stringify({ loaded: compilers(), hosts: hostEntries(), value })
 }
 
 describe("light import", () => {
-  it("loads no compiler and no host compile entry when the registry is imported", () => {
-    const { loaded, hosts, value } = probe(`return builtinTargets.length;`);
+  it("loads no compiler and no compile entry when the registry is imported", () => {
+    const { loaded, entries, value } = probe(`return builtinTargets.length;`);
     expect(value).toBe(7);
     expect(loaded).toEqual([]);
     // Only descriptor modules and their light dependencies may appear.
-    expect(hosts).toEqual([]);
+    expect(entries).toEqual([]);
   });
 
   it("detects a compiler once a target's load() compiles (positive control)", () => {
@@ -78,8 +79,8 @@ describe("light import", () => {
     expect(loaded.some((k) => k.includes("@babel"))).toBe(true);
   });
 
-  it("does not load a compiler for load() alone, for any target", () => {
-    const { loaded, value } = probe(
+  it("loads no compiler for load() alone, and sees the compile entry astro's load() requires", () => {
+    const { loaded, entries, value } = probe(
       `return builtinTargets.map((t) => { t.load?.({} as never); return t.name; });`,
     );
     expect(value).toEqual([
@@ -92,5 +93,10 @@ describe("light import", () => {
       "angular-template",
     ]);
     expect(loaded).toEqual([]);
+    // Positive control for COMPILE_ENTRIES: astro's load() requires
+    // `@mxlang/target-html`, so its compile entry must be listed.
+    expect(
+      entries.some((k) => k.endsWith("/packages/targets/html/dist/index.js")),
+    ).toBe(true);
   });
 });
