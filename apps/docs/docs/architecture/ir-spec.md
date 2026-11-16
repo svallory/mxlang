@@ -35,7 +35,7 @@ The IR is not the parser's output. It is the result of a parse **plus** a sequen
    5. a PascalCase name the file binds (an import, a `<define>`, a `<const>`, a tag param — `fileLocalBinding`) skips steps 6 and 7;
    6. a registered or discovered **custom tag** (`lowerCustomTag`): its contract is validated (attributes, attribute tags, `children`, `parents`) and its `transform` or template replaces the call with ordinary IR (zero or more nodes);
    7. a host claim (`isDelegatedTag`) → `DelegatedTag`, with the host's `resolveDelegatedTag` answer in `data`;
-   8. a component (`fileLocalBinding` or `isComponent`) → `Component`;
+   8. a component (`fileLocalBinding` or `isComponent`) → `Component`, with a `define` target for a `<define>`'s name. A tag param, loop variable or `<const>` of the same name in a nested body hides the `<define>` there, and `<T/>` calls that value as a dynamic tag;
    9. an unbound PascalCase name, or a lowercase name `isElement` rejects → positioned error;
    10. otherwise an `Element`.
 

@@ -5980,6 +5980,20 @@ function capitalBinding(ctx: Ctx, name: string): boolean {
   );
 }
 
+/**
+ * The params of the `<define>` a tag named `name` calls here, or nothing when
+ * a closer local binding (a tag param, a loop variable, a `<const>`) shadows
+ * the define's name. Babel's `scope.getBinding` finds the innermost binding,
+ * so stock Marko calls that local as a dynamic tag; `ctx.tagVarShadowed` is
+ * MX's analog of that lookup. A `<define>` of the same name written inside
+ * the shadowing body is taken out of the set by `lowerChildList`, so it still
+ * wins there.
+ */
+function defineInScope(ctx: Ctx, name: string): string[] | undefined {
+  if (ctx.tagVarShadowed?.has(name)) return undefined;
+  return ctx.defines.get(name);
+}
+
 /** Does a file-local binding make a PascalCase tag a call in this file? */
 function bindingCallsTag(ctx: Ctx, name: string): boolean {
   return ctx.dialect?.bindingsCallTags !== false && capitalBinding(ctx, name);
@@ -7507,7 +7521,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       ctx.declarations.isComponent(name, ctx))
   ) {
     rejectMarkoImportTag(ctx, name, name, node);
-    const params = ctx.defines.get(name);
+    const params = defineInScope(ctx, name);
     if (params) {
       warnDefineExtraParams(ctx, node, name, params);
       return lowerComponent(ctx, node, { kind: "define", name, params });

@@ -35,13 +35,14 @@ const policy = (): Policy => ({
 function lowerSource(
   source: string,
   strip?: typeof stripMxTypes | typeof stripAngleAssertions,
+  host: Partial<Policy> = {},
 ) {
   const { ast, body } = parseFragment(source, { filename: "/f/t.mx" });
   strip?.(ast);
   const ctx = newCtx(
     source,
     printExpression,
-    policy(),
+    { ...policy(), ...host },
     tagTable(bare(), undefined),
     "/f/t.mx",
     targets,
@@ -73,7 +74,14 @@ function callsOf(nodes: readonly IrNode[], out: Call[] = []): Call[] {
 function walk(node: unknown, out: Call[]): void {
   if (!node || typeof node !== "object") return;
   const record = node as Record<string, unknown>;
-  for (const key of ["children", "branches", "content", "else"]) {
+  for (const key of [
+    "children",
+    "branches",
+    "content",
+    "else",
+    "attributeTags",
+    "block",
+  ]) {
     const value = record[key];
     if (Array.isArray(value)) {
       for (const item of value) {
@@ -93,8 +101,8 @@ const IMPORT = 'import Foo from "./foo.js"\n';
 const FOO = "<define/Foo><p>inner</p></define>";
 
 /** The one call `source` makes after the block, in source order. */
-function lastCall(source: string): Call {
-  const calls = callsOf(lowerSource(source).body);
+function lastCall(source: string, host: Partial<Policy> = {}): Call {
+  const calls = callsOf(lowerSource(source, undefined, host).body);
   const last = calls.at(-1);
   if (!last) throw new Error("no component call lowered");
   return last;
@@ -410,5 +418,62 @@ describe("a <define>'s type parameters", () => {
         .body,
     );
     expect(define).not.toHaveProperty("typeParams");
+  });
+});
+
+describe("a local binding of a <define>'s name makes the tag a dynamic call", () => {
+  // mx-nh8x: stock Marko 6.4.4 reads a PascalCase tag name with a binding in
+  // scope as an identifier tag, and Babel's innermost binding is the local, so
+  // `<T/>` under `<for|T|>` is `_dynamic_tag(…, T, …)` over the loop value.
+  const T = "<define/T|{n}|><b>${n}</b></define>";
+  const SHADOWED: Array<[string, string]> = [
+    ["a <for> loop variable", "<for|T| of=[1]><T n=1/></for>"],
+    ["a <for> second param", "<for|i, T| of=[1]><T n=1/></for>"],
+    ["a destructured <for> param", "<for|{T}| of=[{T:1}]><T n=1/></for>"],
+    ["a <define> param", "<define/U|{T}|><T n=2/></define>"],
+    [
+      "a call's content param",
+      "<define/W|{content}|><${content}(1)/></define><W|T|><T n=1/></W>",
+    ],
+    [
+      "an attribute tag param",
+      "<define/W|{item}|><${item.content}(1)/></define><W><@item|T|><T n=1/></@item></W>",
+    ],
+    ["a <const> in a <for> body", "<for|i| of=[1]><const/T=i/><T n=3/></for>"],
+  ];
+  for (const [label, source] of SHADOWED) {
+    it(`${label}: <T> calls the local, not the define`, () => {
+      expect(lastCall(`${T}${source}`).kind).toBe("dynamic");
+    });
+  }
+
+  it("a call after the shadowing body still reaches the define", () => {
+    expect(lastCall(`${T}<for|T| of=[1]></for><T n=1/>`)).toEqual({
+      kind: "define",
+      params: ["{n}"],
+    });
+  });
+
+  it("a define's own param of its name is the param", () => {
+    expect(lastCall("<define/T|{T}|><T n=2/></define>").kind).toBe("dynamic");
+  });
+
+  it("an inner define in the shadowing body is the innermost binding", () => {
+    expect(
+      lastCall(
+        "<for|T| of=[1]><if=true><define/T|{n}|><b/></define><T n=1/></if></for>",
+      ),
+    ).toEqual({ kind: "define", params: ["{n}"] });
+  });
+
+  // A host that binds a dynamic tag's `/var` (the JSX hosts do); without it
+  // core refuses `/var` on any dynamic tag, as on html.
+  it("/var on a shadowed call is not a define call", () => {
+    expect(
+      lastCall(
+        "<define/T|{n}|><return=n/></define><define/W|{content}|><${content}(1)/></define><W|T|><T/x n=1/>${x}</W>",
+        { bindsDynamicTagVar: true },
+      ).kind,
+    ).toBe("dynamic");
   });
 });

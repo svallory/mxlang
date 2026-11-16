@@ -643,7 +643,11 @@ export type ComponentTarget =
        */
       binding?: string;
     }
-  /** A `<define>` in scope, with the parameter names it declared. */
+  /**
+   * A `<define>` in scope, with the parameter names it declared. A tag param,
+   * loop variable or `<const>` of the same name in a nested body hides the
+   * `<define>` there, and `<T/>` calls that value as a dynamic tag.
+   */
   | { kind: "define"; name: string; params: string[] }
   /**
    * `<${expr}/>`, resolved at run time by the host.

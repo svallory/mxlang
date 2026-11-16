@@ -74,3 +74,15 @@ describe("html: a <define>'s type parameters", () => {
     },
   );
 });
+
+describe("html: a local binding of a <define>'s name hides the define", () => {
+  // mx-nh8x: stock Marko 6.4.4 renders `_dynamic_tag(…, T, …)` over the loop
+  // value here; html used to write the outer define `T(...)`.
+  it("a <for> loop variable is rendered as a dynamic tag", () => {
+    const code = emit(
+      "<define/T|{n}|><b>${n}</b></define><define/U|{n}|><i>${n}</i></define><for|T| of=[U]><T n=1/></for>",
+    );
+    expect(code).toContain("__mxRenderDynamic(__mxOut, T, {");
+    expect(code).not.toContain("__mxOut.write(T(");
+  });
+});
