@@ -291,6 +291,16 @@ describe("tag-grammar whitespace", () => {
     "div\nWspan\n",
     "$Wx\n",
   ];
+  // Scanner-only twins (not in the parser's list): the gap before a tag
+  // variable's `:` type and the gap after it are EXPRESSION's
+  // consumeWhitespace(isSpace) in a whitespace-terminated expression, which
+  // the scanner ports as separate skips (VAR_COLON, VAR_TYPE).
+  const TAG_VAR_TYPE_FORMS = [
+    "<div/xW: T a/>",
+    "<div/x:WT a/>",
+    "div/xW: T a\n",
+    "div/x:WT a\n",
+  ];
 
   // The events htmljs-parser would fire, rebuilt from the tree. Every
   // separator is one UTF-16 unit, so offsets never shift.
@@ -307,7 +317,7 @@ describe("tag-grammar whitespace", () => {
   };
 
   for (const ws of PATTERN_WHITE_SPACE) {
-    for (const form of PATTERN_WS_TAG_FORMS) {
+    for (const form of [...PATTERN_WS_TAG_FORMS, ...TAG_VAR_TYPE_FORMS]) {
       const src = form.replaceAll("W", ws);
       it(`${JSON.stringify(src)} reads as its VT twin`, () => {
         const twin = render(form.replaceAll("W", "\v"));

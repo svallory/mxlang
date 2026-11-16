@@ -505,12 +505,23 @@ static void es_mark(EStream *es) {
 // `keep_before` keeps the char before the skipped whitespace as the token's
 // lookbehind char (a resumed expression, which the parser scans from before
 // the whitespace).
-static void es_skip_leading_ws(Scanner *s, EStream *es, bool keep_before) {
+//
+// MX: `tag_ws` skips tag-grammar whitespace (is_pattern_ws) instead of is_ws,
+// for a piece that resumes a whitespace-terminated expression (EXPRESSION's
+// consumeWhitespace(isSpace)); enclosed pieces keep is_ws.
+static void es_skip_leading_ws_as(Scanner *s, EStream *es, bool keep_before,
+                                  bool tag_ws) {
   if (keep_before) es->skipped_before = s->cur.prev_char;
-  while (es_drained(es) && !at_eof(es->lexer) && is_ws(es->lexer->lookahead)) {
+  while (es_drained(es) && !at_eof(es->lexer) &&
+         (tag_ws ? is_pattern_ws(es->lexer->lookahead)
+                 : is_ws(es->lexer->lookahead))) {
     skipc(s, es->lexer);
   }
   es_mark(es);
+}
+
+static void es_skip_leading_ws(Scanner *s, EStream *es, bool keep_before) {
+  es_skip_leading_ws_as(s, es, keep_before, false);
 }
 
 static int32_t es_at(EStream *es, int64_t i) {
@@ -3319,7 +3330,8 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     ExprCfg cfg = cfg_tag_var(s);
     cfg.in_type = true;
     cfg.resume_lookbehind = true;
-    es_skip_leading_ws(s, es, true);
+    // MX: the tag variable is whitespace-terminated (tag-grammar whitespace).
+    es_skip_leading_ws_as(s, es, true, true);
     if (!scan_expr_es(es, cfg, NULL)) return false;
     lexer->result_symbol = VAR_TYPE;  // may be zero-width
     concise_tag_epilogue(s, lexer);
@@ -3332,7 +3344,8 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     // is skipped via the raw lookahead so the no-colon path stays clean for
     // the normal trivia/dispatch flow.
     bool concise_var = is_concise(s);
-    while (!at_eof(lexer) && is_ws(lexer->lookahead) &&
+    // MX: EXPRESSION's consumeWhitespace(isSpace), tag-grammar whitespace.
+    while (!at_eof(lexer) && is_pattern_ws(lexer->lookahead) &&
            (!concise_var || !is_line(lexer->lookahead))) {
       skipc(s, lexer);
     }

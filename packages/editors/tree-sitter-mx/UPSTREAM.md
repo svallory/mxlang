@@ -294,7 +294,9 @@ is MX's own: the tag grammar reads whitespace as `@mxlang/parser` does
   between attributes, after `,`, around `=`/`:=`, before `{` after arguments,
   after tag-level type parameters, `/` + whitespace (missing tag variable),
   the concise next-line peek, whitespace-terminated expressions (termination,
-  `consumeWhitespace(isSpace)` and the operator look-ahead), concise
+  `consumeWhitespace(isSpace)` and the operator look-ahead, including the
+  gaps before and after a tag variable's `:` type, which the scanner skips as
+  `VAR_COLON` and `VAR_TYPE` through `es_skip_leading_ws_as`), concise
   indentation (`skipc_tag_ws`, so `cursor_advance` keeps `is_ws` for HTML-mode
   `$` and delimited blocks), the gap after `$`, the rest of a concise line
   after `;` or `*/`, and `<` + whitespace in HTML content. Only CR and LF end
@@ -313,7 +315,9 @@ is MX's own: the tag grammar reads whitespace as `@mxlang/parser` does
   as NUL), U+200E/U+200F hash like U+000E/U+000F in indentation, and the
   look-behinds do not skip the 17 refused spaces as the parser's do.
 - Tests: the `tag-grammar whitespace` block of `test/corpus.bun-test.mts`
-  (MX's own file, not in the patch).
+  (MX's own file, not in the patch): the parser's 13 forms plus the tag
+  variable type forms `<div/xW: T a/>`, `<div/x:WT a/>` and their concise
+  versions, each with the five separators against its VT twin.
 
 ## Tests
 
