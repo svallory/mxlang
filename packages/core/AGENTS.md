@@ -119,12 +119,17 @@ Five facts worth knowing before editing it:
   dist alike (PR 6 slice S2). The public `parseFragmentNative` now delegates to `parseFragment`.
   Deleted with the Marko readers (PR 6).
 - **Its Babel is stock `@babel/*`, exact-pinned runtime dependencies, loaded
-  lazily by `src/babel.ts` (`coreBabel()`; PR 6 slice S1).**
-  `parse`/`parseExpression` are `@babel/parser`; `traverse`, `types` and
+  lazily by `src/babel.ts` (`coreBabel()`; PR 6 slice S1), except the
+  parser.** `parse`/`parseExpression` are MX's Babel fork (`@mxlang/babel`),
+  reached through `@mxlang/parser/frontend`'s `parseBabel`/`parseBabelExpression`
+  (`coreParser()`), so core's program never typechecks the fork's source and
+  the published `.d.ts` names neither package; `traverse`, `types` and
   `File` come from `@babel/core` (one instance for the TS strip);
   `generator`, `codeFrameColumns` and `pluginTransformTypeScript` from their
   packages. They are `--external` in the build, and no `.d.ts` names a
-  `@babel/*` type. Do not add a second Babel. **`printExpression(node):
+  `@babel/*` type. Do not add a second Babel: never call npm `@babel/parser`
+  at run time from core (it stays a dependency for the type-only imports
+  and because `@babel/core` loads it). **`printExpression(node):
   string`** (`compile.ts`, public) is the one function that prints an
   expression node back to source text; it is what `compileSource`'s
   `translate` visitor hands `newCtx` as `generate`, and every host printing
@@ -135,8 +140,8 @@ Five facts worth knowing before editing it:
   generator and code frame against Marko's until S5 removes the bundle.
 - **`callee-input.ts` is the synchronous, syntactic cross-file reader for a
   component's `Input`.** It resolves discovered and imported callees, parses
-  complete TS/TSX modules with `@babel/parser`'s
-  `typescript` + `jsx` plugins, and reaches `.mx` declarations through the
+  complete TS/TSX modules with core's parser (MX's Babel fork, `coreParser()`)
+  and its `typescript` + `jsx` plugins, and reaches `.mx` declarations through the
   existing template-metadata compile/cache. It follows only bounded literal
   aliases, re-exports, and `import type` edges. Every followed file has its own
   declaration/import/`AttrTag` scope; never merge names across files. Spans

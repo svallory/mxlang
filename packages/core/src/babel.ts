@@ -14,14 +14,24 @@
  * invariant) must not load Babel. The interface is untyped (`Node`) so the
  * published `.d.ts` names no `@babel/*` type.
  *
- * The parser and the TS strip plugin load on their own memos, apart from the
- * `@babel/core` graph: a path that only parses expressions (mapping, the
- * reserved-binding check) pays for `@babel/parser` alone, and the strip
- * plugin loads only when a payload is stripped — which every lowering with
- * an expression payload runs, TypeScript or not.
+ * The parser is not npm `@babel/parser`: `parse`/`parseExpression` are MX's
+ * vendored fork (`@mxlang/babel`), reached through `@mxlang/parser/frontend`'s
+ * `parseBabel`/`parseBabelExpression` so core's program never typechecks the
+ * fork's source. Without the `mx` option the fork equals npm `@babel/parser`
+ * 7.29.8, except that its block-comment scan stays linear when many block
+ * comments share one line. The front end already loads the fork when core
+ * is imported, so the static import adds no module. npm `@babel/parser`
+ * still loads with `@babel/core`, but core never calls it.
+ *
+ * The TS strip plugin loads on its own memo, apart from the `@babel/core`
+ * graph: a path that only parses expressions (mapping, the reserved-binding
+ * check) pays for no `@babel/*` package, and the strip plugin loads only when
+ * a payload is stripped — which every lowering with an expression payload
+ * runs, TypeScript or not.
  */
 import { createRequire } from "node:module";
 import { stripVTControlCharacters } from "node:util";
+import { parseBabel, parseBabelExpression } from "@mxlang/parser/frontend";
 import type { Node } from "./core.ts";
 
 /** Parser, traverse, types, generator, code frame and the TS strip plugin. */
@@ -49,21 +59,24 @@ type PluginTransformTypeScript = (api: Node, options: Node) => Node;
 
 let tsPlugin: PluginTransformTypeScript | undefined;
 
-/** The slice of `@babel/parser` core calls directly. */
+/** The parser core calls directly, shaped as `@babel/parser`'s `parse`/`parseExpression`. */
 interface Parser {
   parse: Babel["parse"];
   parseExpression: Babel["parseExpression"];
 }
 
-let parser: Parser | undefined;
-
 /**
- * `@babel/parser`, loaded on first call: importing core must not load any
- * Babel package (the registry's light-import invariant), and a path that
- * never parses must not pay for the parser either.
+ * MX's Babel fork, the only parser core calls: `@mxlang/parser/frontend`'s
+ * `parseBabel`/`parseBabelExpression` (`@mxlang/babel`'s `parse` and
+ * `parseExpression`, unchanged). Never npm `@babel/parser` at run time.
  */
+const parser: Parser = {
+  parse: parseBabel,
+  parseExpression: parseBabelExpression,
+};
+
+/** The parser core parses with (see `parser`). */
 export function coreParser(): Parser {
-  parser ??= require("@babel/parser") as Parser;
   return parser;
 }
 
