@@ -1,8 +1,8 @@
 # Upstream provenance
 
-`packages/babel/src/` is a vendored copy of `@babel/parser`'s TypeScript source. There
-is no public plugin API for `@babel/parser`, so shipping a parser with a modified JSX plugin means owning and building
-this source ourselves.
+`packages/babel/src/` is a vendored copy of `@babel/parser`'s TypeScript source.
+There is no public plugin API for `@babel/parser`, so shipping a parser with a
+modified JSX plugin means owning and building this source ourselves.
 
 ## Pin
 
