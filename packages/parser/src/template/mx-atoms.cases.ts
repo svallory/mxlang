@@ -1392,6 +1392,29 @@ export function tagNameReads(mod: AtomParserModule): {
 }
 
 /**
+ * The inner check of `tsMarkerViolations` and `nonAsciiMarkerViolations`:
+ * whether `src` lexes `:z` as an atom. One parser serves every call, since
+ * `parse` starts each source clean; the handlers read the current `src` and
+ * `wrong`, so building a parser per input (thousands per set) is avoided.
+ */
+function colonZChecker(mod: AtomParserModule): (src: string) => boolean {
+  let src = "";
+  let wrong = false;
+  const parser = mod.createParser({
+    onRowAtom: (a: { start: number; end: number }) => {
+      if (src.slice(a.start, a.end) === ":z") wrong = true;
+    },
+    onError() {},
+  });
+  return (source) => {
+    src = source;
+    wrong = false;
+    parser.parse(source);
+    return wrong;
+  };
+}
+
+/**
  * Review round 5 (R3): the systematic TypeScript-marker set. Each input puts
  * an operand TypeScript can end with a marker or a type (`a!!`,
  * `y as Array<T>`, `x satisfies Foo<T>`, …) before ` :z` in a ternary, in
@@ -1445,6 +1468,7 @@ export function tsMarkerViolations(
     ["<div x={k: ", "}/>", "{k: ", "}"],
   ];
   const tails = ["z", "z :name", "z === :k"];
+  const lexesColonZ = colonZChecker(mod);
   let total = 0;
   let ran = 0;
   const bad: string[] = [];
@@ -1459,16 +1483,7 @@ export function tsMarkerViolations(
             if (!isValidTs(ePre + expr + ePost)) continue;
             ran++;
             const src = pre + v + post;
-            let wrong = false;
-            mod
-              .createParser({
-                onRowAtom: (a: { start: number; end: number }) => {
-                  if (src.slice(a.start, a.end) === ":z") wrong = true;
-                },
-                onError() {},
-              })
-              .parse(src);
-            if (wrong) bad.push(src);
+            if (lexesColonZ(src)) bad.push(src);
           }
         }
       }
@@ -1671,6 +1686,7 @@ export function nonAsciiMarkerViolations(
     ["<div x={k: ", "}/>", "{k: ", "}"],
   ];
   const tails = ["z", "z :name", "z === :k"];
+  const lexesColonZ = colonZChecker(mod);
   let total = 0;
   let ran = 0;
   const bad: string[] = [];
@@ -1685,16 +1701,7 @@ export function nonAsciiMarkerViolations(
             if (!isValidTs(ePre + expr + ePost)) continue;
             ran++;
             const src = pre + v + post;
-            let wrong = false;
-            mod
-              .createParser({
-                onRowAtom: (a: { start: number; end: number }) => {
-                  if (src.slice(a.start, a.end) === ":z") wrong = true;
-                },
-                onError() {},
-              })
-              .parse(src);
-            if (wrong) bad.push(src);
+            if (lexesColonZ(src)) bad.push(src);
           }
         }
       }
