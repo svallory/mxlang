@@ -13,6 +13,7 @@ import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { bakedPathsIn } from "./baked-paths.ts";
+import { forkCarriers, NOTICES_FILE } from "./third-party-notices.ts";
 
 export const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -168,6 +169,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/mx-language.d.ts",
       "dist/ng-worker.cjs",
       "dist/own-location-header.d.ts",
+      "dist/THIRD-PARTY-NOTICES.md",
       // mx-language.d.ts types MxLanguagePluginOptions.resolveImport with it;
       // it references only the declared typescript peer.
       "dist/tsconfig-paths.d.ts",
@@ -185,7 +187,12 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     name: "@mxlang/vite-plugin",
     dir: "packages/tooling/vite-plugin",
     extraTopLevel: [],
-    distFiles: ["dist/index.cjs", "dist/index.d.ts", "dist/index.js"],
+    distFiles: [
+      "dist/index.cjs",
+      "dist/index.d.ts",
+      "dist/index.js",
+      "dist/THIRD-PARTY-NOTICES.md",
+    ],
     declarations: true,
   },
   // The grammar: no `dist/`. Ships the wasm (built by `prepack`), the queries,
@@ -316,6 +323,30 @@ export function babelFlagReads(dir: string, packed: string[]): string[] {
         readFileSync(join(dir, f), "utf8"),
       ),
     );
+}
+
+/**
+ * Licence-notice problems of a tarball: a packed JS file that inlines MX's
+ * Babel fork with no `THIRD-PARTY-NOTICES.md` packed in its own dir, and a
+ * packed notice with no carrier beside it (a stale notice). `packed` is
+ * relative to `dir`.
+ */
+export function forkNoticeProblems(
+  dir: string,
+  packed: readonly string[],
+): string[] {
+  const carriers = forkCarriers(dir, packed);
+  const noticeOf = (f: string) => posix.join(posix.dirname(f), NOTICES_FILE);
+  const missing = carriers
+    .filter((c) => !packed.includes(noticeOf(c)))
+    .map(
+      (c) => `${c}: carries the Babel fork but ${noticeOf(c)} is not packed`,
+    );
+  const stale = packed
+    .filter((f) => posix.basename(f) === NOTICES_FILE)
+    .filter((n) => !carriers.some((c) => noticeOf(c) === n))
+    .map((n) => `${n}: packed but no JS beside it carries the Babel fork`);
+  return [...missing, ...stale];
 }
 
 /** Every string a `main`/`types`/`bin`/`exports` field points at, as a tarball path. */

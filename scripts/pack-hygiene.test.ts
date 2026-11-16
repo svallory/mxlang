@@ -1,6 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { RELOCATABLE_BANNER, RELOCATABLE_DEFINE } from "./bundled-build.ts";
 import {
@@ -10,6 +17,7 @@ import {
   declaredNames,
   entryTargets,
   escapesRoot,
+  forkNoticeProblems,
   isBuiltin,
   moduleSpecifiers,
   PACKED_PACKAGES,
@@ -22,6 +30,12 @@ import {
   runtimeSpecifiers,
   undeclaredRuntimeImports,
 } from "./pack-hygiene.ts";
+import {
+  BABEL_FORK_MARKER,
+  forkCarriers,
+  NOTICES_FILE,
+  writeThirdPartyNotices,
+} from "./third-party-notices.ts";
 
 // One block per package that ships (or will ship) a tarball. Needs a built
 // `dist/` (`bun run build`), like `packages/tsx-bridge/src/pack-contents.test.ts`.
@@ -178,6 +192,35 @@ for (const p of PACKED_PACKAGES) {
     it("reads no Babel build flag (process.env.BABEL_8_BREAKING, IS_PUBLISH) in shipped JS", () => {
       expect(babelFlagReads(dir, packed)).toEqual([]);
     });
+
+    it("packs THIRD-PARTY-NOTICES.md beside every file that bundles the Babel fork", () => {
+      expect(forkNoticeProblems(dir, packed)).toEqual([]);
+    });
+
+    const carriers = forkCarriers(dir, packed);
+    if (carriers.length > 0) {
+      it("names every fork carrier and the fork's upstream tag in each packed notice", () => {
+        const tag = /^- Tag: `(v[^`]+)`/m.exec(
+          readFileSync(join(repoRoot, "packages/babel/UPSTREAM.md"), "utf8"),
+        )?.[1];
+        expect(tag).toMatch(/^v\d/);
+        const notices = packed.filter(
+          (f) => posix.basename(f) === NOTICES_FILE,
+        );
+        expect(notices.length).toBeGreaterThan(0);
+        for (const notice of notices) {
+          const here = carriers
+            .filter((c) => posix.dirname(c) === posix.dirname(notice))
+            .map((c) => posix.basename(c));
+          const text = readFileSync(join(dir, notice), "utf8");
+          expect(text.split("\n")[0]).toBe(
+            `# Third-party code in ${here.join(", ")}`,
+          );
+          expect(text).toContain(`@babel/parser ${tag?.slice(1)}`);
+          expect(text).toContain(`tag \`${tag}\``);
+        }
+      });
+    }
 
     it("packs every main/types/bin/exports target, none into src", () => {
       const targets = entryTargets(pkg);
@@ -365,6 +408,100 @@ describe("babelFlagReads", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("Babel fork notices", () => {
+  const scratch = mkdtempSync(join(tmpdir(), "fork-notices-"));
+  afterAll(() => rmSync(scratch, { recursive: true, force: true }));
+  const marked = `class P { ${BABEL_FORK_MARKER}(startLoc) {} }`;
+  /** A package dir whose `dist/` holds `files` (name -> text). */
+  const plant = (files: Record<string, string>) => {
+    const dir = mkdtempSync(join(scratch, "pkg-"));
+    mkdirSync(join(dir, "dist"));
+    for (const [name, text] of Object.entries(files)) {
+      writeFileSync(join(dir, "dist", name), text);
+    }
+    return dir;
+  };
+  const carrierFiles = {
+    "a.js": marked,
+    "b.cjs": "module.exports = 1;",
+    "c.d.ts": `declare function ${BABEL_FORK_MARKER}(): void;`,
+  };
+  const cleanFiles = {
+    "b.cjs": "module.exports = 1;",
+    "c.d.ts": `declare function ${BABEL_FORK_MARKER}(): void;`,
+  };
+
+  it("forkNoticeProblems flags a carrier whose notice is not packed", () => {
+    const dir = plant(carrierFiles);
+    expect(
+      forkNoticeProblems(dir, ["dist/a.js", "dist/b.cjs", "dist/c.d.ts"]),
+    ).toEqual([
+      "dist/a.js: carries the Babel fork but dist/THIRD-PARTY-NOTICES.md is not packed",
+    ]);
+  });
+
+  it("forkNoticeProblems passes a carrier with its notice", () => {
+    const dir = plant({ ...carrierFiles, "THIRD-PARTY-NOTICES.md": "x" });
+    expect(
+      forkNoticeProblems(dir, [
+        "dist/a.js",
+        "dist/b.cjs",
+        "dist/c.d.ts",
+        "dist/THIRD-PARTY-NOTICES.md",
+      ]),
+    ).toEqual([]);
+  });
+
+  it("forkNoticeProblems flags a notice with no carrier and ignores a marked .d.ts", () => {
+    const dir = plant({ ...cleanFiles, "THIRD-PARTY-NOTICES.md": "x" });
+    expect(
+      forkNoticeProblems(dir, [
+        "dist/b.cjs",
+        "dist/c.d.ts",
+        "dist/THIRD-PARTY-NOTICES.md",
+      ]),
+    ).toEqual([
+      "dist/THIRD-PARTY-NOTICES.md: packed but no JS beside it carries the Babel fork",
+    ]);
+  });
+
+  it("forkNoticeProblems passes a clean dir with no notice", () => {
+    const dir = plant(cleanFiles);
+    expect(forkNoticeProblems(dir, ["dist/b.cjs", "dist/c.d.ts"])).toEqual([]);
+  });
+
+  it("writeThirdPartyNotices throws naming the dir when required and nothing carries the fork", () => {
+    const dist = join(plant(cleanFiles), "dist");
+    expect(() => writeThirdPartyNotices(dist, { required: true })).toThrow(
+      `no JS file in ${dist} carries the Babel fork`,
+    );
+    expect(existsSync(join(dist, "THIRD-PARTY-NOTICES.md"))).toBe(false);
+  });
+
+  it("writeThirdPartyNotices writes nothing and returns [] when not required", () => {
+    const dist = join(plant(cleanFiles), "dist");
+    expect(writeThirdPartyNotices(dist, { required: false })).toEqual([]);
+    expect(existsSync(join(dist, "THIRD-PARTY-NOTICES.md"))).toBe(false);
+  });
+
+  it("writeThirdPartyNotices writes a heading listing exactly the carriers", () => {
+    const dist = join(plant({ ...carrierFiles, "d.mjs": marked }), "dist");
+    expect(writeThirdPartyNotices(dist, { required: true })).toEqual([
+      "a.js",
+      "d.mjs",
+    ]);
+    const lines = readFileSync(
+      join(dist, "THIRD-PARTY-NOTICES.md"),
+      "utf8",
+    ).split("\n");
+    expect(lines.slice(0, 3)).toEqual([
+      "# Third-party code in a.js, d.mjs",
+      "",
+      "`a.js`, `d.mjs` bundle the code below. Each is distributed under its own licence.",
+    ]);
   });
 });
 
