@@ -25,7 +25,6 @@ import {
   type ParseErrorConstructor,
 } from "../parse-error.ts";
 import {
-  lineBreakG,
   isNewLine,
   isWhitespace,
   skipWhiteSpace,
@@ -295,10 +294,21 @@ export default abstract class Tokenizer extends CommentsParser {
     }
 
     this.state.pos = end + commentEnd.length;
-    lineBreakG.lastIndex = start + 2;
-    while (lineBreakG.test(this.input) && lineBreakG.lastIndex <= end) {
-      ++this.state.curLine;
-      this.state.lineStart = lineBreakG.lastIndex;
+    // MX: count the line breaks inside [start + 2, end) only. The upstream
+    // loop (`lineBreakG.test`) searched past `end` for the next line break,
+    // so every comment on a long line cost the rest of that line.
+    for (let i = start + 2; i < end; i++) {
+      const ch = this.input.charCodeAt(i);
+      if (isNewLine(ch)) {
+        if (
+          ch === charCodes.carriageReturn &&
+          this.input.charCodeAt(i + 1) === charCodes.lineFeed
+        ) {
+          i++;
+        }
+        ++this.state.curLine;
+        this.state.lineStart = i + 1;
+      }
     }
 
     // If we are doing a lookahead right now we need to advance the position (above code)

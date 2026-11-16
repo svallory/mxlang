@@ -80,6 +80,8 @@ build didn't force dropping any of these.
 
    **Done in `parser-solid-inversion`:** the `@mxlang/host-solid` import is gone from `bridge.ts`. The parser imports no host at all: `mxRegionCompile` is required whenever the grammar is on, and a region reached with the hook absent is a positioned compile error naming the option and pointing at `compileSolidMx` for `.solid.mx`. Every in-repo caller (the Vite plugin, the TypeScript plugin, the language server, the oracle) now supplies `compileSolidMx` explicitly — a breaking change for each of them, made deliberately since the alternative (a silent default) is what let a misconfigured caller of a non-Solid file kind lower through the Solid host by accident. `@mxlang/host-solid` moved from `dependencies` to `devDependencies` in `packages/parser/package.json` (kept only for this package's own tests, via `src/mx/test-helpers.ts`'s `parseSolid`/`solidRegionCompile`). See `src/mx/region-compile.ts` for the types and `packages/parser/README.md` for the design summary.
 
+9. **`tokenizer/index.ts`, `skipBlockComment` — bounded line count.** Upstream counts a block comment's line breaks with `lineBreakG.lastIndex = start + 2; while (lineBreakG.test(this.input) && lineBreakG.lastIndex <= end)`. `test` searches the whole remaining input, so a comment holding no line break costs the distance to the next line break after it, not its own length: many block comments on one line parse in quadratic time (measured on the front end's `parse`, `[/*c0*/ a0, …]` on one line, n = 32,000: 762 ms before, 319 ms after). The loop now walks `[start + 2, end)` with the tokenizer's own `isNewLine`, counting `\r\n` as one break and setting `curLine` and `lineStart` (the index after the break) exactly as the regex loop did; `lineBreakG` matches what `isNewLine` accepts, and no match can straddle `end` because `input[end]` is `*`. Output (AST, tokens, comments, positions, errors) is identical, which `vendored.test.ts`'s `line-breaks-in-block-comments` snippet pins. The `lineBreakG` import was dropped from `tokenizer/index.ts`; its export in `util/whitespace.ts` is kept. npm `@babel/parser` 8.0.5 still has the upstream scan.
+
 ## tsconfig relaxations (`packages/babel/tsconfig.json`, whole-package)
 
 Attempted a `src/babel/**`-only scoped tsconfig via TypeScript project
@@ -139,5 +141,8 @@ After running it:
 3. Re-check whether `@babel/helper-string-parser`'s version moved (compare
    against the version `@babel/parser`'s own `package.json` devDependency
    lists at the new tag) and update the pin recorded above if so.
-4. `bun run build` and `bun run test` (`typecheck` from `packages/babel`, `test` from `packages/tsx-bridge`), and fix
+4. Reapply local modification 9 (the bounded line count in
+   `skipBlockComment`), or drop it if upstream's `skipBlockComment` no longer
+   runs `lineBreakG.test` past the comment's end.
+5. `bun run build` and `bun run test` (`typecheck` from `packages/babel`, `test` from `packages/tsx-bridge`), and fix
    whatever the equivalence test or the build surfaces.

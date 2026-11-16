@@ -57,6 +57,21 @@ const syntheticSnippets: { name: string; source: string }[] = [
       );
     `,
   },
+  {
+    // Line breaks inside block comments, of every kind Babel counts (LF,
+    // CRLF as one break, a lone CR, U+2028, U+2029), one right before `*/`,
+    // then a run of single-line comments before tokens on later lines: the
+    // fork's bounded line count (UPSTREAM.md, local modification 9) must
+    // give the same lines and columns as npm's regex scan.
+    name: "line-breaks-in-block-comments",
+    source:
+      "/* a\nb */ const x = 1; /* c\r\nd */ const y = 2;\n" +
+      "/* e\rf */ let z = 3; /* g\u2028h */ z = 4; /* i\u2029j */ z = 5;\n" +
+      "/* k\n*/ z = 6; /* l\r\n*/ z = 7; /* m\n\r\r\n*/ z = 8;\n" +
+      "/*n*/ /*o*/ /*p*/ z = 9; /*q*/ /*r*/\n" +
+      "const w = /*s*/ x + /*t*/ y;\n" +
+      "  z = w;\n",
+  },
 ];
 
 const cases = [...fixtureTwins(), ...syntheticSnippets];
