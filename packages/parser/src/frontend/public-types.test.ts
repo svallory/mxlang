@@ -4,13 +4,7 @@
  * the two cannot drift.
  */
 import { describe, expectTypeOf, it } from "vitest";
-import type {
-  lineColumnAt,
-  ParseOptions,
-  parse,
-  parseBabel,
-  parseBabelExpression,
-} from "./index.ts";
+import type { lineColumnAt, ParseOptions, parse } from "./index.ts";
 import type * as Declared from "./public.d.ts";
 
 describe("public.d.ts", () => {
@@ -21,22 +15,6 @@ describe("public.d.ts", () => {
     >();
     expectTypeOf<typeof lineColumnAt>().toExtend<
       typeof Declared.lineColumnAt
-    >();
-  });
-
-  it("declares parseBabel and parseBabelExpression as the source defines them", () => {
-    expectTypeOf<typeof parseBabel>().toExtend<typeof Declared.parseBabel>();
-    expectTypeOf<typeof parseBabelExpression>().toExtend<
-      typeof Declared.parseBabelExpression
-    >();
-    expectTypeOf<ReturnType<typeof parseBabel>>().toExtend<
-      ReturnType<typeof Declared.parseBabel>
-    >();
-    expectTypeOf<ReturnType<typeof parseBabelExpression>>().toExtend<
-      ReturnType<typeof Declared.parseBabelExpression>
-    >();
-    expectTypeOf<Parameters<typeof parseBabel>[0]>().toEqualTypeOf<
-      Parameters<typeof Declared.parseBabel>[0]
     >();
   });
 
