@@ -102,7 +102,10 @@ Five facts worth knowing before editing it:
   `dist/marko-frontend.cjs` with `htmljs-parser` resolved to
   `packages/parser/src/template/`, and the main build defines
   `MX_MARKO_FRONTEND` so the loader requires that file; `@marko/compiler` and
-  `htmljs-parser` are devDependencies only. The build fails if the bundle
+  `htmljs-parser` are devDependencies only. The main build also defines the
+  Babel fork's `process.env.BABEL_8_BREAKING=false` and
+  `process.env.IS_PUBLISH=true`, as tsx-bridge's does, and
+  `scripts/pack-hygiene.test.ts` fails if a shipped file still reads either. The build fails if the bundle
   requires any package, carries an npm `htmljs-parser`, or `dist/index.js`
   imports either specifier statically. The bundle stubs Babel's
   `browserslist` (no config file found: MX passes no targets) and leaves out
