@@ -83,7 +83,7 @@ A named, reusable template fragment, callable like any other tag:
 
 `<define>` fragments take the same tag params and attribute tags as any other tag call. A call with attributes passes one attribute object to the first parameter, so destructure it as `|{ label, color }|`; a second parameter never receives an attribute.
 
-A tag param, loop variable, `<const>` or a tag call's `/var` of the same name as a `<define>` in a nested body hides it there, and `<Badge/>` calls that value as a dynamic tag. A tag call's `/var` needs no `<define>` of its name: after `<Make/Badge/>`, `<Badge/>` in the same body or a nested one calls the value `Make` returns. Above the call, a `<define>` body written above it included, `<Badge/>` with no `<define/Badge>` is still an unknown tag, and so is a `<Badge/>` in a nested body above any binding of the name in that body (another call's `/Badge`, `<let/Badge>`, `<const/Badge>`, an element's `/Badge`).
+A tag param, loop variable, `<const>` or a tag call's `/var` of the same name as a `<define>` in a nested body hides it there, and `<Badge/>` calls that value as a dynamic tag.
 
 A `<define>` tag's own attributes are properties of its value, so `${Badge.color}` below reads `"green"`:
 

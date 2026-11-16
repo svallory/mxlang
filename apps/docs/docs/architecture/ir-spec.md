@@ -32,10 +32,10 @@ The IR is not the parser's output. It is the result of a parse **plus** a sequen
    2. a host **disposition** (`declarations.tags[name]`): `unsupported` or `error` fails (`unsupported` with core's one sentence plus the host's hint, `error` with the host's own text), `inert` validates the shape and yields an empty `Text`;
    3. core structural tags: `import`/`static`/`export` (statement nodes), `for`, `const`, `define`, `return`, a stray `else`/`else-if` (error); `if` is grouped with its `else` siblings before this switch;
    4. built-in custom tags (`try`, never shadowable);
-   5. a PascalCase name the file binds (an import, a `<define>`, a `<const>`, a tag param, a tag call's `/var` — `fileLocalBinding`) skips steps 6 and 7;
+   5. a PascalCase name the file binds (an import, a `<define>`, a `<const>`, a tag param — `fileLocalBinding`) skips steps 6 and 7;
    6. a registered or discovered **custom tag** (`lowerCustomTag`): its contract is validated (attributes, attribute tags, `children`, `parents`) and its `transform` or template replaces the call with ordinary IR (zero or more nodes);
    7. a host claim (`isDelegatedTag`) → `DelegatedTag`, with the host's `resolveDelegatedTag` answer in `data`;
-   8. a component (`fileLocalBinding` or `isComponent`) → `Component`, with a `define` target for a `<define>`'s name. A tag param, loop variable, `<const>` or a tag call's `/var` of the same name in a nested body hides the `<define>` there, and `<T/>` calls that value as a dynamic tag. A tag call's `/var` the walk has already reached in scope makes `<T/>` that dynamic call with or without a `<define>` of the name; with no `<define>`, a `<T/>` above the call (a `<define>` body written above it included) is still unbound, and so is one in a nested body above any binding of the name in that body;
+   8. a component (`fileLocalBinding` or `isComponent`) → `Component`, with a `define` target for a `<define>`'s name. A tag param, loop variable, `<const>` or a tag call's `/var` of the same name in a nested body hides the `<define>` there, and `<T/>` calls that value as a dynamic tag;
    9. an unbound PascalCase name, or a lowercase name `isElement` rejects → positioned error;
    10. otherwise an `Element`.
 
