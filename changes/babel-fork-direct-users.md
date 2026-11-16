@@ -1,5 +1,5 @@
 ---
-packages: [core, solid, angular]
+packages: [solid, angular]
 kind: Fixed
 ---
-Compiles re-parse expressions and statements with MX's Babel fork, so many block comments on one line no longer make a compile quadratic.
+The Solid and Angular hosts re-parse expressions and statements with MX's Babel fork, so many block comments on one line no longer make their compile passes quadratic.
