@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import { configDefaults } from "vitest/config";
 import { createVitest } from "vitest/node";
 import {
+  DOC_READERS,
   FIXTURE_CONSUMERS,
   fixtureConsumers,
   hasVitestTests,
+  isProjectDoc,
   isRelatedSource,
   isWide,
   laneFor,
@@ -20,6 +22,7 @@ import {
   projectsFor,
   relatedPassWithNoTests,
   relatedSources,
+  splitDocs,
   testScript,
   VITEST_TEST_FILE,
 } from "./test-affected.ts";
@@ -238,7 +241,10 @@ describe("FIXTURE_CONSUMERS (fixtures read from another project)", () => {
   });
 
   it("every consumer is an existing test file in a vitest project", () => {
-    for (const { consumers } of FIXTURE_CONSUMERS) {
+    for (const consumers of [
+      ...FIXTURE_CONSUMERS.map((row) => row.consumers),
+      DOC_READERS,
+    ]) {
       for (const consumer of consumers) {
         expect(
           existsSync(resolve(import.meta.dirname, "..", consumer)),
@@ -467,5 +473,118 @@ describe("ownRunnerDirs", () => {
     for (const f of ["a.bun-test.mts", "a.ts"]) {
       expect(VITEST_TEST_FILE.test(f), f).toBe(false);
     }
+  });
+});
+
+describe("Markdown selection", () => {
+  const dirs = projectDirs();
+  const CORPUS = "packages/parser/src/template/corpus-equivalence.test.ts";
+
+  it("a .md inside a project dir is a project doc", () => {
+    for (const f of [
+      "packages/tooling/typescript-plugin/AGENTS.md",
+      "packages/core/README.md",
+      "packages/core/CHANGELOG.md",
+      "packages/editors/tree-sitter-solid/test/COVERAGE.md",
+      "scripts/AGENTS.md",
+    ])
+      expect(isProjectDoc(f, dirs), f).toBe(true);
+  });
+
+  it("a root doc, a fixture doc, a FIXTURE_CONSUMERS doc or a source is not", () => {
+    for (const f of [
+      "AGENTS.md",
+      "docs/a.md",
+      "packages/oracle/fixtures/angular/README.md",
+      "packages/editors/tree-sitter-mx/test/corpus/README.md",
+      "packages/core/src/a.ts",
+    ])
+      expect(isProjectDoc(f, dirs), f).toBe(false);
+  });
+
+  it("PR #800's case: a package AGENTS.md selects no whole project", () => {
+    const { docs, rest } = splitDocs(
+      ["packages/tooling/typescript-plugin/AGENTS.md"],
+      dirs,
+    );
+    expect(docs).toEqual(["packages/tooling/typescript-plugin/AGENTS.md"]);
+    expect(rest).toEqual([]);
+    expect(
+      nonSourceProjects(
+        rest.filter((f) => !isRelatedSource(f)),
+        dirs,
+      ),
+    ).toEqual({ byProject: new Map(), unmapped: [] });
+  });
+
+  it("a doc beside a core fixture still selects core's two projects", () => {
+    const { docs, rest } = splitDocs(
+      [
+        "packages/tooling/typescript-plugin/AGENTS.md",
+        "packages/core/src/fixtures/a.json",
+      ],
+      dirs,
+    );
+    expect(docs).toEqual(["packages/tooling/typescript-plugin/AGENTS.md"]);
+    expect(rest).toEqual(["packages/core/src/fixtures/a.json"]);
+    expect([
+      ...nonSourceProjects(
+        rest.filter((f) => !isRelatedSource(f)),
+        dirs,
+      ).byProject.keys(),
+    ]).toEqual(["@mxlang/core", "@mxlang/core-isolated"]);
+  });
+
+  it("a grammar package's doc triggers no own runner; its grammar.js does", () => {
+    const own = [
+      "packages/core/",
+      "packages/editors/zed/",
+      "packages/editors/tree-sitter-mx/",
+    ];
+    const hasTests = (d: string) => d === "packages/core/";
+    expect(
+      ownRunnerDirs(
+        splitDocs(["packages/editors/tree-sitter-mx/UPSTREAM.md"], own).rest,
+        own,
+        hasTests,
+      ),
+    ).toEqual([]);
+    expect(
+      ownRunnerDirs(
+        splitDocs(
+          [
+            "packages/editors/tree-sitter-mx/UPSTREAM.md",
+            "packages/editors/tree-sitter-mx/grammar.js",
+          ],
+          own,
+        ).rest,
+        own,
+        hasTests,
+      ),
+    ).toEqual(["packages/editors/tree-sitter-mx/"]);
+  });
+
+  it("a project doc adds the Markdown readers to vitest related", () => {
+    expect(
+      relatedSources(["packages/tooling/typescript-plugin/AGENTS.md"], dirs),
+    ).toEqual([CORPUS]);
+    expect(
+      relatedSources(
+        [
+          "packages/core/README.md",
+          "packages/hosts/solid/src/emitter.ts",
+          "packages/parser/src/template/corpus-equivalence.test.ts",
+          "packages/core/CHANGELOG.md",
+        ],
+        dirs,
+      ),
+    ).toEqual(["packages/hosts/solid/src/emitter.ts", CORPUS, PROBE_CONSUMER]);
+  });
+
+  it("a root doc or a source-only change adds no Markdown reader", () => {
+    expect(relatedSources(["docs/a.md"], dirs)).toEqual([]);
+    expect(relatedSources(["packages/core/src/core.ts"], dirs)).toEqual([
+      "packages/core/src/core.ts",
+    ]);
   });
 });

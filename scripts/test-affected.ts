@@ -29,6 +29,10 @@
  * invocation. A changed file that maps to no project at all (docs, scripts
  * without tests) is named explicitly before exiting 0.
  *
+ * A `.md` inside a project dir (outside fixtures-style dirs and
+ * `FIXTURE_CONSUMERS` rows) runs only the Markdown readers (`DOC_READERS`,
+ * through `vitest related`), never its whole project or own test script.
+ *
  * A project that owns a changed file but has no vitest test files (the
  * tree-sitter grammars, whose tests are `*.bun-test.mts`, and the Zed
  * extension) is not given to `vitest run --project`, which would fail with
@@ -226,18 +230,59 @@ export function nonSourceProjects(
 }
 
 /**
- * What `vitest related` gets: the changed related sources, the subprocess
- * probe's consumer (`probeConsumers`) and, for a related source under a
- * `FIXTURE_CONSUMERS` path (the tree-sitter-mx corpus readers, say), the
- * tests in other projects that read it. Deduped, in that order.
+ * Tests that read package Markdown files. corpus-equivalence reads the
+ * `mx`/`marko` fences of every tracked Markdown file (`git ls-files`), so a
+ * changed project doc selects it whatever the doc contains. A new test that
+ * reads a package's `.md` adds its row here (or to `FIXTURE_CONSUMERS` for a
+ * fixture-style file).
  */
-export function relatedSources(changed: readonly string[]): string[] {
+export const DOC_READERS: readonly string[] = [
+  "packages/parser/src/template/corpus-equivalence.test.ts",
+];
+
+/**
+ * A project doc: a `.md` inside a project dir that is not under a
+ * fixtures-style dir and not on a `FIXTURE_CONSUMERS` row. It maps to the
+ * Markdown readers (`DOC_READERS`), never to its owner's whole project.
+ */
+export function isProjectDoc(file: string, dirs: readonly string[]): boolean {
+  return (
+    /\.md$/.test(file) &&
+    ownerDir(file, dirs) !== undefined &&
+    !FIXTURE_DIR.test(file) &&
+    fixtureConsumers(file).length === 0
+  );
+}
+
+/** `changed` split by `isProjectDoc`, each part in input order. */
+export function splitDocs(
+  changed: readonly string[],
+  dirs: readonly string[],
+): { docs: string[]; rest: string[] } {
+  const docs: string[] = [];
+  const rest: string[] = [];
+  for (const f of changed) (isProjectDoc(f, dirs) ? docs : rest).push(f);
+  return { docs, rest };
+}
+
+/**
+ * What `vitest related` gets: the changed related sources, the subprocess
+ * probe's consumer (`probeConsumers`), for a related source under a
+ * `FIXTURE_CONSUMERS` path (the tree-sitter-mx corpus readers, say) the
+ * tests in other projects that read it, and `DOC_READERS` when a project doc
+ * changed. Deduped, in that order.
+ */
+export function relatedSources(
+  changed: readonly string[],
+  dirs: readonly string[] = projectDirs(),
+): string[] {
   const related = changed.filter(isRelatedSource);
   return [
     ...new Set([
       ...related,
       ...probeConsumers(changed),
       ...related.flatMap(fixtureConsumers),
+      ...(splitDocs(changed, dirs).docs.length > 0 ? DOC_READERS : []),
     ]),
   ];
 }
@@ -504,8 +549,17 @@ function main(): number {
     console.log("test:affected: no changes vs origin/main; nothing to run.");
     return 0;
   }
-  const sources = relatedSources(changed);
-  const nonSources = changed.filter((f) => !isRelatedSource(f));
+  const dirs = projectDirs();
+  // Project docs (.md) map to the Markdown readers only, never to their
+  // owner's whole project or own test script.
+  const { docs, rest } = splitDocs(changed, dirs);
+  if (docs.length > 0) {
+    console.log(
+      `test:affected: docs-only change -> no whole project (${docs.join(", ")}); Markdown readers via vitest related`,
+    );
+  }
+  const sources = relatedSources(changed, dirs);
+  const nonSources = rest.filter((f) => !isRelatedSource(f));
   const wide = changed.filter(isWide);
   if (wide.length > 0) {
     console.warn(
@@ -532,11 +586,10 @@ function main(): number {
   }
 
   let rc = 0;
-  const dirs = projectDirs();
   // Projects owning a changed file that have no vitest test files (the
   // tree-sitter grammars, Zed): vitest would fail them with "No test files
   // found", so they run their own `test` script or are named and skipped.
-  const own = ownRunnerDirs(changed, dirs, (d) => hasVitestTests(d));
+  const own = ownRunnerDirs(rest, dirs, (d) => hasVitestTests(d));
 
   if (sources.length > 0) {
     // passWithNoTests=false: a change whose sources no test imports must not
