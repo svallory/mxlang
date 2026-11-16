@@ -964,8 +964,8 @@ describe("event attributes (phase B of dom-events)", () => {
   });
 
   it("rejects on: with a fix-it naming on-<exact>", () => {
-    expect(errorFor("<div on:click=fn>x</div>").message).toContain(
-      "write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+    expect(errorFor("<div on:click=fn>x</div>").message).toBe(
+      "`on:click=fn` is not an event binding; write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
     );
   });
 });
@@ -1064,7 +1064,7 @@ describe("<textarea value> (Marko 6.4.4 parity)", () => {
       '<div ...x set:html="<b>x</b>"/>',
     ]) {
       expect(errorFor(template).message, template).toContain(
-        "attribute `set:html` cannot be preserved as a plain Marko attribute",
+        "attribute `set:html` cannot be preserved as a plain attribute",
       );
     }
   });

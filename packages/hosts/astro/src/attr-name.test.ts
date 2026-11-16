@@ -112,7 +112,7 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
           ["\n  ", 5, 2],
         ] as const) {
           expect(failure(`<div${gap}${name}${suffix}/>`)).toEqual({
-            message: `attribute \`${name}\` cannot be preserved as a plain Marko attribute in \`.astro.mx\`: Astro interprets it as a directive`,
+            message: `attribute \`${name}\` cannot be preserved as a plain attribute in \`.astro.mx\`: Astro interprets it as a directive`,
             line,
             column,
           });
@@ -124,7 +124,7 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
   it("refuses define:vars on a style instead of changing CSS semantics", () => {
     expect(failure("<style define:vars=x>p { color: red; }</style>")).toEqual({
       message:
-        "attribute `define:vars` cannot be preserved as a plain Marko attribute in `.astro.mx`: Astro interprets it as a directive",
+        "attribute `define:vars` cannot be preserved as a plain attribute in `.astro.mx`: Astro interprets it as a directive",
       line: 4,
       column: 7,
     });
@@ -149,7 +149,7 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
         ),
       ).toThrow(
         expect.objectContaining({
-          message: `attribute \`${name}\` cannot be preserved as a plain Marko attribute in \`.astro.mx\`: Astro interprets it as a directive`,
+          message: `attribute \`${name}\` cannot be preserved as a plain attribute in \`.astro.mx\`: Astro interprets it as a directive`,
           line: 4,
           column: 6,
         }),
@@ -160,7 +160,7 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
   it("refuses an explicit filtered attribute even when a spread follows it", () => {
     expect(failure('<div set:html=x ...{"data-x": "y"}/>')).toMatchObject({
       message:
-        "attribute `set:html` cannot be preserved as a plain Marko attribute in `.astro.mx`: Astro interprets it as a directive",
+        "attribute `set:html` cannot be preserved as a plain attribute in `.astro.mx`: Astro interprets it as a directive",
       line: 4,
       column: 5,
     });

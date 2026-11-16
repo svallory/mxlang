@@ -417,7 +417,7 @@ export const astroTemplateDeclarations: HostDeclarations = {
       const event =
         attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
       fail(
-        `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name (Marko rejects this form too)`,
+        `\`${attr.name}:${attr.modifier}=fn\` is not an event binding; write \`on${event}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name`,
         attr,
       );
     }
@@ -504,7 +504,7 @@ function validatePlainAstroAttrs(attrs: Attr[], nativeName?: string): void {
         attr.name === "class:list")
     ) {
       fail(
-        `attribute \`${attr.name}\` cannot be preserved as a plain Marko attribute in \`.astro.mx\`: Astro interprets it as a directive`,
+        `attribute \`${attr.name}\` cannot be preserved as a plain attribute in \`.astro.mx\`: Astro interprets it as a directive`,
         attr,
       );
     }
