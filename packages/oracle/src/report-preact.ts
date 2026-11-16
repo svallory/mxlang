@@ -44,8 +44,9 @@ const MIN_FIXTURES = 45; // was 43; +2 for static-block-import and static-block-
  * Fixtures this host cannot render, each naming the construct.
  *
  * Every entry is a construct the *target* has no form for, and each is a
- * compile error with the same message the unit tests pin — so a skip here is
- * the documented behaviour, not an unimplemented row.
+ * compile error the unit tests pin — so a skip here is the documented
+ * behaviour, not an unimplemented row. The reasons are this runner's own
+ * prose naming the construct, not the emitter's messages.
  */
 function skips(targetName: string): Record<string, string> {
   return {

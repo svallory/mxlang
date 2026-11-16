@@ -2718,7 +2718,7 @@ the empty string) renders the body called with no arguments, as Marko
 does. A literal string target
 (`<${"div"}|item|>`) is the compile error `Tag does not support parameters.`,
 Marko's own. A string that only arrives at run time throws an MX run-time
-error (`MX: tag params |…| cannot be passed to a native element`). This is a
+error (`tag params |…| cannot be passed to a native element`). This is a
 deliberate divergence: Marko renders the element with the body. A `<define>`
 used as a dynamic target value (`<const/R = Row/>` then `<${R}|n|>` or `<${R}>`)
 receives the body as its `content`, as a direct call does (the args form,
@@ -4005,7 +4005,7 @@ one long line):
 ```text
  (position approximate: generated <line>:<col>)
  (position unknown in this file kind: generated <line>:<col>)
- (in MX-generated code, not yours: an MX bug; generated <line>:<col>)
+ (in generated code, not yours: an internal bug; generated <line>:<col>)
 ```
 
 A diagnostic is the **author's** when the narrowing found its text spelled by
@@ -4033,7 +4033,7 @@ module. The same goes for each `relatedInformation` entry of a diagnostic
 ("'x' is declared here" in generated code), and for the diagnostics of a
 program emit (`mx-tsc` without `--noEmit`, declaration-emit errors). Nothing is
 suppressed: there is no allow-list for generated scaffolding, and the
-repository's own fixtures carry no "MX bug" diagnostic except the one that pins
+repository's own fixtures carry no "internal bug" diagnostic except the one that pins
 it. A diagnostic Volar can map is untouched: same position, byte-identical
 message. A mapping may still hide a diagnostic on purpose (its `verification`
 rejects that code: the `.astro.mx` fence's TS1108); that is a host's decision

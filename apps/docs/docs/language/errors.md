@@ -199,7 +199,7 @@ shown is the compiler's wording, not a summary.
 
 | Message | Cause |
 | --- | --- |
-| `MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>` | On Preact, React and Hono, a plain object with its own `content` (one built by hand, not a record) reaches a dynamic tag at run time. A record renders its `content`. |
+| `this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>` | On Preact, React and Hono, a plain object with its own `content` (one built by hand, not a record) reaches a dynamic tag at run time. A record renders its `content`. |
 
 ### Reading a component's own `Input`
 
