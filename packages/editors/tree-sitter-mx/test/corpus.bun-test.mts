@@ -308,8 +308,13 @@ describe("tag-grammar whitespace", () => {
     "div/x:WT a\n",
   ];
   // Scanner-only twins of the other ports to is_pattern_ws: ARGS_CLOSE
-  // before a method body, TYPES_CLOSE before params or args, the concise
-  // comma continuation on either side of the `,`, and the gap after `*/`.
+  // before a method body, the open-tag gap after tag type args (`<div<T>`:
+  // `<` right after the name, so TYPES_CLOSE skips its peek), the concise
+  // comma continuation on either side of a trailing `,`, and the gap after
+  // `*/`. TYPES_CLOSE's peek for `|` or `(` runs only after tag type params
+  // (`<div <T>`, `<` after a gap); `<div <T>W(x)/>` has no twin, because its
+  // VT form is an error. The comma-continuation loop after a `,` that leads
+  // the next line decides only when a newline follows the gap.
   const PORT_FORMS = [
     "<foo(x)W{ }/>",
     "<div a<T>(x)W{ }/>",
@@ -318,6 +323,9 @@ describe("tag-grammar whitespace", () => {
     "div a=1,W\n  b=2\n",
     "div a=1W,\n  b=2\n",
     "/* c */W\ndiv\n",
+    "<div <T>W|x|/>",
+    "div <T>W|x|\n",
+    "div a=1\n  ,W\n  b=2\n",
   ];
 
   // The events htmljs-parser would fire, rebuilt from the tree. Every
@@ -371,6 +379,20 @@ describe("tag-grammar whitespace", () => {
     const src = `<div/${ws}a/>`;
     it(`${JSON.stringify(src)} is a missing tag variable, as "<div/\\va/>" is`, () => {
       for (const input of [src, "<div/\va/>"]) {
+        const tree = parseMx(input);
+        assert.ok(tree, "parse timed out");
+        assert.strictEqual(tree.rootNode.toString(), MISSING_VAR_TREE);
+        tree.delete();
+      }
+    });
+  }
+  // The guard before the expression decides only when an operator follows
+  // the gap: without it, the tag-var expression would continue over `+a`.
+  // The VT twin's tree is MISSING_VAR_TREE too.
+  for (const ws of PATTERN_WHITE_SPACE) {
+    const src = `<div/${ws}+a/>`;
+    it(`${JSON.stringify(src)} is a missing tag variable, as "<div/\\v+a/>" is`, () => {
+      for (const input of [src, "<div/\v+a/>"]) {
         const tree = parseMx(input);
         assert.ok(tree, "parse timed out");
         assert.strictEqual(tree.rootNode.toString(), MISSING_VAR_TREE);
