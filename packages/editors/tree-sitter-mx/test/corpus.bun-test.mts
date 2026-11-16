@@ -275,7 +275,7 @@ describe("tag-grammar whitespace", () => {
   // a shorthand or an attribute name. The inputs are literal copies of
   // PATTERN_WS_TAG_FORMS and REFUSED_SPACE_ROWS in
   // packages/parser/src/template/mx-unicode-words.cases.ts.
-  const PATTERN_WHITE_SPACE = ["\u0085", "‎", "‏", " ", " "];
+  const PATTERN_WHITE_SPACE = ["\u0085", "\u200e", "\u200f", "\u2028", "\u2029"];
   const PATTERN_WS_TAG_FORMS = [
     "<divWa/>",
     "<div aWb/>",
@@ -318,27 +318,27 @@ describe("tag-grammar whitespace", () => {
 
   // [input, offset of the refused space]
   const REFUSED_SPACE_ROWS: [string, number][] = [
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a b/>", 6],
-    ["<div a　b/>", 6],
-    ["<div a﻿b/>", 6],
-    ["<div x/>", 4],
-    ["<div.a b/>", 6],
-    ["div x\n", 3],
-    ["<div a=1  b/>", 9],
+    ["<div a\u00a0b/>", 6],
+    ["<div a\u1680b/>", 6],
+    ["<div a\u2000b/>", 6],
+    ["<div a\u2001b/>", 6],
+    ["<div a\u2002b/>", 6],
+    ["<div a\u2003b/>", 6],
+    ["<div a\u2004b/>", 6],
+    ["<div a\u2005b/>", 6],
+    ["<div a\u2006b/>", 6],
+    ["<div a\u2007b/>", 6],
+    ["<div a\u2008b/>", 6],
+    ["<div a\u2009b/>", 6],
+    ["<div a\u200ab/>", 6],
+    ["<div a\u202fb/>", 6],
+    ["<div a\u205fb/>", 6],
+    ["<div a\u3000b/>", 6],
+    ["<div a\ufeffb/>", 6],
+    ["<div\u00a0x/>", 4],
+    ["<div.a\u00a0b/>", 6],
+    ["div\u00a0x\n", 3],
+    ["<div a=1 \u00a0b/>", 9],
   ];
 
   // web-tree-sitter's indices count UTF-16 units (probed: the root of
@@ -377,19 +377,19 @@ describe("tag-grammar whitespace", () => {
   // each tree is the one origin/main gave before the refusal existed.
   const UNCHANGED: [string, string][] = [
     [
-      "<div a=x />",
+      "<div a=x\u00a0/>",
       "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
     ],
     [
-      "<div/x  a/>",
+      "<div/x\u00a0 a/>",
       "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (tag_var (tag_var_expr (var_pattern))) (attr_name) (open_tag_end_self) (element_end)))",
     ],
     [
-      "<p>a b</p>",
+      "<p>a\u00a0b</p>",
       "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (open_tag_end) (text) (close_tag (close_tag_start) (close_tag_name) (close_tag_end)) (element_end)))",
     ],
     [
-      "<div></div >",
+      "<div></div\u00a0>",
       "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment)) (open_tag_end) (close_tag_start)) (text))",
     ],
   ];
