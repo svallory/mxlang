@@ -879,14 +879,14 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     return undefined;
   };
   let resolveImport: typeof aliasResolver | undefined;
-  // MX only supports the MX 1.0 subset of Marko syntax, so a caller cannot
-  // opt back into `.marko` through `extensions` — that would silently claim
-  // support this plugin does not have. Rejected eagerly, at plugin
+  // `.mx` is the only template extension, so a caller cannot opt back into
+  // `.marko` through `extensions` — that would silently claim support this
+  // plugin does not have. Rejected eagerly, at plugin
   // construction, rather than left to surface later as a confusing runtime
   // mismatch.
   if (options.extensions?.some((ext) => ext.endsWith(".marko"))) {
     throw new Error(
-      "@mxlang/vite-plugin: '.marko' is not a supported extension — MX only compiles the MX 1.0 subset of Marko syntax under '.mx'.",
+      "@mxlang/vite-plugin: '.marko' is not a supported extension in 'extensions'; MX templates use the '.mx' extension.",
     );
   }
   // Longest first: `.mx` is a string suffix of `.solid.mx`, so a caller-

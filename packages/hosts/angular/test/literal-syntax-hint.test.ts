@@ -206,7 +206,7 @@ describe("literal Angular syntax in a template", () => {
     });
     it("@defer and friends have no MX form: escape only", () => {
       expect(msg("<p>@defer (on idle) { a }</p>")).toBe(
-        '`@defer (on idle)…` is literal text in an MX template; MX has no equivalent of this Angular block. Use `${"@"}defer` for literal text.',
+        '`@defer (on idle)…` is literal text in an MX template; there is no equivalent tag for this Angular block. Use `${"@"}defer` for literal text.',
       );
       for (const kw of ["placeholder", "loading", "error", "empty"]) {
         expect(msg(`<p>@${kw} { a }</p>`)).toContain("no equivalent");

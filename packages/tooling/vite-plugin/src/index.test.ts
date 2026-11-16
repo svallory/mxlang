@@ -183,10 +183,10 @@ describe("mx()", () => {
   });
 
   it("throws a clear error if extensions includes .marko", () => {
-    // MX only supports the MX 1.0 subset of Marko syntax, so a caller
-    // cannot opt back into `.marko` through `extensions`.
+    // `.mx` is the only template extension, so a caller cannot opt back
+    // into `.marko` through `extensions`.
     expect(() => mx({ extensions: [".mx", ".marko"] })).toThrow(
-      /'\.marko' is not a supported extension/,
+      "@mxlang/vite-plugin: '.marko' is not a supported extension in 'extensions'; MX templates use the '.mx' extension.",
     );
   });
 

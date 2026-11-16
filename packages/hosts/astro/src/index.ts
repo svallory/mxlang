@@ -1,8 +1,8 @@
 /**
  * `@mxlang/host-astro` — the Astro host for MX.
  *
- * MX (Markup eXtended) is a template language born from Marko, MX 1.0 being a
- * strict subset of Marko's syntax. This package renders `.mx`
+ * MX (Markup eXtended) is a template language whose default syntax is
+ * Marko's. This package renders `.mx`
  * components inside an Astro project as **static markup**: they are compiled
  * by `@mxlang/target-html` to a runtime-free
  * `(input) => string` function, called during Astro's build, and never shipped
@@ -73,9 +73,9 @@ export interface MxIntegrationOptions {
    *
    * `.solid.mx` is deliberately absent: that is a different file kind (TSX
    * with MX regions, lowered to Solid JSX), and it belongs to the Solid host,
-   * not this one. `.marko` is not accepted either: MX only supports the MX
-   * 1.0 subset of Marko syntax, so treating a real `.marko` file as MX would
-   * silently claim support it does not have.
+   * not this one. `.marko` is not accepted either: `.mx` is the only template
+   * extension, so treating a real `.marko` file as MX would silently claim
+   * support this integration does not have.
    */
   extensions?: string[];
   /** Custom tags already discovered and loaded for `.mx` and `.astro.mx` files. */
@@ -127,14 +127,14 @@ const DEFAULT_EXTENSIONS = [".mx"];
 export default function mxAstro(
   options: MxIntegrationOptions = {},
 ): AstroIntegration {
-  // MX only supports the MX 1.0 subset of Marko syntax, so a caller cannot
-  // opt back into `.marko` through `extensions` — that would silently claim
-  // support this integration does not have. Rejected eagerly, at
+  // `.mx` is the only template extension, so a caller cannot opt back into
+  // `.marko` through `extensions` — that would silently claim support this
+  // integration does not have. Rejected eagerly, at
   // integration construction, rather than left to surface later as a
   // confusing build-time mismatch.
   if (options.extensions?.some((ext) => ext.endsWith(".marko"))) {
     throw new Error(
-      "@mxlang/host-astro: '.marko' is not a supported extension — MX only compiles the MX 1.0 subset of Marko syntax under '.mx'.",
+      "@mxlang/host-astro: '.marko' is not a supported extension in 'extensions'; MX templates use the '.mx' extension.",
     );
   }
   const extensions = options.extensions ?? DEFAULT_EXTENSIONS;

@@ -363,7 +363,7 @@ export function literalSyntaxWarnings(
       index: m.index,
       message: hint
         ? `${describe(keyword, block.cond)} is literal text in an MX template, not Angular control flow. Use ${hint}, or ${literal} for literal text.`
-        : `${describe(keyword, block.cond)} is literal text in an MX template; MX has no equivalent of this Angular block. Use ${literal} for literal text.`,
+        : `${describe(keyword, block.cond)} is literal text in an MX template; there is no equivalent tag for this Angular block. Use ${literal} for literal text.`,
     });
   }
 

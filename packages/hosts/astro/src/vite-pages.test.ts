@@ -231,7 +231,7 @@ export default render;
   });
 
   it("declines .marko.tsx", () => {
-    // MX only supports the MX 1.0 subset of Marko syntax, so a real .marko
+    // `.mx` is the only template extension, so a real .marko
     // file is never treated as a page here, even under src/pages and even
     // with a .tsx virtual suffix that would otherwise pass every other
     // check. Regression for a regex that used to accept
