@@ -126,7 +126,9 @@ describe("Solid SSR: data in a dynamic tag renders nothing", () => {
     expect(get("nullBody").html).toBe("<div>body</div>");
   });
   it("refuses an object that carries content, as a data attribute tag", () => {
-    expect(get("contentData").error).toMatch(/data attribute tag/);
+    expect(get("contentData").error).toBe(
+      "this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>",
+    );
   });
 });
 

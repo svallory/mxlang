@@ -23,7 +23,7 @@ describe("a refined bound attribute (solid)", () => {
     (refined, plain, line, column) => {
       const error = failure(refined);
       expect(error).toMatchObject({ line, column });
-      expect(error.message).toContain("reactive state");
+      expect(error.message).toContain("is a two-way binding");
       expect(error).toMatchObject({
         line: failure(plain).line,
         column: failure(plain).column,

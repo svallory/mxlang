@@ -721,7 +721,6 @@ describe("Solid host errors", () => {
     ],
     ["lifecycle", `<lifecycle onMount() { run() }/>`, "lifecycle primitives"],
     ["script", `<script>run()</script>`, "surrounding TypeScript module"],
-    ["bound attribute", `<input value:=name>`, "bound attribute"],
     ["on modifier", `<div on:click=fn/>`, "removed in Solid 2"],
     [
       "ordinary colon method",
@@ -753,11 +752,6 @@ describe("Solid host errors", () => {
       "on `<@placeholder>`",
     ],
     [
-      "html-comment (jsx-text-entities)",
-      `<html-comment>hi</html-comment>`,
-      "cannot appear in a Solid component",
-    ],
-    [
       "unresolved capitalized tag",
       `<TotallyUndefined/>`,
       "Unable to find entry point for custom tag `<TotallyUndefined>`",
@@ -777,6 +771,30 @@ describe("Solid host errors", () => {
   for (const [name, source, expected] of errors) {
     it(name, () => expectError(source, expected));
   }
+
+  it("refuses a bound attribute on an element with the full message", () => {
+    let error: unknown;
+    try {
+      compile(`<input value:=name>`);
+    } catch (caught) {
+      error = caught;
+    }
+    expect((error as Error).message).toBe(
+      "bound attribute (`:=`) is a two-way binding; use Solid state and an explicit event handler",
+    );
+  });
+
+  it("refuses html-comment with the full message (jsx-text-entities)", () => {
+    let error: unknown;
+    try {
+      compile(`<html-comment>hi</html-comment>`);
+    } catch (caught) {
+      error = caught;
+    }
+    expect((error as Error).message).toBe(
+      "an HTML comment (<html-comment>) cannot appear in a Solid component: JSX has no comment node, so it cannot render <!--…-->; write the comment in the HTML shell that mounts the app",
+    );
+  });
 
   it("reports a host error past the enclosing region base", () => {
     let error: unknown;
@@ -912,7 +930,9 @@ describe("event attributes (phase B of dom-events)", () => {
     } catch (caught) {
       error = caught;
     }
-    expect((error as Error).message).toContain("`on-x=fn` for a custom event");
+    expect((error as Error).message).toBe(
+      "`on:x=fn` was removed in Solid 2; use `onX=fn` for a delegated event or `on-x=fn` for a custom event name",
+    );
   });
 });
 

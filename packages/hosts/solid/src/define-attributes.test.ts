@@ -413,7 +413,7 @@ describe("solid: what stays refused", () => {
     const source = "<define/D a:=input.x/><p>${D.a}</p>";
     const error = thrown(source, INPUT);
     expect(error.message).toBe(
-      "bound attribute (`:=`) is Marko reactive state; use Solid state and an explicit event handler",
+      "bound attribute (`:=`) is a two-way binding; use Solid state and an explicit event handler",
     );
     expect([error.line, error.column]).toEqual([1, source.indexOf("a:=")]);
   });

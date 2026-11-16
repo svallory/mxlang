@@ -71,7 +71,7 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
   client: {
     kind: "error",
     reason:
-      "a `client` block is Marko's client-runtime split; a Solid component is already client code — write the statement in the surrounding TypeScript module",
+      "a `client` block holds code that runs only in the browser; a Solid component is already client code — write the statement in the surrounding TypeScript module",
   },
   server: {
     kind: "error",
@@ -744,7 +744,7 @@ export const solidDeclarations: HostDeclarations = {
   resolveDelegatedTag(name, node): TryData {
     if (name === "html-comment") {
       rawFail(
-        "an HTML comment (<html-comment>) cannot appear in a Solid component: JSX has no comment node, so it cannot render Marko's <!--…-->; write the comment in the HTML shell that mounts the app",
+        "an HTML comment (<html-comment>) cannot appear in a Solid component: JSX has no comment node, so it cannot render <!--…-->; write the comment in the HTML shell that mounts the app",
         node,
       );
     }
@@ -753,7 +753,7 @@ export const solidDeclarations: HostDeclarations = {
   },
   rejectModifier(attr) {
     const replacements: Record<string, string> = {
-      on: "`on:x=fn` was removed in Solid 2; use `onX=fn` for a delegated event or `on-x=fn` for a custom event name (Marko rejects this form too)",
+      on: "`on:x=fn` was removed in Solid 2; use `onX=fn` for a delegated event or `on-x=fn` for a custom event name",
     };
     rawFail(
       replacements[attr.name] ??
@@ -1207,7 +1207,7 @@ function renderAttr(
       );
     case "bound":
       return fail(
-        "bound attribute (`:=`) is Marko reactive state; use Solid state and an explicit event handler",
+        "bound attribute (`:=`) is a two-way binding; use Solid state and an explicit event handler",
         attr,
       );
     // Phase B of `dom-events`: recompose Solid's prop from the DOM event name
@@ -1663,7 +1663,7 @@ function attributeTagAttrValue(
       return mapped(JSON.stringify(attr.value), attr.nameSpan);
     case "bound":
       return fail(
-        "bound attribute (`:=`) is Marko reactive state; use Solid state and an explicit event handler",
+        "bound attribute (`:=`) is a two-way binding; use Solid state and an explicit event handler",
         attr,
       );
     case "event":
@@ -3070,7 +3070,7 @@ export class SolidEmitter implements Emitter<string> {
         mappedExpr(expr),
         // Marko parity: an attribute-tag record (any object with `content`)
         // renders its body, as Marko's dynamic tag reads `value.content`.
-        `; if (${temp} !== null && typeof ${temp} === "object" && typeof (${temp} as any).content === "function") ${temp} = (${temp} as any).content;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); `,
+        `; if (${temp} !== null && typeof ${temp} === "object" && typeof (${temp} as any).content === "function") ${temp} = (${temp} as any).content;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); `,
         // Marko: a runtime-resolved textarea takes `value`, never content.
         node.content && !raw
           ? `if (${value} === "textarea") throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead."); `

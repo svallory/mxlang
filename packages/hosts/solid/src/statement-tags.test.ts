@@ -47,13 +47,19 @@ describe("statement tags (solid)", () => {
     });
   }
 
-  for (const word of ["client", "server"]) {
-    it(`refuses \`${word}\` with a positioned message`, () => {
-      const error = fail(`${word} console.log(1)\n<div/>`);
-      expect(error.message).toContain(`\`${word}\``);
-      expect(error.line).toBe(1);
-    });
-  }
+  it("refuses `client` with a positioned message", () => {
+    const error = fail("client console.log(1)\n<div/>");
+    expect(error.message).toBe(
+      "a `client` block holds code that runs only in the browser; a Solid component is already client code — write the statement in the surrounding TypeScript module",
+    );
+    expect(error.line).toBe(1);
+  });
+
+  it("refuses `server` with a positioned message", () => {
+    const error = fail("server console.log(1)\n<div/>");
+    expect(error.message).toContain("`server`");
+    expect(error.line).toBe(1);
+  });
 
   it("refuses `class` with the one not-supported message", () => {
     const error = fail("class { x = 1 }\n<div/>");
