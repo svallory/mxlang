@@ -307,6 +307,18 @@ describe("tag-grammar whitespace", () => {
     "div/xW: T a\n",
     "div/x:WT a\n",
   ];
+  // Scanner-only twins of the other ports to is_pattern_ws: ARGS_CLOSE
+  // before a method body, TYPES_CLOSE before params or args, the concise
+  // comma continuation on either side of the `,`, and the gap after `*/`.
+  const PORT_FORMS = [
+    "<foo(x)W{ }/>",
+    "<div a<T>(x)W{ }/>",
+    "<div<T>W|x|/>",
+    "<div<T>W(x)/>",
+    "div a=1,W\n  b=2\n",
+    "div a=1W,\n  b=2\n",
+    "/* c */W\ndiv\n",
+  ];
 
   // The events htmljs-parser would fire, rebuilt from the tree. Every
   // separator is one UTF-16 unit, so offsets never shift.
@@ -323,7 +335,11 @@ describe("tag-grammar whitespace", () => {
   };
 
   for (const ws of PATTERN_WHITE_SPACE) {
-    for (const form of [...PATTERN_WS_TAG_FORMS, ...TAG_VAR_TYPE_FORMS]) {
+    for (const form of [
+      ...PATTERN_WS_TAG_FORMS,
+      ...TAG_VAR_TYPE_FORMS,
+      ...PORT_FORMS,
+    ]) {
       const src = form.replaceAll("W", ws);
       it(`${JSON.stringify(src)} reads as its VT twin`, () => {
         const twin = render(form.replaceAll("W", "\v"));
@@ -345,6 +361,22 @@ describe("tag-grammar whitespace", () => {
         tree.delete();
       });
     }
+  }
+
+  // VAR_PATTERN: `/` followed by tag-grammar whitespace is a missing tag
+  // variable (MISSING_TAG_VARIABLE), an error exactly as for VT.
+  const MISSING_VAR_TREE =
+    "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment))))";
+  for (const ws of PATTERN_WHITE_SPACE) {
+    const src = `<div/${ws}a/>`;
+    it(`${JSON.stringify(src)} is a missing tag variable, as "<div/\\va/>" is`, () => {
+      for (const input of [src, "<div/\va/>"]) {
+        const tree = parseMx(input);
+        assert.ok(tree, "parse timed out");
+        assert.strictEqual(tree.rootNode.toString(), MISSING_VAR_TREE);
+        tree.delete();
+      }
+    });
   }
 
   // [input, offset of the refused space]
@@ -426,6 +458,47 @@ describe("tag-grammar whitespace", () => {
   ];
   for (const [src, expected] of UNCHANGED) {
     it(`keeps today's tree for ${JSON.stringify(src)}`, () => {
+      const tree = parseMx(src);
+      assert.ok(tree, "parse timed out");
+      assert.strictEqual(tree.rootNode.toString(), expected);
+      tree.delete();
+    });
+  }
+});
+
+describe("non-Latin-1 look-behind", () => {
+  // The look-behinds (the char before a token, an operator or a comment)
+  // read a code point above U+00FF by its class, not by its low byte: a
+  // Unicode space reads as whitespace, any other as a word char. Each tree is
+  // its ASCII twin's, named in the comment.
+  const ELEMENT_ATTR_TEXT =
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end) (text) (close_tag (close_tag_start) (close_tag_name) (close_tag_end)) (element_end)))";
+  const ELEMENT_TEXT =
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (open_tag_end) (text) (close_tag (close_tag_start) (close_tag_name) (close_tag_end)) (element_end)))";
+  const ELEMENT_ATTR_SELF =
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))";
+  const CASES: [string, string][] = [
+    // twin "<div a=xa>t</div>": U+4E3D's low byte is `=`, so `丽>` read as `=>`
+    ["<div a=x\u4e3d>t</div>", ELEMENT_ATTR_TEXT],
+    // twin "<p>a// x</p>": U+4E20's low byte is a space
+    ["<p>\u4e20// x</p>", ELEMENT_TEXT],
+    // twin "<div a=(x /2)/>": U+202F's low byte is `/`
+    ["<div a=(x\u202f/2)/>", ELEMENT_ATTR_SELF],
+    // twin "<div a=b/2/>": a non-ASCII identifier char, so `/` divides
+    ["<div a=\u53d8/2/>", ELEMENT_ATTR_SELF],
+    // twin "<p>aa// x</p>": the parser starts a comment only after a code <= 32
+    ["<p>a\u2028// x</p>", ELEMENT_TEXT],
+    ["<p>a\u2009// x</p>", ELEMENT_TEXT],
+    ["<p>a\u3000// x</p>", ELEMENT_TEXT],
+    // twin "<${xa}>t</${xa}>": the interpolated name's hash and the close
+    // tag's hash both read the low byte
+    [
+      "<${x\u4e3d}>t</${x\u4e3d}>",
+      "(document (element (open_tag_start) (tag_name (placeholder (placeholder_start) (placeholder_expr) (placeholder_end))) (open_tag_end) (text) (close_tag (close_tag_start) (close_tag_name) (close_tag_end)) (element_end)))",
+    ],
+  ];
+  for (const [src, expected] of CASES) {
+    it(`parses ${JSON.stringify(src)} as its ASCII twin`, () => {
       const tree = parseMx(src);
       assert.ok(tree, "parse timed out");
       assert.strictEqual(tree.rootNode.toString(), expected);

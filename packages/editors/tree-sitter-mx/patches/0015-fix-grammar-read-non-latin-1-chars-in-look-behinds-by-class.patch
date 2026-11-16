@@ -1,0 +1,107 @@
+From b52090bfd91eb6b4cdcbc73a58de66cf048728f4 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <me@saulo.engineer>
+Date: Mon, 16 Nov 2026 06:13:45 -0300
+Subject: [PATCH] fix(grammar): read non-Latin-1 chars in look-behinds by
+ class, not low byte
+
+The look-behind stores (buf, prev_char, prev_nonws_char) kept a code point's low byte, so U+4E3D read as `=`, U+202F as `/`, U+200A as LF and U+3000 as NUL. The five Pattern_White_Space code points above U+0020 and the refused Unicode spaces are now LB_USPACE (0x1F, read as whitespace), any other code point above U+00FF is `_`, and Latin-1 keeps its byte. `//` or `/*` after LB_USPACE in HTML content is text, as in the parser. An interpolated tag name's hash reads a parallel low-byte name_buf, so it still matches the close tag's hash.
+---
+ src/scanner.c | 35 +++++++++++++++++++++++++++++------
+ 1 file changed, 29 insertions(+), 6 deletions(-)
+
+diff --git a/src/scanner.c b/src/scanner.c
+index bf7d70b..1767ae6 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -126,11 +126,22 @@ static inline bool is_refused_tag_space(int32_t c) {
+          c == 0x202F || c == 0x205F || c == 0x3000 || c == 0xFEFF;
+ }
+ // MX: the byte the look-behind stores keep for a char (buf, prev_char,
+-// prev_nonws_char). The five Pattern_White_Space code points above U+0020
+-// are stored as VT, so a look-behind sees exactly what it sees for VT
+-// (their low bytes would read as `(`, `)`, 0x0E, 0x0F and 0x85).
++// prev_nonws_char). A code point's low byte would read as an unrelated ASCII
++// char (U+200A as LF, U+3000 as NUL, U+202F as `/`, U+4E3D as `=`), so:
++// - the five Pattern_White_Space code points above U+0020 and the refused
++//   Unicode spaces (U+00A0, U+FEFF and the rest) are LB_USPACE. It is
++//   `<= ' '`, so `is_ws` reads it as it reads VT (no consumer compares a byte
++//   to VT); only the HTML-content `//`/`/*` check tells it apart, because the
++//   parser starts a comment there only after a code <= 32;
++// - any other code point above U+00FF is `_`, a word char that is in no
++//   keyword or operator, as the parser reads a non-ASCII identifier char;
++// - Latin-1 keeps its byte (`é` stays a non-word char).
++#define LB_USPACE 0x1F
+ static inline uint8_t look_behind_byte(int32_t c) {
+-  if (c > ' ' && is_pattern_ws(c)) return 0x0B;
++  if ((c > ' ' && is_pattern_ws(c)) || is_refused_tag_space(c)) {
++    return LB_USPACE;
++  }
++  if (c > 0xFF) return '_';
+   return (uint8_t)(c & 0xff);
+ }
+ static inline bool is_line(int32_t c) { return c == '\n' || c == '\r'; }
+@@ -326,6 +337,10 @@ typedef struct {
+ 
+   // scratch (not serialized)
+   char *buf;
++  // MX: the same chars as `buf`, by low byte (`c & 0xff`), index for index.
++  // A tag name's hash reads these, as the close-tag matchers hash the raw
++  // low byte, so an interpolated name and its close tag agree.
++  char *name_buf;
+   uint32_t buf_len, buf_cap;
+ } Scanner;
+ 
+@@ -411,7 +426,9 @@ static inline void buf_push(Scanner *s, int32_t c) {
+   if (s->buf_len == s->buf_cap) {
+     s->buf_cap = s->buf_cap ? s->buf_cap * 2 : 256;
+     s->buf = (char *)realloc(s->buf, s->buf_cap);
++    s->name_buf = (char *)realloc(s->name_buf, s->buf_cap);
+   }
++  s->name_buf[s->buf_len] = (char)(c & 0xff);
+   s->buf[s->buf_len++] = (char)look_behind_byte(c);
+ }
+ 
+@@ -1693,7 +1710,7 @@ static void accumulate_tag_name_hash(Scanner *s) {
+   if (!t) return;
+   if (!s->tag_name_done || (s->in_shorthand && !s->attr_shorthand)) {
+     for (uint32_t i = 0; i < s->buf_len; i++) {
+-      int32_t c = (int32_t)(uint8_t)s->buf[i];
++      int32_t c = (int32_t)(uint8_t)s->name_buf[i];
+       t->full_hash = hash_push(t->full_hash, c);
+       t->full_len++;
+       if (!s->tag_name_done) {
+@@ -2585,7 +2602,10 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+ 
+       // html content: //... and /*...*/ comments when preceded by whitespace
+       int32_t prev = es_prev_char(&es);
+-      if (is_ws(prev) && prev != 0 && (n1 == '/' || n1 == '*')) {
++      // MX: not after LB_USPACE; the parser's HTML_CONTENT tests
++      // isWhitespaceCode (code <= 32) on the char before `/`.
++      if (is_ws(prev) && prev != 0 && prev != LB_USPACE &&
++          (n1 == '/' || n1 == '*')) {
+         EMIT_TEXT_OR({
+           if (n1 == '/') {
+             es_consume_line_comment(&es);
+@@ -4084,6 +4104,7 @@ void *tree_sitter_mx_external_scanner_create(void) {
+ void tree_sitter_mx_external_scanner_destroy(void *payload) {
+   Scanner *s = (Scanner *)payload;
+   free(s->buf);
++  free(s->name_buf);
+   free(s);
+ }
+ 
+@@ -4150,9 +4171,11 @@ void tree_sitter_mx_external_scanner_deserialize(void *payload,
+                                                     unsigned length) {
+   Scanner *s = (Scanner *)payload;
+   char *buf = s->buf;
++  char *name_buf = s->name_buf;
+   uint32_t buf_cap = s->buf_cap;
+   memset(s, 0, sizeof(Scanner));
+   s->buf = buf;
++  s->name_buf = name_buf;
+   s->buf_cap = buf_cap;
+   s->cur.line_only_ws = 1;
+   s->cur.cur_indent_hash = HASH_INIT;
+-- 
+2.50.1 (Apple Git-155)
+

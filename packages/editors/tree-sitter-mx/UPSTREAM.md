@@ -319,6 +319,30 @@ is MX's own: the tag grammar reads whitespace as `@mxlang/parser` does
   variable type forms `<div/xW: T a/>`, `<div/x:WT a/>` and their concise
   versions, each with the five separators against its VT twin.
 
+`patches/0015-fix-grammar-read-non-latin-1-chars-in-look-behinds-by-class.patch`
+is MX's own: the look-behind stores read a code point above U+00FF by its
+class, not by its low byte (0014's first known limit).
+
+- `src/scanner.c`: `look_behind_byte` stores the five Pattern_White_Space
+  code points above U+0020 and the 17 refused spaces as `LB_USPACE` (0x1F),
+  which `is_ws` reads as it reads VT; any other code point above U+00FF as
+  `_`, a word char in no keyword or operator, as the parser reads a non-ASCII
+  identifier char; Latin-1 keeps its byte. So `<div a=x丽>t</div>` no longer
+  reads `丽>` as `=>`, `<p>丠// x</p>` no longer starts a comment, and
+  `<div a=变/2/>` divides. The HTML-content `//`/`/*` check also refuses
+  `LB_USPACE`, because the parser's `HTML_CONTENT` starts a comment only after
+  a code <= 32: `<p>a // x</p>` is text (0014 read it as a comment).
+- `name_buf` holds the same chars as `buf` by low byte; an interpolated tag
+  name's hash (`accumulate_tag_name_hash`) reads it, as the close-tag
+  matchers hash the raw low byte, so `<${x丽}>t</${x丽}>` still matches.
+- Known limits: the look-behinds read U+0085, U+200E and U+200F as
+  whitespace, where the parser's expression look-behinds do not; tag-name
+  hashes stay on the low byte, so non-Latin-1 names that share low bytes
+  match each other's close tags; a literal U+001F reads as `LB_USPACE`.
+- Tests: the `non-Latin-1 look-behind` block of `test/corpus.bun-test.mts`
+  (eight inputs against their ASCII twins' trees), and `PORT_FORMS` plus the
+  missing tag variable twin in the `tag-grammar whitespace` block.
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and
