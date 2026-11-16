@@ -284,6 +284,15 @@ describe("/var on a bare-identifier dynamic tag", () => {
     expect(dynamic?.code).toBe(named?.code);
   });
 
+  it("binds a <define> callee's value when the define declares <return>", () => {
+    // mx-l4m0: stock 6.4.4 compiles this to `let z = U.content({…})`.
+    expect(
+      compile(
+        "<define/U|{n}|><return=n * 2/><i>${n}</i></define>\n<${U}/z n=3/>\n<p>${z}</p>\n",
+      ),
+    ).toBeUndefined();
+  });
+
   it("compiles a call with no tag variable (control)", () => {
     expect(compile('import P from "./plain.mx"\n<${P}/>\n')).toBeUndefined();
   });

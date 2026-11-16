@@ -159,6 +159,23 @@ describe("solid: a dynamic tag reads a <define> without attributes", () => {
     ).toBe("<ul><i>1</i></ul>");
   });
 
+  // mx-l4m0: core admits `/var` on a dynamic tag naming a returning define
+  // only on a host that binds it; Solid does not, so it is refused at `/z`.
+  it("/var on a dynamic tag naming a returning define is refused at the /var", () => {
+    expect(() =>
+      emit(
+        "<define/U|{n}|><return=n * 2/><i>${n}</i></define><${U}/z n=3/><p>${z}</p>",
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+        message: expect.stringContaining("tag variable `/z`"),
+        line: 1,
+        column: 56,
+      }),
+    );
+  });
+
   it("a define declared after the read is refused by core", () => {
     expect(() => emit(`<\${D}/>${DEFINE}`)).toThrowError(
       expect.objectContaining({

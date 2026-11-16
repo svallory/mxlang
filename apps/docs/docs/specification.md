@@ -3537,14 +3537,14 @@ A `<define>` body is a `<return>` position of its own, as in Marko 6.4.4:
 `<Thing/double n=21/>` bind `double` to `42` while it renders `<i>21</i>`. The
 same rules hold inside the body (at most one, at its top level only), counted
 per define, and a define's `<return>` is independent of the file's own. Only a
-direct call with `/var` reads the value; every other read of the define (a
-call without `/var`, `Thing.content`, a dynamic tag `<${Thing}/>`) gets its
-output alone, and `/var` on a dynamic tag naming a define stays refused. On
-html, a dynamic tag over a local that holds the define (a loop variable or tag
-param `V`, called as `<V/x/>` or `<${V}/x/>`) is the exception: its `/var`
-binds the `<return>` value, as in Marko 6.4.4. A
-`/var` on a call of a define without `<return>` is refused as on any tag that
-returns nothing. Every host but Angular carries the value; Angular refuses the
+call with `/var` reads the value: the direct call `<Thing/double/>`, and on
+html, Preact, React and Hono a dynamic tag naming the define
+(`<${Thing}/double n=21/>`), as in Marko 6.4.4. Every other read of the define
+(a call without `/var`, `Thing.content`) gets its output alone. On those same
+hosts a dynamic tag over a local that holds the define (a loop variable or tag
+param `V`, called as `<V/x/>` or `<${V}/x/>`) binds the `<return>` value too.
+A `/var` on a call of a define without `<return>`, direct or through a dynamic
+tag, is refused as on any tag that returns nothing, as Marko 6.4.4 refuses it. Every host but Angular carries the value; Angular refuses the
 `<return>` (`MX_UNSUPPORTED_CONSTRUCT`, at its value), as it refuses a page's or
 a tag's own, because an `<ng-template>` has no channel to hand a value back.
 

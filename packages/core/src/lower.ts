@@ -4476,10 +4476,12 @@ function rejectMarkoImportTag(
  * `/var` needs a `<return>` to bind just as `<Child/x/>` does (Marko 6.4
  * refuses both). Judged only where the callee is known by name: a default
  * import of a `.mx` unit that declares none (the imported-unit error, at the
- * tag variable), or a `<define>` (the `/var` is refused outright, even on a
- * define whose body declares a `<return>`: only the direct call `<Foo/x/>`
- * binds a define's value). Any other expression, an alias
- * through `<const>`, a `.ts` module or an unreadable unit carries no claim.
+ * tag variable), or a `<define>` whose body declares no `<return>` (refused
+ * as the direct call `<Foo/x/>` is). A define that declares one is left to
+ * `lowerComponent`'s dynamic-target gate: a host that binds `/var` on a
+ * dynamic tag binds the define's value, as stock does, and any other host
+ * refuses the `/var` there. Any other expression, an alias through
+ * `<const>`, a `.ts` module or an unreadable unit carries no claim.
  */
 function rejectDynamicTagVarWithoutReturn(
   ctx: Ctx,
@@ -4493,6 +4495,7 @@ function rejectDynamicTagVarWithoutReturn(
   )
     return;
   if (ctx.defines.has(binding)) {
+    if (ctx.returningDefines?.has(binding)) return;
     rejectUnsupportedFields(ctx, node, voiceOfCtx(ctx).tag(binding), {
       attributeTags: true,
       args: true,
