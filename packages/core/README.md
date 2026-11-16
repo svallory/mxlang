@@ -19,9 +19,11 @@ its own the answer is Marko's, and every difference is listed in
 `divergences.md` in the repository. A dialect package can change the syntax
 for the file extensions it claims (see "Dialects" below).
 
-The only runtime dependency is `@babel/parser`. The published bundle inlines the
-MX front end and a copy of the Marko compiler core uses for taglib lookup and
-code printing, so installing core installs no `@marko/*` package.
+The runtime dependencies are stock Babel packages (see "Which Babel the core
+uses") and `cosmiconfig`. The published bundle inlines the MX front end
+(with MX's Babel parser fork, which it parses payloads with) and a copy of the
+Marko compiler core uses for taglib lookup and code printing, so installing
+core installs no `@marko/*` package.
 
 ## Core versus host
 
@@ -131,7 +133,7 @@ packages: `@babel/parser` for `parse`/`parseExpression`, `@babel/core`'s own
 `traverse`, `types` and `File`, `@babel/generator`,
 `@babel/code-frame` and `@babel/plugin-transform-typescript`. They are
 exact-pinned runtime dependencies (not bundled), loaded lazily in
-`src/babel.ts` (`coreBabel()`), so importing core loads no Babel. `traverse`,
+`src/babel.ts` (`coreBabel()`), so importing core loads none of them. `traverse`,
 `types` and `File` come from `@babel/core` so the TS strip's file, its paths
 and the walk over them are one instance whatever an install dedupes. The
 published `.d.ts` names no `@babel/*` type: nodes are untyped (`Node`) at
