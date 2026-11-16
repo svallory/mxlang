@@ -49,6 +49,7 @@ const values = {
   arrayHoldingArrayProtoGadget: () => [Object.assign({}, JSON.parse('{"__proto__":[],"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}'))],
   renderBody: () => ({ renderBody: { type: "img", props: PROPS() } }),
   contentData: () => ({ content: { type: "img", props: PROPS() } }),
+  contentNull: () => ({ content: null }),
   nullValue: () => null,
   undefinedValue: () => undefined,
   zero: () => 0,
@@ -117,6 +118,7 @@ const VALUE_NAMES = [
   "arrayHoldingArrayProtoGadget",
   "renderBody",
   "contentData",
+  "contentNull",
   "nullValue",
   "undefinedValue",
   "zero",
@@ -248,6 +250,15 @@ describe("data in a dynamic tag renders nothing (Preact client and server)", () 
       expect(r.injected).toBe(0);
       expect(r.client).toBe(wrap(shape, ""));
       expect(r.server).toBe(wrap(shape, ""));
+    }
+  });
+  it("an object whose own content is null is refused as a data attribute tag", () => {
+    const r = at("self", "contentNull");
+    expect(r.errors.length).toBeGreaterThan(0);
+    for (const error of r.errors) {
+      expect(error).toBe(
+        "this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>",
+      );
     }
   });
   it("an object that carries content renders nothing as a tag with arguments", () => {

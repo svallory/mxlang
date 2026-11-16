@@ -331,6 +331,13 @@ const NULLISH_TARGET = `export interface Input { c?: string }
 const RUNTIME_STRING = `export interface Input { tag: string }
 <\${input.tag}|item|>body \${item}</>`;
 
+/** The same run-time string target in the args form (the helper's array path). */
+const RUNTIME_STRING_ARGS = `export interface Input { tag: string }
+<\${input.tag}("a")|item|>body \${item}</>`;
+
+const NATIVE_PARAMS_MESSAGE =
+  "tag params |…| cannot be passed to a native element: a string target has nothing to call its body";
+
 function scratchFor(host: Host, testCase: Pick<Case, "caller" | "callee">) {
   const scratch = mkdtempSync(join(tmpdir(), `mx-${host}-tag-params-`));
   symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
@@ -521,7 +528,24 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
       )) as { default: unknown };
       await expect(
         renderHtml(host, mod.default, { tag: "div" }),
-      ).rejects.toThrow(/tag params/);
+      ).rejects.toThrow(new Error(NATIVE_PARAMS_MESSAGE));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("a string that arrives at run time in the args form throws the same error", async () => {
+    const { scratch, compile } = scratchFor(host, {
+      caller: RUNTIME_STRING_ARGS,
+    });
+    try {
+      await compile();
+      const mod = (await import(
+        `${join(scratch, "main.tsx")}?tp=${serial++}`
+      )) as { default: unknown };
+      await expect(
+        renderHtml(host, mod.default, { tag: "div" }),
+      ).rejects.toThrow(new Error(NATIVE_PARAMS_MESSAGE));
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

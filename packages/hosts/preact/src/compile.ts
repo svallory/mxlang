@@ -393,7 +393,7 @@ const MX_DYNAMIC_FN = `function __mxDynamic(target: any, payload: any, content?:
       const Tag: any = target;
       const attrs = payload[0] || {};
       if (takesParams) {
-        if (typeof target === "string") throw new Error("MX: tag params |…| cannot be passed to a native element: a string target has nothing to call its body");
+        if (typeof target === "string") throw new Error("tag params |…| cannot be passed to a native element: a string target has nothing to call its body");
         return <Tag {...attrs} children={content} />;
       }
       if (target === "textarea") {
@@ -413,7 +413,7 @@ const MX_DYNAMIC_FN = `function __mxDynamic(target: any, payload: any, content?:
     const Tag: any = target.__mxDefineComponent ?? target;
     const { content: bodyContent, ...rest } = props;
     if (takesParams) {
-      if (typeof target === "string") throw new Error("MX: tag params |…| cannot be passed to a native element: a string target has nothing to call its body");
+      if (typeof target === "string") throw new Error("tag params |…| cannot be passed to a native element: a string target has nothing to call its body");
       return <Tag {...rest} children={bodyContent} />;
     }
     if (target === "textarea") {
@@ -430,7 +430,7 @@ const MX_DYNAMIC_FN = `function __mxDynamic(target: any, payload: any, content?:
     Object.prototype.hasOwnProperty.call(target, "content")
   ) {
     throw new Error(
-      "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>",
+      "this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>",
     );
   }
   return props.content ? <>{props.content()}{null}</> : __mxRenderable(target);
