@@ -540,6 +540,19 @@ export function cacheArgs(
   ];
 }
 
+/**
+ * The log line for a vitest command `main()` runs, printed in full so a log
+ * shows every file the selection added (DOC_READERS, FIXTURE_CONSUMERS
+ * consumers, PROBE_CONSUMER) and the trailing flags. With `lane`, the line
+ * names the MX_TEST_LANE the command runs under.
+ */
+export function commandLog(cmd: readonly string[], lane?: string): string {
+  const line = cmd.join(" ");
+  return lane === undefined
+    ? `test:affected: ${line}`
+    : `test:affected: MX_TEST_LANE=${lane} ${line}`;
+}
+
 function main(): number {
   const argv = process.argv.slice(2);
   const moon = argv.includes("--moon");
@@ -607,9 +620,7 @@ function main(): number {
       ...cacheArgs(process.env, extra),
       ...extra,
     ];
-    console.log(
-      `test:affected: MX_TEST_LANE=${env.MX_TEST_LANE} ${cmd.join(" ").slice(0, 200)}`,
-    );
+    console.log(commandLog(cmd, env.MX_TEST_LANE));
     rc = run(cmd, env);
   }
 
@@ -632,7 +643,7 @@ function main(): number {
       "--passWithNoTests=false",
       ...extra,
     ];
-    console.log(`test:affected: ${cmd.join(" ").slice(0, 200)}`);
+    console.log(commandLog(cmd));
     rc = Math.max(rc, run(cmd, env));
   }
   if (unmapped.length > 0) {

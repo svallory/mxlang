@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { configDefaults } from "vitest/config";
 import { createVitest } from "vitest/node";
 import {
+  commandLog,
   DOC_READERS,
   FIXTURE_CONSUMERS,
   fixtureConsumers,
@@ -588,5 +589,41 @@ describe("Markdown selection", () => {
     expect(relatedSources(["packages/core/src/core.ts"], dirs)).toEqual([
       "packages/core/src/core.ts",
     ]);
+  });
+});
+
+describe("commandLog", () => {
+  it("prints a command over 200 characters in full", () => {
+    // 295 characters joined; the DOC_READERS entry starts at character 210.
+    const cmd = [
+      "bunx",
+      "vitest",
+      "related",
+      "packages/hosts/angular/src/emitter.ts",
+      "packages/hosts/preact/src/emitter.ts",
+      "packages/hosts/solid/src/emitter.ts",
+      "packages/hosts/angular/src/mapping.ts",
+      "packages/hosts/angular/src/page-class.ts",
+      "packages/parser/src/template/corpus-equivalence.test.ts",
+      "--run",
+      "--passWithNoTests=false",
+    ];
+    expect(commandLog(cmd, "all")).toBe(
+      "test:affected: MX_TEST_LANE=all bunx vitest related packages/hosts/angular/src/emitter.ts packages/hosts/preact/src/emitter.ts packages/hosts/solid/src/emitter.ts packages/hosts/angular/src/mapping.ts packages/hosts/angular/src/page-class.ts packages/parser/src/template/corpus-equivalence.test.ts --run --passWithNoTests=false",
+    );
+  });
+
+  it("has no MX_TEST_LANE= prefix without a lane", () => {
+    const cmd = [
+      "bunx",
+      "vitest",
+      "run",
+      "--project",
+      "parser",
+      "--passWithNoTests=false",
+    ];
+    expect(commandLog(cmd)).toBe(
+      "test:affected: bunx vitest run --project parser --passWithNoTests=false",
+    );
   });
 });
