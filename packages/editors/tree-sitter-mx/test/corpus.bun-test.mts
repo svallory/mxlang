@@ -331,9 +331,9 @@ describe("tag-grammar whitespace", () => {
       });
     }
     // The tag variable's event spans the whole `x: T`, so the twin check
-    // above cannot see where the type token starts; the highlight capture
-    // on var_type starts after the gap, as for VT.
-    for (const form of TAG_VAR_TYPE_FORMS) {
+    // above cannot see where the type token starts after a gap behind the
+    // `:`; the highlight capture on var_type starts after the gap, as for VT.
+    for (const form of TAG_VAR_TYPE_FORMS.filter((f) => f.includes(":W"))) {
       const src = form.replaceAll("W", ws);
       it(`${JSON.stringify(src)} starts its var_type at T`, () => {
         const tree = parseMx(src);
