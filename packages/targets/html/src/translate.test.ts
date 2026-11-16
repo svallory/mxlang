@@ -830,7 +830,12 @@ describe("evaluate-initial-value constructs", () => {
 describe("error constructs: the target genuinely cannot express them", () => {
   it("rejects <await>, naming why a synchronous render cannot", () => {
     const body = "<await|v| =input.p><p>${v}</p></await>";
-    expect(() => compile(src(body), file)).toThrow(/`<await>` suspends/);
+    expect(() => compile(src(body), file)).toThrow(
+      expect.objectContaining({
+        message:
+          "`<await>` suspends on a promise; this target is a synchronous `(input) => string` and cannot await",
+      }),
+    );
   });
 
   it("rejects <try> with a <@placeholder>", () => {
@@ -2718,17 +2723,23 @@ describe("the strict policy: reactive tags error by name", () => {
       "<lifecycle/>",
       /`<lifecycle>` is a reactive lifecycle hook/,
     ],
-    [
-      "<script>",
-      "<script>go()</script>",
-      /`<script>` as a Marko tag runs client code/,
-    ],
     ["client block", "client\n  const x = 1", /`client` block is client-only/],
     ["<id>", "<id/x/>", /`<id>` allocates an identifier/],
     ["<log>", "<log=1/>", /`<log>` writes to the console/],
     ["<debug>", "<debug/>", /`<debug>` is a debugger hook/],
   ])("rejects %s under { strict: true }", (_name, body, message) => {
     expect(() => compile(src(body), file, { strict: true })).toThrow(message);
+  });
+
+  it("rejects <script> under { strict: true }", () => {
+    expect(() =>
+      compile(src("<script>go()</script>"), file, { strict: true }),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "`<script>` runs client code and requires a runtime; this strict policy has no reactive target",
+      }),
+    );
   });
 
   it.each([

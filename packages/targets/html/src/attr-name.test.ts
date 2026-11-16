@@ -266,7 +266,7 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
           ["\n  ", 2, 2],
         ] as const) {
           expect(failure(`<div${gap}${name}${suffix}/>`)).toEqual({
-            message: `\`${name}=fn\` is not MX syntax; write \`${dom}=fn\` for a DOM event or \`${custom}=fn\` for a custom event name (Marko rejects this form too)`,
+            message: `\`${name}=fn\` is not an event binding; write \`${dom}=fn\` for a DOM event or \`${custom}=fn\` for a custom event name`,
             line,
             column,
           });

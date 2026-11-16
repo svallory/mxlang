@@ -135,7 +135,7 @@ const TAGS: Record<string, Disposition> = {
   await: {
     kind: "error",
     reason:
-      "`<await>` suspends on a promise; this target is a synchronous `(input) => string` and cannot await. Marko itself refuses to render one to a string (\"Cannot consume asynchronous render with 'toString'\")",
+      "`<await>` suspends on a promise; this target is a synchronous `(input) => string` and cannot await",
   },
   // `<return>` is **not** listed here. It was, and the reason it gave — "a
   // module compiled to `(input) => string` has no parent to return to" — was
@@ -1108,7 +1108,7 @@ function rejectModifier(
     // The fix-it every host gives: name both MX spellings, `on<Name>` for a
     // DOM event and `on-<exact>` for a custom event name.
     fail(
-      `\`${name}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${remainder}=fn\` for a custom event name (Marko rejects this form too)`,
+      `\`${name}=fn\` is not an event binding; write \`on${event}=fn\` for a DOM event or \`on-${remainder}=fn\` for a custom event name`,
       attr,
     );
   }
@@ -1453,7 +1453,7 @@ const STRICT_TAGS: Record<string, Disposition> = {
   script: {
     kind: "error",
     reason:
-      "`<script>` as a Marko tag runs client code and requires a runtime; this strict policy has no reactive target",
+      "`<script>` runs client code and requires a runtime; this strict policy has no reactive target",
   },
   client: {
     kind: "error",
