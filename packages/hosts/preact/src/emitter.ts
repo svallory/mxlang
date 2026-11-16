@@ -2960,16 +2960,9 @@ export class PreactEmitter implements Emitter<string> {
           : mapped(own, node.nameSpan);
       if (node.returnsValue && node.var) {
         // As a returning unit's `/var` call (below): two statements above
-        // the `return`, the output rendered here. The callback-scope refusal
-        // is the unit path's, word for word, and goes when that one goes.
-        if (this.#callbackScope) {
-          fail(
-            this.#region
-              ? `\`/var\` on \`<${node.target.name}>\` inside \`<for>\`, \`<if>\`, an attribute-tag body or a \`<define>\` body is not supported in a \`.${this.#region.segment}.mx\` region; bind it directly in the region's markup, outside those bodies`
-              : `\`/var\` on \`<${node.target.name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
-            node,
-          );
-        }
+        // the `return`, the output rendered here. The statements go to the
+        // innermost scope's list, so inside a callback body (`#callbackBody`)
+        // they run per row or branch, in the scope the call was written in.
         if (local) {
           // The call keeps the authored name, which a local scope also
           // binds, so the pair function is out of reach (see `local` above).

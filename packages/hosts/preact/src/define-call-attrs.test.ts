@@ -144,13 +144,12 @@ describe("preact: a <define> that declares <return>", () => {
     expect(await renderWhole(source)).toBe(html);
   });
 
-  // Stock renders `1020`; a `/var` inside `<for>` is the unit path's
-  // refusal on this host until that refusal is lifted.
-  it("refuses a /var under <for> as a unit's /var call is", async () => {
-    await expect(
-      renderWhole(
+  // Stock renders `1020`: the `/var` binds in each row's own scope.
+  it("binds a /var under <for> in each row's own scope", async () => {
+    expect(
+      await renderWhole(
         "<define/T|{n}|><return=n * 10/></define><for|i| of=[1, 2]><T/v n=i/>${v}</for>",
       ),
-    ).rejects.toThrow(/\/var.*inside .*<for>/);
+    ).toBe("1020");
   });
 });
