@@ -212,6 +212,21 @@ const CASES: Array<[string, string, string]> = [
     "<define/Bar><@item x=1/></define><p>${Bar.item.x}</p>",
     "<p>1</p>",
   ],
+  [
+    "an attribute tag under an <if> that holds",
+    "<define/Bar><if=input.show><@item x=1/></if></define><p>${Bar.item?.x}</p>",
+    "<p>1</p>",
+  ],
+  [
+    "an attribute tag under an <if> that does not hold",
+    "<define/Bar><if=!input.show><@item x=1/></if></define><p>${Bar.item?.x}</p>",
+    "<p></p>",
+  ],
+  [
+    "an attribute tag under an <if> and an <else>",
+    "<define/Bar><if=!input.show><@item x=1/></if><else><@item x=2/></else></define><p>${Bar.item.x}</p>",
+    "<p>2</p>",
+  ],
 ];
 
 describe("angular: a <define>'s attributes are properties of its value", () => {
@@ -317,6 +332,64 @@ describe("angular: what stays refused", () => {
     expect(
       thrown("<define/D f() { return 3 }/><p>${D.f()}</p>").message,
     ).toContain("Angular templates cannot contain a `function` expression");
+  });
+
+  // An `@let` holds one template expression: an object, never Marko's
+  // repeatable attribute-tag record, a body or a nested attribute tag.
+  it.each([
+    [
+      "a repeated attribute tag",
+      "<define/Bar><@item x=1/><@item x=2/></define><p>${Bar.item.x}</p>",
+      "a repeated attribute tag `<@item>` in a `<define>` body isn't supported by @mxlang/host-angular: its value is an `@let` object, which has no repeatable record",
+      12,
+    ],
+    [
+      "an attribute tag in a <for>",
+      "<define/Bar><for|n| of=input.items><@item x=n/></for></define><p>${Bar.item.x}</p>",
+      "a repeated attribute tag `<@item>` in a `<define>` body isn't supported by @mxlang/host-angular: its value is an `@let` object, which has no repeatable record",
+      35,
+    ],
+    [
+      "an attribute tag with a body",
+      "<define/Bar><@item>hi</@item></define><p>${Bar.item.x}</p>",
+      "a body on `<@item>` in a `<define>` body isn't supported by @mxlang/host-angular: its value is an `@let` object, which cannot hold content",
+      12,
+    ],
+    [
+      "a nested attribute tag",
+      "<define/Bar><@item><@sub/></@item></define><p>${Bar.item.x}</p>",
+      "nested attribute tags inside `<@item>` in a `<define>` body aren't supported by @mxlang/host-angular: its value is an `@let` object",
+      19,
+    ],
+  ])(
+    "%s in a define body is refused at the attribute tag",
+    (_label, source, message, column) => {
+      const error = thrown(source);
+      expect(error.message).toBe(message);
+      expect([error.line, error.column]).toEqual([1, column]);
+      expect(error.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+    },
+  );
+
+  it("a bare read of a define with attribute tags and a body is refused, at the read", () => {
+    const source = "<define/Bar><@item/><p>b</p></define>${typeof Bar}";
+    const error = thrown(source);
+    expect(error.message).toBe(
+      "`Bar` is read as a whole here, but `<define/Bar>` has attribute tags and a body, and in an Angular template only `Bar.<attribute tag>` can be read from it: `#Bar` is a template reference. Call it as `<Bar/>`, or move the attribute tags to a second `<define>`",
+    );
+    expect([error.line, error.column]).toEqual([1, 37]);
+    expect(error.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+  });
+
+  it("Bar.content of a define with attribute tags and a body is refused, at the read", () => {
+    const source =
+      "<define/Bar><@item/><p>b</p></define><p>${typeof Bar.content}</p>";
+    const error = thrown(source);
+    expect(error.message).toBe(
+      "`Bar.content` is the body of `<define/Bar>`, which a define with attribute tags cannot expose in an Angular template: `#Bar` is a template reference. Call it as `<Bar/>`, or move the attribute tags to a second `<define>`",
+    );
+    expect([error.line, error.column]).toEqual([1, 40]);
+    expect(error.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
   });
 
   it("a define with no attributes still compiles to a bare template", () => {

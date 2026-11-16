@@ -371,6 +371,25 @@ describe("solid: what stays refused", () => {
     );
   });
 
+  it("a hoisted define that reads another define's attribute tag cannot close over the region", () => {
+    // Stock renders `<i>1</i>`. Only literal attributes are inlined into a
+    // hoisted define; an attribute tag never is, nor is a literal attribute of
+    // a define that also has attribute tags.
+    for (const source of [
+      "<define/D><@item x=1/></define><define/E><i>${D.item.x}</i></define><E/>",
+      "<define/D a=1><@item x=1/></define><define/E><i>${D.a}</i></define><E/>",
+    ]) {
+      const error = thrown(source);
+      expect(error.message).toBe(
+        "`<define/E>` is hoisted to module scope and cannot close over `D`, a value local to this region; pass it as a param instead",
+      );
+      expect([error.line, error.column]).toEqual([
+        1,
+        source.indexOf("<define/E>"),
+      ]);
+    }
+  });
+
   it("a define that reads its own attribute cannot close over itself", () => {
     // Stock renders `1`. The body is hoisted, and `D` is not in scope there.
     const error = thrown("<define/D a=1>${D.a}</define><D/>");
