@@ -28,6 +28,9 @@ tasks:
       - "build/**/*"
       - "/scripts/bundled-build.ts"
       - "/scripts/baked-paths.ts"
+      - "/scripts/third-party-notices.ts"
+      - "/packages/babel/LICENSE"
+      - "/packages/babel/UPSTREAM.md"
       # The bundle inlines the registry, every host and target descriptor and
       # their compile entries: a change there must not replay a cached dist.
       - "/packages/target-registry/src/**/*"

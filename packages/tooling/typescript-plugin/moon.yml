@@ -32,6 +32,9 @@ tasks:
     inputs:
       - "src/**/*"
       - "build/**/*"
+      - "/scripts/third-party-notices.ts"
+      - "/packages/babel/LICENSE"
+      - "/packages/babel/UPSTREAM.md"
       - "tsconfig.json"
       - "tsconfig.build.json"
       - "package.json"

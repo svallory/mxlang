@@ -30,6 +30,9 @@ tasks:
       - "src/**/*"
       - "/packages/babel/src/**/*"
       - "scripts/emit-declarations.ts"
+      - "/scripts/third-party-notices.ts"
+      - "/packages/babel/LICENSE"
+      - "/packages/babel/UPSTREAM.md"
       - "package.json"
     outputs:
       - "dist"

@@ -41,7 +41,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external vscode-languageserver --external vscode-languageserver-textdocument && bun build src/bin.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external vscode-languageserver --external vscode-languageserver-textdocument && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external vscode-languageserver --external vscode-languageserver-textdocument && bun build src/bin.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external vscode-languageserver --external vscode-languageserver-textdocument && bun ../../../scripts/third-party-notices.ts dist && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
     "@mxlang/core": "workspace:*",

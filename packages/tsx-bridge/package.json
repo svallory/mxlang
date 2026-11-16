@@ -28,7 +28,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @mxlang/core --define process.env.BABEL_8_BREAKING=false --define process.env.USE_ESM=true --define process.env.IS_PUBLISH=true && bun scripts/emit-declarations.ts",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @mxlang/core --define process.env.BABEL_8_BREAKING=false --define process.env.USE_ESM=true --define process.env.IS_PUBLISH=true && bun ../../scripts/third-party-notices.ts dist && bun scripts/emit-declarations.ts",
     "test:bun": "bun --tsconfig-override=../../tsconfig.base.json test src/mx/region-compile.bun.test.ts"
   },
   "dependencies": {

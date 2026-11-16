@@ -7,6 +7,7 @@
 import { copyFileSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { bakedPathsIn } from "./baked-paths.ts";
+import { writeThirdPartyNotices } from "./third-party-notices.ts";
 
 /**
  * Bun's CJS output inlines `import.meta.url` (and the ESM shim's `__filename`
@@ -78,6 +79,8 @@ export async function bundledBuild({
     throw new Error(`the bundled build of ${packageDir} failed`);
   }
   copyCoreFrontend(out);
+  // The licence notice of the Babel fork, beside whichever outputs inline it.
+  writeThirdPartyNotices(out, { required: false });
   assertRelocatable(
     readdirSync(out)
       .filter((f) => f.endsWith(".cjs"))
