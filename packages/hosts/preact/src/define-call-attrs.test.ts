@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
 // Expected HTML is what stock Marko 6.4.4 renders for the same templates
-// (probe: scratch/reports/squad-jsx/define-call-attrs.md).
+// (stock Marko 6.4.4 render probe of these templates).
 const CASES: Array<[string, string, string]> = [
   [
     "|p| reads the attribute object",

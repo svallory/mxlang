@@ -28,8 +28,8 @@ tracked here) — deliverables live at `docs/upstream/` instead, as the brief's
   dependency, resolved transitively through `@marko/compiler`), branch
   `mx/fragment-offset`, one commit on top of the tag.
 
-Both clones live at `/Users/svallory/work/mx/scratch/upstream-offset-api/`
-(outside this repo, per the brief) and are not part of this commit.
+Both clones were local working copies outside this repository and are not
+part of this commit.
 
 ## API shape chosen, and why
 
@@ -165,7 +165,6 @@ tree from independent, from-scratch `pnpm install`s.
 ## Round 2: a regression found by independent review, and its real cause
 
 An independent code review of the first version of this PR
-(`/Users/svallory/work/mx/scratch/reports/upstream-offset-api.code-review.md`)
 could not reproduce this document's original "147 passing / same 17
 pre-existing failures" claim for `@marko/compiler`, and instead found, from a
 genuinely clean `pnpm install` (not a long-lived dev sandbox): **135

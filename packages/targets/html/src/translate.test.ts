@@ -2176,8 +2176,8 @@ describe("dynamic tags", () => {
 
 // A capitalized tag bound to a value import that is not a `.marko`/`.mx`
 // default import lowers as a dynamic tag, matching Marko's own
-// `_dynamic_tag` runtime dispatch for the six measured value kinds
-// (`scratch/reports/value-import-as-tag-parity.md`). Each case here uses an
+// `_dynamic_tag` runtime dispatch for the six measured value kinds (a stock
+// Marko render probe of each kind). Each case here uses an
 // ordinary `import X from "./target.ts"` (or `{ X }`) and an ordinary
 // `<X>`/`<X/>` call — the routing itself, not the `<${expr}>` syntax already
 // covered above.

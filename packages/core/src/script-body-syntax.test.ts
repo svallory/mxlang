@@ -7,9 +7,8 @@
  * text for its analyses only, skipped a body that failed to parse, and emitted
  * none of it on html, so a decorator or a syntax error compiled silently, and
  * the stale-read check (`MX_STALE_DERIVED_READ`) was switched off for that
- * body without a word. Probes (stock 6.4.4, positions 1-based line:column):
- * `scratch/reports/probes/script-body-syntax-stock-6.4.4.txt` and
- * `script-body-syntax-extra-stock-6.4.4.txt`.
+ * body without a word. Probes: stock Marko 6.4.4 compiles of these bodies,
+ * positions 1-based line:column.
  */
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";

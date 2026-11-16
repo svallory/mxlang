@@ -188,8 +188,7 @@ are counted in the summary.
   install it, `mx-tsc -w -p` keeps the error until you restart it. This is
   TypeScript 6.0.3's own behaviour: plain `tsc -w -p` does the same on Linux
   (it recovers on macOS), and `mx-tsc` matches it exactly. `-b -w` does recover
-  on both. See `scratch/reports/review-mx-tsc-build-extensionless-resolve-r3.md`
-  (repro in podman, `node:26-bookworm-slim`).
+  on both (reproduced in podman, `node:26-bookworm-slim`).
 - **A package's `.d.ts` beside its `.ng.mx`.** For a project's own files, an
   `x.d.ts` next to `x.ng.mx` makes `-b`, `-w` and `-p` all resolve `./x` to the
   template. For a file inside a package (`node_modules`), `-b` and `-w` keep the

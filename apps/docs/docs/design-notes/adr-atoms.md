@@ -292,7 +292,7 @@ so `string :title` under `attributes` is an attribute visible across the entity,
 
 ## Parser approach
 
-**Approved by the lead (2026-10-05); re-measured on htmljs-parser 5.18.0 / @marko/compiler 5.42.10 in PR 1.** Source: `scratch/reports/squad-atoms/parser-approach.md` (option b′), first measured by a simulation inside `@marko/compiler` 5.42.5 with htmljs-parser 5.15.0 patched. In PR 1 the simulation and the real patched parser give the same output on every row but `a ? :b :c`, where the real lexer gives the predicted `a ? "b" : c`, and the 31 name-sugar forms are byte-identical against main (31/31).
+**Approved by the lead (2026-10-05); re-measured on htmljs-parser 5.18.0 / @marko/compiler 5.42.10 in PR 1.** Source: the parser-approach study (option b′), first measured by a simulation inside `@marko/compiler` 5.42.5 with htmljs-parser 5.15.0 patched. In PR 1 the simulation and the real patched parser give the same output on every row but `a ? :b :c`, where the real lexer gives the predicted `a ? "b" : c`, and the 31 name-sugar forms are byte-identical against main (31/31).
 
 Today htmljs-parser passes every atom through intact in every position (attribute value, default attribute, `${}`, tag arguments, concise mode, attribute tags), and Babel rejects every one with "Unexpected token". Babel has no parser plugin API: an unknown plugin name is silently ignored. So atoms are lexed where MX already owns the lexer, htmljs-parser as MX carries it (the root patch today, the in-repo copy for the future):
 

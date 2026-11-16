@@ -969,9 +969,10 @@ function declaredBinding(d: Declaration): boolean {
  * Does stock Marko refuse `second` after `first` when one of them is a `declare
  * const`, `declare let` or `declare var`? Babel's scope registers those, but
  * not as one rule: the table is what stock 6.4.4 answers for every pair
- * (`scratch/reports/review-583-r2.md` and the r3 probe), and MX matches it,
- * at the second name, because the compile would otherwise accept what stock
- * refuses. A `declare function`, `class`, `enum` or `namespace` is not in it.
+ * (stock 6.4.4 compile probes of each pair, from rounds 2 and 3 of the review
+ * of PR 583), and MX matches it, at the second name, because the compile
+ * would otherwise accept what stock refuses. A `declare function`, `class`,
+ * `enum` or `namespace` is not in it.
  */
 function declareClash(first: Declaration, second: Declaration): boolean {
   if (first.kind === "typeImport" || second.kind === "typeImport") return false;

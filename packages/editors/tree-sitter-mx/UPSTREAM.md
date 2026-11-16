@@ -14,7 +14,7 @@ does not have, so MX owns its grammar from 0.2.0 of the Zed extension on (see
 | Repository | `https://github.com/marko-js/tree-sitter` |
 | Commit | `7fb20382b9b0c97c8bdbceee0e0641bea11dd00f` |
 | Release | `@marko/tree-sitter` 0.2.0 (2026-06-26), the rev Marko's own Zed extension pins |
-| MX branch | `mx/shorthand-anywhere` at `3e0583417142f9491d6eba18c4950e22c91c5197`, a local branch of a marko-js/tree-sitter checkout (`~/.home/furniture/zed/tree-sitter-marko` on the operator's Mac), reviewed in `scratch/reports/zed-shorthand/` (space root, not versioned) |
+| MX branch | `mx/shorthand-anywhere` at `3e0583417142f9491d6eba18c4950e22c91c5197`, a local branch of a `marko-js/tree-sitter` checkout, reviewed before vendoring |
 
 Upstream history is not imported. The files were taken with `git archive`, so
 this repo holds a snapshot, and `patches/` records how it differs from the pin.

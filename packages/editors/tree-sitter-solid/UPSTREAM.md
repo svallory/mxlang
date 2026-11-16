@@ -124,7 +124,7 @@ against a **clean clone of HEAD** (never the working tree) — the class of
 gate that would have caught this before a real dev install did. Run via
 `bun run zed-compile-check` or as the last step of `bun run test`
 (`scripts/test.sh`). Confirmed failing against the pre-fix commit and passing
-after — see `scratch/reports/zed-solidmx.md`.
+after.
 
 ## A second, related defect found while adding `--check` coverage for it
 

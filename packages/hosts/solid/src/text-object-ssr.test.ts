@@ -20,8 +20,8 @@ const packageRoot = new URL("..", import.meta.url).pathname;
  * can fix this without also stringifying real nodes (`${props.children}`, a
  * render-prop return, a component call), which is what the first draft did, so
  * the fix has to come from the runtime: bead
- * `mx-solid-ssr-object-child-raw-html` (blocked on upstream, see
- * `scratch/reports/solid-ssr-node-brand-issue.md`).
+ * `mx-solid-ssr-object-child-raw-html` (blocked on upstream: Solid's SSR
+ * nodes carry no brand that tells them from a plain object).
  *
  * The first block pins what must keep working under any future fix: real
  * nodes reaching a placeholder render as markup. The second block is the

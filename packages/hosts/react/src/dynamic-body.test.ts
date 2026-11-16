@@ -5,8 +5,8 @@
  * body renders as text; this host's `content` is JSX children, where a
  * text-only body is a bare string that `mxDynamic` read as a tag name
  * (`<wrap>hello</wrap>` rendered `<hello></hello>`). Expected HTML is what
- * stock Marko 6.4.4 renders for the same templates (scratch/squad-liuna/
- * jsx-dynamic-body-text.md, parity table).
+ * stock Marko 6.4.4 renders for the same templates (a stock render probe of
+ * these templates, parity table).
  */
 
 import { createTargetLookup } from "@mxlang/core";

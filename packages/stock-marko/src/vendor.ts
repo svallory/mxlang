@@ -10,8 +10,8 @@
  *
  * Provenance: fetched from
  * `https://registry.npmjs.org/htmljs-parser/-/htmljs-parser-5.18.0.tgz`;
- * the upstream tag is `v5.18.0` of `marko-js/htmljs-parser` (local copy
- * `/Users/svallory/work/mx/data/forks/htmljs-parser`). The forward-patch
+ * the upstream tag is `v5.18.0` of `marko-js/htmljs-parser`
+ * (`https://github.com/marko-js/htmljs-parser/tree/v5.18.0`). The forward-patch
  * test in `vendor.test.ts` proves these bytes are the exact pre-image of
  * `patches/htmljs-parser@5.18.0.patch` against the installed, patched
  * `dist`.

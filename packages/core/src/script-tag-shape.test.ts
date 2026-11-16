@@ -6,10 +6,8 @@
  * Stock Marko 6.4.4 refuses `<script async>`, `<script src="/x.js">` ("does not
  * support html attributes") and a placeholder in the body ("Unexpected content
  * in `<script>` tag"); MX compiled both, discarding the attribute and not
- * reading the body. Probed on the stock parser (positions 1-based line:column;
- * MX's columns are 0-based, one less):
- * `scratch/reports/probes/script-and-export-equals-7cfaa606/` and
- * `scratch/reports/script-tag-attrs-and-placeholder.md`.
+ * reading the body. Probed with stock Marko 6.4.4 compiles of these tags
+ * (positions 1-based line:column; MX's columns are 0-based, one less).
  *
  * It also refuses the head forms stock refuses and MX read past: arguments,
  * params, a tag variable, a second value and a value next to a body. Probed on
