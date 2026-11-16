@@ -9,7 +9,7 @@
 
 import type { ParserPlugin } from "@babel/parser";
 
-/** The options `@babel/parser` reads a module statement with. */
+/** The options core's parser (`coreParser()`, MX's fork) reads a module statement with. */
 export interface StatementParseOptions {
   sourceType: "module";
   plugins: ParserPlugin[];

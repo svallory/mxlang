@@ -121,13 +121,22 @@ Five facts worth knowing before editing it:
   `@mxlang/parser/lexer` (typed by its `public.d.ts`), from source and in the
   dist alike (PR 6 slice S2). The public `parseFragmentNative` now delegates to `parseFragment`.
   Deleted with the Marko readers (PR 6).
-- **Its Babel is stock `@babel/*`, exact-pinned runtime dependencies, loaded
-  lazily by `src/babel.ts` (`coreBabel()`; PR 6 slice S1).**
-  `parse`/`parseExpression` are `@babel/parser`; `traverse`, `types` and
+- **Its parser is MX's fork; the rest of its Babel is stock `@babel/*`,
+  exact-pinned runtime dependencies, loaded lazily by `src/babel.ts`
+  (`coreBabel()`; PR 6 slice S1).** `parse`/`parseExpression`
+  (`coreParser()`) are the fork, `@mxlang/babel`, imported statically through
+  `@mxlang/parser/frontend/babel`: under plain Node, vitest and Bun that
+  subpath is the parser package's built `dist/babel.js` (so core's tests need
+  `packages/parser` built, and an edit to `packages/babel/src` reaches them
+  only after that build), and core's build passes `--conditions mx-source`,
+  which resolves it to source, so the dist bundles the one fork copy
+  `mx-parse.ts` already does. `traverse`, `types` and
   `File` come from `@babel/core` (one instance for the TS strip);
   `generator`, `codeFrameColumns` and `pluginTransformTypeScript` from their
   packages. They are `--external` in the build, and no `.d.ts` names a
-  `@babel/*` type. Do not add a second Babel. **`printExpression(node):
+  `@babel/*`, `@mxlang/babel` or `@mxlang/parser` type. npm `@babel/parser`
+  must not be called at run time from core: it stays a dependency and
+  `--external` only for core's type-only imports and for `@babel/core`. **`printExpression(node):
   string`** (`compile.ts`, public) is the one function that prints an
   expression node back to source text; it is what `compileSource`'s
   `translate` visitor hands `newCtx` as `generate`, and every host printing
@@ -138,7 +147,7 @@ Five facts worth knowing before editing it:
   generator and code frame against Marko's until S5 removes the bundle.
 - **`callee-input.ts` is the synchronous, syntactic cross-file reader for a
   component's `Input`.** It resolves discovered and imported callees, parses
-  complete TS/TSX modules with `@babel/parser`'s
+  complete TS/TSX modules with `coreParser()` (the fork) and its
   `typescript` + `jsx` plugins, and reaches `.mx` declarations through the
   existing template-metadata compile/cache. It follows only bounded literal
   aliases, re-exports, and `import type` edges. Every followed file has its own
@@ -948,8 +957,8 @@ Five facts worth knowing before editing it:
   resolving different tags for one file.
 - **`parseOptions` is read without executing the sidecar**, because it must
   reach Marko before the *calling* file is parsed. It is extracted statically
-  from the default export with `@marko/compiler`'s own Babel (not a second
-  `@babel/parser`), and the accepted shape is narrow: an object literal, or an
+  from the default export with core's own parser (`coreBabel()`, MX's fork),
+  and the accepted shape is narrow: an object literal, or an
   identifier bound once at module scope to one (optionally through `as` /
   `satisfies`), holding boolean-valued `text`/`preserveWhitespace`/
   `openTagOnly`. A spread, a computed key, a non-boolean or an indirection is

@@ -1,27 +1,43 @@
 /**
- * The Babel core lowers, prints and strips TypeScript with: stock `@babel/*`
- * packages, exact-pinned runtime dependencies of `@mxlang/core` and external
- * to its bundle. It replaces `@marko/compiler`'s bundled Babel
- * (`markoBabel()`), which was the same packages at 7.29.7 plus Marko's
- * patches; the patches only teach the generator, traverse and types about
- * `Marko*` nodes, which MX payloads never are.
+ * The Babel core lowers, prints and strips TypeScript with.
  *
- * `traverse` and `types` come from `@babel/core`'s own exports, so the
- * `File` that `stripMxTypes` builds, its paths and scopes, and the traversal
- * that walks them are one Babel instance whatever the install dedupes.
+ * `parse`/`parseExpression` are MX's `@babel/parser` fork (`@mxlang/babel`),
+ * reached through `@mxlang/parser/frontend/babel`. With no `mx*` option the
+ * fork parses as npm `@babel/parser` 7.29.8 does, but its block-comment scan
+ * is linear, so a line with many block comments does not make a re-parse
+ * quadratic. The subpath resolves to the parser package's built
+ * `dist/babel.js`, which plain Node loads (the fork's source uses
+ * `const enum`s and accessor decorators that Node's type stripping cannot
+ * run); core's own build passes the `mx-source` condition and bundles the
+ * fork's source, the same copy `mx-parse.ts` already bundles. npm
+ * `@babel/parser` stays a dependency for core's type-only imports and for
+ * `@babel/core`, but core never calls it.
  *
- * Loaded lazily on first use: importing core (the registry's light-import
- * invariant) must not load Babel. The interface is untyped (`Node`) so the
- * published `.d.ts` names no `@babel/*` type.
+ * `traverse`, `types` and `File` come from `@babel/core`'s own exports, so
+ * the `File` that `stripMxTypes` builds, its paths and scopes, and the
+ * traversal that walks them are one Babel instance whatever the install
+ * dedupes. `@babel/core`, the generator, the code frame and the TS strip
+ * plugin are stock, exact-pinned runtime dependencies, external to core's
+ * bundle. They replace `@marko/compiler`'s bundled Babel (`markoBabel()`),
+ * which was the same packages at 7.29.7 plus Marko's patches; the patches
+ * only teach the generator, traverse and types about `Marko*` nodes, which
+ * MX payloads never are.
  *
- * The parser and the TS strip plugin load on their own memos, apart from the
- * `@babel/core` graph: a path that only parses expressions (mapping, the
- * reserved-binding check) pays for `@babel/parser` alone, and the strip
- * plugin loads only when a payload is stripped — which every lowering with
- * an expression payload runs, TypeScript or not.
+ * The stock packages load lazily on first use: importing core (the
+ * registry's light-import invariant) must not load `@babel/core`. The
+ * interface is untyped (`Node`) so the published `.d.ts` names no
+ * `@babel/*` type.
+ *
+ * The TS strip plugin loads on its own memo, apart from the `@babel/core`
+ * graph: it loads only when a payload is stripped — which every lowering
+ * with an expression payload runs, TypeScript or not.
  */
 import { createRequire } from "node:module";
 import { stripVTControlCharacters } from "node:util";
+import {
+  parseBabel,
+  parseBabelExpression,
+} from "@mxlang/parser/frontend/babel";
 import type { Node } from "./core.ts";
 
 /** Parser, traverse, types, generator, code frame and the TS strip plugin. */
@@ -49,7 +65,7 @@ type PluginTransformTypeScript = (api: Node, options: Node) => Node;
 
 let tsPlugin: PluginTransformTypeScript | undefined;
 
-/** The slice of `@babel/parser` core calls directly. */
+/** The slice of the parser core calls directly. */
 interface Parser {
   parse: Babel["parse"];
   parseExpression: Babel["parseExpression"];
@@ -58,12 +74,13 @@ interface Parser {
 let parser: Parser | undefined;
 
 /**
- * `@babel/parser`, loaded on first call: importing core must not load any
- * Babel package (the registry's light-import invariant), and a path that
- * never parses must not pay for the parser either.
+ * MX's `@babel/parser` fork, the parser every core parse goes through. A
+ * static import, not a run-time `require`: core's build bundles only what it
+ * can see, and the parser package is private, so a published dist could not
+ * resolve it.
  */
 export function coreParser(): Parser {
-  parser ??= require("@babel/parser") as Parser;
+  parser ??= { parse: parseBabel, parseExpression: parseBabelExpression };
   return parser;
 }
 

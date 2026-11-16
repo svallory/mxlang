@@ -10,8 +10,13 @@
  */
 import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { type ParserOptions, parse as parseNpm } from "@babel/parser";
+import {
+  parseBabel,
+  parseBabelExpression,
+} from "@mxlang/parser/frontend/babel";
 import { describe, expect, it } from "vitest";
-import { coreBabel, withReasonFirst } from "./babel.ts";
+import { coreBabel, coreParser, withReasonFirst } from "./babel.ts";
 import { compileSource } from "./compile.ts";
 import type { Policy } from "./declarations.ts";
 import { markoBabel } from "./marko-frontend.ts";
@@ -249,5 +254,32 @@ describe("withReasonFirst puts a parse error's reason on the first line", () => 
   it("leaves a message that already starts with text as it is", () => {
     const error = new Error("plain reason");
     expect(withReasonFirst(error)).toBe(error);
+  });
+});
+
+describe("coreParser parses with MX's built Babel fork", () => {
+  it("is the fork's parse and parseExpression from @mxlang/parser/frontend/babel", () => {
+    expect(coreParser().parse).toBe(parseBabel);
+    expect(coreParser().parseExpression).toBe(parseBabelExpression);
+  });
+
+  it("tokenizes as npm @babel/parser does (the fork's bundled accessor-decorator state)", () => {
+    const options: ParserOptions = { plugins: ["jsx"], tokens: true };
+    // Each parser has its own TokenType table: compare a token's `type` by its
+    // label, as `vendored.test.ts` in packages/tsx-bridge does.
+    const labelled = (ast: unknown): unknown =>
+      JSON.parse(
+        JSON.stringify(ast, (key, value) =>
+          key === "type" &&
+          value &&
+          typeof value === "object" &&
+          "label" in value
+            ? value.label
+            : value,
+        ),
+      );
+    expect(labelled(coreParser().parse("<div/>", options))).toEqual(
+      labelled(parseNpm("<div/>", options)),
+    );
   });
 });
