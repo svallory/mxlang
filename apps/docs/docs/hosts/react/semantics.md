@@ -58,7 +58,7 @@ The default is right for unique strings and numbers. It is wrong for a list with
 - **Only names React declares.** A DOM event `@types/react` has no handler prop for is a compile error, even where react-dom binds it (`on-fullscreenchange`), and so is any other unlisted name (`on-search`, `on-gesturestart`).
 - **Custom DOM events** (`on-my-event=f`) are a compile error on React, Preact and Hono alike. Use a `ref` callback that calls `addEventListener`.
 - **On a component**, `onSelect=pick` is an ordinary prop.
-- `on:click` is not MX syntax; the error names `onClick`.
+- `on:click` is refused, with a fix-it naming both spellings: `` `on:click=fn` is not React syntax; write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name ``.
 
 The handler receives React's synthetic event. `onChange` on a text field fires per keystroke, as in any React app. The shared rules are in [Attributes](/language/attributes/#attributes-event-attributes).
 

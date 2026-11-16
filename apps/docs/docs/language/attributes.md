@@ -178,10 +178,11 @@ DOM equivalent to suggest), or a typo such as `onFoo`.
 `on-<exact>` is never checked: naming an event MX cannot know about is exactly
 what it is for. (`on-` with nothing after the dash is an error.)
 
-### `on:click` is not MX syntax; `oncapture:click` is an ordinary attribute
+### `on:click` is not an event binding; `oncapture:click` is an ordinary attribute
 
 MX has no event modifiers. `on:*` is handed to the host, which rejects it with
-a fix-it naming the `on-<exact>` form. A lowercase `oncapture:click` is what
+a fix-it naming both forms: `on<Name>` for a DOM event and `on-<exact>` for a
+custom event name. A lowercase `oncapture:click` is what
 it is in Marko: an ordinary attribute that keeps its full name, neither an
 event nor a capture-mode listener. To stop an event, call `event.preventDefault()` in the
 handler; for listener options such as `capture` or `passive`, use a `ref`
