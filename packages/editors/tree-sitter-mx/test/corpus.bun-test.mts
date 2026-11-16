@@ -6,6 +6,7 @@
 // through lowerSource.
 import assert from "node:assert";
 import { parseMx } from "../__tests__/util/language.mts";
+import { treeEvents } from "../__tests__/util/tree-events.mts";
 import { readCorpus } from "./corpus/read.mts";
 
 const CASES = readCorpus();
@@ -265,4 +266,131 @@ describe("error recovery", () => {
     assert.equal(hasMissing(root), false, root.toString());
     tree.delete();
   });
+});
+
+describe("tag-grammar whitespace", () => {
+  // The tag grammar's whitespace is Unicode's Pattern_White_Space, as in
+  // @mxlang/parser: U+0085, U+200E, U+200F, U+2028 and U+2029 read exactly
+  // as VT (U+000B), and the other Unicode spaces are refused in a tag name,
+  // a shorthand or an attribute name. The inputs are literal copies of
+  // PATTERN_WS_TAG_FORMS and REFUSED_SPACE_ROWS in
+  // packages/parser/src/template/mx-unicode-words.cases.ts.
+  const PATTERN_WHITE_SPACE = ["\u0085", "‎", "‏", " ", " "];
+  const PATTERN_WS_TAG_FORMS = [
+    "<divWa/>",
+    "<div aWb/>",
+    "<div a=1Wb/>",
+    "<div/xWa/>",
+    "<div.cWa/>",
+    "<p><Wb</p>",
+    "<div a=x +Wb/>",
+    "divWa\n",
+    "div aWb\n",
+    "div a=1Wb\n",
+    "div a=x +Wb\n",
+    "div\nWspan\n",
+    "$Wx\n",
+  ];
+
+  // The events htmljs-parser would fire, rebuilt from the tree. Every
+  // separator is one UTF-16 unit, so offsets never shift.
+  const render = (src: string) => {
+    const tree = parseMx(src);
+    assert.ok(tree, "parse timed out");
+    const root = tree.rootNode;
+    assert.ok(!root.hasError, `${JSON.stringify(src)}: ${root.toString()}`);
+    const events = treeEvents(src, root)
+      .map((e) => `${e.label} ${e.start}-${e.end} ${src.slice(e.start, e.end)}`)
+      .join("\n");
+    tree.delete();
+    return events;
+  };
+
+  for (const ws of PATTERN_WHITE_SPACE) {
+    for (const form of PATTERN_WS_TAG_FORMS) {
+      const src = form.replaceAll("W", ws);
+      it(`${JSON.stringify(src)} reads as its VT twin`, () => {
+        const twin = render(form.replaceAll("W", "\v"));
+        assert.strictEqual(render(src).replaceAll(ws, "\v"), twin);
+      });
+    }
+  }
+
+  // [input, offset of the refused space]
+  const REFUSED_SPACE_ROWS: [string, number][] = [
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a b/>", 6],
+    ["<div a　b/>", 6],
+    ["<div a﻿b/>", 6],
+    ["<div x/>", 4],
+    ["<div.a b/>", 6],
+    ["div x\n", 3],
+    ["<div a=1  b/>", 9],
+  ];
+
+  // web-tree-sitter's indices count UTF-16 units (probed: the root of
+  // "<div a\u0085b/>x" ends at 11, its length, not at its 12 UTF-8 bytes).
+  const covers = (
+    n: { type: string; isMissing: boolean; startIndex: number; endIndex: number; children: any[] },
+    at: number,
+  ): boolean =>
+    ((n.type === "ERROR" || n.isMissing) && n.startIndex <= at && at < n.endIndex) ||
+    n.children.some((c) => covers(c, at));
+
+  for (const [src, at] of REFUSED_SPACE_ROWS) {
+    it(`refuses the space in ${JSON.stringify(src)} with an ERROR over it`, () => {
+      const tree = parseMx(src);
+      assert.ok(tree, "parse timed out");
+      const root = tree.rootNode;
+      assert.ok(root.hasError, root.toString());
+      assert.ok(covers(root, at), root.toString());
+      tree.delete();
+      const twin = parseMx(src.slice(0, at) + " " + src.slice(at + 1));
+      assert.ok(twin, "parse timed out");
+      assert.ok(!twin.rootNode.hasError, twin.rootNode.toString());
+      twin.delete();
+    });
+  }
+
+  // Values, tag variables, body text and close tag names are not refused:
+  // each tree is the one origin/main gave before the refusal existed.
+  const UNCHANGED: [string, string][] = [
+    [
+      "<div a=x />",
+      "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
+    ],
+    [
+      "<div/x  a/>",
+      "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (tag_var (tag_var_expr (var_pattern))) (attr_name) (open_tag_end_self) (element_end)))",
+    ],
+    [
+      "<p>a b</p>",
+      "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (open_tag_end) (text) (close_tag (close_tag_start) (close_tag_name) (close_tag_end)) (element_end)))",
+    ],
+    [
+      "<div></div >",
+      "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment)) (open_tag_end) (close_tag_start)) (text))",
+    ],
+  ];
+  for (const [src, expected] of UNCHANGED) {
+    it(`keeps today's tree for ${JSON.stringify(src)}`, () => {
+      const tree = parseMx(src);
+      assert.ok(tree, "parse timed out");
+      assert.strictEqual(tree.rootNode.toString(), expected);
+      tree.delete();
+    });
+  }
 });

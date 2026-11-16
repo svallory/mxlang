@@ -111,6 +111,28 @@ enum TokenType {
 // --------------------------------------------------------------------------
 
 static inline bool is_ws(int32_t c) { return c <= ' ' && c >= 0; }
+// MX: whitespace in the tag grammar (isPatternWhiteSpaceCode): is_ws plus
+// the rest of Unicode's Pattern_White_Space. Each of the five reads exactly
+// as VT (U+000B): it separates and never ends a concise line.
+static inline bool is_pattern_ws(int32_t c) {
+  return is_ws(c) || c == 0x85 || c == 0x200E || c == 0x200F ||
+         c == 0x2028 || c == 0x2029;
+}
+// MX: the Unicode spaces that are not Pattern_White_Space
+// (isRefusedTagSpaceCode). A tag name, a shorthand or an attribute name
+// refuses one: the scan produces no token there, so it is an ERROR node.
+static inline bool is_refused_tag_space(int32_t c) {
+  return c == 0xA0 || c == 0x1680 || (c >= 0x2000 && c <= 0x200A) ||
+         c == 0x202F || c == 0x205F || c == 0x3000 || c == 0xFEFF;
+}
+// MX: the byte the look-behind stores keep for a char (buf, prev_char,
+// prev_nonws_char). The five Pattern_White_Space code points above U+0020
+// are stored as VT, so a look-behind sees exactly what it sees for VT
+// (their low bytes would read as `(`, `)`, 0x0E, 0x0F and 0x85).
+static inline uint8_t look_behind_byte(int32_t c) {
+  if (c > ' ' && is_pattern_ws(c)) return 0x0B;
+  return (uint8_t)(c & 0xff);
+}
 static inline bool is_line(int32_t c) { return c == '\n' || c == '\r'; }
 static inline bool is_indent_code(int32_t c) { return c == ' ' || c == '\t'; }
 static inline bool is_word_code(int32_t c) {
@@ -216,6 +238,7 @@ typedef struct {
                              // lookbehind may cross the token start
   bool split_at_shorthand;   // MX: ws + `.ident`/`:ident` ends the value
   bool atoms;                // MX: stop before an atom
+  bool attr_name;            // MX: refuses is_refused_tag_space (attrName)
   uint8_t terminator;
 } ExprCfg;
 
@@ -232,6 +255,7 @@ typedef struct {
   bool was_comment;
   bool resumed;  // MX: this token continues an expression after an atom
   bool at_atom;  // MX: the scan stopped before an atom
+  bool refused;  // MX: the scan stopped at a refused space (cfg.attr_name)
 } ExprState;
 
 // Position bookkeeping replacing the parser's backwards reads of the source.
@@ -338,26 +362,39 @@ static inline ContentFrame *top_content(Scanner *s) {
   return s->content_len ? &s->contents[s->content_len - 1] : NULL;
 }
 
-static void cursor_advance(Cursor *cur, int32_t c) {
-  cur->prev_char = (uint8_t)(c & 0xff);
+// `tag_ws` (MX): the char is read by the tag grammar, so the
+// Pattern_White_Space code points count as whitespace (concise indentation).
+static void cursor_advance_ws(Cursor *cur, int32_t c, bool tag_ws) {
+  cur->prev_char = look_behind_byte(c);
   if (is_line(c)) {
     cur->line_only_ws = 1;
     cur->cur_indent_len = 0;
     cur->cur_indent_hash = HASH_INIT;
-  } else if (is_ws(c)) {
+  } else if (tag_ws ? is_pattern_ws(c) : is_ws(c)) {
     if (cur->line_only_ws) {
       cur->cur_indent_len++;
       cur->cur_indent_hash = hash_push(cur->cur_indent_hash, c);
     }
   } else {
     cur->line_only_ws = 0;
-    cur->prev_nonws_char = (uint8_t)(c & 0xff);
+    cur->prev_nonws_char = look_behind_byte(c);
   }
+}
+
+static inline void cursor_advance(Cursor *cur, int32_t c) {
+  cursor_advance_ws(cur, c, false);
 }
 
 // Skip a trivia char (not part of any token; token start moves past it).
 static inline void skipc(Scanner *s, TSLexer *lexer) {
   cursor_advance(&s->cur, lexer->lookahead);
+  lexer->advance(lexer, true);
+}
+
+// MX: skipc for concise indentation, where the tag grammar's
+// Pattern_White_Space counts as indentation.
+static inline void skipc_tag_ws(Scanner *s, TSLexer *lexer) {
+  cursor_advance_ws(&s->cur, lexer->lookahead, true);
   lexer->advance(lexer, true);
 }
 
@@ -375,7 +412,7 @@ static inline void buf_push(Scanner *s, int32_t c) {
     s->buf_cap = s->buf_cap ? s->buf_cap * 2 : 256;
     s->buf = (char *)realloc(s->buf, s->buf_cap);
   }
-  s->buf[s->buf_len++] = (char)(c & 0xff);
+  s->buf[s->buf_len++] = (char)look_behind_byte(c);
 }
 
 // --------------------------------------------------------------------------
@@ -775,10 +812,18 @@ static bool can_follow_division(int32_t c) {
   }
 }
 
-static void es_consume_ws(EStream *es) {
+// MX: EXPRESSION's `isSpace`: a whitespace-terminated expression (a name, tag
+// variable or attribute value) is in the tag grammar, whose whitespace is
+// is_pattern_ws; any other expression keeps is_ws.
+static inline bool expr_is_space(const ExprState *e, int32_t c) {
+  return e->cfg.terminated_by_whitespace ? is_pattern_ws(c) : is_ws(c);
+}
+
+// consumeWhitespace(isSpace)
+static void es_consume_ws(EStream *es, const ExprState *e) {
   while (true) {
     int32_t c = es_peek(es, 0);
-    if (c >= 0 && is_ws(c)) es_next(es);
+    if (c >= 0 && expr_is_space(e, c)) es_next(es);
     else break;
   }
 }
@@ -803,7 +848,7 @@ static bool check_for_operators(EStream *es, ExprState *e, bool eol) {
   Scanner *s = es->s;
 
   if (look_behind_for_operator(es, e, (int64_t)s->buf_len) != -1) {
-    es_consume_ws(es);
+    es_consume_ws(es, e);
     return true;
   }
 
@@ -812,7 +857,10 @@ static bool check_for_operators(EStream *es, ExprState *e, bool eol) {
     uint32_t k = 1;
     while (true) {
       int32_t c = es_peek(es, k);
-      if (c >= 0 && (terminated_by_eol ? is_indent_code(c) : is_ws(c))) k++;
+      if (c >= 0 &&
+          (terminated_by_eol ? is_indent_code(c) : expr_is_space(e, c))) {
+        k++;
+      }
       else break;
     }
 
@@ -1042,8 +1090,16 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
       return true;
     }
 
+    // MX: a Unicode space that is not Pattern_White_Space is refused in an
+    // attribute name (INVALID_CHARACTER): the scan stops there and the
+    // character gets no token of its own (see emit_refused_space).
+    if (e->cfg.attr_name && is_refused_tag_space(code)) {
+      e->refused = true;
+      return false;
+    }
+
     if (!e->group_len) {
-      if (e->cfg.terminated_by_whitespace && is_ws(code)) {
+      if (e->cfg.terminated_by_whitespace && is_pattern_ws(code)) {
         if (!check_for_operators(es, e, false)) return true;
         continue;
       }
@@ -1092,7 +1148,7 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
           }
           e->ternary_depth++;
           es_next(es);
-          es_consume_ws(es);
+          es_consume_ws(es, e);
           continue;
         }
         es_next(es);
@@ -1112,7 +1168,7 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
             e->in_type = true;
           }
           es_next(es);
-          es_consume_ws(es);
+          es_consume_ws(es, e);
           continue;
         }
         es_next(es);
@@ -1128,7 +1184,7 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
             e->in_type = false;
           }
           es_next(es);  // skip = (or the char after =>)
-          es_consume_ws(es);
+          es_consume_ws(es, e);
           continue;
         }
         es_next(es);
@@ -1166,7 +1222,7 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
           default:
             if (can_follow_division(es_prev_nonws(es))) {
               es_next(es);
-              es_consume_ws(es);
+              es_consume_ws(es, e);
               continue;
             } else {
               es_next(es);
@@ -1203,7 +1259,7 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
           es_next(es);
         } else if (e->cfg.operators && !e->group_len) {
           es_next(es);
-          es_consume_ws(es);
+          es_consume_ws(es, e);
           continue;
         } else {
           es_next(es);
@@ -1445,7 +1501,7 @@ static bool scan_line_attr_trivia(Scanner *s, TSLexer *lexer, bool consume) {
   for (;;) {
     if (at_eof(lexer)) return false;
     int32_t c = lexer->lookahead;
-    if (is_ws(c)) {
+    if (is_pattern_ws(c)) {  // MX: OPEN_TAG's peek, tag-grammar whitespace
       skip_or_peek(s, lexer, consume);
     } else if (c == '/') {
       skip_or_peek(s, lexer, consume);
@@ -1524,6 +1580,7 @@ static ExprCfg cfg_attr_name(Scanner *s) {
   ExprCfg cfg;
   memset(&cfg, 0, sizeof(cfg));
   cfg.terminated_by_whitespace = true;
+  cfg.attr_name = true;
   cfg.terminator = is_concise(s)
                        ? (s->in_attr_group ? TERM_CONCISE_GROUPED_ATTR_NAME
                                            : TERM_CONCISE_ATTR_NAME)
@@ -1694,7 +1751,8 @@ static bool scan_scriptlet_body(Scanner *s, TSLexer *lexer, const bool *valid,
                                 TSSymbol *result) {
   // INLINE_SCRIPT.parse: consumeWhitespace, then `{` block or statement.
   if (valid[SCRIPTLET_BLOCK_OPEN] || valid[SCRIPTLET_EXPR]) {
-    while (!at_eof(lexer) && is_ws(lexer->lookahead)) skipc(s, lexer);
+    // MX: the gap after `$` is tag-grammar whitespace.
+    while (!at_eof(lexer) && is_pattern_ws(lexer->lookahead)) skipc(s, lexer);
     if (!at_eof(lexer) && lexer->lookahead == '{' &&
         valid[SCRIPTLET_BLOCK_OPEN]) {
       cursor_advance(&s->cur, '{');
@@ -2435,7 +2493,8 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
         });
       }
 
-      if (n1 == '>' || n1 == '<' || n1 < 0 || is_ws(n1)) {
+      // MX: `<` followed by tag-grammar whitespace is text.
+      if (n1 == '>' || n1 == '<' || n1 < 0 || is_pattern_ws(n1)) {
         if (n1 < 0) {
           // `<` at EOF: the parser starts an open tag and errors at EOF.
           EMIT_TEXT_OR({
@@ -2584,8 +2643,9 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
       skipc(s, lexer);
       continue;
     }
-    if (is_ws(c)) {
-      skipc(s, lexer);
+    // MX: indentation (and the gap after `tag;`) is tag-grammar whitespace.
+    if (is_pattern_ws(c)) {
+      skipc_tag_ws(s, lexer);
       continue;
     }
     break;
@@ -2717,7 +2777,7 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
   mark(s, lexer);
   bool ok = false;
 
-  if (c == '$' && is_ws(es_peek(&es, 1)) && es_peek(&es, 1) >= 0) {
+  if (c == '$' && is_pattern_ws(es_peek(&es, 1)) && es_peek(&es, 1) >= 0) {
     es_next_mark(&es);  // $
     *result = SCRIPTLET_START_CONCISE;
     ok = valid[SCRIPTLET_START_CONCISE];
@@ -2753,7 +2813,7 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
         while (true) {
           int32_t c2 = es_peek(&es, k);
           if (c2 < 0 || is_line(c2)) break;
-          if (!is_ws(c2)) {
+          if (!is_pattern_ws(c2)) {  // MX: tag-grammar whitespace
             s->fail_next = 1;  // INVALID_CHARACTER after this token
             break;
           }
@@ -2794,9 +2854,20 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
 // Open tags (OPEN_TAG / TAG_NAME / ATTRIBUTE)
 // --------------------------------------------------------------------------
 
+// MX: a refused space (is_refused_tag_space) at the logical position, in a
+// tag name, a shorthand or an attribute name: INVALID_CHARACTER over that one
+// character. No state accepts the ERROR_SENTINEL outside recovery, so the
+// parser wraps it in an ERROR node and scan_recovery swallows the rest of the
+// line; returning false instead would end the parse and drop the rest of the
+// file (a concise `div\u00a0x` parsed clean as an empty document).
+static void emit_refused_space(EStream *es, TSSymbol *result) {
+  es_next_mark(es);
+  *result = ERROR_SENTINEL;
+}
+
 // Is this character a TAG_NAME terminator?
 static bool is_tag_name_terminator(Scanner *s, int32_t c, int32_t next) {
-  if (c < 0 || is_ws(c)) return true;
+  if (c < 0 || is_pattern_ws(c)) return true;  // MX: tag-grammar whitespace
   switch (c) {
     case '=': case '(': case '/': case '|': case '<': case ',':
       return true;
@@ -2868,6 +2939,13 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
   // Attribute-position shorthands (`<a x=1 .b>`) are not part of the tag's
   // name: they never feed the close-tag hashes.
   if (s->attr_shorthand) t = NULL;
+
+  // MX: a Unicode space that is not Pattern_White_Space is refused in a tag
+  // name or shorthand (INVALID_CHARACTER).
+  if (is_refused_tag_space(c)) {
+    emit_refused_space(es, result);
+    return 1;
+  }
 
   if (c == '$' && n1 == '{') {
     es_next_mark(es);
@@ -2955,6 +3033,9 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
         is_line(c) || is_tag_name_terminator(s, c, n1)) {
       break;
     }
+    // MX: the fragment ends before a refused space, which the next scan
+    // refuses (the name section stays open).
+    if (is_refused_tag_space(c)) break;
     if (t) {
       t->full_hash = hash_push(t->full_hash, c);
       t->full_len++;
@@ -2974,7 +3055,7 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
   if (shorthand_takes_no_bound_value(s, c, n1)) return 0;
 
   if (c != '.' && c != '#' && !(c == ':' && n1 != '=') &&
-      !(c == '$' && n1 == '{')) {
+      !(c == '$' && n1 == '{') && !is_refused_tag_space(c)) {
     finalize_tag_name(s, c);
   }
 
@@ -3063,7 +3144,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
       if (s->attr_has_type_params) {
         uint32_t k = 0;
         int32_t c2;
-        while ((c2 = es_peek(es, k)) >= 0 && is_ws(c2)) k++;
+        while ((c2 = es_peek(es, k)) >= 0 && is_pattern_ws(c2)) k++;
         if (c2 != '{') return false;
       }
     } else {
@@ -3072,7 +3153,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
       // (OPEN_TAG.return: consumeWhitespaceIfBefore("{")).
       uint32_t k = 0;
       int32_t c2;
-      while ((c2 = es_peek(es, k)) >= 0 && is_ws(c2)) k++;
+      while ((c2 = es_peek(es, k)) >= 0 && is_pattern_ws(c2)) k++;
       if (c2 == '{') {
         s->attr_active = 1;
         s->attr_has_args = 1;
@@ -3177,7 +3258,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
       // fires when the types expression returns, before anything else).
       uint32_t k = 0;
       int32_t c2;
-      while ((c2 = es_peek(es, k)) >= 0 && is_ws(c2)) k++;
+      while ((c2 = es_peek(es, k)) >= 0 && is_pattern_ws(c2)) k++;
       if (c2 == '|') {
         if (s->tag_has_params) return false;
       } else if (c2 == '(') {
@@ -3222,7 +3303,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   }
   if (valid[VAR_PATTERN] && !valid[ATTR_NAME]) {
     int32_t c0 = es_peek(es, 0);
-    if (c0 >= 0 && is_ws(c0)) return false;  // MISSING_TAG_VARIABLE
+    if (c0 >= 0 && is_pattern_ws(c0)) return false;  // MISSING_TAG_VARIABLE
     ExprCfg cfg = cfg_tag_var(s);
     cfg.split_at_type_colon = true;
     bool empty = false;
@@ -3265,7 +3346,8 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   if (valid[ATTR_VALUE_EXPR] && !valid[ATTR_NAME]) {
     // After = / := the parser consumes whitespace; after ... it does not.
     if (s->attr_stage == ATTR_VALUE_STAGE) {
-      while (es_drained(es) && !at_eof(lexer) && is_ws(lexer->lookahead)) {
+      while (es_drained(es) && !at_eof(lexer) &&
+             is_pattern_ws(lexer->lookahead)) {
         skipc(s, lexer);
       }
       es_mark(es);
@@ -3312,7 +3394,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     int32_t cc = lexer->lookahead;
 
     if ((!s->tag_name_done || s->in_shorthand) &&
-        (is_ws(cc) || cc == ',')) {
+        (is_pattern_ws(cc) || cc == ',')) {
       // TAG_NAME terminates at whitespace/comma before any trivia skipping.
       finalize_tag_name(s, cc);
       if (s->statement_pending) {
@@ -3333,7 +3415,9 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
       if (s->tag_comma_continue) {
         // comma continues the open tag with another line attribute
         if (scan_line_attr_trivia(s, lexer, true)) skipc(s, lexer);
-        while (!at_eof(lexer) && is_ws(lexer->lookahead)) skipc(s, lexer);
+        while (!at_eof(lexer) && is_pattern_ws(lexer->lookahead)) {
+          skipc(s, lexer);
+        }
         s->tag_comma_continue = 0;
         continue;
       }
@@ -3344,14 +3428,15 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
       return true;
     }
 
-    if (is_ws(cc)) {
+    // MX: between attributes and after `,`: tag-grammar whitespace.
+    if (is_pattern_ws(cc)) {
       skipc(s, lexer);
       continue;
     }
 
     if (cc == ',') {
       skipc(s, lexer);
-      while (!at_eof(lexer) && is_ws(lexer->lookahead)) skipc(s, lexer);
+      while (!at_eof(lexer) && is_pattern_ws(lexer->lookahead)) skipc(s, lexer);
       continue;
     }
 
@@ -3645,7 +3730,19 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   if (c == '<') return false;  // INVALID_ATTRIBUTE_NAME
   {
     bool empty = false;
-    if (!scan_expr_es(es, cfg_attr_name(s), &empty)) return false;
+    ExprState e;
+    if (!scan_expr_es_state(es, cfg_attr_name(s), &empty, &e)) {
+      if (!e.refused) return false;
+      // MX: a refused space. The name before it is the ATTR_NAME (the token
+      // ends at the last mark, before the space); the next scan starts a
+      // fresh attribute at the space and refuses it here, with no name.
+      if (empty) {
+        TSSymbol sym = 0;
+        emit_refused_space(es, &sym);
+        lexer->result_symbol = sym;
+        return true;
+      }
+    }
     if (empty) return false;
     if (!valid[ATTR_NAME]) return false;
     s->attr_stage = ATTR_NAME_STAGE;

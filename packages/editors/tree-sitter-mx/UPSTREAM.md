@@ -284,6 +284,37 @@ is MX's own:
   one 160-byte expression state) against tree-sitter's 1024-byte buffer, so a
   second expression frame does not fit.
 
+`patches/0014-fix-grammar-read-pattern-white-space-as-tag-grammar-whitespace.patch`
+is MX's own: the tag grammar reads whitespace as `@mxlang/parser` does
+(its `isPatternWhiteSpaceCode` and `isRefusedTagSpaceCode`).
+
+- `src/scanner.c`: `is_pattern_ws` is `is_ws` plus U+0085, U+200E, U+200F,
+  U+2028 and U+2029. Each of the five reads as VT wherever the parser's tag
+  grammar uses `isPatternWhiteSpaceCode`: the end of a tag name or shorthand,
+  between attributes, after `,`, around `=`/`:=`, before `{` after arguments,
+  after tag-level type parameters, `/` + whitespace (missing tag variable),
+  the concise next-line peek, whitespace-terminated expressions (termination,
+  `consumeWhitespace(isSpace)` and the operator look-ahead), concise
+  indentation (`skipc_tag_ws`, so `cursor_advance` keeps `is_ws` for HTML-mode
+  `$` and delimited blocks), the gap after `$`, the rest of a concise line
+  after `;` or `*/`, and `<` + whitespace in HTML content. Only CR and LF end
+  a concise line. The look-behind stores (`buf`, `prev_char`,
+  `prev_nonws_char`) keep only a low byte; they now keep the five as VT
+  (`look_behind_byte`), so a look-behind sees what it sees for VT.
+- `is_refused_tag_space` (U+00A0, U+1680, U+2000 to U+200A, U+202F, U+205F,
+  U+3000, U+FEFF) in a tag name, a shorthand or an attribute name
+  (`ExprCfg.attr_name`, the parser's `attrName`) is an `ERROR_SENTINEL` over
+  that one character: the name before it keeps its token, and recovery
+  swallows the rest of the line. Returning false there ended the parse
+  silently (a concise `div x` parsed as an empty document). Values, tag
+  variables, close tag names and body text are not refused.
+- Known limits, not changed here: other code points still lose their high
+  byte in the look-behind stores (U+200A is stored as LF, U+2000 and U+3000
+  as NUL), U+200E/U+200F hash like U+000E/U+000F in indentation, and the
+  look-behinds do not skip the 17 refused spaces as the parser's do.
+- Tests: the `tag-grammar whitespace` block of `test/corpus.bun-test.mts`
+  (MX's own file, not in the patch).
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and
