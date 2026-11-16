@@ -20,7 +20,7 @@ import {
 } from "./test-support.ts";
 
 const SWITCH_MESSAGE =
-  "Unable to find entry point for custom tag `<switch>`. MX has no switch; use `<if=…>` / `<else if=…>`.";
+  "Unable to find entry point for custom tag `<switch>`. There is no `<switch>` control-flow tag; use `<if=…>` / `<else if=…>`.";
 const KEYED_MESSAGE =
   "The `by=` arrow parameter `y` must match the `<for>` row `x`; rename it to keep the key expression: `by=(x => x.id)`. If the row has no `id` field, `by=identity` is a different strategy that tracks the row itself.";
 const IDENTITY_MESSAGE =

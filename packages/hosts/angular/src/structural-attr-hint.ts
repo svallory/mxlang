@@ -208,7 +208,7 @@ export function structuralAttrMessage(attr: StructuralAttr): string {
         : "`<if=cond>…</if>` or `<for|item| of=items>…</for>`";
   return (
     `\`*${attr.name}\` cannot follow another attribute: after ${after}, ` +
-    "Marko reads it as a multiplication, so this does not parse. " +
+    "it reads as a multiplication, so this does not parse. " +
     "Make it the first attribute of the tag, " +
     `or write ${tag} instead.`
   );

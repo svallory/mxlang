@@ -77,7 +77,7 @@ describe("TS80001 carries one location", () => {
         join(fixtures, "ng-structural-attr-failing"),
       );
       expect(lines).toEqual([
-        "src/x.component.ng.mx(5,28): error TS80001: `*ngIf` cannot follow another attribute: after `class=…`, Marko reads it as a multiplication, so this does not parse. Make it the first attribute of the tag, or write `<if=cond>…</if>` instead.",
+        "src/x.component.ng.mx(5,28): error TS80001: `*ngIf` cannot follow another attribute: after `class=…`, it reads as a multiplication, so this does not parse. Make it the first attribute of the tag, or write `<if=cond>…</if>` instead.",
       ]);
       expect(status).toBe(1);
     },

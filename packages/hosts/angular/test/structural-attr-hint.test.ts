@@ -81,6 +81,7 @@ function expectHint(message: string, structural: string, attribute: string) {
   if (attribute === "another attribute") expect(message).toContain(attribute);
   else expect(message).toContain(`\`${attribute}=`);
   expect(message).toContain("multiplication");
+  expect(message).not.toContain("Marko");
   // Fix 1: move it to the first position.
   expect(message).toMatch(/first attribute/);
   // Fix 2: the control-flow tag that replaces the directive.

@@ -105,7 +105,7 @@ function rawFail(message: string, node: { loc?: { start?: Position } }): never {
 function unknownTagMessage(name: string, ctx: Ctx): string {
   const base = unresolvedCustomTagMessage(name, { voice: voiceOfCtx(ctx) });
   return name === "switch" || name === "case"
-    ? `${base} MX has no switch; use \`<if=…>\` / \`<else if=…>\`.`
+    ? `${base} There is no \`<switch>\` control-flow tag; use \`<if=…>\` / \`<else if=…>\`.`
     : base;
 }
 

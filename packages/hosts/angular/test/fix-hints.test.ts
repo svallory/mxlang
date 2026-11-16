@@ -53,7 +53,7 @@ function clean(source: string) {
   }
 }
 const SWITCH_MESSAGE =
-  "Unable to find entry point for custom tag `<switch>`. MX has no switch; use `<if=…>` / `<else if=…>`.";
+  "Unable to find entry point for custom tag `<switch>`. There is no `<switch>` control-flow tag; use `<if=…>` / `<else if=…>`.";
 /** 0-based column of `needle`'s first occurrence, matching the emitter's Position basis. */
 function authoredColumn(source: string, needle: string): number {
   const offset = source.indexOf(needle);
