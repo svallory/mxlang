@@ -29,6 +29,15 @@
  * invocation. A changed file that maps to no project at all (docs, scripts
  * without tests) is named explicitly before exiting 0.
  *
+ * A project that owns a changed file but has no vitest test files (the
+ * tree-sitter grammars, whose tests are `*.bun-test.mts`, and the Zed
+ * extension) is not given to `vitest run --project`, which would fail with
+ * "No test files found": its package's own `test` script runs instead, or,
+ * when it has none, it is named and skipped (CI covers it). Its sources stay
+ * in the `vitest related` call so tests elsewhere that import them are still
+ * selected; that call passes with no tests only when every changed related
+ * source belongs to such a project.
+ *
  * The lane is always `all`: `vitest related` already selects only the affected
  * tests, so a fast lane would hide slow-lane tests it selected (the watch-mode
  * tsc tests import core and parser). Which slow-lane packages were touched is
@@ -330,8 +339,8 @@ function projectName(dir: string): string {
   }
 }
 
-function git(args: string[]): string {
-  const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+function git(args: string[], cwd = root): string {
+  const r = spawnSync("git", args, { cwd, encoding: "utf8" });
   if (r.status !== 0) {
     throw new Error(`git ${args.join(" ")} failed: ${r.stderr.trim()}`);
   }
@@ -348,6 +357,105 @@ export function changedFiles(base = "origin/main"): string[] {
     for (const line of out.split("\n")) if (line) names.add(line);
   }
   return [...names].filter((f) => existsSync(resolve(root, f))).sort();
+}
+
+/**
+ * A file vitest collects with its default `include`
+ * (`configDefaults.include`, `**\/*.{test,spec}.?(c|m)[jt]s?(x)`). Project
+ * configs that set `include` only narrow it, so this is a safe superset.
+ */
+export const VITEST_TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
+
+/**
+ * Whether git (tracked plus untracked, not ignored) lists a vitest test file
+ * under `dir`. Git, not a glob, so `node_modules`, `dist` and ignored dirs are
+ * never walked.
+ */
+export function hasVitestTests(dir: string, base = root): boolean {
+  return git(
+    ["ls-files", "--cached", "--others", "--exclude-standard", "--", dir],
+    base,
+  )
+    .split("\n")
+    .some((f) => VITEST_TEST_FILE.test(f));
+}
+
+/**
+ * The project dirs owning a changed file that have no vitest tests
+ * (`hasTests` false): distinct and sorted. A file outside every dir adds
+ * nothing.
+ */
+export function ownRunnerDirs(
+  files: readonly string[],
+  dirs: readonly string[],
+  hasTests: (dir: string) => boolean,
+): string[] {
+  const owners = new Set<string>();
+  for (const f of files) {
+    const d = ownerDir(f, dirs);
+    if (d !== undefined) owners.add(d);
+  }
+  return [...owners].filter((d) => !hasTests(d)).sort();
+}
+
+/**
+ * `--passWithNoTests` for the `vitest related` call: true only when there are
+ * changed related sources and every one of them is owned by a dir in `own`
+ * (no vitest test can be expected to import them), else false.
+ */
+export function relatedPassWithNoTests(
+  changed: readonly string[],
+  own: readonly string[],
+  dirs: readonly string[],
+): boolean {
+  const related = changed.filter(isRelatedSource);
+  return (
+    related.length > 0 &&
+    related.every((f) => {
+      const d = ownerDir(f, dirs);
+      return d !== undefined && own.includes(d);
+    })
+  );
+}
+
+/** `scripts.test` of `<dir>/package.json`, or undefined when there is none. */
+export function testScript(dir: string, base = root): string | undefined {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(resolve(base, dir, "package.json"), "utf8"),
+    );
+    const t = pkg?.scripts?.test;
+    return typeof t === "string" ? t : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The `--project` list without the own-runner projects (`own`), and one run
+ * per own dir, in `own`'s order: its package's `test` script when it has one,
+ * no `cmd` (named and skipped) otherwise.
+ */
+export function ownRunnerPlan(
+  own: readonly string[],
+  projects: readonly string[],
+  script: (dir: string) => string | undefined = testScript,
+  name: (dir: string) => string = projectName,
+): {
+  projects: string[];
+  runs: { dir: string; name: string; cmd?: string[] }[];
+} {
+  const ownNames = new Set(own.map(name));
+  return {
+    projects: projects.filter((p) => !ownNames.has(p)),
+    runs: own.map((dir) => ({
+      dir,
+      name: name(dir),
+      ...(script(dir) === undefined
+        ? {}
+        : { cmd: ["bun", "run", "--cwd", dir, "test"] }),
+    })),
+  };
 }
 
 function run(cmd: string[], env: NodeJS.ProcessEnv): number {
@@ -418,17 +526,25 @@ function main(): number {
   }
 
   let rc = 0;
+  const dirs = projectDirs();
+  // Projects owning a changed file that have no vitest test files (the
+  // tree-sitter grammars, Zed): vitest would fail them with "No test files
+  // found", so they run their own `test` script or are named and skipped.
+  const own = ownRunnerDirs(changed, dirs, (d) => hasVitestTests(d));
 
   if (sources.length > 0) {
     // passWithNoTests=false: a change whose sources no test imports must not
-    // exit green (vitest 3 defaults `related` to passWithNoTests).
+    // exit green (vitest 3 defaults `related` to passWithNoTests). It is true
+    // only when every changed related source belongs to an own-runner
+    // project, which is tested by its own script below; its sources stay in
+    // the call so tests elsewhere that import them are still selected.
     const cmd = [
       "bunx",
       "vitest",
       "related",
       ...sources,
       "--run",
-      "--passWithNoTests=false",
+      `--passWithNoTests=${relatedPassWithNoTests(changed, own, dirs)}`,
       ...cacheArgs(process.env, extra),
       ...extra,
     ];
@@ -441,30 +557,43 @@ function main(): number {
   // Changed files the import graph cannot see (.mx files, fixtures of any
   // extension, corpora, .json): run the vitest project of the package that
   // owns each one, plus the project of each test elsewhere that reads it.
-  if (nonSources.length > 0) {
-    const { byProject, unmapped } = nonSourceProjects(nonSources);
-    if (byProject.size > 0) {
-      const projects = [...byProject.keys()];
-      for (const [p, files] of byProject) {
-        console.log(
-          `test:affected: non-source change -> whole project ${p} (${files.join(", ")})`,
-        );
-      }
-      const cmd = [
-        "bunx",
-        "vitest",
-        "run",
-        ...projects.flatMap((p) => ["--project", p]),
-        "--passWithNoTests=false",
-        ...extra,
-      ];
-      console.log(`test:affected: ${cmd.join(" ").slice(0, 200)}`);
-      rc = Math.max(rc, run(cmd, env));
-    }
-    if (unmapped.length > 0) {
-      // Explicit, not silent: these changed files belong to no vitest project.
+  const { byProject, unmapped } = nonSourceProjects(nonSources, dirs);
+  const plan = ownRunnerPlan(own, [...byProject.keys()]);
+  if (plan.projects.length > 0) {
+    for (const p of plan.projects) {
       console.log(
-        `test:affected: no vitest project covers ${unmapped.join(", ")}; covered by the gate instead.`,
+        `test:affected: non-source change -> whole project ${p} (${(byProject.get(p) ?? []).join(", ")})`,
+      );
+    }
+    const cmd = [
+      "bunx",
+      "vitest",
+      "run",
+      ...plan.projects.flatMap((p) => ["--project", p]),
+      "--passWithNoTests=false",
+      ...extra,
+    ];
+    console.log(`test:affected: ${cmd.join(" ").slice(0, 200)}`);
+    rc = Math.max(rc, run(cmd, env));
+  }
+  if (unmapped.length > 0) {
+    // Explicit, not silent: these changed files belong to no vitest project.
+    console.log(
+      `test:affected: no vitest project covers ${unmapped.join(", ")}; covered by the gate instead.`,
+    );
+  }
+
+  // Own-runner projects. Extra args are vitest args, never passed here.
+  for (const r of plan.runs) {
+    if (r.cmd) {
+      console.log(
+        `test:affected: ${r.name} has no vitest tests -> bun run test in ${r.dir}`,
+      );
+      rc = Math.max(rc, run(r.cmd, env));
+    } else {
+      const files = changed.filter((f) => ownerDir(f, dirs) === r.dir);
+      console.log(
+        `test:affected: ${r.name} has no vitest tests and no test script (${files.join(", ")}); not run here, CI covers it.`,
       );
     }
   }

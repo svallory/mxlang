@@ -1,20 +1,27 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { configDefaults } from "vitest/config";
 import { createVitest } from "vitest/node";
 import {
   FIXTURE_CONSUMERS,
   fixtureConsumers,
+  hasVitestTests,
   isRelatedSource,
   isWide,
   laneFor,
   nonSourceProjects,
+  ownRunnerDirs,
+  ownRunnerPlan,
   PROBE_CONSUMER,
   probeConsumers,
   projectDirs,
   projectFor,
   projectsFor,
+  relatedPassWithNoTests,
   relatedSources,
+  testScript,
+  VITEST_TEST_FILE,
 } from "./test-affected.ts";
 
 describe("laneFor", () => {
@@ -342,5 +349,123 @@ describe("probeConsumers", () => {
         "scripts/other.ts",
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("ownRunnerDirs", () => {
+  const dirs = [
+    "packages/core/",
+    "packages/editors/zed/",
+    "packages/editors/tree-sitter-mx/",
+  ];
+  const TS = "packages/editors/tree-sitter-mx/";
+  const ZED = "packages/editors/zed/";
+
+  it("keeps the owner dirs without vitest tests, deduped and sorted", () => {
+    expect(
+      ownRunnerDirs(
+        [
+          "packages/editors/zed/src/lib.rs",
+          "packages/core/src/core.ts",
+          "packages/editors/tree-sitter-mx/grammar.js",
+          "packages/editors/tree-sitter-mx/src/parser.c",
+          "packages/editors/zed/extension.toml",
+          "docs/a.md",
+        ],
+        dirs,
+        (d) => d === "packages/core/",
+      ),
+    ).toEqual([TS, ZED]);
+    expect(
+      ownRunnerDirs(
+        ["packages/core/src/core.ts", "docs/a.md"],
+        dirs,
+        (d) => d === "packages/core/",
+      ),
+    ).toEqual([]);
+  });
+
+  it("relatedPassWithNoTests is true only when every changed related source is owned", () => {
+    const own = [TS];
+    expect(
+      relatedPassWithNoTests(
+        ["packages/editors/tree-sitter-mx/grammar.js"],
+        own,
+        dirs,
+      ),
+    ).toBe(true);
+    expect(
+      relatedPassWithNoTests(
+        [
+          "packages/editors/tree-sitter-mx/grammar.js",
+          "packages/core/src/core.ts",
+        ],
+        own,
+        dirs,
+      ),
+    ).toBe(false);
+    expect(
+      relatedPassWithNoTests(
+        ["packages/editors/tree-sitter-mx/src/parser.c", "docs/a.md"],
+        own,
+        dirs,
+      ),
+    ).toBe(false);
+  });
+
+  it("hasVitestTests: the grammar and Zed have none, core and scripts do", () => {
+    expect(hasVitestTests("packages/editors/tree-sitter-mx/")).toBe(false);
+    expect(hasVitestTests("packages/editors/zed/")).toBe(false);
+    expect(hasVitestTests("packages/core/")).toBe(true);
+    expect(hasVitestTests("scripts/")).toBe(true);
+  });
+
+  it("ownRunnerPlan drops owned projects and runs each own dir's test script", () => {
+    const scripts: Record<string, string> = { [TS]: "./scripts/test.sh" };
+    const names: Record<string, string> = {
+      [TS]: "@mxlang/tree-sitter-mx",
+      [ZED]: "@mxlang/zed",
+    };
+    expect(
+      ownRunnerPlan(
+        [TS, ZED],
+        [
+          "@mxlang/core",
+          "@mxlang/core-isolated",
+          "@mxlang/tree-sitter-mx",
+          "@mxlang/zed",
+        ],
+        (d) => scripts[d],
+        (d) => names[d] ?? d,
+      ),
+    ).toEqual({
+      projects: ["@mxlang/core", "@mxlang/core-isolated"],
+      runs: [
+        {
+          dir: TS,
+          name: "@mxlang/tree-sitter-mx",
+          cmd: ["bun", "run", "--cwd", TS, "test"],
+        },
+        { dir: ZED, name: "@mxlang/zed" },
+      ],
+    });
+  });
+
+  it("testScript reads the package's test script, undefined without one", () => {
+    expect(testScript(TS)).toBe("./scripts/test.sh");
+    expect(testScript(ZED)).toBeUndefined();
+    expect(testScript("packages/editors/")).toBeUndefined();
+  });
+
+  it("VITEST_TEST_FILE mirrors vitest's default include", () => {
+    expect(configDefaults.include).toEqual([
+      "**/*.{test,spec}.?(c|m)[jt]s?(x)",
+    ]);
+    for (const f of ["a.test.ts", "a.spec.mjs", "a.test.tsx"]) {
+      expect(VITEST_TEST_FILE.test(f), f).toBe(true);
+    }
+    for (const f of ["a.bun-test.mts", "a.ts"]) {
+      expect(VITEST_TEST_FILE.test(f), f).toBe(false);
+    }
   });
 });
