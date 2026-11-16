@@ -546,7 +546,10 @@ describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", 
   const REACHED: Array<[string, string]> = [
     ["the same body", "<Make/T/><T n=1/>"],
     ["a body nested under the /T", "<Make/T/><div><T n=1/></div>"],
-    ["a nested body below its own /T", "<Make/T/><div><Make/T/><T n=1/></div>"],
+    [
+      "a nested body below its own /T",
+      "<Make/T/><if=true><Make/T/><T n=1/></if>",
+    ],
   ];
   for (const [label, source] of REACHED) {
     it(`with no <define/T>, ${label}: <T> calls the /T`, () => {
@@ -578,37 +581,41 @@ describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", 
       "<Make/T/><define/W><T n=1/><Make/T/></define><W/>",
     ],
     [
-      "an element body's <T> above its own /T",
-      "<Make/T/><div><T n=1/><Make/T/></div>",
+      "an <if> body's <T> above its own /T",
+      "<Make/T/><if=true><T n=1/><Make/T/></if>",
     ],
     [
       "an <if> in a body whose own /T is below it",
-      "<Make/T/><div><if=true><T n=1/></if><Make/T/></div>",
+      "<Make/T/><if=true><if=true><T n=1/></if><Make/T/></if>",
     ],
     // A /T in a sibling block is reached but not in scope here.
     [
       "a <T> after a sibling block's /T, above its own",
-      "<div><Make/T/></div><T n=1/><Make/T/>",
+      "<if=true><Make/T/></if><T n=1/><Make/T/>",
     ],
     // Any binding of T in the body, not only a call's /T, makes the outer
     // reached /T not this body's: the <T> would read the body's own T.
     [
       "a body's <T> above its own <let/T>",
-      "<Make/T/><div><T n=1/><let/T=U/></div>",
+      "<Make/T/><if=true><T n=1/><let/T=U/></if>",
     ],
     [
       "a body's <T> above its own <const/T>",
-      "<Make/T/><div><T n=1/><const/T=U/></div>",
+      "<Make/T/><if=true><T n=1/><const/T=U/></if>",
     ],
     [
       "a body's <T> above its own element ref /T",
-      "<Make/T/><div><T n=1/><div/T/></div>",
+      "<Make/T/><if=true><T n=1/><div/T/></if>",
+    ],
+    [
+      "a body's <T> above its own <id/T>",
+      "<Make/T/><if=true><T n=1/><id/T/></if>",
     ],
     // A nested <define/V> unhides V in its body; T's innermost rebinding
-    // body (the <div>) must survive that copy of the hidden set.
+    // body (the <if>) must survive that copy of the hidden set.
     [
       "a <T> beside a define that unhides another name, above its body's /T",
-      "<Make/V/><Make/T/><div><span><define/V><b/></define><T n=1/></span><Make/T/></div>",
+      "<Make/V/><Make/T/><if=true><span><define/V><b/></define><T n=1/></span><Make/T/></if>",
     ],
   ])("with no <define/T>, %s is unbound", (_what, source) => {
     expect(() => lowerSource(`${NO_T}${source}`)).toThrow(
