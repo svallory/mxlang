@@ -61,8 +61,9 @@ describe("linear scaling", () => {
   // Babel's tree shallow while every item puts comments before a trigger.
   // Three comments per item make each look-behind step over several, so a
   // per-step scan of every comment read so far clearly breaks the bound. One
-  // item per line: Babel scans from each block comment to the next line
-  // break, so on a single line that scan alone grows quadratically.
+  // item per line: MX's Babel fork counts line breaks inside each block
+  // comment only, but npm `@babel/parser` scans from each block comment to
+  // the next line break, so a single line would grow quadratically there.
   it("many-comments-in-one-expression: 10x the input takes at most ~10x the time", () => {
     const item = (i: number) => `/*c${i}*/ /*d${i}*/ /*e${i}*/ &a${i}`;
     const shape = (n: number) =>
