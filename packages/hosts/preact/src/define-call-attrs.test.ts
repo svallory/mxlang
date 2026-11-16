@@ -144,6 +144,32 @@ describe("preact: a <define> that declares <return>", () => {
     expect(await renderWhole(source)).toBe(html);
   });
 
+  // Lead choice 3 (mx-nh8x): a call tag's `/T` is a binding core does not
+  // track as a tag name, so `<T/x/>` stays a `define` call this host sees as
+  // local; stock calls the local there, so the refusal must still fire.
+  it("refuses /var on a define call a call tag's /T shadows", () => {
+    const source =
+      "<define/T|{n}|><return=n/></define><define/Make><return=(() => 1)/></define><define/W><Make/T/><T/x n=1/><p>${x}</p></define><W/>";
+    expect(() => compilePreactMx(source, "/fixtures/page.mx")).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "a local binding of the same name shadows the `<define>`",
+        ),
+        line: 1,
+        column: 95,
+      }),
+    );
+  });
+
+  // mx-nh8x: stock renders the loop value `U`, not the outer define `T`.
+  it("renders a loop variable of a define's name as that value", async () => {
+    expect(
+      await renderWhole(
+        "<define/T|{n}|><b>${n}</b></define><define/U|{n}|><i>${n}</i></define><for|T| of=[U]><T n=1/></for>",
+      ),
+    ).toBe("<i>1</i>");
+  });
+
   // Stock renders `1020`: the `/var` binds in each row's own scope.
   it("binds a /var under <for> in each row's own scope", async () => {
     expect(

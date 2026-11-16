@@ -435,7 +435,7 @@ describe("a tag param that rebinds a define's name", () => {
       `${ROW}<define/List|{ a = /[}]/, Row }|><Row(1)/></define><List/>`,
     );
     expect(code).toContain(
-      "const __mxDef_List = ({ a = /[}]/, Row }: any) => (<>{Row(1)}</>);",
+      "const __mxDef_List = ({ a = /[}]/, Row }: any) => (<>{__mxDynamic(Row, [1])}</>);",
     );
   });
 
@@ -444,14 +444,14 @@ describe("a tag param that rebinds a define's name", () => {
       `${ROW}<for|{ Row }| of=input.list><Row(1)/></for><Row(2)/>`,
     );
     expect(code).toContain(
-      "<__mxFragment key={{ Row }}>{Row(1)}</__mxFragment>)}{__mxDef_Row(2)}",
+      "<__mxFragment key={{ Row }}>{__mxDynamic(Row, [1])}</__mxFragment>)}{__mxDef_Row(2)}",
     );
   });
 
   it("in a dynamic tag's body params, but not after the tag", () => {
     const code = emit(`${ROW}<\${input.X}|Row|><Row(1)/></><Row(2)/>`);
     expect(code).toContain(
-      "{ content: ((Row) => <>{Row(1)}</>) as (...args: any[]) => any }, undefined, true)}{__mxDef_Row(2)}",
+      "{ content: ((Row) => <>{__mxDynamic(Row, [1])}</>) as (...args: any[]) => any }, undefined, true)}{__mxDef_Row(2)}",
     );
   });
 });
