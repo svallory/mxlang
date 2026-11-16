@@ -1,0 +1,41 @@
+// TypeScript trivia above U+0020 before a region's `<`.
+// Each line holds the code point its comment names as a literal character.
+// tsx's lexer and @mxlang/tsx-bridge skip it, so the region starts at `<`.
+
+const x = 4;
+
+// U+00A0 NO-BREAK SPACE: skipped before `<`
+export const t1 = <p>a</p>;
+
+// U+1680 OGHAM SPACE MARK: skipped before `<`
+export const t2 = <p>a</p>;
+
+// U+2000 EN QUAD: skipped before `<`
+export const t3 = <p>a</p>;
+
+// U+2009 THIN SPACE: skipped before `<`
+export const t4 = <p>a</p>;
+
+// U+200A HAIR SPACE: skipped before `<`
+export const t5 = <p>a</p>;
+
+// U+202F NARROW NO-BREAK SPACE: skipped before `<`
+export const t6 = <p>a</p>;
+
+// U+205F MEDIUM MATHEMATICAL SPACE: skipped before `<`
+export const t7 = <p>a</p>;
+
+// U+3000 IDEOGRAPHIC SPACE: skipped before `<`
+export const t8 =　<p>a</p>;
+
+// U+FEFF ZERO WIDTH NO-BREAK SPACE: skipped before `<`
+export const t9 =﻿<p>a</p>;
+
+// U+2028 LINE SEPARATOR: skipped before `<`
+export const t10 = <p>a</p>;
+
+// U+2029 PARAGRAPH SEPARATOR: skipped before `<`
+export const t11 = <p>a</p>;
+
+// U+3000 IDEOGRAPHIC SPACE: skipped after `(`, before `<`
+export const p1 = (　<p>a</p>);

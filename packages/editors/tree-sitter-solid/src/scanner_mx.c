@@ -132,8 +132,8 @@ static inline bool is_eof(TSLexer *lexer) { return lexer->eof(lexer); }
 // Pattern_White_Space, not only codes <= 32, so each site below uses the
 // predicate the bridge's parser uses at the state it mirrors.
 //
-// `is_ws`: htmljs's `isWhitespaceCode`, any code <= 32 (scanner-rules §4). Kept
-// for TypeScript trivia (`mx_scan_at_lt`) and as the base of the two below.
+// `is_ws`: htmljs's `isWhitespaceCode`, any code <= 32 (scanner-rules §4), and
+// the base of the two below.
 static inline bool is_ws(int32_t c) { return c > 0 && c <= 32; }
 
 // `isPatternWhiteSpaceCode`: `is_ws` plus U+0085, U+200E, U+200F, U+2028 and
@@ -147,6 +147,10 @@ static inline bool is_pattern_ws(int32_t c) {
 // `isUnicodeWhitespaceCode`: `is_ws` plus Unicode's space separators, U+2028,
 // U+2029 and U+FEFF (not U+0085, U+200E or U+200F). The parser skips these in
 // `getPreviousNonWhitespaceCharCode`, the regex-vs-division look-behind.
+// `mx_scan_at_lt` also skips them as the TypeScript trivia before a region's
+// `<`: they are tsx's `extras` that Babel (so @mxlang/tsx-bridge) also skips.
+// tsx's extras add U+200B and U+2060, which Babel refuses, so a file holding
+// one has no bridge region to agree with.
 static inline bool is_unicode_ws(int32_t c) {
     return is_ws(c) || c == 0xA0 || c == 0x1680 || (c >= 0x2000 && c <= 0x200A) ||
            c == 0x2028 || c == 0x2029 || c == 0x202F || c == 0x205F || c == 0x3000 ||
@@ -1136,8 +1140,15 @@ static bool scan_mx_element_body(TSLexer *lexer) {
 // next nested attempt, in the same dispatch, seeing the following character
 // rather than `<` again). So there can only be one attempt per `<`, and it
 // must decide the full shape — fragment vs. element vs. neither — itself.
+//
+// Tree-sitter calls the external scanner once, before the internal lexer
+// skips the grammar's `extras`, and does not call it again after them. So
+// this function skips the TypeScript trivia before `<` itself, with
+// `is_unicode_ws` (tsx's extras that Babel also skips): stopping at U+3000 or
+// U+2028 would leave the internal lexer to skip it and lex `<` as a tsx token,
+// and no region would start where the bridge starts one.
 static bool mx_scan_at_lt(TSLexer *lexer, bool want_element, bool want_open, bool want_close) {
-    while (is_ws(lexer->lookahead)) {
+    while (is_unicode_ws(lexer->lookahead)) {
         lexer->advance(lexer, true);
     }
     if (lexer->lookahead != '<') {
