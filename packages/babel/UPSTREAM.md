@@ -124,7 +124,7 @@ Run `packages/babel/scripts/vendor.sh <tag>` (defaults to the currently
 pinned tag if omitted). It deletes `src/` (keeping `mx-hooks.ts` and `internal.ts`, which are ours) and re-fetches both
 `packages/babel-parser/src` and `packages/babel-helper-string-parser/src`
 (the latter into `util/string-parser.ts`), then reapplies the `flow` drop.
-It does **not** reapply the four numbered local modifications above, rerun
+It does **not** reapply the numbered local modifications above, rerun
 the build, or rerun the equivalence test — the script prints a reminder to
 do all three by hand, since a new tag may shift line numbers, add new
 plugins, or change the `ParseErrorConstructor`/`@bit` call sites enough
