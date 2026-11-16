@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { RELOCATABLE_BANNER, RELOCATABLE_DEFINE } from "./bundled-build.ts";
 import {
+  babelFlagReads,
   bakedBuildPaths,
   declarationFiles,
   declaredNames,
@@ -174,6 +175,10 @@ for (const p of PACKED_PACKAGES) {
       expect(bakedBuildPaths(dir, packed)).toEqual([]);
     });
 
+    it("reads no Babel build flag (process.env.BABEL_8_BREAKING, IS_PUBLISH) in shipped JS", () => {
+      expect(babelFlagReads(dir, packed)).toEqual([]);
+    });
+
     it("packs every main/types/bin/exports target, none into src", () => {
       const targets = entryTargets(pkg);
       expect(targets.length).toBeGreaterThan(0);
@@ -331,6 +336,32 @@ describe("bakedBuildPaths", () => {
           "/build/root",
         ),
       ).toEqual(["a.cjs", "b.js"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("babelFlagReads", () => {
+  it("flags each Babel build flag read, only in JS files", () => {
+    const dir = mkdtempSync(join(tmpdir(), "babel-flags-"));
+    try {
+      writeFileSync(
+        join(dir, "a.js"),
+        "const x = process.env.BABEL_8_BREAKING ? 1 : 0;",
+      );
+      writeFileSync(
+        join(dir, "b.cjs"),
+        "if (!process.env.IS_PUBLISH) throw new Error();",
+      );
+      writeFileSync(join(dir, "c.mjs"), "const x = false ? 1 : 0;");
+      writeFileSync(
+        join(dir, "d.d.ts"),
+        "declare const x: typeof process.env.BABEL_8_BREAKING;",
+      );
+      expect(babelFlagReads(dir, ["a.js", "b.cjs", "c.mjs", "d.d.ts"])).toEqual(
+        ["a.js", "b.cjs"],
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

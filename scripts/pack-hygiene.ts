@@ -301,6 +301,23 @@ export function bakedBuildPaths(
     );
 }
 
+/**
+ * Packed JS files that still read one of MX's Babel fork's build flags
+ * (`process.env.BABEL_8_BREAKING`, `process.env.IS_PUBLISH`). A build that
+ * bundles the fork must fold them with `--define`, as tsx-bridge's and
+ * core's builds do; left unfolded, a user's environment switches the bundled
+ * parser to Babel 8 behaviour at run time.
+ */
+export function babelFlagReads(dir: string, packed: string[]): string[] {
+  return packed
+    .filter((f) => /\.(c|m)?js$/.test(f))
+    .filter((f) =>
+      /process\.env\.(BABEL_8_BREAKING|IS_PUBLISH)\b/.test(
+        readFileSync(join(dir, f), "utf8"),
+      ),
+    );
+}
+
 /** Every string a `main`/`types`/`bin`/`exports` field points at, as a tarball path. */
 export function entryTargets(pkg: PackageJson): string[] {
   const targets: string[] = [];
