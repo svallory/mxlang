@@ -5970,8 +5970,8 @@ function activeWildcard(ctx: Ctx, node: Node): WildcardMatch | undefined {
 
 /**
  * Is `name` a PascalCase name a file-local binding (an import, a `<const>`, a
- * `<define>`, a loop or define parameter) has in scope? Such a binding is
- * always a component call, unless the file's dialect sets
+ * `<define>`, a loop or define parameter, a tag call's `/var`) has in scope?
+ * Such a binding is always a component call, unless the file's dialect sets
  * `bindingsCallTags: false`: then no binding makes a tag a call, and the
  * wildcard, the contract and the unknown-tag rules read the name as if it
  * were unbound.
@@ -5981,7 +5981,8 @@ function capitalBinding(ctx: Ctx, name: string): boolean {
     /^[A-Z]/.test(name) &&
     (ctx.defines.has(name) ||
       ctx.imports.has(name) ||
-      (ctx.tagVarShadowed?.has(name) ?? false))
+      (ctx.tagVarShadowed?.has(name) ?? false) ||
+      (ctx.hiddenDefines?.has(name) ?? false))
   );
 }
 
@@ -7571,10 +7572,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // pattern; `const Foo = lazy(...)`, a conditional, a string, or a tag param
     // (whose runtime value can never be inspected here) is "unknown" and routes
     // here instead. Same `valueImportBinding` provenance channel as above, so
-    // typed attribute-tag checking is unaffected. A `<define>` a tag call's
-    // `/var` hides here (`ctx.hiddenDefines`) is that call's value, unknown
-    // too; it is not added to the file-wide `unknownLocalValue`, which never
-    // shrinks.
+    // typed attribute-tag checking is unaffected. A name a tag call's `/var`
+    // binds in an enclosing body (`ctx.hiddenDefines`), with or without a
+    // `<define>` of that name, is that call's value, unknown too; it is not
+    // added to the file-wide `unknownLocalValue`, which never shrinks.
     if (
       ctx.unknownLocalValue.has(name) ||
       (ctx.hiddenDefines?.has(name) ?? false)

@@ -140,6 +140,11 @@ describe("preact: a <define> that declares <return>", () => {
       "<define/T|{n}|><return=n/><b>${n}</b></define><T n=1/>",
       "<b>1</b>",
     ],
+    [
+      "calls a tag call's /T as a tag with no <define/T>",
+      "<define/U|{n}|><i>${n}</i></define><define/Make><return=U/></define><Make/T/><T n=1/>",
+      "<i>1</i>",
+    ],
   ])("%s", async (_what, source, html) => {
     expect(await renderWhole(source)).toBe(html);
   });

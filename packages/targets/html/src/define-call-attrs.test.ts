@@ -130,6 +130,11 @@ describe("html: a <define> that declares <return>", () => {
       `${returning}<\${U} n=1/>`,
       "<i>1</i>",
     ],
+    [
+      "calls a tag call's /T as a tag with no <define/T>",
+      "<define/U|{n}|><i>${n}</i></define><define/Make><return=U/></define><Make/T/><T n=1/>",
+      "<i>1</i>",
+    ],
   ])("%s", (_what, source, html) => {
     expect(render(source)).toBe(html);
   });

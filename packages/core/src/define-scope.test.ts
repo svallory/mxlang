@@ -538,4 +538,24 @@ describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", 
       ),
     ).not.toThrow();
   });
+
+  // mx-vgbp: the same holds with no `<define/T>` at all. Stock 6.4.4 emits
+  // `let T = Make.content({})` and `_dynamic_tag(…, T, …)` for each of these.
+  const NO_T =
+    "<define/U|{n}|><i>${n}</i></define><define/Make><return=U/></define>";
+  const UNDEFINED: Array<[string, string]> = [
+    ["the same body", "<Make/T/><T n=1/>"],
+    ["a body nested under the /T", "<Make/T/><div><T n=1/></div>"],
+  ];
+  for (const [label, source] of UNDEFINED) {
+    it(`with no <define/T>, ${label}: <T> calls the /T`, () => {
+      expect(lastCall(`${NO_T}${source}`).kind).toBe("dynamic");
+    });
+  }
+
+  it("with no <define/T>, a <T> the /T is not in scope for is unbound", () => {
+    expect(() =>
+      lowerSource(`${NO_T}<define/W><Make/T/></define><T n=1/>`),
+    ).toThrow(/`<T>` has no matching import or `<define>` in scope/);
+  });
 });
