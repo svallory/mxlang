@@ -21,7 +21,7 @@ VENDOR_DIR="$HERE/vendor/tree-sitter-typescript"
 PATCH_DIR="$HERE/patches"
 
 # vendor/ is .gitignore'd, but src/scanner.c #includes the tsx scanner
-# header — Zed's file:// dev install compiles only what's committed at the
+# header — Zed's dev install compiles only what's committed at the
 # pinned rev (never vendor/), so a copy of that header must live in src/
 # itself. See UPSTREAM.md "A real defect this caused" for what happens
 # without this (Zed's clean clone: "file not found").

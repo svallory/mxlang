@@ -7,7 +7,7 @@
 #   2. scripts/parse-all.sh    — zero ERROR/MISSING over every .solid.mx
 #   3. scripts/highlight-smoke.sh — queries load and apply to every file
 #   4. scripts/zed-compile-check.sh — compiles src/ from a clean clone of
-#      HEAD, the same way Zed's file:// dev install does. Steps 1-3 all run
+#      HEAD, the same way Zed's dev install does. Steps 1-3 all run
 #      against the working tree, where vendor/ exists (populated by
 #      vendor.sh) — none of them can catch src/ reaching outside itself for
 #      a header that's committed nowhere. This step exists specifically for

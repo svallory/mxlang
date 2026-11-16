@@ -15,12 +15,12 @@ repository = "https://github.com/svallory/mxlang"
 # extension.
 #
 # DEV FORM. Same rules as solid below: Zed fetches the committed `rev`
-# (never the working tree), and `path` points at the grammar's subdirectory
-# of this monorepo. After a grammar commit, move `rev` to it. Merge by
-# fast-forward only: a squash or rebase merge orphans this sha, and
-# scripts/check-grammar-revs.sh then fails on main.
+# from this monorepo's GitHub URL (never the working tree), and `path` points
+# at the grammar's subdirectory of this monorepo. After a grammar commit, move
+# `rev` to it. Merge by fast-forward only: a squash or rebase merge orphans
+# this sha, and scripts/check-grammar-revs.sh then fails on main.
 # AT PUBLISH TIME: swap to the split-off grammar repo's real URL and drop `path`.
-repository = "file:///Users/svallory/work/mx"
+repository = "https://github.com/svallory/mxlang"
 rev = "0ad62c76bc8996b67274f95215060d2540226eb2"
 path = "packages/editors/tree-sitter-mx"
 
@@ -49,26 +49,30 @@ languages = ["MX", "Solid", "ReactMX", "PreactMX", "HonoMX"]
 # it is Solid-specific, so AngularMX declares `grammar = "solid"` directly
 # rather than this extension compiling a second, identical grammar package.
 #
-# DEV FORM. Zed still requires a committed `rev` even for a `file://`
-# repository — it runs `git init` + `git remote add origin <url>` +
-# `git fetch --depth 1 origin <rev>` + `git checkout <rev>`, so uncommitted
-# changes under packages/editors/tree-sitter-solid are invisible to it. `path` points Zed at the grammar's
-# subdirectory inside this monorepo's working tree, since the checked-out
-# `rev` is the whole repo, not a single-grammar repo the way a plain
-# `[grammars.<name>]` pointing straight at a grammar's own repo root would be
-# (`GrammarManifestEntry.path`, crates/extension/src/extension_manifest.rs).
+# DEV FORM. `repository` is this monorepo's GitHub URL. Zed requires a
+# committed `rev` whatever the URL scheme — it runs `git init` +
+# `git remote add origin <url>` + `git fetch --depth 1 origin <rev>` +
+# `git checkout <rev>`, so uncommitted changes under
+# packages/editors/tree-sitter-solid are invisible to it, and the `rev` must
+# be pushed. To install a grammar commit that is not pushed yet, push its
+# branch, or point `repository` at `file://<your checkout root>` locally and
+# do not commit that line. `path` points Zed at the grammar's subdirectory
+# inside this monorepo, since the checked-out `rev` is the whole repo, not a
+# single-grammar repo the way a plain `[grammars.<name>]` pointing straight at
+# a grammar's own repo root would be (`GrammarManifestEntry.path`,
+# crates/extension/src/extension_manifest.rs).
 #
 # AT PUBLISH TIME: after `packages/editors/zed` is subtree-split into its
 # own `mxlang/zed` repo (see scripts/subtree-split.sh), swap `repository` to
 # the split-off `tree-sitter-solid` repo's real GitHub URL and drop `path`
 # (that repo's root will already be the grammar root).
-repository = "file:///Users/svallory/work/mx"
+repository = "https://github.com/svallory/mxlang"
 rev = "d017c1f7d228acd21738e0124ef15ff83f447e04"
 path = "packages/editors/tree-sitter-solid"
 
 [grammars.astromx]
 # DEV FORM. Same rules as solid.
 # AT PUBLISH TIME: swap to real GitHub URL and drop `path`.
-repository = "file:///Users/svallory/work/mx"
+repository = "https://github.com/svallory/mxlang"
 rev = "85d3fd60f788279d4c974de3904052742ebe42d3"
 path = "packages/editors/tree-sitter-astromx"

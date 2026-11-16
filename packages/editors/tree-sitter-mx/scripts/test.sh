@@ -28,7 +28,7 @@
 #      `MX` (the name of languages/mx), not `marko`.
 #   5. tools/check-wasm.mts — the wasm parses a sample and both queries load.
 #   6. scripts/zed-compile-check.sh — compiles src/ from a clean clone of
-#      HEAD, the same way Zed's file:// dev install does.
+#      HEAD, the same way Zed's dev install does.
 #
 # The test files are named *.bun-test.mts, not *.test.mts, so the root vitest
 # run (which globs packages/editors/*) does not collect them: they use bun's

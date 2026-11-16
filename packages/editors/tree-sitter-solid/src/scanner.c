@@ -18,7 +18,7 @@
 // MX scanner when the MX token is valid, and otherwise defers to upstream.
 //
 // The header is copied into src/ (not included from ../vendor/) because
-// vendor/ is .gitignore'd — only src/ is committed, and Zed's file:// dev
+// vendor/ is .gitignore'd — only src/ is committed, and Zed's dev
 // install compiles nothing but what is committed at the pinned rev. An
 // include reaching outside src/ compiles fine from a working tree (where
 // scripts/vendor.sh has populated vendor/) but fails in Zed's clean clone

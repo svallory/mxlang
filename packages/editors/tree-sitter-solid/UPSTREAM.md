@@ -98,7 +98,7 @@ itself, copied rather than included from outside it.
 
 ## A real defect this caused
 
-**Zed's file:// dev install of this grammar failed to compile** the first
+**Zed's dev install of this grammar failed to compile** the first
 time it was tried (`~/Library/Logs/Zed/Zed.log`):
 
 ```
@@ -112,7 +112,7 @@ Root cause: `src/scanner.c` originally `#include`d
 That path resolves fine from a working tree, where `scripts/vendor.sh` has
 populated `vendor/` — every check that ran before this was caught
 (`tree-sitter test`, `scripts/parse-all.sh`, `scripts/highlight-smoke.sh`, CI)
-compiles from the working tree and could not see the problem. Zed's `file://`
+compiles from the working tree and could not see the problem. Zed's
 dev install, per Z7, git-clones this repo **at the pinned committed rev** and
 compiles only what's there — `vendor/` is `.gitignore`'d, so it simply isn't
 present in that clone.

@@ -8,7 +8,7 @@
 `angular-editor-grammar`). `AstroMX` rides the `astromx` grammar (from `packages/editors/tree-sitter-astromx`, which splits the file into a TypeScript fence and an MX template body) and injects Marko queries into the body, so the frontmatter highlights as TypeScript.
 
 `MX` rides MX's own tree-sitter grammar, `[grammars.mx]` in `extension.toml`
-(dev form: `file://` + committed `rev` + `path =
+(dev form: this monorepo's GitHub URL + committed `rev` + `path =
 "packages/editors/tree-sitter-mx"`): `marko-js/tree-sitter` at
 `7fb20382b9b0c97c8bdbceee0e0641bea11dd00f` (`@marko/tree-sitter` v0.2.0) plus
 the name-sugar shorthands. `scripts/vendor.sh` builds `languages/mx/*.scm`
@@ -38,16 +38,18 @@ same shape with `["ng.mx"]`.
 
 `Solid` (`.solid.mx`) is backed by `packages/editors/tree-sitter-solid`'s grammar
 (a patched `tree-sitter-typescript` tsx dialect with an `mx_element` external
-token in expression position). Its grammar is a **`file://` dependency during
-development** (`extension.toml`'s `[grammars.solid]`, with
+token in expression position). Its grammar is a **monorepo dependency during
+development** (`extension.toml`'s `[grammars.solid]`: `repository =
+"https://github.com/svallory/mxlang"`, with
 `path = "packages/editors/tree-sitter-solid"` since the grammar lives inside this
-monorepo rather than at a repo's own root) — swapped to a real GitHub URL at
-publish time. Even `file://` still requires a **committed sha**: Zed's
+monorepo rather than at a repo's own root) — swapped to the grammar's own
+GitHub URL at publish time. Zed requires a **committed, pushed sha**: its
 `checkout_repo` runs `git init` + `git fetch --depth 1 origin <rev>` +
 `git checkout <rev>` regardless of scheme, so uncommitted changes under
 `packages/editors/tree-sitter-solid` are invisible to Zed. The dev loop is commit,
-then bump `rev` in `extension.toml`, then reinstall — see
-`packages/editors/zed/README.md`.
+push, then bump `rev` in `extension.toml`, then reinstall; to try an unpushed
+commit, point `repository` at `file://<your checkout root>` locally and do not
+commit that line — see `packages/editors/zed/README.md`.
 
 **`AngularMX` (`.ng.mx`) reuses this same grammar package unchanged**, rather
 than a second, identical grammar: the grammar's only MX-specific addition

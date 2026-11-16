@@ -60,7 +60,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 CLONE_DIR="$TMP_DIR/clone"
 
 # Clone the whole monorepo (this grammar has no repo of its own yet — it
-# lives nested at $PKG_REL, same as extension.toml's file:// + path dev
+# lives nested at $PKG_REL, same as extension.toml's monorepo URL + path dev
 # form), at HEAD, so only committed files are present. This mirrors exactly
 # what Zed's checkout_repo does for [grammars.solid].
 echo "Cloning committed HEAD only (file://$REPO_ROOT, at $PKG_REL)..."

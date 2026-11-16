@@ -357,7 +357,7 @@ the root `bun run test:grammar`):
    and `test/atoms.bun-test.mts`.
 4. `tools/check-wasm.mts`: the wasm parses a sample, and both queries load.
 5. `scripts/zed-compile-check.sh`: compiles `src/` from a clean clone of
-   HEAD, as Zed's `file://` dev install does (CI: the `zed-compile-check` job,
+   HEAD, as Zed's dev install does (CI: the `zed-compile-check` job,
    forced `tree-sitter build --wasm` fallback with tree-sitter-cli 0.26.9,
    no Docker, the same as the solid and astromx packages; see
    `../tree-sitter-solid/UPSTREAM.md` "tree-sitter-cli version split").

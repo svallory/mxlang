@@ -1,9 +1,9 @@
 # Publishing checklist
 
 This extension has no automated release pipeline. Two things must happen
-before it can be installed by anyone other than a `file://` dev install:
-the grammars' `file://` dev paths must be swapped for real GitHub URLs
-(Z36), and the extension itself must be registered with Zed's extensions
+before it can be installed by anyone other than a dev install: the
+grammars' monorepo URL and `path` must be swapped for their own repositories'
+GitHub URLs (Z36), and the extension itself must be registered with Zed's extensions
 registry. Both are manual, one-time-per-release steps.
 
 ## 1. Subtree-split this package into its own repo
@@ -24,16 +24,16 @@ sees committed history; commit everything in this package first.
 
 `extension.toml` currently points `[grammars.mx]`, `[grammars.solid]` and
 `[grammars.astromx]`
-at this monorepo over `file://`, with a `path` selecting the grammar's
-subdirectory — that only works for a dev install (Zed still clones the repo
-at a committed `rev` even for `file://`; see each grammar's own comment in
-`extension.toml`). At publish time, for **each** grammar:
+at this monorepo's GitHub URL (`https://github.com/svallory/mxlang`), with a
+`path` selecting the grammar's subdirectory — that only works for a dev
+install (Zed clones the repo at a committed, pushed `rev`; see each grammar's
+own comment in `extension.toml`). At publish time, for **each** grammar:
 
 1. Commit and push `packages/editors/tree-sitter-mx` (or
    `tree-sitter-solid`, `tree-sitter-astromx`) to its own real repository — either as its own
    subtree-split repo, or wherever it will be vendored from.
 2. In `extension.toml`, swap that grammar's `repository` from
-   `file:///Users/svallory/work/mx` to the real GitHub URL.
+   the monorepo URL to the grammar's own GitHub URL.
 3. Update `rev` to the commit the grammar was published at.
 4. Delete the `path = "packages/editors/..."` line — the published repo's
    root is already the grammar root, so no subdirectory selector is needed
@@ -64,8 +64,8 @@ pushes to arbitrary hosts. The procedure (from that repo's own README):
    commit the submodule is checked out at.
 4. Open a PR against `zed-industries/extensions`. Their CI builds the
    extension from the pinned commit — this is the first point a genuinely
-   clean, network-fetched build of `extension.toml` (not the local
-   `file://` dev form) gets exercised, so treat a failure there as a real
+   clean build of the published `extension.toml` (not the monorepo
+   `path` dev form) gets exercised, so treat a failure there as a real
    defect, not registry flakiness, until proven otherwise.
 5. Once merged, updates ship by bumping the submodule's pinned commit in a
    follow-up PR to the registry repo — there is no separate "publish"
@@ -80,7 +80,7 @@ longest matching suffix) but says so **by inspection of the config**, not by
 observing it in a running Zed. Before or shortly after publishing, verify it
 for real:
 
-1. Install the extension (dev install via `file://`, or the published one).
+1. Install the extension (dev install from your checkout, or the published one).
 2. Open a `.solid.mx` file and a plain `.mx` file side by side in Zed.
 3. Check the language shown in Zed's status bar / language picker for each:
    the `.solid.mx` file must show `Solid`, and `.mx` must show `MX`.

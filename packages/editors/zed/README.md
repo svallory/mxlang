@@ -184,8 +184,9 @@ the one to install for `.marko` files.
 ## Dev install (Zed) — `Solid` and `AngularMX`
 
 `Solid`'s grammar lives in this monorepo at `packages/editors/tree-sitter-solid`,
-so `extension.toml`'s `[grammars.solid]` uses the **`file://` dev form**
-with `path = "packages/editors/tree-sitter-solid"` (Zed clones the whole repo at
+so `extension.toml`'s `[grammars.solid]` uses the **monorepo dev form**:
+`repository = "https://github.com/svallory/mxlang"` with
+`path = "packages/editors/tree-sitter-solid"` (Zed clones the whole repo at
 `rev`, then looks for `src/` under that `path` — `GrammarManifestEntry.path`
 in Zed's own `extension_manifest.rs`). `AngularMX` reuses this exact grammar
 (`languages/ngmx/config.toml` declares `grammar = "solid"`, no
@@ -195,23 +196,25 @@ in Zed's own `extension_manifest.rs`). `AngularMX` reuses this exact grammar
 Even in dev form, Zed still requires a **committed** `rev` — it runs `git
 init` + `git remote add origin <url>` + `git fetch --depth 1 origin <rev>` +
 `git checkout <rev>` regardless of scheme, so **uncommitted changes under
-`packages/editors/tree-sitter-solid` are invisible to Zed**. There is no way to
+`packages/editors/tree-sitter-solid` are invisible to Zed**, and with the
+GitHub URL the `rev` must also be pushed. There is no way to
 point Zed at a dirty working tree. Zed also never runs `tree-sitter
 generate` itself — it compiles whatever `src/parser.c` (and
 `src/scanner_mx.c`/`src/scanner.c`) is committed at that rev with clang.
 
-The dev loop is therefore **commit, then bump `rev`, then reinstall**:
+The dev loop is therefore **commit, push, then bump `rev`, then reinstall**:
 
 1. Make your change under `packages/editors/tree-sitter-solid` and commit it (in
-   this worktree, on this branch).
-2. `git rev-parse HEAD` — copy the sha.
-3. Update `extension.toml`'s `[grammars.solid]` `rev` to that sha.
-4. Command Palette → **"zed: install dev extension"** → select this
-   directory (`worktrees/main/packages/editors/zed` from the operator's
-   space root, i.e. `packages/editors/zed` inside whichever worktree you're
-   in — Zed does not watch for live changes; see "Reinstalling after a
-   change" below).
-5. Open or create a `.solid.mx` file — it should be recognized as `Solid`,
+   your checkout, on your branch).
+2. Push the branch, so the commit is on GitHub. To try a commit you have not
+   pushed, point `[grammars.solid]`'s `repository` at
+   `file://<your checkout root>` locally instead, and do not commit that line.
+3. `git rev-parse HEAD` — copy the sha.
+4. Update `extension.toml`'s `[grammars.solid]` `rev` to that sha.
+5. Command Palette → **"zed: install dev extension"** → select this
+   directory (`packages/editors/zed` inside your checkout — Zed does not
+   watch for live changes; see "Reinstalling after a change" below).
+6. Open or create a `.solid.mx` file — it should be recognized as `Solid`,
    with the TypeScript host language highlighted, brackets matched, an
    outline of its declarations, and each `mx_element` region highlighted via
    its `MX` injection (see "Embedded MX regions" above). A `.ng.mx` file
@@ -274,10 +277,11 @@ submission procedure, verifying the `.mx`/`.solid.mx` suffix precedence in a
 running Zed, and the manual `.mx`/`.astro.mx` editor checks still owed.
 
 **Publish-time URL swap.** Both the dev-install steps above and
-`extension.toml`'s `[grammars.solid]` comment describe the `file://` form
-as temporary: once `packages/editors/zed` is subtree-split into its own
+`extension.toml`'s `[grammars.solid]` comment describe the monorepo URL and
+`path` form as temporary: once `packages/editors/zed` is subtree-split into its own
 repo and `packages/editors/tree-sitter-solid` is published on its own (or the split
 repo vendors it), swap `repository` to that repo's real GitHub URL, drop
 `path` (its root will already be the grammar root), and commit. Registering
 with `zed-industries/extensions` needs the remote form — a registry
-submodule cannot point at a contributor's local filesystem.
+submodule needs each grammar's own repository, not a subdirectory of this
+monorepo.
