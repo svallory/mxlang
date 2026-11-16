@@ -171,8 +171,8 @@ try {
   if (!apiOutput.includes("via-api: ok"))
     fail(`public API check produced: ${apiOutput}`);
 
-  // 2. Bun loader. `.mx` only — MX only supports the MX 1.0 subset of Marko
-  // syntax, so the loader does not claim a real `.marko` file.
+  // 2. Bun loader. `.mx` only — `.mx` is the only template extension and a
+  // `.marko` file is not an MX input, so the loader does not claim one.
   writeFileSync(
     join(scratchDir, "bunfig.toml"),
     'preload = ["@mxlang/target-html/bun"]\n',

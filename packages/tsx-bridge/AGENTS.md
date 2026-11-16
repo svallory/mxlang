@@ -64,8 +64,8 @@ MX does not promise. `.mx`
 (plus `.solid.mx` and `.astro.mx`, different file kinds) is the only template
 extension across every host loader (`@mxlang/target-html/bun`, `@mxlang/host-hono/bun`,
 `@mxlang/vite-plugin`), the language server, the TypeScript plugin/`mx-tsc`,
-and the VS Code/Zed extensions. Porting a Marko component that stays within
-the MX 1.0 subset is a rename. Tags beside a file reach a compile through
+and the VS Code/Zed extensions. A Marko component that uses no construct
+`divergences.md` lists ports by renaming it to `.mx`. Tags beside a file reach a compile through
 core's own scan (`getCustomTags`: `tags/x.mx` and `tags/x.tag.ts`, handed to
 the compile as `customTags`). No MX compile runs `@marko/compiler`'s `tags/`
 auto-discovery, which only ever found files whose *actual* extension is

@@ -14,9 +14,9 @@ import { compileHonoMx, honoTargets } from "./index.ts";
  * difference, since this host's compiled output contains JSX and that
  * package's does not.
  *
- * `.marko` is deliberately not registered: MX only supports the MX 1.0
- * subset of Marko syntax, so treating a real `.marko` file as MX would
- * silently claim support it does not have. `.solid.mx` is a different file
+ * `.marko` is deliberately not registered: `.mx` is the only template
+ * extension; a `.marko` file is not an MX input, so treating one as MX would
+ * silently claim support MX does not promise. `.solid.mx` is a different file
  * kind (TSX with MX regions, handled by `@mxlang/vite-plugin`) and must not
  * match here, nor does `.astro.mx` (Astro's template kind), hence the
  * negative lookbehind despite both also ending in `.mx`.

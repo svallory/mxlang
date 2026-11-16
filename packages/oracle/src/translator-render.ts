@@ -17,8 +17,9 @@ import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
  * loading the emitted module rather than reconstructing its shape.
  *
  * `@mxlang/target-html`'s own loaders (the Bun plugin, `@mxlang/vite-plugin`)
- * accept only `.mx` — MX only supports the MX 1.0 subset of Marko syntax, so
- * a real `.marko` filename is never handed to a product entry point. This
+ * accept only `.mx` — `.mx` is the only template extension and a `.marko`
+ * file is not an MX input, so a real `.marko` filename is never handed to a
+ * product entry point. This
  * harness instead reads each fixture's `.marko` file by content and compiles
  * it under a *virtual* sibling `.mx` filename (same directory, so relative
  * imports and `@marko/compiler`'s own `tags/` discovery still resolve

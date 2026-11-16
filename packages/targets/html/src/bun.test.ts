@@ -50,8 +50,8 @@ describe("@mxlang/target-html/bun", () => {
   test("does not claim a .marko path", async () => {
     Bun.plugin(markoPlugin);
 
-    // MX only supports the MX 1.0 subset of Marko syntax, so a real .marko
-    // file is not treated as MX by this loader — even one of this host's
+    // `.mx` is the only template extension; a .marko file is not an MX
+    // input, so it is not treated as MX by this loader — even one of this host's
     // own oracle fixtures, which stays a real .marko file on disk. Bun's
     // default loader for an unrecognized extension returns the file's own
     // path as the module's default export, not a compiled function -

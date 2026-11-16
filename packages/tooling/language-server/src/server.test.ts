@@ -1596,8 +1596,9 @@ describe("stdio server (e2e)", () => {
   });
 
   it("does not recognize a .marko document or the marko language id", () => {
-    // MX only supports the MX 1.0 subset of Marko syntax, so a real .marko
-    // file is not diagnosed as MX even though it shares a taglib origin.
+    // `.mx` is the only template extension; a .marko file is not an MX
+    // input, so it is not diagnosed as MX even though it shares a taglib
+    // origin.
     expect(isMxDocument("file:///project/App.marko", "marko")).toBe(false);
     expect(isMxDocument("untitled:App", "marko")).toBe(false);
   });

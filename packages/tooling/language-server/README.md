@@ -37,8 +37,7 @@ successful compile clears any previous diagnostics for that file.
 **Everything else.** No completion, no hover, no go-to-definition, no
 formatting, no semantic tokens — Marko's own language server
 (`marko-js/language-server`) already provides all of that for `.marko`
-files (and would for `.mx`, since MX 1.0 is a strict Marko subset), and
-this server is designed to run *alongside* it, not replace it
+files, and this server is designed to run *alongside* it, not replace it
 (`notes/research/host-diagnostics.md` §2: both VS Code and Zed support
 multiple language servers registered against one language).
 

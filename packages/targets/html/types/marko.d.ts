@@ -13,7 +13,7 @@
  * export.
  *
  * `.marko` has no declaration here: `.mx` is the only extension either loader
- * accepts, since MX only supports the MX 1.0 subset of Marko syntax.
+ * accepts, since a `.marko` file is not an MX input.
  */
 declare module "*.mx" {
   import type { Out } from "@mxlang/target-html/runtime";
