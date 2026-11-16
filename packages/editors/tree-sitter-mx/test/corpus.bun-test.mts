@@ -344,10 +344,18 @@ describe("tag-grammar whitespace", () => {
   // web-tree-sitter's indices count UTF-16 units (probed: the root of
   // "<div a\u0085b/>x" ends at 11, its length, not at its 12 UTF-8 bytes).
   const covers = (
-    n: { type: string; isMissing: boolean; startIndex: number; endIndex: number; children: any[] },
+    n: {
+      type: string;
+      isMissing: boolean;
+      startIndex: number;
+      endIndex: number;
+      children: any[];
+    },
     at: number,
   ): boolean =>
-    ((n.type === "ERROR" || n.isMissing) && n.startIndex <= at && at < n.endIndex) ||
+    ((n.type === "ERROR" || n.isMissing) &&
+      n.startIndex <= at &&
+      at < n.endIndex) ||
     n.children.some((c) => covers(c, at));
 
   for (const [src, at] of REFUSED_SPACE_ROWS) {
