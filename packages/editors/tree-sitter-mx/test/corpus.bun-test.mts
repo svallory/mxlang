@@ -330,6 +330,21 @@ describe("tag-grammar whitespace", () => {
         assert.strictEqual(render(src).replaceAll(ws, "\v"), twin);
       });
     }
+    // The tag variable's event spans the whole `x: T`, so the twin check
+    // above cannot see where the type token starts; the highlight capture
+    // on var_type starts after the gap, as for VT.
+    for (const form of TAG_VAR_TYPE_FORMS) {
+      const src = form.replaceAll("W", ws);
+      it(`${JSON.stringify(src)} starts its var_type at T`, () => {
+        const tree = parseMx(src);
+        assert.ok(tree, "parse timed out");
+        const types = tree.rootNode.descendantsOfType("var_type");
+        assert.equal(types.length, 1, tree.rootNode.toString());
+        assert.equal(types[0]?.startIndex, src.indexOf("T"));
+        assert.equal(types[0]?.text, "T");
+        tree.delete();
+      });
+    }
   }
 
   // [input, offset of the refused space]
