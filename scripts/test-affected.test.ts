@@ -496,6 +496,8 @@ describe("Markdown selection", () => {
       "AGENTS.md",
       "docs/a.md",
       "packages/oracle/fixtures/angular/README.md",
+      // A fixtures-style dir on no FIXTURE_CONSUMERS row.
+      "packages/oracle/fixtures/marko/README.md",
       "packages/editors/tree-sitter-mx/test/corpus/README.md",
       "packages/core/src/a.ts",
     ])
