@@ -88,7 +88,7 @@ describe("solid mx-tsc printed method heads", () => {
         );
         expect(diagnostic, output).toBeDefined();
         expect(diagnostic).not.toMatch(
-          /position approximate|MX-generated code|position unknown/,
+          /position approximate|in generated code|position unknown/,
         );
       }
     },

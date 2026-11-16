@@ -72,7 +72,7 @@ describe.each(["solid", "preact", "react", "hono"])(
     it("maps whole-file parameter types, defaults, constraints and return types exactly", () => {
       for (const d of whole) {
         expect(d.message).not.toMatch(
-          /position approximate|MX-generated code|position unknown/,
+          /position approximate|in generated code|position unknown/,
         );
       }
       expect(
@@ -88,7 +88,7 @@ describe.each(["solid", "preact", "react", "hono"])(
     it("keeps exact region parameter, default, generic constraint and return positions", () => {
       for (const d of region) {
         expect(d.message).not.toMatch(
-          /position approximate|MX-generated code|position unknown/,
+          /position approximate|in generated code|position unknown/,
         );
       }
       expect(

@@ -37,7 +37,7 @@ export function approximateSuffix(line: number, column: number): string {
  * range touches no mapped authored code. The error is in code MX wrote.
  */
 export function mxBugSuffix(line: number, column: number): string {
-  return ` (in MX-generated code, not yours: an MX bug; generated ${line}:${column})`;
+  return ` (in generated code, not yours: an internal bug; generated ${line}:${column})`;
 }
 
 /**

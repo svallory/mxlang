@@ -169,7 +169,7 @@ function expectCases(project: Project, cases: Record<string, Case>) {
     });
     // Reported at the authored token: never the 1:1 fallback.
     for (const line of lines) {
-      expect(line, name).not.toContain("an MX bug");
+      expect(line, name).not.toContain("an internal bug");
       expect(line, name).not.toContain("position approximate");
     }
   }
@@ -253,7 +253,7 @@ describe("mx-tsc under strict: a client declaration keeps its type", () => {
     expect(declared(plainLines, "plain.ts")).toMatch(/^\(1,5\): /);
     expect(declared(mxLines, "client-var-read.mx")).toMatch(/^\(1,12\): /);
     for (const line of mxLines) {
-      expect(line).not.toContain("an MX bug");
+      expect(line).not.toContain("an internal bug");
       expect(line).not.toContain("position approximate");
     }
   });

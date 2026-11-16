@@ -193,6 +193,14 @@ const pageSpans = [
   PAGE.code("oops"),
 ];
 
+describe("mxBugSuffix", () => {
+  it("names neither MX nor Marko", () => {
+    expect(mxBugSuffix(3, 7)).toBe(
+      " (in generated code, not yours: an internal bug; generated 3:7)",
+    );
+  });
+});
+
 describe("approximateUnmapped", () => {
   it("returns a diagnostic Volar can map as the very same object", () => {
     const language = PAGE.language(pageMappings, pageSpans);
@@ -393,7 +401,7 @@ describe("approximateUnmapped", () => {
 
       expect(placed?.start).toBe(world.src("<b>"));
       expect(placed?.length).toBe("<b>${missingName}</b>".length);
-      expect(placed?.messageText).not.toContain("an MX bug");
+      expect(placed?.messageText).not.toContain("an internal bug");
     });
 
     it("never takes a scaffolding name that static text happens to spell for the author's", () => {
@@ -415,7 +423,7 @@ describe("approximateUnmapped", () => {
       // gap is the region, and nothing the author wrote is about `input`.
       expect(placed?.start).toBe(0);
       expect(placed?.length).toBe(world.source.length);
-      expect(placed?.messageText).toContain("an MX bug");
+      expect(placed?.messageText).toContain("an internal bug");
     });
 
     it("narrows to a literal the author wrote", () => {
@@ -503,7 +511,7 @@ describe("approximateUnmapped", () => {
       );
       expect(
         region.place(language, region.diagnostic("__scaffold"))?.messageText,
-      ).toContain("an MX bug");
+      ).toContain("an internal bug");
     });
   });
 
@@ -594,8 +602,8 @@ describe("approximateUnmapped", () => {
       expect(farMessage).toBe(
         `Cannot find name 'oops'.${mxBugSuffix(farLine, farColumn)}`,
       );
-      expect(farMessage).toContain("an MX bug");
-      expect(nearMessage).not.toContain("an MX bug");
+      expect(farMessage).toContain("an internal bug");
+      expect(nearMessage).not.toContain("an internal bug");
     });
 
     it("does not call a token the source merely spells an authored name", () => {
@@ -606,7 +614,7 @@ describe("approximateUnmapped", () => {
 
       expect(
         String(approximateUnmapped(language, scaffold).messageText),
-      ).toContain("an MX bug");
+      ).toContain("an internal bug");
     });
   });
 

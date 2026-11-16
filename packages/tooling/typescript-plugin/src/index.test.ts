@@ -1625,7 +1625,7 @@ describe("MX language plugin", {
       expect(
         ts.flattenDiagnosticMessageText(defect?.messageText ?? "", "\n"),
       ).toMatch(
-        /\(in MX-generated code, not yours: an MX bug; generated \d+:\d+\)$/,
+        /\(in generated code, not yours: an internal bug; generated \d+:\d+\)$/,
       );
       expect(defect?.start).toBe(0);
       expect(defect?.length).toBe(0);
@@ -6033,7 +6033,7 @@ describe("an unmapped diagnostic lands on its enclosing tag in every file kind",
     expect(diagnostics.map((d) => [d.code, onSource(source, d)])).toEqual([
       [2488, "1"],
     ]);
-    expect(text(diagnostics[0] as ts.Diagnostic)).not.toContain("MX bug");
+    expect(text(diagnostics[0] as ts.Diagnostic)).not.toContain("internal bug");
   });
 
   it("an .astro.mx page reports a missing prop on its tag", () => {

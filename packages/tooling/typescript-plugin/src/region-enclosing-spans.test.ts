@@ -180,7 +180,7 @@ describe(".ng.mx exposes its region's spans to the unmapped-diagnostic seam", ()
     // A synthetic diagnostic on emitter-written text, spelled nowhere in the
     // source: placed on the construct, marked as code MX wrote, never "unknown".
     expect(String(placed?.messageText)).toMatch(
-      / \(in MX-generated code, not yours: an MX bug; generated \d+:\d+\)$/,
+      / \(in generated code, not yours: an internal bug; generated \d+:\d+\)$/,
     );
     expect(String(placed?.messageText)).not.toContain("position unknown");
   });

@@ -82,7 +82,7 @@ const at = (file: string, position: string) =>
 
 const noise = (lines: string[]) => {
   for (const line of lines) {
-    expect(line).not.toContain("an MX bug");
+    expect(line).not.toContain("an internal bug");
     expect(line).not.toContain("position approximate");
   }
 };
