@@ -1773,7 +1773,7 @@ depend on an input marked "front end" in the last column.
 | `tagDiscoveryDirs` (`tags/*.marko` found by Marko's scanner) | taglib lookup | the html target passed `["tags"]` (`targets/html/src/compiler.ts` `host`) until PR 6 slice S3b, which dropped it from the translator | **dropped** with `@marko/compiler` (ruling Q22): no `marko-tag.json`/`marko.json` exists, and the two discovered `.marko` tags (`targets/html/fixtures-marko/tags-discovery/tags/badge.marko`, `fixtures-marko/try-child-throw/tags/boom.marko`) carry no parse options (a `.marko` file can only get them from a `marko-tag.json`), so nothing depends on it |
 | Babel parser options (`typescript` plugin, `allow*` flags) | `:6699-6705` (`manipulateOptions(opts) {` is at `:6699`) | the compiler | **front end**, fixed configuration of the expression sub-parser |
 | The expression sub-parser itself | `parseExpression` and friends, `[C]chunk-src.js:947-1016` | Marko's bundled `@babel/parser` **7.29.7** (`[C]babel.js`, region `@babel+parser@7.29.7`) | **front end**: MX's Babel fork (`packages/babel/src`, from `@babel/parser` 7.29.8). It must produce node shapes equal to today's, including `extra.raw`, `extra.parenthesized` and comments, or emitted code changes (ruling Q13/P3) |
-| The generator and Babel support packages | `printExpression` (`core/src/compile.ts`, `generator(node, { concise: true })`); `expr()` for loc-less nodes; `declName` | Marko's bundled `@babel/generator`, `@babel/traverse`, `@babel/types` **7.29.7** (`[C]babel.js`; `markoBabel`, `core/src/core.ts`) | **lowering**, not the front end: the port pins `@babel/{types,traverse,generator}` at 7.29.7 with today's generator options (`concise: true`). The generator is part of the byte contract: it prints `Const.name`, `Define`/`Component.var`/`DelegatedTag.var` names, unsliceable `For` params, attribute-method values and dynamic tag names, and rewrites authored text (`<const/{ a,b }=x/>` gives `"{ a, b }"`, the reviewer's probe c). Replacing generator output with source slices is wanted, but as a separate recorded change after the port (TODO `ir-generated-text-to-source-slices`) |
+| The generator and Babel support packages | `printExpression` (`core/src/compile.ts`, `generator(node, { concise: true })`); `expr()` for loc-less nodes; `declName` | Marko's bundled `@babel/generator`, `@babel/traverse`, `@babel/types` **7.29.7** (`[C]babel.js`; `markoBabel`, `core/src/core.ts`) | **lowering**, not the front end: the port pins `@babel/{types,traverse,generator}` at 7.29.7 with today's generator options (`concise: true`). The generator is part of the byte contract: it prints identifier names (`Const.name`, `Define`/`Component.var`/`DelegatedTag.var`), unsliceable `For` params, attribute-method values and dynamic tag names. A destructuring pattern in those names is now the authored source slice (`<const/{ a,b }=x/>` gives `"{ a,b }"`, where the generator gave `"{ a, b }"`, the reviewer's probe c); the generator prints it only when it has no position, or when a stripping compile finds TypeScript below its top-level annotation (`IR_VERSION` 17) |
 | `file.___hasParseErrors`, `watchFiles` | `:1028`, `:6190` | internal | dropped (errors are data; dependency tracking is core's) |
 
 So the front end takes two required external inputs, both supplied per
@@ -1928,6 +1928,15 @@ rulings, with where the text now lives:
 | Q21 | element-shape table owned by the target descriptor, core default, one table two readers; `<title>`; unnamed tag = `"html"` | §3.12, §7.1 |
 | Q22 | drop `tagDiscoveryDirs` | §7.1 |
 
+Done after the port, each as its own change:
+
+- **Generator output to source slices.** A destructuring tag variable
+  (`Const.name`, a tag's `/var`) is the authored source slice, not the
+  generator's spelling (probe c: `{ a,b }` stays `{ a,b }`), without its
+  top-level annotation; identifiers were already their names. A stripping
+  compile keeps the generator for a pattern holding TypeScript below its
+  annotation (§7.1 row; `ir-spec.md` §5.11). `IR_VERSION` 17.
+
 Deferred, still open (each after the port, as its own change):
 
 - **Q17.** Drop `loc` from `Expr.node` and `For.paramNodes` payloads (keep only
@@ -1938,10 +1947,6 @@ Deferred, still open (each after the port, as its own change):
   **html's `input` collision reported at the identifier** (§6.4, "After the
   port, possibly"). Not part of the port: each changes output, so each would
   be its own change with its own goldens.
-- **Generator output to source slices** (TODO
-  `ir-generated-text-to-source-slices`). Deferred: wanted, but as a separate
-  recorded change after the port, because it changes emitted text (probe c,
-  `{ a,b }` printed as `{ a, b }`); the port keeps the pinned generator (§7.1).
 - **`MxShorthandValue.dynamic` without `quasis`/`expressions`** (§3.6).
   Deferred: the port keeps both beside `template`; dropping the duplicate is
   the same later clean-up as ruling C4 made for the dynamic tag name (§3.3),

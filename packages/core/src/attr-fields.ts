@@ -106,6 +106,22 @@ export const strippedValueRoots = new WeakMap<
   { start: number; end: number }
 >();
 
+/**
+ * Each `MxPattern` payload `stripMxTypes` (or `stripAngleAssertions`)
+ * replaced, keyed by the stripped payload node, with what the strip took
+ * away from it: where the pattern's authored text starts and ends without
+ * its top-level `: T` (`start`, `end`, file-absolute; absent when the parser
+ * gave no offsets), and whether TypeScript syntax sat below the pattern
+ * apart from that annotation (`typed`: a cast or a typed arrow in a
+ * default). The stripped node's own `end` still runs over `: T`, and its
+ * annotation is gone, so neither can be read afterwards. `declName` is the
+ * only reader.
+ */
+export const strippedPatterns = new WeakMap<
+  object,
+  { start?: number; end?: number; typed: boolean }
+>();
+
 export function methodFunctionOf(ctx: Ctx, method: Node): Node {
   const statements = payloadOf(method.body);
   const params = payloadOf(method.params);

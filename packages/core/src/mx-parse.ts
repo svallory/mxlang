@@ -23,7 +23,11 @@
  */
 import { relative } from "node:path";
 import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
-import { strippedMethodTypeParams, strippedValueRoots } from "./attr-fields.ts";
+import {
+  strippedMethodTypeParams,
+  strippedPatterns,
+  strippedValueRoots,
+} from "./attr-fields.ts";
 import { coreBabel, coreTsPlugin } from "./babel.ts";
 import { codedError, type Node, type TranslateError } from "./core.ts";
 import {
@@ -1660,10 +1664,31 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
     }
     case "MxPattern": {
       rejectNestedModuleDeclaration(node);
+      // Read before the strip: it drops the top-level annotation while the
+      // node's `end` still runs over it, and it erases nested casts.
+      const start = node.start;
+      const end = node.typeAnnotation?.start ?? node.end;
+      let typed = false;
+      for (const key of t.VISITOR_KEYS[node.type] ?? []) {
+        if (key === "typeAnnotation") continue;
+        const field = node[key];
+        for (const child of Array.isArray(field) ? field : [field]) {
+          if (!child || typeof child.type !== "string") continue;
+          t.traverseFast(child, (each: Node) => {
+            if (each.type.startsWith("TS")) typed = true;
+          });
+        }
+      }
       const [declaration] = stripProgram([
         t.variableDeclaration("let", [t.variableDeclarator(node)]),
       ]);
       container.node = declaration?.declarations?.[0]?.id ?? node;
+      strippedPatterns.set(
+        container.node,
+        typeof start === "number" && typeof end === "number"
+          ? { start, end, typed }
+          : { typed },
+      );
       return;
     }
     case "MxArguments": {

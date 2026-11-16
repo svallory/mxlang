@@ -244,11 +244,16 @@ describe("pass-through constructs (the §3 table)", () => {
     ["nested", "{ outer: { a }, list: [b] }", ["a", "b"]],
     ["default", "{ a = 1 }", ["a"]],
     ["rest", "{ a, ...rest }", ["a", "rest"]],
+    ["unspaced object", "{a,b}", ["a", "b"]],
+    ["oddly spaced array", "[ a ,b ]", ["a", "b"]],
+    ["unspaced renamed", "{ x:y }", ["y"]],
+    ["multi-line commented", "{\n  a, /* c */\n  b\n}", ["a", "b"]],
   ])(
-    "Const varBindings carries %s names and authored spans",
+    "Const varBindings carries %s names and authored spans, and name keeps the spelling",
     (_label, pattern, names) => {
       const source = `\n<const/${pattern}=input/>`;
       const node = as(ok(source).body[0], "Const");
+      expect(node.name).toBe(pattern);
       expect(node.varBindings?.map(({ name }) => name)).toEqual(names);
       expect(
         node.varBindings?.map(({ span }) => {

@@ -558,3 +558,30 @@ describe("`stripTypes: false` and core's own checks", () => {
     );
   });
 });
+
+describe("a destructuring `<const>` name under the strip", () => {
+  /** The first `Const` of `source`, lowered with `options`. */
+  function constOf(source: string, options?: LowerSourceOptions) {
+    const { ir, diagnostics } = lowerSource(source, "/f.mx", options);
+    expect(diagnostics).toEqual([]);
+    return (
+      ir as unknown as {
+        body: { kind: string; name: string; varType?: { code: string } }[];
+      }
+    ).body.find((node) => node.kind === "Const");
+  }
+
+  it("leaves the annotation out of the name, with and without `stripTypes`", () => {
+    const source = "<const/{a} : {a: number}=o/>\n";
+    const stripped = constOf(source);
+    expect(stripped?.name).toBe("{a}");
+    expect(stripped?.varType).toBeUndefined();
+    const kept = constOf(source, { stripTypes: false });
+    expect(kept?.name).toBe("{a}");
+    expect(kept?.varType?.code).toBe("{a: number}");
+  });
+
+  it("prints a pattern with a typed default through the generator, without the cast", () => {
+    expect(constOf("<const/{a = (1 as number)}=o/>\n")?.name).toBe("{ a = 1 }");
+  });
+});

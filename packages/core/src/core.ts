@@ -33,7 +33,12 @@
  *   text is sliced back out by `loc` and re-parsed.
  */
 
-import { attrArgsOf, attrNameOf, isDefaultAttr } from "./attr-fields.ts";
+import {
+  attrArgsOf,
+  attrNameOf,
+  isDefaultAttr,
+  strippedPatterns,
+} from "./attr-fields.ts";
 import { coreBabel, coreParser } from "./babel.ts";
 import type { CalleeInput } from "./callee-input.ts";
 import type { ContractFact, DerivedDeclaration } from "./contract-facts.ts";
@@ -1586,6 +1591,16 @@ function spliceSource(
 /**
  * The source text of an identifier or pattern in **binding position**.
  *
+ * An `ObjectPattern` or `ArrayPattern` is the authored slice of the source,
+ * verbatim (spacing, line breaks and comments as written), with its
+ * top-level `: T` annotation cut off and the end trimmed; a lowered trigger
+ * inside it prints as its replacement, as in `exprWithNodes`. A stripping
+ * compile records where the pattern ended before its annotation, and whether
+ * TypeScript sat below it (`strippedPatterns`): such a pattern (a cast or a
+ * typed arrow in a default) prints through `ctx.generate`, so no TypeScript
+ * reaches the output. An `Identifier` and a node with no position print
+ * through `ctx.generate` too; for an `Identifier` that is its name.
+ *
  * Never rewritten, whatever is registered. `<const/count=…>`, `<for|count|>`
  * and `<define/Row|count|>` all print a name the emitted JS is about to
  * *declare*, and a rewrite there produces `const count() = …` — invalid JS
@@ -1602,7 +1617,23 @@ function spliceSource(
  * host's" — instead of one rule for expressions and another for templates.
  */
 export function declName(ctx: Ctx, node: Node): string {
-  return ctx.generate(node);
+  if (node?.type !== "ObjectPattern" && node?.type !== "ArrayPattern") {
+    return ctx.generate(node);
+  }
+  const stripped = strippedPatterns.get(node);
+  if (stripped?.typed) return ctx.generate(node);
+  const start = stripped ? stripped.start : node.start;
+  const end =
+    node.typeAnnotation?.start ?? (stripped ? stripped.end : node.end);
+  if (typeof start !== "number" || typeof end !== "number") {
+    return ctx.generate(node);
+  }
+  return spliceSource(
+    ctx,
+    start,
+    end,
+    triggerSplicesIn(ctx, start, end),
+  ).trimEnd();
 }
 
 /**

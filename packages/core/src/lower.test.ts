@@ -8,6 +8,7 @@ import {
   argumentsBlame,
   assertPositioned,
   DYNAMIC_TAG,
+  declName,
   expr,
   fail,
   firstAttributeTag,
@@ -1227,6 +1228,24 @@ describe("one fixture per IR kind", () => {
     // The opaque slot the host filled at lower time, so its emitter never
     // re-inspects a Marko node to recover its own decision.
     expect(hosted.data).toEqual({ seen: "signal" });
+  });
+
+  it("DelegatedTag carries a destructuring /var as written", () => {
+    // Through the MX front end (`compileSource`): this file's `lowerSource`
+    // parses with Marko, whose payload nodes carry no offsets to slice.
+    const { code } = compileSource(
+      "<signal/[ x ,y ]=1/>\n",
+      "/tmp/mx-core-test/probe.mx",
+      fakeDeclarations({
+        isDelegatedTag: (name) => name === "signal",
+        resolveDelegatedTag: (name) => ({ seen: name }),
+      }),
+      {
+        targets: lookup,
+        emitIr: (ir) => String(find(ir.body, "DelegatedTag").tag.var),
+      },
+    );
+    expect(code).toBe("[ x ,y ]");
   });
 
   it("a claimed html-comment resolves before its children are lowered, any other tag after", () => {
@@ -2522,6 +2541,26 @@ describe("Define/For param and name spans", () => {
     );
     const noLocVar = { type: "Identifier", name: "Row" };
     expect(exprSpan(ctx, noLocVar)).toBeUndefined();
+  });
+
+  it("`declName` prints a position-less pattern through the generator", () => {
+    const ctx = newCtx(
+      "<const/{a,b}=o/>\n",
+      printExpression,
+      fakeDeclarations(),
+      undefined,
+      "test.mx",
+      lookup,
+    );
+    const key = (name: string) => ({
+      type: "ObjectProperty",
+      key: { type: "Identifier", name },
+      value: { type: "Identifier", name },
+      computed: false,
+      shorthand: true,
+    });
+    const pattern = { type: "ObjectPattern", properties: [key("a"), key("b")] };
+    expect(declName(ctx, pattern)).toBe("{ a, b }");
   });
 });
 
@@ -4105,6 +4144,21 @@ describe("a host that binds a dynamic tag's /var opts in", () => {
     expect(component.target).toMatchObject({ kind: "dynamic" });
     expect(component.var).toBe("n");
     expect(component.returnsValue).toBeUndefined();
+  });
+
+  it("carries a destructuring /var on the Component node as written", () => {
+    // Through the MX front end, as "DelegatedTag carries a destructuring
+    // /var as written" above.
+    const { code } = compileSource(
+      "<${C}/{a,b} start=1/>",
+      "/tmp/mx-core-test/probe.mx",
+      policy(),
+      {
+        targets: lookup,
+        emitIr: (ir) => String(find(ir.body, "Component").var),
+      },
+    );
+    expect(code).toBe("{a,b}");
   });
 
   it("still refuses /var on a dynamic tag without the opt-in", () => {

@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 16;
+export const IR_VERSION = 17;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -531,7 +531,11 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
    * treats an absent field as unknown.
    */
   bindings?: string[];
-  /** The tag's `/var` binding, as source text, when it declares one. */
+  /**
+   * The tag's `/var` binding, as source text, when it declares one. An
+   * identifier is its name; a destructuring pattern is the authored text,
+   * verbatim, without a top-level annotation (`declName`).
+   */
   var: string | null;
   /**
    * Whatever the host decided about this tag at *lower* time, from its
@@ -767,7 +771,9 @@ export type IrNode =
       /** Tag arguments, `<Row(a, b)/>`, for a positional `<define>` call. */
       args: Expr[];
       /**
-       * The `/var` binding this call declares, as source text.
+       * The `/var` binding this call declares, as source text. An
+       * identifier is its name; a destructuring pattern is the authored
+       * text, verbatim, without a top-level annotation (`declName`).
        *
        * Only ever set on a call to a unit or a `<define>` that declares
        * `<return>` — the core rejects `/var` on one that does not, so an
@@ -922,6 +928,14 @@ export type IrNode =
     } & IrBase)
   | ({
       kind: "Const";
+      /**
+       * The binding pattern as source text, never rewritten. An identifier
+       * is its name; a destructuring pattern is the authored text, verbatim
+       * (spacing, line breaks and comments as written), with the top-level
+       * annotation left out (`varType`) and the end trimmed. A stripping
+       * compile prints a pattern holding TypeScript below that annotation
+       * (a cast in a default) through the generator instead (`declName`).
+       */
       name: string;
       /**
        * Each identifier `name` declares, with its authored span. Filled by
