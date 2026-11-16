@@ -361,9 +361,8 @@ function uniqueName(base: string, taken: ReadonlySet<string>): string {
 /**
  * Parses the property list of an `export interface Input { … }`.
  *
- * Babel's own TypeScript parse (MX's Babel fork, the parser `packages/core`
- * uses too). Each
- * property's type is taken as the **verbatim source slice** of its type
+ * Babel's own TypeScript parse (MX's Babel fork, through `@mxlang/tsx-bridge`'s
+ * `parseBabel`). Each property's type is taken as the **verbatim source slice** of its type
  * annotation rather than re-printed from the AST, so the emitted `@Input()`
  * keeps the author's exact spelling.
  *
