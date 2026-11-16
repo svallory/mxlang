@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Checks every `file://` grammar in extension.toml against this repo:
+# Checks every grammar in extension.toml that points at this repository
+# (`repository` is `file://...` or https://github.com/svallory/mxlang, with or
+# without `.git`) against this checkout:
 #   1. `rev` is a commit this repo has and an ancestor of HEAD (Zed fetches
 #      exactly that sha; a commit left behind by a rebase would vanish from
 #      the merged history);
@@ -16,7 +18,9 @@
 # pinned rev. A grammar commit without a `rev` bump fails check 3 the same way.
 #
 # Needs full history (CI: `fetch-depth: 0`). Usage: scripts/check-grammar-revs.sh
-# Exit 0: every file:// grammar is consistent. Exit 1: one is not.
+# Exit 0: every such grammar is consistent. Exit 1: one is not, one lacks
+# `rev` or `path`, or no grammar points at this repository (a check that
+# selects nothing would pass silently).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,6 +28,24 @@ cd "$HERE"
 ROOT="$(git rev-parse --show-toplevel)"
 # `path` is relative to the repository root, as Zed reads it.
 git() { command git -C "$ROOT" "$@"; }
+
+# Captured first: a failing command substitution in a plain assignment stops
+# the script under `set -e`, where a `done < <(...)` process substitution's
+# exit status is ignored.
+grammars="$(python3 - <<'PY'
+import tomllib
+MONOREPO = ("https://github.com/svallory/mxlang", "https://github.com/svallory/mxlang.git")
+with open("extension.toml", "rb") as f:
+    grammars = tomllib.load(f).get("grammars", {})
+for name, g in grammars.items():
+    repo = g.get("repository", "")
+    if repo.startswith("file://") or repo in MONOREPO:
+        if "path" not in g or "rev" not in g:
+            raise SystemExit(f"[grammars.{name}] points at this repository but has no rev/path")
+        print(f"{name}\t{g['rev']}\t{g['path']}")
+PY
+)"
+[[ -n "$grammars" ]] || { echo "check-grammar-revs: no grammar in extension.toml points at this repository (file:// or https://github.com/svallory/mxlang)" >&2; exit 1; }
 
 status=0
 while IFS=$'\t' read -r name rev path; do
@@ -50,15 +72,5 @@ while IFS=$'\t' read -r name rev path; do
     continue
   fi
   echo "check-grammar-revs: [grammars.$name] OK ($rev, $path)"
-done < <(python3 - <<'PY'
-import tomllib
-with open("extension.toml", "rb") as f:
-    grammars = tomllib.load(f).get("grammars", {})
-for name, g in grammars.items():
-    if g.get("repository", "").startswith("file://"):
-        if "path" not in g or "rev" not in g:
-            raise SystemExit(f"[grammars.{name}] is file:// but has no rev/path")
-        print(f"{name}\t{g['rev']}\t{g['path']}")
-PY
-)
+done <<< "$grammars"
 exit "$status"
