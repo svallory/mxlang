@@ -715,12 +715,15 @@ export interface Ctx {
    * The names a tag call's or dynamic tag's `/var` binds in an enclosing
    * body.
    *
-   * A PascalCase tag of such a name is a dynamic call over the `/var`'s
-   * value and hides a `<define>` of the name; with no such define it is one
-   * only once the walk has reached the `/var` in scope (`capitalBinding`):
-   * `<Make/T/><T n=1/>` calls the value `Make` returns, and
-   * `<define/W><Make/T/><T n=1/></define>` calls the local `T`, not the
-   * outer `<define/T>` (stock's innermost binding). Kept apart
+   * Where a `<define>` of such a name exists, a PascalCase tag of the name is
+   * a dynamic call over the `/var`'s value instead:
+   * `<define/W><Make/T/><T n=1/></define>` calls the local `T`, not the outer
+   * `<define/T>` (stock's innermost binding). With no such define, only a
+   * `/T` that `lowerComponent` registers makes `<T>` dynamic (not a dynamic
+   * tag's own `/T` where the host claims the dynamic tag), and only once the
+   * walk has reached that call in scope, with no body between it and the tag
+   * binding the name again (`capitalBinding`):
+   * `<Make/T/><T n=1/>` calls the value `Make` returns. Kept apart
    * from `tagVarShadowed`, which `checkTagVarReads` skips: the `/T` is itself
    * a tag variable whose reads are still checked. Maintained by
    * `lowerChildList`; replaced, never mutated.

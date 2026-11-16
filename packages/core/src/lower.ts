@@ -5990,16 +5990,19 @@ function capitalBinding(ctx: Ctx, name: string): boolean {
 }
 
 /**
- * Has the walk reached, in scope, the tag call's or dynamic tag's `/var` that
- * binds `name` in an enclosing body (`ctx.hiddenDefines`)? Only then is a
- * PascalCase tag of that name with no `<define>` a dynamic call over the
- * value. `lowerComponent` registers the `/var`, not pending, when it reaches
- * the call, so an entry exists only after it; it is in scope when its
- * declaring block is this block or an ancestor (the prefix test
- * `checkTagVarReads` uses), and when it was declared in the innermost body
- * that declares a `/T` (`hidingBlocks`) or inside it. A `<T/>` above its
- * `<Make/T/>`, in that body or a body nested in it, keeps the unknown-tag
- * error instead of reading the value in its temporal dead zone.
+ * Has the walk reached, in scope, the tag call whose `/var` binds `name` in
+ * an enclosing body (`ctx.hiddenDefines`)? Only then is a PascalCase tag of
+ * that name with no `<define>` a dynamic call over the value. Only a call
+ * core lowers itself qualifies: `lowerComponent` registers its `/var`, not
+ * pending, when it reaches the call, so an entry exists only after it. A
+ * dynamic tag a host claims (`isDelegatedTag`) registers nothing, so there
+ * `<${Make}/T/>` alone does not make `<T>` dynamic. The entry is in scope
+ * when its declaring block is this block or an ancestor (the prefix test
+ * `checkTagVarReads` uses), and when no body between it and here binds the
+ * name again (`hidingBlocks`). A `<T/>` above its `<Make/T/>`, or in a
+ * nested body with any binding of `T` in that body (other than that body's
+ * own call, once reached), keeps the unknown-tag error instead of reading a
+ * value in its temporal dead zone.
  */
 function hiddenTagVarReached(ctx: Ctx, name: string): boolean {
   if (!ctx.hiddenDefines?.has(name)) return false;
@@ -6007,9 +6010,9 @@ function hiddenTagVarReached(ctx: Ctx, name: string): boolean {
   if (!bound || bound.pending || bound.define) return false;
   const here = ctx.tagVarBlock ?? [];
   // An outer `/T` the walk has reached is not this body's: when a body
-  // between it and here declares its own `/T` (`<Make/T/><div><T n=1/>
-  // <Make/T/></div>`), the emitted `<T/>` reads that body's `let T`, which
-  // is still in its temporal dead zone.
+  // between it and here binds `T` again (`<Make/T/><div><T n=1/>
+  // <let/T=U/></div>`, or a call, `<const>`, `<id>` or element ref), the
+  // emitted `<T/>` reads that body's `T`, still in its temporal dead zone.
   const hidingBlock = hidingBlocks.get(ctx.hiddenDefines)?.get(name) ?? [];
   return (
     bound.block.length >= hidingBlock.length &&
@@ -6020,9 +6023,10 @@ function hiddenTagVarReached(ctx: Ctx, name: string): boolean {
 
 /**
  * For each `ctx.hiddenDefines` set, the block path of the innermost body
- * whose own children declare the `/var` that hides each name. Keyed by the
- * set, which `lowerChildList` replaces and never mutates, so a ctx copy reads
- * the same table and a fresh walk, with a fresh set, starts without one.
+ * whose own children bind each name (any tag variable, not only the `/var`
+ * that hides it). Keyed by the set, which `lowerChildList` replaces and
+ * never mutates, so a ctx copy reads the same table and a fresh walk, with a
+ * fresh set, starts without one.
  */
 const hidingBlocks = new WeakMap<
   ReadonlySet<string>,
@@ -8234,14 +8238,24 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     declared.some(([, names]) => names.length > 0) ||
     constDeclared.some(([, names]) => names.length > 0);
 
-  // Set next to the `try` whose `finally` restores it.
-  if (hiding.size > 0) {
-    const outer = ctx.hiddenDefines;
-    const hidden = new Set([...(outer ?? []), ...hiding]);
+  // Set next to the `try` whose `finally` restores it. Every name this body
+  // binds itself (`declaredHere`: a tag call, `<let>`, `<const>`, `<id>`, an
+  // element ref, any tag variable) and that a `/var` hides here records this
+  // body as the innermost one that rebinds it, so an outer `/T` the walk has
+  // reached is not in scope below it (`hiddenTagVarReached`).
+  const outer = ctx.hiddenDefines;
+  const hidden =
+    hiding.size > 0 ? new Set([...(outer ?? []), ...hiding]) : outer;
+  const rebound = [...declaredHere].filter((name) => hidden?.has(name));
+  if (hidden && rebound.length > 0) {
+    // A fresh set even when `hiding` added nothing: the table is keyed by it.
+    const keyed = hidden === outer ? new Set(hidden) : hidden;
     const blocks = new Map(outer ? hidingBlocks.get(outer) : undefined);
     const here = [...(ctx.tagVarBlock ?? [])];
-    for (const name of hiding) blocks.set(name, here);
-    hidingBlocks.set(hidden, blocks);
+    for (const name of rebound) blocks.set(name, here);
+    hidingBlocks.set(keyed, blocks);
+    ctx.hiddenDefines = keyed;
+  } else {
     ctx.hiddenDefines = hidden;
   }
   try {

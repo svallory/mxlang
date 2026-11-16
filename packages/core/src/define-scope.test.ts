@@ -590,6 +590,26 @@ describe("a tag call's /var of a <define>'s name makes the tag a dynamic call", 
       "a <T> after a sibling block's /T, above its own",
       "<div><Make/T/></div><T n=1/><Make/T/>",
     ],
+    // Any binding of T in the body, not only a call's /T, makes the outer
+    // reached /T not this body's: the <T> would read the body's own T.
+    [
+      "a body's <T> above its own <let/T>",
+      "<Make/T/><div><T n=1/><let/T=U/></div>",
+    ],
+    [
+      "a body's <T> above its own <const/T>",
+      "<Make/T/><div><T n=1/><const/T=U/></div>",
+    ],
+    [
+      "a body's <T> above its own element ref /T",
+      "<Make/T/><div><T n=1/><div/T/></div>",
+    ],
+    // A nested <define/V> unhides V in its body; T's innermost rebinding
+    // body (the <div>) must survive that copy of the hidden set.
+    [
+      "a <T> beside a define that unhides another name, above its body's /T",
+      "<Make/V/><Make/T/><div><span><define/V><b/></define><T n=1/></span><Make/T/></div>",
+    ],
   ])("with no <define/T>, %s is unbound", (_what, source) => {
     expect(() => lowerSource(`${NO_T}${source}`)).toThrow(
       /`<T>` has no matching import or `<define>` in scope/,
