@@ -14,7 +14,7 @@ is still open). Two file kinds compile today:
   it, and because this host owns that module it maintains the decorator's
   own `imports:` array rather than warning you to. See "`.ng.mx`" below.
 
-See `notes/investigations/angular-host-design.md` for the full design.
+See `apps/docs/docs/hosts/angular/lowering.md` for the lowering table.
 
 MX (Markup eXtended) is a template language born from Marko: it takes
 Marko's syntax and brings it to wherever JSX lives today. Marko is the

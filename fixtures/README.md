@@ -63,8 +63,9 @@ directory with `input.solid.mx` and `twin.tsx`, no code change.
    `__mxEntry3`), so a change to generated names updates the twins in the
    same PR.
 3. Write `input.solid.mx`: the MX spelling of the same component, per
-   `notes/solidmx-jsx-mapping.md` and `notes/solidmx-spec.md` sections 4-5
-   at the space root. If a construct isn't covered by the mapping doc, leave
+   `apps/docs/docs/hosts/solid.md` and the spec
+   (`apps/docs/docs/specification.md`). If a construct isn't covered by those
+   pages, leave
    `// TODO(mx): unmapped` in the `.solid.mx` file and note it in your PR —
    do not invent MX syntax.
 4. Run `bun run oracle` (or `bun run test`) once to write the golden
@@ -258,8 +259,8 @@ real-Marko rendering does not match `@mxlang/target-html`'s:
   difference: a settled MX decision Marko does not share (S3's attribute-tag
   calling convention; S11's lowercase-binding dispatch, which
   covers both an imported component and a `<define>`d tag called by name),
-  a documented parser limitation the `<fragment>` wrapper works around
-  (`notes/team-standalone-mx.md`'s defect 3), or a genuine Marko-side
+  a documented parser limitation the `<fragment>` wrapper works around,
+  or a genuine Marko-side
   behavior with no MX equivalent to reconcile against (dropping HTML
   comments; `<fragment>` as an explicit multi-root wrapper being unnecessary
   and rejected outright; requiring a taglib entry for an unknown custom tag;

@@ -41,7 +41,7 @@ Two syntax decisions are settled and encoded in `@mxlang/host-solid`'s lowering 
   second `name=` the last writer wins — and `children` counts, since ordinary
   children lower into that prop, so `<@children>` beside any ordinary child
   collides too.
-- **Tag params (`|a, b|`) come before `=value`.** `<if|u|=user()>`, not `<if=user()|u|>` — the latter parses but folds `|u|` into the condition expression and reports no params, matching `<for|item, i| of=...>`'s own order. `notes/solidmx-spec.md` §5.1 writes `<if=user()|u|>` as loose prose; the real grammar is params-first.
+- **Tag params (`|a, b|`) come before `=value`.** `<if|u|=user()>`, not `<if=user()|u|>` — the latter parses but folds `|u|` into the condition expression and reports no params, matching `<for|item, i| of=...>`'s own order.
 
 ## Testing `print`: compare ASTs
 

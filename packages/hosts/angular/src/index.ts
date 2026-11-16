@@ -1,8 +1,7 @@
 /**
  * `@mxlang/host-angular` — the Angular host on `@mxlang/core`.
  *
- * Step 1 of the design note (`notes/investigations/angular-host-design.md`):
- * a `.mx` page template compiles to a plain Angular template string, for a
+ * A `.mx` page template compiles to a plain Angular template string, for a
  * watcher to write to `x.component.html` beside a hand-written `x.component.ts`
  * whose `templateUrl` points at it. No MX runtime, no Angular dependency in
  * the user's app — `@angular/compiler` is a devDependency of this package's

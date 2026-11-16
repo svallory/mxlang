@@ -315,7 +315,7 @@ resolution (replaced by MX's own element table, `@mxlang/web-elements`).
 
 ## What this proves
 
-`notes/marko-runtime-modes.md` proposes an **expressions-only** output mode for
+`apps/docs/docs/design-notes/marko-runtime-modes.md` proposes an **expressions-only** output mode for
 Marko: `runtime: "none"`, where a template compiles to a plain string function
 and the reactive tags become compile-time errors. The argument for it is that
 Marko's `html` output *minus the runtime* is already a precompiled template

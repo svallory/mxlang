@@ -132,7 +132,8 @@ export interface CompileHtmlResult extends CompileResult {
  *
  * The emitted module imports `escape` and default-exports
  * `(input: Input) => string` — nothing else is required at run time. This is
- * the "expressions-only" output mode of `notes/marko-runtime-modes.md`,
+ * the "expressions-only" output mode of
+ * `apps/docs/docs/design-notes/marko-runtime-modes.md`,
  * implemented as a translator rather than a fork.
  *
  * The returned map is a placeholder identity map: the emitter builds text

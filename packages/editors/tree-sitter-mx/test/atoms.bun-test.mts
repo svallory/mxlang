@@ -7,7 +7,7 @@
 //
 // The corpus is Mesh's: every line of the brief's sample, and every line of
 // Mesh's syntax-v3 Invoice entity (test/fixtures/kit-invoice.mx, from
-// mesh notes/team-lead-2026-10-04/briefs/syntax-v3.md), which put an ERROR at
+// Mesh's syntax-v3 brief), which put an ERROR at
 // the root on 0.1.0-alpha.1 because of its tagless `:name=value` lines.
 //
 // The last block is the default attribute's value: the scanner does not end it

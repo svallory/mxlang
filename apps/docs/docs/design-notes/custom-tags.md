@@ -6,9 +6,7 @@ description: "The approved design for MX 1.x custom tags: the CustomTag and TagC
 # Build spec: Custom Tags (MX 1.x)
 
 Status: **approved to build** (Saulo, 2026-09-15). Base: `main` @ `a87fa1d7`.
-Rationale and evidence live in `notes/investigations/custom-tags-check-results.md`
-(referenced below as *report §x*). This file is the decided design only — no
-history, no rejected options.
+This file is the decided design only — no history, no rejected options.
 
 ---
 
@@ -62,7 +60,7 @@ export interface CustomTag {
   /**
    * Parse-time behaviour. **Static data, never a function**: the scan must know
    * these before the *calling* file is parsed, so they cannot depend on
-   * anything computed later (report §II.5.8).
+   * anything computed later.
    */
   parseOptions?: {
     /** Body arrives as one unparsed `Text` node. `<markdown>`, `<graphql>`. */
@@ -157,7 +155,7 @@ interface TagStore {
 `element`, `attr`, `dynamicAttr`, `booleanAttr`, `expr`, `ifChain`, `forLoop`,
 `block`, and **`delegatedTag(name, children, attributeTags)`** — the only route to a
 host primitive. The core calls the host's own `resolveDelegatedTag`, so a host that
-does not claim the name fails in its own words (report §II.2.4). Module-level IR
+does not claim the name fails in its own words. Module-level IR
 kinds (`Import`, `Static`, `Export`, `InputInterface`) are deliberately absent.
 
 ### Ordering and determinism
@@ -197,8 +195,7 @@ kinds (`Import`, `Static`, `Export`, `InputInterface`) are deliberately absent.
 
 `tags/icon.mx` is a complete custom tag. No sidecar, no config.
 
-*Rewritten for the tag-unit model (note
-`notes/investigations/tag-unit-design.md`). The previous revision described
+*Rewritten for the tag-unit model. The previous revision described
 lowering a template by **inlining** it into the caller and substituting
 `input`. That engine is deleted: a template is now a module, and the caller
 emits an import plus a call.*
@@ -355,7 +352,7 @@ emits an import plus a call.*
   routes to the template, now validated.
 - **`parseOptions` reach the parser** through MX's injected taglib entry, the
   mechanism already used for `mx-translator-core` (`taglibs: [[id, def]]`);
-  verified in report §II.5.9 A that injected `parseOptions` are honored.
+  verified that injected `parseOptions` are honored.
 
 **Integrations that must run the scan and pass its result to every lower:**
 Bun loaders, Vite plugin, Astro, TS plugin, language server, `mx-tsc`.
@@ -366,7 +363,7 @@ Bun loaders, Vite plugin, Astro, TS plugin, language server, `mx-tsc`.
   sidecar that fails to load as a diagnostic rather than crashing.
 - **TS-plugin double resolve:** `createHtmlMappings` lowers the source a *second*
   time and **must be given the same tag map**. Without it the file gets *no*
-  mappings at all (report §II.2.9).
+  mappings at all.
 
 ---
 

@@ -48,8 +48,7 @@ so a construct a host's `strict` policy rejects — `<let>`, `<effect>`,
 `<lifecycle>`, `<script>`, `:=` — is valid Marko syntax and Marko's server
 reports nothing for it. `tsserver` cannot fill the gap either: it never opens
 `.marko`/`.mx` files at all, only `.ts`/`.tsx` files that *import* one (that
-is what `@marko/ts-plugin` and `@mxlang/typescript-plugin` type-check). Full
-research: `notes/research/host-diagnostics.md`.
+is what `@marko/ts-plugin` and `@mxlang/typescript-plugin` type-check).
 
 **No TypeScript diagnostics, so nothing here maps a generated position.** The server publishes core's compile diagnostics, each carrying its own source position; it never type-checks a generated module, so the "diagnostic with no source mapping is never dropped" rule (spec §12) has nothing to apply to. A thrown error with no position at all is the one thing it does not publish (it goes to `onUnexpectedError`): that is an internal failure, not a diagnostic about the author's file.
 

@@ -1,4 +1,4 @@
-<!-- This is the 74-construct coverage baseline that packages/editors/tree-sitter-solid/test/corpus/*.txt is measured against. Copied verbatim from notes/zed/solidmx-corpus-checklist.md (see UPSTREAM.md "What the corpus is measured against"). -->
+<!-- This is the 74-construct coverage baseline that packages/editors/tree-sitter-solid/test/corpus/*.txt is measured against. Copied verbatim from the squad's Solid corpus checklist (see UPSTREAM.md "What the corpus is measured against"). -->
 
 <!--
 2026-09-13 re-audit (zed-solidmx-followups): this checklist predates MX taking Marko's

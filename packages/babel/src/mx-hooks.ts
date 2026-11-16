@@ -151,8 +151,7 @@ export type MxRegionPositionCheck = (
  * `mxRegionPositionCheck` is set. The tokenizer's own `context: TokContext[]`
  * (`tokenizer/state.ts`) is brace/template disambiguation, not a syntactic
  * parent path, so this is tracked separately and only when a host asked for
- * it — see `bridge.ts:83-86`'s options-bag channel and the design note at
- * `notes/investigations/angular-ng-mx-spike.md` §Q4.
+ * it — see `bridge.ts:83-86`'s options-bag channel.
  */
 export type MxRegionParentFrame =
   | {

@@ -4,8 +4,8 @@
 
 `packages/hosts/angular` emits an Angular template string from a `.mx` page
 template (`compile()`, `src/index.ts`); the emitter (task 1.3) covers every
-structural kind. See `notes/investigations/angular-host-design.md` for the
-design (A1: the lowering table; A3: the CLI).
+structural kind. See `apps/docs/docs/hosts/angular/lowering.md` for the
+lowering table.
 
 `bun run oracle:angular` (`packages/oracle/src/report-angular.ts`,
 `runAngularTable`) is the oracle table: each fixture under

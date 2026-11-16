@@ -2164,8 +2164,8 @@ describe("<return>", () => {
  * `Expr.span` (core contract C4): file-absolute byte offsets, filled by
  * `exprOf` for every construction site, absent for a synthesized expr.
  *
- * One test per distinct `exprOf` caller family (`notes/investigations/
- * angular-c4-expr-span.md` §2's seventeen-site table), each asserting
+ * One test per distinct `exprOf` caller family (seventeen construction sites),
+ * each asserting
  * `source.slice(span.sourceStart, span.sourceEnd)` equals the authored
  * expression text — the only assertion that catches an off-by-one.
  */

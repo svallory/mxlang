@@ -38,14 +38,14 @@ successful compile clears any previous diagnostics for that file.
 formatting, no semantic tokens — Marko's own language server
 (`marko-js/language-server`) already provides all of that for `.marko`
 files, and this server is designed to run *alongside* it, not replace it
-(`notes/research/host-diagnostics.md` §2: both VS Code and Zed support
-multiple language servers registered against one language).
+(both VS Code and Zed support multiple language servers registered against
+one language).
 
 The reason a second server exists at all: Marko's own server compiles with a
-hardcoded config that carries no host policy (`host-diagnostics.md` §1), so
-`<let>` — valid Marko syntax — is invisible to it even when a host's
+hardcoded config that carries no host policy, so `<let>` — valid Marko
+syntax — is invisible to it even when a host's
 `strictPolicy` forbids it. `tsserver` can't fill the gap either: it never
-opens `.mx` files in the first place (`host-diagnostics.md` §4).
+opens `.mx` files in the first place.
 
 ## Why this server exists
 
@@ -121,7 +121,7 @@ provenance and registration.
 
 Both VS Code and Zed do support **multiple** servers on one language id —
 this is not a workaround, it's how ESLint+TS or Tailwind+CSS coexist today
-(`host-diagnostics.md` §2) — so adding this server does not replace Marko's.
+— so adding this server does not replace Marko's.
 
 ### VS Code
 

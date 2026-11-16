@@ -219,11 +219,10 @@ offered that position (so `valid_symbols` is not what declines it).
 
 ## What the corpus is measured against
 
-`test/corpus/*.txt` is scored against **`notes/zed/solidmx-corpus-checklist.md`**
-— 74 catalogued constructs from spec sections 3 and 4, derived from the Solid
-spec by the squad rather than from this grammar. That file lives in the
-operator's `notes/` at the project-space root and is **not versioned with this
-repo**, so record the number here for it to mean anything later:
+`test/corpus/*.txt` is scored against the 74-construct checklist copied into
+`test/COVERAGE.md` — 74 catalogued constructs from spec sections 3 and 4,
+derived from the Solid spec by the squad rather than from this grammar. The
+coverage number at the time of writing:
 
 **Coverage at the time of writing: 59 of 74 constructs.** The uncovered ones are
 checklist 56-59 (`<let>`, `<const>`, `<effect>`, `:=`), which the checklist

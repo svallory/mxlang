@@ -3,15 +3,10 @@
 MX's `packages/core/src/fragment.ts` post-shifts every
 node and error position after parsing a Marko fragment with `@marko/compiler`,
 because neither `@marko/compiler` nor `htmljs-parser` accept a base position
-for a substring parse (`notes/research/next-items-facts.md` §A;
-`notes/research/marko-compiler-seam.md` §2). This directory is the concrete
+for a substring parse (measured: neither accepts a start offset, line or
+column). This directory is the concrete
 patch pair that would remove the need for that stopgap, plus the mx-side
 proof that switching to it changes nothing observable.
-
-**Note on repo layout**: the brief's own `notes/upstream/` location is outside
-this git repository (the space root's `notes/` is a sibling directory, not
-tracked here) — deliverables live at `docs/upstream/` instead, as the brief's
-"Where" section anticipates.
 
 ## Tags patched
 
@@ -50,9 +45,8 @@ to `parser.parse(code, options)` (the patched htmljs-parser above) and into
 `babel-utils/loc.js`'s `getLoc`/`getLocRange`/`withLoc` (the Babel sub-parse
 for attribute values, params, etc., which computes its own line/column from
 `file`'s cached line index rather than calling back into `positionAt`).
-`ast.start`/`program.start` (hardcoded to `0` in stock 5.42.5,
-`next-items-facts.md` §A) become `offsetAt(0)`; `ast.end`/`program.end`
-become `offsetAt(code.length - 1)`.
+`ast.start`/`program.start` (hardcoded to `0` in stock 5.42.5) become
+`offsetAt(0)`; `ast.end`/`program.end` become `offsetAt(code.length - 1)`.
 
 Two entry-point candidates existed: (a) fold everything into an existing
 `Config` field, or (b) a new `parseFragment(source, base)` top-level export
@@ -291,7 +285,7 @@ Test Files  16 passed (16)
      Tests  322 passed (322)
 ```
 This covers `packages/core/src/fragment.test.ts` (7 tests, the exact
-position-shift assertions from `next-items-facts.md` §A),
+position-shift assertions),
 `packages/core/src/fragment-native.test.ts` (8 tests, 0 skipped with the
 packages linked),
 `packages/hosts/solid/src/index.test.ts` (43 tests, including the two
@@ -344,8 +338,8 @@ before sending either PR.
 ## Recommendation
 
 **Send both.** They are small, additive, behavior-preserving-when-absent
-patches solving a documented real gap (`next-items-facts.md` §A confirms zero
-existing upstream issues/PRs on this), each backed by its own repo's test
+patches solving a documented real gap (a search found no existing upstream
+issue or PR on this), each backed by its own repo's test
 suite passing (443/443 and 147/17 — the exact pre-existing failure count),
 and mx's own consumer-shaped test suites (`fragment.test.ts`,
 `hosts/solid`, `packages/tsx-bridge`) pass identically on the native path.

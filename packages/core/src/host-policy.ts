@@ -1,6 +1,6 @@
 /**
- * Policy resolution (brief §2, `host-diagnostics.md` §3): which target a file
- * compiles through, plus that target's strictness.
+ * Policy resolution: which target a file compiles through, plus that
+ * target's strictness.
  *
  * **Unstable contract.** `mx.target` selects a registered target directly;
  * `mx.host` selects its host's default target. If both resolve, they must
@@ -45,8 +45,7 @@
  *   nearest-match hint), and resolution continues with the dependency rule.
  *
  * This mirrors `Project.loadMeta`'s own `createRequire` + upward
- * `package.json` walk in Marko's language server (`host-diagnostics.md` §1),
- * so the technique is not novel to this package.
+ * `package.json` walk in Marko's language server, so the technique is not novel to this package.
  *
  * It lives in `@mxlang/core` rather than in either consumer because two
  * entry points ask this same question: `@mxlang/language-server` (to pick the

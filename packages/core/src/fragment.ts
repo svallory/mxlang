@@ -7,7 +7,7 @@
  * parser has no base-position parameter, so every `loc` it produces is
  * relative to the substring it was given. This shifts them afterwards.
  *
- * It is the stopgap `notes/research/marko-seam-spikes.md` (spike 1) measured,
+ * It is the stopgap a seam spike measured,
  * not a fix: the fix is an additive `parseFragment({ start, line, column })`
  * upstream, which MX still intends to send once a host consumes this door.
  * The Solid host's own bridge (`packages/tsx-bridge/src/mx/bridge.ts`) is untouched

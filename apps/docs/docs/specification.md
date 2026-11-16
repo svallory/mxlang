@@ -1837,8 +1837,7 @@ Four iteration shapes, chosen by attribute.
   `MX_INVALID_FOR`, at the name.
 
 **Params come before `=value`** — `<for|item, i| of=xs>`, and by the same rule
-`<if|u|=cond>` would be the spelling were it legal. `notes/solidmx-spec.md` §5.1
-writes `<if=user()|u|>`; that prose is wrong, and the real grammar is
+`<if|u|=cond>` would be the spelling were it legal: the grammar is
 params-first.
 
 **Every `<for>` binds its iterable to a temporary before the loop opens.** This
@@ -6250,9 +6249,9 @@ custom-tags build spec is also on the site at `/design-notes/custom-tags/`.
 ## 17. Sources
 
 - `divergences.md` (repo root) — every departure from Marko, and the MX 2 deferred list
-- `worktrees/main/AGENTS.md` — per-package and per-host contracts
+- `AGENTS.md` (repo root) — per-package and per-host contracts
 - [`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/) — the custom-tags feature spec
-- `notes/solidmx-spec.md` — Solid (note §5.1's `<if=cond|u|>` is wrong; see §5.2)
+- `apps/docs/docs/hosts/solid.md` — Solid
 - `packages/core/src/{lower,core,custom-tags,builtin-tags,template-tag,scan,ir}.ts`
 - `packages/core/src/{syntax-table,triggers}.ts`, `packages/parser/src/template/syntax.ts` — the syntax table (§13.9)
 - `packages/hosts/*/README.md` and their emitters

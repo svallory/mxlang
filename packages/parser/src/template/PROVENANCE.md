@@ -16,7 +16,8 @@ produce identical event streams.
 - Commit: `05d5789e7986bc78c0cf387034cbcc3323ae560f` (the tag's commit; tag
   object `2da494e1fa4ba5bcc85f47a885ba5baa26d2392c`)
 - Commit date: 2026-09-28
-- Copied: 2026-10-05, from `git archive v5.18.0` of `data/forks/htmljs-parser`
+- Copied: 2026-10-05, from `git archive v5.18.0` of a clone of
+  `https://github.com/marko-js/htmljs-parser`
 - Source path: `src/` (`core/`, `states/`, `util/`, `index.ts`, `internal.ts`,
   `__tests__/`)
 

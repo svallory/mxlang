@@ -7,8 +7,8 @@
  * `textDocumentSync` and `codeActionProvider` are the capabilities advertised.
  * No completion, hover, or go-to-definition — Marko's own language server keeps
  * those; this server exists only to surface the host-policy errors Marko's
- * server cannot see (`host-diagnostics.md` §1, `<let>` under a strict policy
- * being valid Marko syntax and therefore invisible to it).
+ * server cannot see (`<let>` under a strict policy being valid Marko syntax
+ * and therefore invisible to it).
  */
 
 import { existsSync } from "node:fs";

@@ -1,6 +1,6 @@
 # `packages/stock-marko` (`@mxlang/stock-marko`, private)
 
-Proof package for the MX2 brief (`notes/briefs/mx2/stock-marko-reference.md`).
+Proof package for MX 2's stock-Marko reference.
 It holds the stock, unpatched `htmljs-parser` 5.18.0 and proves — by
 running both parsers over identical inputs — where the root `patchedDependencies`
 patch diverges MX's parser from the published build.

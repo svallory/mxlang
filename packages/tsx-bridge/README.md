@@ -8,9 +8,8 @@
 MX's parser is a fork of `@babel/parser` with one plugin function replaced:
 the JSX element parser, so `<` in expression position opens an MX region
 instead of a JSX element. `@babel/parser` has no public plugin API, so a fork
-means owning and building its source ourselves; see
-`notes/research/parser-fork-strategy.md` at the space root for why the
-alternatives (patching the published bundle, acorn, oxc/swc) were rejected.
+means owning and building its source ourselves; the alternatives (patching
+the published bundle, acorn, oxc/swc) were rejected.
 
 > **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
 
@@ -90,8 +89,7 @@ context). No host knowledge (Angular's or anyone else's) lives in this
 package: the option is a plain callback returning `{ ok: true }` or
 `{ ok: false, message }`, and a rejection raises a positioned parse error at
 the region's own start. Absent, nothing is tracked and parsing is unchanged
-— see `notes/investigations/angular-ng-mx-spike.md`
-§Q4 for the design rationale (this is the `.ng.mx` host's C3 contract).
+(this is the `.ng.mx` host's C3 contract).
 
 **A host claims the lowering itself** through the
 `mxRegionCompile` parser option, on the same options-bag channel and for the

@@ -5,7 +5,7 @@ The MX front end and lowerer every MX host is built on.
 > **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
 
 MX is a template language born from Marko: Marko's syntax is the default row,
-brought to wherever JSX lives today (see `notes/mx-vision.md`). MX itself defines
+brought to wherever JSX lives today. MX itself defines
 the markup and the **structural** tags — `<if>` / `<else if>` / `<else>`, `<for>`
 in all its forms, attribute tags, tag params, `<define>`, `<const>`, `static`,
 `import` — and each **host** decides what state, reactivity and output mean. This
@@ -172,7 +172,7 @@ No `marko.json` is read, and no template is parsed by `@marko/compiler`.
 MX *substring* of a larger file, with every position shifted to the
 enclosing file. The consumer is a host whose MX lives inside another language
 (Solid's `.solid.mx`). This is the stopgap
-`notes/research/marko-seam-spikes.md` spike 1 measured, not a fix: the fix is an
+a seam spike measured, not a fix: the fix is an
 additive base-position parameter upstream, which MX still intends to send.
 Solid's own bridge (`packages/tsx-bridge/src/mx/bridge.ts`) now calls this
 front door for every MX region it finds — see `packages/hosts/solid/README.md`

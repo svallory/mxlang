@@ -11,8 +11,8 @@ import { parseStub } from "./test-helpers.ts";
  * Runs one `.solid.mx` decorator/property fixture and captures the
  * `MxRegionContext` the parser computed for its MX region, via a check that
  * always accepts but records what it saw — same shape as the Angular host's
- * own five-line check (see `notes/investigations/angular-ng-mx-spike.md`
- * §Q4), without asserting a specific host's policy.
+ * own check (`ngMxPositionCheck`, `packages/hosts/angular/src/ng-mx.ts`),
+ * without asserting a specific host's policy.
  */
 const DECORATOR_PLUGINS: PluginConfig[] = ["typescript", "jsx", "decorators"];
 
@@ -293,8 +293,8 @@ describe("computeMxRegionContext (unit)", () => {
       { kind: "property", key: "template", valueStart: 42 },
     ];
     const context = computeMxRegionContext(stack, 42);
-    // Mirrors notes/investigations/angular-ng-mx-spike.md §Q4's five-line
-    // `ngMxPositionCheck`, plus `argumentIndex === 0` — Angular's own
+    // Mirrors the Angular host's `ngMxPositionCheck`, `argumentIndex === 0`
+    // included — Angular's own
     // `@Component({ template: ... })` decorator always takes exactly one
     // argument, so the real check pins that too, not just the shape.
     const ngMxPositionCheck = (ctx: MxRegionContext) =>
