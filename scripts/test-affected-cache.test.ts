@@ -16,7 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createVitest } from "vitest/node";
+import { createVitest, type Reporter } from "vitest/node";
 import { cacheArgs } from "./test-affected.ts";
 import {
   bypassReason,
@@ -52,6 +52,18 @@ const project = (): ProjectInput => ({
     },
   },
 });
+/** The fixture inputs' one project. */
+const firstProject = (i: Inputs): ProjectInput => {
+  const p = i.projects[0];
+  if (p === undefined) throw new Error("the fixture inputs have one project");
+  return p;
+};
+/** vite-node's transform hook as the cache wraps it (a vitest internal). */
+type TransformRequest = (
+  id: string,
+  filepath: string,
+  mode: string,
+) => Promise<unknown>;
 const collect = (env: NodeJS.ProcessEnv = {}): Inputs =>
   collectInputs(root, [project()], env, root);
 const write = (rel: string, text: string) => {
@@ -323,7 +335,7 @@ describe("guards fall back to native (AC-3)", () => {
     const ns = namespaceFor(base);
     if (!ns.ok) throw new Error(ns.reason);
     const req = (i: Inputs, ns2: string) => {
-      const pk = projectKey(i.projects[0]);
+      const pk = projectKey(firstProject(i));
       if (!pk.ok) throw new Error(pk.reason);
       return entryKey(
         ns2,
@@ -347,7 +359,7 @@ describe("guards fall back to native (AC-3)", () => {
     const served = (i: Inputs): boolean => {
       const n = namespaceFor(i);
       if (!n.ok) return false;
-      const pk = projectKey(i.projects[0]);
+      const pk = projectKey(firstProject(i));
       if (!pk.ok) return false;
       return new Store(storeDir, n.value).get(req(i, n.value)) !== undefined;
     };
@@ -476,7 +488,7 @@ describe("guards fall back to native (AC-3)", () => {
         inputs: () =>
           clone((i) => {
             (
-              i.projects[0].config as { resolve: { conditions: string[] } }
+              firstProject(i).config as { resolve: { conditions: string[] } }
             ).resolve.conditions = ["node", "x"];
           }),
       },
@@ -484,7 +496,7 @@ describe("guards fall back to native (AC-3)", () => {
         name: "project config define",
         inputs: () =>
           clone((i) => {
-            i.projects[0].config = { define: { A: "1" } };
+            firstProject(i).config = { define: { A: "1" } };
           }),
       },
       {
@@ -505,35 +517,35 @@ describe("guards fall back to native (AC-3)", () => {
         name: "plugin origin changed (same names)",
         inputs: () =>
           clone((i) => {
-            i.projects[0].origins = ["o1", "changed"];
+            firstProject(i).origins = ["o1", "changed"];
           }),
       },
       {
         name: "plugin origin unknown",
         inputs: () =>
           clone((i) => {
-            i.projects[0].origins = ["o1", null];
+            firstProject(i).origins = ["o1", null];
           }),
       },
       {
         name: "unsupported plugin",
         inputs: () =>
           clone((i) => {
-            i.projects[0].plugins.push("some-user-plugin");
+            firstProject(i).plugins.push("some-user-plugin");
           }),
       },
       {
         name: "third-party vite:-prefixed plugin",
         inputs: () =>
           clone((i) => {
-            i.projects[0].plugins.push("vite:react-babel");
+            firstProject(i).plugins.push("vite:react-babel");
           }),
       },
       {
         name: "plugin option closure",
         inputs: () =>
           clone((i) => {
-            i.projects[0].config = {
+            firstProject(i).config = {
               resolve: { alias: [{ find: "x", customResolver() {} }] },
             };
           }),
@@ -652,7 +664,10 @@ describe("guards fall back to native (AC-3)", () => {
   it("serves cached lists only until finish, stores atomically, rejects an unstable file", async () => {
     const calls: string[] = [];
     const file = join(root, "src/a.ts");
-    const node = {
+    const node: {
+      transformPromiseMap: { ssr: Map<string, unknown> };
+      _transformRequest: TransformRequest;
+    } = {
       transformPromiseMap: { ssr: new Map() },
       _transformRequest: async (id: string) => {
         calls.push(id);
@@ -686,7 +701,7 @@ describe("guards fall back to native (AC-3)", () => {
     const flip = join(root, "src/flip.ts");
     writeFileSync(flip, "export {}");
     let n = 0;
-    const flipNode = {
+    const flipNode: { _transformRequest: TransformRequest } = {
       _transformRequest: async () => {
         writeFileSync(flip, `export const t = ${++n};`);
         return { code: "x", deps: ["/src/b.ts"], dynamicDeps: [] };
@@ -703,7 +718,7 @@ describe("guards fall back to native (AC-3)", () => {
     second?.finish();
 
     writeFileSync(flip, "export {}");
-    const steadyNode = {
+    const steadyNode: { _transformRequest: TransformRequest } = {
       _transformRequest: async () => ({
         code: "x",
         deps: ["/src/b.ts"],
@@ -751,16 +766,18 @@ describe("glob counterexample (AC-4)", () => {
             run: true,
             globals: true,
             related: [join(proj, related)],
-            reporters: cached ? [reporter] : [],
+            reporters: cached ? [reporter as unknown as Reporter] : [],
           },
           {},
           { stdout: process.stderr },
         );
         let during: unknown;
         try {
-          const node = ctx.projects[0].vitenode as unknown as {
-            _transformRequest: unknown;
-          };
+          const node = (
+            ctx.projects[0] as unknown as {
+              vitenode: { _transformRequest: unknown };
+            }
+          ).vitenode;
           const nativeFn = node._transformRequest;
           await ctx.start();
           during = node._transformRequest === nativeFn;

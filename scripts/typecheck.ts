@@ -27,7 +27,7 @@ function listDirs(): string[] {
     "bash",
     [
       "-c",
-      'for d in packages/*/ packages/*/*/ examples/*/; do [ -f "$d/tsconfig.json" ] && echo "$d"; done',
+      'for d in scripts/ packages/*/ packages/*/*/ examples/*/; do [ -f "$d/tsconfig.json" ] && echo "$d"; done',
     ],
     { cwd: root, encoding: "utf8" },
   );

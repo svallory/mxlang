@@ -55,7 +55,7 @@ import {
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { createVitest } from "vitest/node";
+import { createVitest, type Reporter } from "vitest/node";
 import { projectDirs, projectsFor } from "./test-affected.ts";
 import {
   collectInputs,
@@ -180,18 +180,21 @@ async function select(fx: Fx, o: SelectOptions): Promise<Selection> {
       config = join(fx.root, "parity.config.mts");
       writeFileSync(config, o.configText);
     }
+    // `define` is not in CliOptions' type, but createVitest passes it on to
+    // the resolved config at run time (the "config define" row relies on it).
+    const options: Parameters<typeof createVitest>[1] & { define?: unknown } = {
+      root: fx.root,
+      config,
+      watch: false,
+      run: true,
+      globals: true,
+      related: o.related.map((f) => (isAbsolute(f) ? f : join(fx.root, f))),
+      reporters: o.cached ? [reporter as unknown as Reporter] : [],
+      define: o.define,
+    };
     const ctx = await createVitest(
       "test",
-      {
-        root: fx.root,
-        config,
-        watch: false,
-        run: true,
-        globals: true,
-        related: o.related.map((f) => (isAbsolute(f) ? f : join(fx.root, f))),
-        reporters: o.cached ? [reporter] : [],
-        define: o.define,
-      },
+      options,
       { plugins: o.plugins as never },
       { stdout: process.stderr },
     );
@@ -794,8 +797,11 @@ export const ROWS: Row[] = [
           problems.push(`a writer failed: ${r.out.slice(-300)}`);
       }
       for (const r of results.slice(2)) {
-        const m = /^RESULT (.*)$/m.exec(r.out);
-        const files = m ? (JSON.parse(m[1]) as Selection).files : undefined;
+        const json = /^RESULT (.*)$/m.exec(r.out)?.[1];
+        const files =
+          json !== undefined
+            ? (JSON.parse(json) as Selection).files
+            : undefined;
         if (files?.join() !== "edit.test.ts,lib.test.ts") {
           problems.push(
             `a concurrent run selected [${files}]: ${r.out.slice(-300)}`,
@@ -803,10 +809,11 @@ export const ROWS: Row[] = [
         }
       }
       for (const r of readerResults) {
-        const m = /^RESULT (.*)$/m.exec(r.out);
-        const got = m
-          ? (JSON.parse(m[1]) as { reads: number; torn: number })
-          : undefined;
+        const json = /^RESULT (.*)$/m.exec(r.out)?.[1];
+        const got =
+          json !== undefined
+            ? (JSON.parse(json) as { reads: number; torn: number })
+            : undefined;
         if (!got || got.reads === 0)
           problems.push(`a reader read nothing: ${r.out.slice(-300)}`);
         else if (got.torn > 0)
@@ -840,10 +847,9 @@ export const ROWS: Row[] = [
         "--related",
         "src/lib.ts",
       ]).exit;
-      const line = /^RESULT (.*)$/m.exec(warm.out);
-      const warmLine = line
-        ? (JSON.parse(line[1]) as Selection).line
-        : warm.out;
+      const json = /^RESULT (.*)$/m.exec(warm.out)?.[1];
+      const warmLine =
+        json !== undefined ? (JSON.parse(json) as Selection).line : warm.out;
       if (!/[1-9]\d* hits/.test(warmLine)) {
         problems.push(`no cache hits after concurrent writes: ${warmLine}`);
       }
@@ -1014,8 +1020,13 @@ export function planShards(count: number): string[][] {
     if (names.length === 0)
       throw new Error(`no vitest project name for ${dir}`);
     const k = load.indexOf(Math.min(...load));
-    load[k] += w;
-    shards[k].push(...names);
+    const kLoad = load[k];
+    const shard = shards[k];
+    if (kLoad === undefined || shard === undefined) {
+      throw new Error(`planShards(${count}): the least-loaded shard exists`);
+    }
+    load[k] = kLoad + w;
+    shard.push(...names);
   }
   const empty = shards.findIndex((p) => p.length === 0);
   if (empty >= 0) throw new Error(`shard ${empty + 1}/${count} has no project`);
@@ -1064,7 +1075,7 @@ async function realDeps(
         root: repoRoot,
         watch: false,
         run: true,
-        reporters: [reporter],
+        reporters: [reporter as unknown as Reporter],
         project: projects,
       },
       {},
@@ -1129,6 +1140,9 @@ async function runReal(
   return withHarness({ MX_TEST_LANE: "all" }, async () => {
     const problems: string[] = [];
     const projects = planShards(shard[1])[shard[0]];
+    if (projects === undefined) {
+      throw new Error(`real shard ${shard[0] + 1}/${shard[1]} does not exist`);
+    }
     // Cold: the store is empty, so every module is transformed natively.
     const t0 = performance.now();
     const cold = await realDeps(store, projects);
@@ -1199,7 +1213,11 @@ const BIG_ENTRY_KEY = "ab".repeat(32);
 const READER_DEADLINE_MS = 30_000;
 
 async function hammer(argv: string[]): Promise<number> {
-  const arg = (n: string) => argv[argv.indexOf(n) + 1];
+  const arg = (n: string): string => {
+    const v = argv[argv.indexOf(n) + 1];
+    if (v === undefined) throw new Error(`hammer child: ${n} needs a value`);
+    return v;
+  };
   const store = new Store(arg("--store"), "hammer");
   const done = arg("--done");
   const deps = Array.from({ length: 20_000 }, (_, i) =>
@@ -1321,7 +1339,11 @@ function spawnPart(args: string[], readyLine?: string): Spawned {
 
 async function part(argv: string[]): Promise<number> {
   const which = argv[argv.indexOf("--part") + 1];
-  const arg = (n: string) => argv[argv.indexOf(n) + 1];
+  const arg = (n: string): string => {
+    const v = argv[argv.indexOf(n) + 1];
+    if (v === undefined) throw new Error(`parity child: ${n} needs a value`);
+    return v;
+  };
   // The parent kills only its direct child, so every child (and so every
   // grandchild) bounds itself.
   setTimeout(() => process.exit(1), CHILD_TIMEOUT_MS).unref();
@@ -1340,6 +1362,9 @@ async function part(argv: string[]): Promise<number> {
   }
   if (which === "real") {
     const [i, n] = arg("--shard").split("/").map(Number);
+    if (i === undefined || n === undefined) {
+      throw new Error("parity child: --shard is <i>/<n>");
+    }
     const problems = await runReal(arg("--store"), [i, n]);
     for (const p of problems) console.log(`FAIL real ${i + 1}/${n}: ${p}`);
     console.log(

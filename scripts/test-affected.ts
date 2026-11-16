@@ -253,9 +253,11 @@ export function isWide(file: string): boolean {
  * are kept.
  */
 export function projectDirs(base = root): string[] {
-  return PROJECT_GLOBS.flatMap((g) =>
-    globSync(g, { cwd: base, onlyFiles: false }),
-  )
+  // `onlyFiles: false` stays: Bun's globSync may honour it (Node ignores it).
+  // A non-fresh object skips the excess-property check, so the call resolves
+  // to the `string[]` overload; do not annotate it with Node's glob options.
+  const options = { cwd: base, onlyFiles: false };
+  return PROJECT_GLOBS.flatMap((g) => globSync(g, options))
     .map((d) => `${d.replace(/\/+$/, "")}/`)
     .filter((d) => existsSync(resolve(base, d)))
     .sort();
@@ -327,7 +329,8 @@ function projectName(dir: string): string {
   const cfg = resolve(root, dir, "vitest.config.ts");
   if (existsSync(cfg)) {
     const m = /\bname:\s*["']([^"']+)["']/.exec(readFileSync(cfg, "utf8"));
-    if (m) return m[1];
+    const name = m?.[1];
+    if (name !== undefined) return name;
   }
   try {
     const pkg = JSON.parse(
@@ -459,7 +462,10 @@ export function ownRunnerPlan(
 }
 
 function run(cmd: string[], env: NodeJS.ProcessEnv): number {
-  const r = spawnSync(cmd[0], cmd.slice(1), {
+  const [bin, ...args] = cmd;
+  if (bin === undefined)
+    throw new Error("test:affected: run() got an empty command");
+  const r = spawnSync(bin, args, {
     cwd: root,
     env,
     stdio: "inherit",

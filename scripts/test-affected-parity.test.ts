@@ -48,7 +48,9 @@ describe("nativeReason (the verifier's reading of a native fallback)", () => {
       lines.push(`test:affected cache: ${m}`),
     );
     expect(lines).toHaveLength(1);
-    expect(nativeReason(lines[0])).toMatch(
+    const line = lines[0];
+    if (line === undefined) throw new Error("install() warned once");
+    expect(nativeReason(line)).toMatch(
       /symlink leaves the repository.*a -> \/x/,
     );
   });
@@ -70,7 +72,9 @@ describe("nativeReason (the verifier's reading of a native fallback)", () => {
       "/nowhere",
       (m) => viaInstall.push(`test:affected cache: ${m}`),
     );
-    expect(nativeRunProblem(viaInstall[0])).toMatch(
+    const line = viaInstall[0];
+    if (line === undefined) throw new Error("install() warned once");
+    expect(nativeRunProblem(line)).toMatch(
       /^cache is native here: file inventory unavailable; parity cannot/,
     );
     expect(

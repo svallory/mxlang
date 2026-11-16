@@ -121,7 +121,11 @@ export function configFiles(
   /** Queue every workspace package the text of `file` imports. */
   const follow = (file: string, text: string) => {
     for (const m of text.matchAll(BARE_IMPORT)) {
-      const name = packageName(m[1]);
+      const spec = m[1];
+      if (spec === undefined) {
+        throw new Error("BARE_IMPORT's specifier group is mandatory");
+      }
+      const name = packageName(spec);
       if (name === undefined || packages.has(name)) continue;
       // The nearest node_modules/<name> above the importing file.
       for (let d = dirname(file); ; d = dirname(d)) {
@@ -219,11 +223,13 @@ export default class AffectedCacheReporter {
         this.options.dir ??
         resolve(root, "node_modules", ".cache", "mx-affected");
       this.installed = install(
-        ctx.projects.map((p, i) => ({
-          name: p.name,
-          vitenode: p.vitenode,
-          input: perProject[i],
-        })),
+        ctx.projects.map((p, i) => {
+          const input = perProject[i];
+          if (input === undefined) {
+            throw new Error("perProject has one input per project");
+          }
+          return { name: p.name, vitenode: p.vitenode, input };
+        }),
         inputs,
         dir,
         (m) => console.warn(`test:affected cache: ${m}`),

@@ -58,17 +58,16 @@ export function parseFragment(slug: string, text: string): Fragment {
   let packages: string[] | null = null;
   let kind: Kind | null = null;
   for (const line of lines.slice(1, close)) {
-    const pkgMatch = packagesRe.exec(line);
-    if (pkgMatch) {
-      packages = pkgMatch[1]
+    const list = packagesRe.exec(line)?.[1];
+    if (list !== undefined) {
+      packages = list
         .split(",")
         .map((name) => name.trim())
         .filter((name) => name.length > 0);
       continue;
     }
-    const kindMatch = kindRe.exec(line);
-    if (kindMatch) {
-      const value = kindMatch[1];
+    const value = kindRe.exec(line)?.[1];
+    if (value !== undefined) {
       if (!(kinds as readonly string[]).includes(value)) {
         throw new FragmentError(
           `${slug}: kind must be one of ${kinds.join(" | ")}, got \`${value}\``,
@@ -202,11 +201,11 @@ export function prependEntries(
     ].join("\n");
   }
   let firstContent = headingIndex + 1;
-  while (firstContent < lines.length && lines[firstContent].trim() === "") {
+  while (lines[firstContent]?.trim() === "") {
     firstContent++;
   }
-  const empty =
-    firstContent === lines.length || /^## /.test(lines[firstContent]);
+  const next = lines[firstContent];
+  const empty = next === undefined || /^## /.test(next);
   return [
     ...lines.slice(0, headingIndex + 1),
     "",

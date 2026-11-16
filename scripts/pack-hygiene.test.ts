@@ -371,7 +371,6 @@ describe("runtime bare-import check", () => {
     expect(
       check(
         'import "declared/sub"; import "@p/peer"; import "node:fs"; import "fs/promises"; import "./x.js"; import "@x/pkg/runtime";',
-        "ok",
       ),
     ).toEqual([]);
   });

@@ -5,13 +5,17 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const host = process.argv[2];
+const hostArg = process.argv[2];
 if (
-  !host ||
-  !["html", "preact", "react", "hono", "solid", "astro", "marko"].includes(host)
+  !hostArg ||
+  !["html", "preact", "react", "hono", "solid", "astro", "marko"].includes(
+    hostArg,
+  )
 ) {
-  throw new Error(`Unknown attribute-value probe host: ${host}`);
+  throw new Error(`Unknown attribute-value probe host: ${hostArg}`);
 }
+// A const narrowed above, so hoisted functions below see a string.
+const host: string = hostArg;
 const packageDir =
   host === "marko"
     ? join(root, "packages/oracle")

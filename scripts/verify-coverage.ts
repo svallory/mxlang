@@ -358,13 +358,16 @@ async function main() {
         ["packages/editors/tree-sitter-solid", grammarMarkerPath],
         ["packages/editors/tree-sitter-astromx", astromxGrammarMarkerPath],
         ["packages/editors/tree-sitter-mx", mxGrammarMarkerPath],
-      ]) {
+      ] as const) {
         if (isFreshEvidence(marker, verifyStart)) testedPackages.add(key);
         else if (mode)
           throw new Error(`Missing or stale grammar evidence: ${key}`);
       }
     }
     if (mode === "--collect") {
+      if (path === undefined || jobOrJobs === undefined) {
+        throw new Error("--collect was validated above to carry <file> <job>");
+      }
       const manifest: CoverageEvidence = {
         version: 1,
         invocation: invocationKey(),

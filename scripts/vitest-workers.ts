@@ -335,8 +335,7 @@ export interface CliWorkers {
 }
 
 export function cliMaxWorkers(argv: readonly string[]): CliWorkers | undefined {
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+  for (const [i, a] of argv.entries()) {
     const m = /^--maxWorkers=(.+)$/.exec(a) ?? /^--max-workers=(.+)$/.exec(a);
     const token = m ? m[1] : undefined;
     if (!token && a !== "--maxWorkers" && a !== "--max-workers") continue;

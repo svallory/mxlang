@@ -1,0 +1,10 @@
+{
+  // Typecheck config for the root scripts/ directory (the .cjs files stay out).
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "bun"]
+  },
+  "include": ["**/*.ts"]
+}

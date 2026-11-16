@@ -10,7 +10,7 @@
     "apps/*"
   ],
   "scripts": {
-    "typecheck": "for d in packages/*/ packages/*/*/ examples/*/; do if [ -f \"$d/tsconfig.json\" ]; then (cd \"$d\" && echo \"[typecheck] $d\" && if [ -f package.json ] && grep -q '\"typecheck\"' package.json; then bun run typecheck; else bunx tsc --noEmit; fi) || exit 1; fi; done",
+    "typecheck": "for d in scripts/ packages/*/ packages/*/*/ examples/*/; do if [ -f \"$d/tsconfig.json\" ]; then (cd \"$d\" && echo \"[typecheck] $d\" && if [ -f package.json ] && grep -q '\"typecheck\"' package.json; then bun run typecheck; else bunx tsc --noEmit; fi) || exit 1; fi; done",
     "test": "vitest run --reporter=default --reporter=json --outputFile=vitest-results.json",
     "test:affected": "bun run scripts/test-affected.ts",
     "test:affected:parity": "bun run scripts/test-affected-parity.ts",
@@ -55,6 +55,7 @@
     "@types/babel__core": "7.20.5",
     "@types/babel__generator": "7.27.0",
     "@types/babel__helper-validator-identifier": "7.15.2",
+    "@types/bun": "1.4.2",
     "@types/charcodes": "0.2.2",
     "@types/node": "26.5.1",
     "@types/react": "19.3.0",
