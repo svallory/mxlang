@@ -163,6 +163,17 @@ describe("preact: a <define> that declares <return>", () => {
     );
   });
 
+  // mx-bk8r: a call tag's `/T` hides the define in its body, so `<T/x/>` is a
+  // dynamic tag over the call's value `U`, and `/var` binds `U`'s returned
+  // value as stock does (stock 6.4.4 renders `<p>42</p>`).
+  it("binds /var on a define call a call tag's /T hides to the local's value", async () => {
+    expect(
+      await renderWhole(
+        "<define/T|{n}|><return=n/></define><define/U|{n}|><return=n * 2/></define><define/Make><return=U/></define><define/W><Make/T/><T/x n=21/><p>${x}</p></define><W/>",
+      ),
+    ).toBe("<p>42</p>");
+  });
+
   // mx-nh8x: stock renders the loop value `U`, not the outer define `T`.
   it("renders a loop variable of a define's name as that value", async () => {
     expect(

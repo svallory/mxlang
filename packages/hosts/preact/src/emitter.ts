@@ -2463,7 +2463,7 @@ export class PreactEmitter implements Emitter<string> {
           : concatMapped("(<>", closeFragmentBody(rendered), "</>);"),
     );
     const wrapped = returned
-      ? `__mxDefine((...a: Parameters<typeof ${own}>) => ${own}(...a).output, ${JSON.stringify(node.name)})`
+      ? `__mxDefine((...a: Parameters<typeof ${own}>) => ${own}(...a).output, ${JSON.stringify(node.name)}, ${own})`
       : `__mxDefine(${own}, ${JSON.stringify(node.name)})`;
     // The public name maps to the define's name span too, so a go-to-definition
     // from a value read reaches the `<define/Row>` tag.

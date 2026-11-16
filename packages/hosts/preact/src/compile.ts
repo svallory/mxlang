@@ -288,8 +288,13 @@ function contentNormalization(subject: string, indent: number): string {
  * form under the non-enumerable key `__mxDefineComponent`, which
  * `__mxDynamic`'s props branch renders. A string key, not a symbol: each
  * module inlines its own helpers and a define value can cross modules.
+ *
+ * A define whose body declares `<return>` passes its pair function as the
+ * third argument, kept under the non-enumerable key `__mxDefinePair`, so a
+ * `/var` on a dynamic tag over the define's value (`__mxDynamicPair`) binds
+ * the value the direct call `<Row/x/>` would.
  */
-const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F, name: string): F {
+const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F, name: string, pair?: (...args: any[]) => { value: any; output: any }): F {
   const wrapped = ((first?: any, ...rest: any[]) => {
     if (first !== null && typeof first === "object" && first.content == null && first.children != null) {
       const body = first.children;
@@ -306,6 +311,7 @@ ${contentNormalization("body", 10)}
   const component = (props: any) => wrapped(props);
   Object.defineProperty(component, "name", { value: name, configurable: true });
   Object.defineProperty(wrapped, "__mxDefineComponent", { value: component });
+  if (pair) Object.defineProperty(wrapped, "__mxDefinePair", { value: pair });
   return wrapped;
 }`;
 
@@ -437,9 +443,10 @@ const MX_DYNAMIC_FN = `function __mxDynamic(target: any, payload: any, content?:
 }`;
 
 /**
- * __mxDynamic for a call that binds /var: a target with a render path (a
- * compiled unit that declares <return>) is called through
- * .render, which hands back the { value, output } pair — the value binds the
+ * __mxDynamic for a call that binds /var: a returning define's value is
+ * called through its pair function (__mxDefinePair, see MX_DEFINE), and a
+ * target with a render path (a compiled unit that declares <return>) through
+ * .render; each hands back the { value, output } pair — the value binds the
  * /var, the output renders, and the pair object itself never reaches JSX.
  * Any other callee has no value channel, so value is undefined and the
  * output is whatever __mxDynamic renders. Typed any on value: the callee's
@@ -448,6 +455,12 @@ const MX_DYNAMIC_FN = `function __mxDynamic(target: any, payload: any, content?:
  * element types already accept any node for.
  */
 const MX_DYNAMIC_PAIR = `function __mxDynamicPair(target: any, payload: any, content?: any, takesParams?: boolean): { value: any; output: any } {
+  // A returning define's value carries its pair function (\`__mxDefine\`):
+  // called with the arguments \`__mxDynamic\` hands the define, the args
+  // spread, or the one props object that already carries \`content\`.
+  if (typeof target === "function" && typeof target.__mxDefinePair === "function") {
+    return target.__mxDefinePair(...(Array.isArray(payload) ? payload : [payload]));
+  }
   if (
     target !== null &&
     target !== undefined &&
