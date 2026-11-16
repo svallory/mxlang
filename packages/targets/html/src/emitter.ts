@@ -1583,12 +1583,15 @@ export function createEmitter(
       );
       // A define that declares `<return>`: its block returns `{ value, output }`
       // under a private name, which only a `/var` call reaches. Its public
-      // value (calls without `/var`, `content` reads, dynamic tags) is the
-      // output alone, as for any other define.
+      // value (calls without `/var`, `content` reads) is the output alone, as
+      // for any other define. It carries the pair as a non-enumerable
+      // `__mxDefinePair`, so a dynamic tag over a local holding it
+      // (`<V/x/>`, `<${V}/x/>`) binds the `<return>` value through
+      // `__mxRenderDynamic`, as Marko 6.4.4's `_dynamic_tag` does.
       const pair = node.returnValue ? defineFunctionName(node.name) : null;
       if (pair) push(concatMapped(`const ${pair} = `, fn, ";"));
       const value: string | MappedCode = pair
-        ? `(...a: Parameters<typeof ${pair}>) => ${pair}(...a).output`
+        ? `(Object.defineProperty((...a: Parameters<typeof ${pair}>) => ${pair}(...a).output, "__mxDefinePair", { value: ${pair} }) as ((...a: Parameters<typeof ${pair}>) => string) & { readonly __mxDefinePair: typeof ${pair} })`
         : fn;
       const tree = node.attributeTagTree ?? [];
       if (node.attrs.length === 0 && tree.length === 0) {

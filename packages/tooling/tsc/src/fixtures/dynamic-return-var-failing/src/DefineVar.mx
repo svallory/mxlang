@@ -1,0 +1,5 @@
+<define/U><return=1/></define>
+<for|V| of=[U]>
+  <V/x/>
+  <p>${x.toUpperCase()}</p>
+</for>

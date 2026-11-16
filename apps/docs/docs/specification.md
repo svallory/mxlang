@@ -3540,7 +3540,10 @@ same rules hold inside the body (at most one, at its top level only), counted
 per define, and a define's `<return>` is independent of the file's own. Only a
 direct call with `/var` reads the value; every other read of the define (a
 call without `/var`, `Thing.content`, a dynamic tag `<${Thing}/>`) gets its
-output alone, and `/var` on a dynamic tag naming a define stays refused. A
+output alone, and `/var` on a dynamic tag naming a define stays refused. On
+html, a dynamic tag over a local that holds the define (a loop variable or tag
+param `V`, called as `<V/x/>` or `<${V}/x/>`) is the exception: its `/var`
+binds the `<return>` value, as in Marko 6.4.4. A
 `/var` on a call of a define without `<return>` is refused as on any tag that
 returns nothing. Every host but Angular carries the value; Angular refuses the
 `<return>` (`MX_UNSUPPORTED_CONSTRUCT`, at its value), as it refuses a page's or
@@ -4937,10 +4940,11 @@ renders its body (it once rendered `[object Object]`), and `/var` on a dynamic
 tag binds (it was once silently dropped).
 
 `/var` on a tag that is *resolved through a `.ts` module* (a barrel re-export
-or a hand-written function imported by name) is refused at compile time, as it
-has been since the core extraction: "tag variable `/c` on `<X>` is not
-supported in a standalone template". The workaround is the dynamic form,
-`<${X}/c/>`, which binds the `render` value. On the **html** host the props of
+or a hand-written function imported by name, `<X/c/>`) binds as the dynamic
+form `<${X}/c/>` does on html, Preact, React and Hono: the `render` value, or
+`undefined` for a callee without `.render`. Solid and Angular refuse it at
+compile time: "tag variable `/c` on `<X>` is not supported in a standalone
+template". On the **html** host the props of
 an imported `.ts` tag, and of an authored `${expr}` tag whose type is a function,
 are type-checked against the callee's first parameter (or its `render` input;
 `| undefined` is ignored): a wrong-typed or unknown attribute is reported on the

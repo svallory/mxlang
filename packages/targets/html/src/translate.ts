@@ -1387,6 +1387,11 @@ export const policy: Policy = {
   isComponent,
   checkBinding: rejectInputShadowing,
   isDelegatedTag,
+  // `__mxRenderDynamic` hands back what the callee's `render` returns (or a
+  // returning define's `<return>` value), so a `/var` on a dynamic target core
+  // builds for a local value or a value import (`<V/x/>`) binds, as stock
+  // Marko 6.4.4's `_dynamic_tag` does, instead of being refused.
+  bindsDynamicTagVar: true,
   dynamicTagDelegateBindsVar: true,
   isBuiltinTag: (name) => name === "let" || name === "id",
   resolveDelegatedTag,
@@ -1604,11 +1609,14 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 // \`render\` returns, which is what a \`/var\` on the dynamic tag binds. A
 // compiled template is told apart by its \`.render\` entry, never by the shape
 // of what it returns; any other function returns a string that is written.
-// The overload types the binding \`undefined\` only when the type proves the
+// A \`<define>\` that declares \`<return>\` carries its \`{ value, output }\`
+// function as a non-enumerable \`__mxDefinePair\`: it is called with the
+// arguments the plain-function call takes, its output written and its value
+// returned. The overload types the binding \`undefined\` only when the type proves the
 // callee has no \`render\` (a string, null, undefined, false, 0 or a plain function);
 // \`unknown\`, \`object\`, \`{}\` and \`Function\` might be a unit at run time, so
 // they bind \`unknown\`, and \`any\` stays \`any\`.
-const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: __MxDynamicProps<T>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
+const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: __MxDynamicProps<T>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { readonly __mxDefinePair: (...__mxA: any) => { value: infer V } } ? V : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
 function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
   // Marko parity (6.4.4 \`normalizeDynamicRenderer\`): an object that is no
   // compiled template renders its \`content\`, else its \`default\` (a module
@@ -1647,6 +1655,12 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
     // Marko 6.4.4's html/dynamic-tag.ts voidElementsReg, case-sensitive.
     __mxSink.write(/^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(__mxTarget) ? __mxOut : __mxOut + "</" + __mxTarget + ">");
     return;
+  }
+  if (typeof __mxTarget.__mxDefinePair === "function") {
+    // A returning \`<define>\`: Marko 6.4.4 binds its \`<return>\` value.
+    const __mxPair = __mxArgs ? (Object.keys(__mxProps).length > 0 ? __mxTarget.__mxDefinePair(...__mxArgs, __mxProps) : __mxTarget.__mxDefinePair(...__mxArgs)) : __mxTarget.__mxDefinePair(__mxProps);
+    __mxSink.write("" + __mxPair.output);
+    return __mxPair.value;
   }
   if (__mxArgs) {
     // Marko 6.3.51 calls a template with its args, so args[0] is its input.

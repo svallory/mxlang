@@ -94,4 +94,43 @@ describe("html: a <define> that declares <return>", () => {
   ])("%s", (_what, source, html) => {
     expect(render(source)).toBe(html);
   });
+
+  // A dynamic tag over a local holding the define binds its `<return>`
+  // value (stock `let x = _dynamic_tag(…, V, {…})`). Expected HTML is stock
+  // Marko 6.4.4's render, its resume comments and script removed.
+  const returning = "<define/U|{n}|><return=n * 2/><i>${n}</i></define>";
+  it.each([
+    [
+      "binds /var on a loop variable holding the define",
+      `${returning}<for|V| of=[U]><V/x n=21/><p>\${x}</p></for>`,
+      "<i>21</i><p>42</p>",
+    ],
+    [
+      "binds /var on a content param holding the define",
+      `${returning}<define/W|{content}|><\${content}(U)/></define><W|T|><T/y n=2/><p>\${y}</p></W>`,
+      "<i>2</i><p>4</p>",
+    ],
+    [
+      "binds /var on a loop variable that shadows another define",
+      `${returning}<define/T|{n}|><b>\${n}</b></define><for|T| of=[U]><T/x n=1/><p>\${x}</p></for>`,
+      "<i>1</i><p>2</p>",
+    ],
+    [
+      "binds /var on the hinted spelling over the local",
+      `${returning}<for|V| of=[U]><\${V}/z n=3/><p>\${z}</p></for>`,
+      "<i>3</i><p>6</p>",
+    ],
+    [
+      "binds undefined for a define without <return>",
+      "<define/D|{n}|><b>${n}</b></define><for|V| of=[D]><V/x n=1/><p>${String(x)}</p></for>",
+      "<b>1</b><p>undefined</p>",
+    ],
+    [
+      "writes only the output for a dynamic call without /var",
+      `${returning}<\${U} n=1/>`,
+      "<i>1</i>",
+    ],
+  ])("%s", (_what, source, html) => {
+    expect(render(source)).toBe(html);
+  });
 });

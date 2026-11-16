@@ -981,6 +981,22 @@ describe("the render sink", () => {
     expect(html).toBe("<b>x</b><p>undefined</p>");
   });
 
+  // Stock Marko 6.4.4 compiles a `.ts` value import called by name to
+  // `let n = _dynamic_tag(…, Hello, {…})`, as it does `<${Hello}/n/>`, and
+  // binds `undefined`; html writes the function's string, as the dynamic
+  // spelling above does.
+  it("binds /var on a .ts value import called by name as its dynamic spelling does", async () => {
+    const html = await renderModules(
+      {
+        "hello.ts": hello,
+        "page.mx":
+          'import Hello from "./hello.ts"\n<Hello/n name="x"/><p>${String(n)}</p>',
+      },
+      "page.mx",
+    );
+    expect(html).toBe("<b>x</b><p>undefined</p>");
+  });
+
   // Measured with Marko 6.4.4 (stock parser, server render): a falsy dynamic
   // tag name renders nothing of its own and leaves the `/var` `undefined`.
   it.each([
@@ -1377,33 +1393,6 @@ describe("an imported .mx tag that declares <return>", () => {
       ]) {
         expect(() => compile(src(source), join(dir, "page.mx"))).not.toThrow();
       }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("still rejects /var on an imported .ts component", () => {
-    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-ts-"));
-    try {
-      writeFileSync(join(dir, "widget.ts"), "export default () => ({})");
-      let error: (Error & { line?: number; column?: number }) | undefined;
-      try {
-        compile(
-          src('import Widget from "./widget.ts"\n<Widget/n/>'),
-          join(dir, "page.mx"),
-        );
-      } catch (caught) {
-        error = caught as Error;
-      }
-      expect(error?.message).toMatch(
-        /tag variable `\/n` on `<Widget>` is not supported/,
-      );
-      // At the `/n` itself, not the tag (core's dynamic-tag-var-silent-drop
-      // position change: `rejectUnsupportedFields` reports at `node.var`).
-      expect({ line: error?.line, column: error?.column }).toEqual({
-        line: 2,
-        column: 8,
-      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
