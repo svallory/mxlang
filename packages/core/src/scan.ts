@@ -904,7 +904,7 @@ export function checkParseOptions(
 /**
  * Reads a sidecar's `parseOptions` without executing it.
  *
- * The file is parsed with core's own Babel (`coreBabel()`, MX's Babel fork).
+ * The file is parsed with core's own Babel (`coreBabel()`, `@babel/parser`).
  *
  * The accepted shape is narrow and stated here because an author hits it as a
  * diagnostic: the module's `export default` must be an object literal, or an

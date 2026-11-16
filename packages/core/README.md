@@ -19,8 +19,8 @@ its own the answer is Marko's, and every difference is listed in
 `divergences.md` in the repository. A dialect package can change the syntax
 for the file extensions it claims (see "Dialects" below).
 
-The runtime dependencies are stock Babel packages (see "Which Babel the core
-uses"). The published bundle inlines the MX front end, MX's Babel parser fork and a copy of the Marko compiler core uses for taglib lookup and
+The only runtime dependency is `@babel/parser`. The published bundle inlines the
+MX front end and a copy of the Marko compiler core uses for taglib lookup and
 code printing, so installing core installs no `@marko/*` package.
 
 ## Core versus host
@@ -126,22 +126,18 @@ tested:
 
 ## Which Babel the core uses
 
-Lowering walks, prints and strips TypeScript with stock Babel packages:
-`@babel/core`'s own `traverse`, `types` and `File`, `@babel/generator`,
+Lowering parses, walks, prints and strips TypeScript with stock Babel
+packages: `@babel/parser` for `parse`/`parseExpression`, `@babel/core`'s own
+`traverse`, `types` and `File`, `@babel/generator`,
 `@babel/code-frame` and `@babel/plugin-transform-typescript`. They are
 exact-pinned runtime dependencies (not bundled), loaded lazily in
-`src/babel.ts` (`coreBabel()`), so importing core loads none of them. It parses with MX's Babel fork
-(`@mxlang/babel`, `parse`/`parseExpression` through
-`@mxlang/parser/frontend`, inlined into the dist), the same parser the front
-end uses: without MX's options it equals `@babel/parser` 7.29.8, and its
-block-comment scan stays linear when many block comments share one line.
-npm `@babel/parser` remains a dependency only because `@babel/core` loads it;
-core never calls it. `traverse`,
+`src/babel.ts` (`coreBabel()`), so importing core loads no Babel. `traverse`,
 `types` and `File` come from `@babel/core` so the TS strip's file, its paths
 and the walk over them are one instance whatever an install dedupes. The
 published `.d.ts` names no `@babel/*` type: nodes are untyped (`Node`) at
-core's boundary. Babel's helpers dispatch on `node.type`, so they read the
-fork's nodes like their own.
+core's boundary. The MX front end parses payloads with its own fork
+(`@mxlang/babel`); Babel's helpers dispatch on `node.type`, so they read
+those nodes like their own.
 
 Until PR 6 core used `@marko/compiler`'s bundled Babel (7.29.7, patched for
 Marko's own node types, which MX payloads never are); `src/babel.test.ts`

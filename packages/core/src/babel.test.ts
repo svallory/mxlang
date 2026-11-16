@@ -10,9 +10,8 @@
  */
 import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { parseBabel, parseBabelExpression } from "@mxlang/parser/frontend";
 import { describe, expect, it } from "vitest";
-import { coreBabel, coreParser, withReasonFirst } from "./babel.ts";
+import { coreBabel, withReasonFirst } from "./babel.ts";
 import { compileSource } from "./compile.ts";
 import type { Policy } from "./declarations.ts";
 import { markoBabel } from "./marko-frontend.ts";
@@ -250,14 +249,5 @@ describe("withReasonFirst puts a parse error's reason on the first line", () => 
   it("leaves a message that already starts with text as it is", () => {
     const error = new Error("plain reason");
     expect(withReasonFirst(error)).toBe(error);
-  });
-});
-
-describe("core parses with MX's Babel fork", () => {
-  it("coreParser() and coreBabel() hand out the front end's parseBabel/parseBabelExpression", () => {
-    expect(coreParser().parse).toBe(parseBabel);
-    expect(coreParser().parseExpression).toBe(parseBabelExpression);
-    expect(coreBabel().parse).toBe(parseBabel);
-    expect(coreBabel().parseExpression).toBe(parseBabelExpression);
   });
 });

@@ -5383,7 +5383,7 @@ function firstJsxStart(
   options: { plugins: ParserPlugin[]; allowImportExportEverywhere?: boolean },
 ): { line: number; column: number } | undefined {
   const parseWithJsx = (text: string): Node =>
-    // Marko's slim Babel has no `jsx` plugin; core's own parser (MX's Babel fork) does.
+    // Marko's slim Babel has no `jsx` plugin; core's own `@babel/parser` does.
     coreParser().parse(text, {
       sourceType: "module",
       allowReturnOutsideFunction: true,
