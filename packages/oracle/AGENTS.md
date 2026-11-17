@@ -33,7 +33,7 @@ Golden snapshots (`fixtures/<name>/__golden__/twin.<backend>.<variant>.js`) pin 
 ### `oracle:marko`: Marko parity for the stock `.marko` fixture set
 
 The parity target for Marko-syntax constructs is Marko itself,
-not Solid. `.mx`/`@mxlang/html` are retired, so there is one dialect
+not Solid. The old `.mx` dialect of the deleted `@mxlang/html` package is gone, so there is one dialect
 and one table: `bun run oracle:marko` (`packages/oracle/src/report-marko.ts`,
 delegating to `report-marko-stock.ts`) renders every fixture under
 `packages/targets/html/fixtures-marko/<name>/{input.marko,input.json,expected.html}`

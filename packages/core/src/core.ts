@@ -7,9 +7,9 @@
  * the core, and each host supplies declarations
  * plus an `Emitter`.
  *
- * This file previously served two dialects — `@mxlang/html`'s retired `.mx`
- * dialect, alongside `@mxlang/html`'s stock `.marko` — until `.mx` was retired
- * and `@mxlang/html` deleted entirely. Two things that were true while both
+ * This file previously served two dialects — `@mxlang/html`'s old `.mx`
+ * dialect, alongside `@mxlang/html`'s stock `.marko` — until that dialect was
+ * retired and `@mxlang/html` deleted entirely. Two things that were true while both
  * existed, kept here because they still explain choices this core makes:
  *
  * - **Tag disposition.** The capability test asks "what this target can't

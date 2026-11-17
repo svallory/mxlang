@@ -9,8 +9,11 @@ import { renderTranslator } from "./translator-render";
  * `oracle:marko`'s one table: parity between Marko's own toolchain and
  * `@mxlang/target-html` for the stock `.marko` fixture set.
  *
- * There is no dialect to compare it against any more (`.mx` and
- * `@mxlang/target-html` are retired), so this asks a single, narrow question: for
+ * It is the only table because the deleted `@mxlang/html` package's old `.mx`
+ * dialect table is gone. `.mx` is the template extension and
+ * `@mxlang/target-html` is the compiler under test; the fixtures are stock
+ * `.marko` sources compiled under a virtual `.mx` name
+ * (`translator-render.ts`). So this asks a single, narrow question: for
  * templates an ordinary Marko user would write, does the expressions-only
  * translator emit what Marko's own server render emits? Every fixture is
  * expected to pass, and a skip needs a reason — "this target

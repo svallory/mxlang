@@ -459,7 +459,7 @@ is an unknown tag. An unknown lowercase tag resolves through MX's own element
 table (`@mxlang/web-elements`: HTML, SVG, MathML), and a plain `<!-- -->`
 comment is stripped, because Marko strips it.
 
-The retired `.mx` dialect made different choices here —
+The old, retired `.mx` dialect made different choices here —
 callable function props instead of renderables, `input.children` instead of
 `input.content`, explicit imports only, no `tags/` discovery, an error for an
 unhyphenated unknown tag, and preserved `<!-- -->` comments. Those were

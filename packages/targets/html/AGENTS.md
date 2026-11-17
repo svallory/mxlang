@@ -368,12 +368,12 @@ than assumed:
 
 ### The `strict` policy
 
-The retired `.mx` dialect rejected reactive
+The old, retired `.mx` dialect rejected reactive
 constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks,
 `<id>`) by name, since standalone MX had no reactive target at all. The
 default `policy` above instead renders what Marko's own server render would
 emit for those (inert, or `<let>`'s initial value) — the policy table above.
-`strictPolicy` (`translate.ts`) keeps `.mx`'s stance as an *opt-in*: the same
+`strictPolicy` (`translate.ts`) keeps the old dialect's stance as an *opt-in*: the same
 six constructs become errors naming the construct, for an author who wants
 "this needs a reactive runtime" to be a compile error. `compile`/`compileFile`/
 `build` take `{ strict: true }` to select it.

@@ -181,7 +181,7 @@ Flags pass through `bun run`, e.g. `bun run oracle -- --strict --update`.
 ## `oracle:marko`: Marko parity for the stock `.marko` fixture set
 
 The parity target for Marko syntax is Marko itself, not Solid.
-The `.mx` dialect and `@mxlang/html` are retired, so there is one
+The old `.mx` dialect of the deleted `@mxlang/html` package is gone, so there is one
 dialect (stock Marko) and one table. `bun run oracle:marko`
 (`packages/oracle/src/report-marko.ts`, delegating to
 `report-marko-stock.ts`) renders every fixture under
