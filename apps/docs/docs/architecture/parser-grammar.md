@@ -652,7 +652,8 @@ consumer's `onOpenTagName` returns `TagType.statement` (`TAG_NAME.exit`).
 The sets are the AST catalogue's ([ast.md §3.10](/architecture/ast/),
 "Statement keywords per target"). The language's six, `import`, `export`,
 `static`, `server`, `client` and `class`, apply on every `compileSource` host
-and for every `parseFragment` caller; `import`, `static`, `export` apply under
+and for every `parseFragment` caller (a dialect's files and fragments parse
+under its own tag rules preset's set); `import`, `static`, `export` apply under
 the `none` tag rules preset of the core IR entry point (`lowerSource`). The
 "empty" row is the template parser's behaviour for a consumer that supplies
 no set, and no MX entry point does that.

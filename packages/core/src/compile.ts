@@ -7,9 +7,10 @@
  * API (`@mxlang/target-html` does) without two different signatures sharing one
  * name across the two packages.
  *
- * The seam: a host supplies a translator (its taglibs and a `translate`
- * visitor) that injects no runtime, and `compileSource` parses with the MX
- * front end and runs the visitor's `Program.exit` itself. The code used to
+ * The seam: from the host's taglibs and options, core builds a translator
+ * (`translatorClaiming`) whose `translate` visitor is core's lowering and
+ * injects no runtime, and `compileSource` parses with the MX front end and
+ * runs that visitor's `Program.exit` itself. The code used to
  * live in `@mxlang/target-html`'s `index.ts`; it is core's because the seam
  * is the same for every host — only the taglib list, the policies and any
  * post-pass over the emitted code differ, and those arrive as arguments.
@@ -182,9 +183,9 @@ export interface HostOptions extends TranslatorOptions {
    * lowering. Unset or `true` (a build): `stripMxTypes` drops annotations and
    * type arguments from every payload, as stock Marko's `output: "html"`
    * does. `false` (type-checking tooling): payloads keep them, lowering keeps
-   * tag-variable and attribute types (`ctx.keepTypes`), and only
-   * angle-bracket casts and tag type-argument and type-parameter containers
-   * are stripped (`stripAngleAssertions`).
+   * tag-variable and attribute types (`ctx.keepTypes`), containers holding
+   * an angle-bracket cast get the full strip, and tag type-argument and
+   * type-parameter containers are dropped (`stripAngleAssertions`).
    */
   stripTypes?: boolean;
   /** Emits the module from the lowered IR. */
