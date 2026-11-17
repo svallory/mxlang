@@ -122,13 +122,17 @@ export function probeConsumers(changed: readonly string[]): string[] {
 /**
  * The inputs of `packages/parser/dist/babel.js`, the bundle core parses
  * through. Keep in step with `parser:build`'s inputs in
- * packages/parser/moon.yml.
+ * packages/parser/moon.yml: the lockfile (the bundle inlines the locked npm
+ * code) and the tsconfig chain count too, so a lockfile bump rebuilds it.
  */
 const PARSER_BUILD_INPUTS: readonly RegExp[] = [
   /^packages\/babel\/src\//,
   /^packages\/babel\/package\.json$/,
   /^packages\/parser\/src\/frontend\/babel\.ts$/,
   /^packages\/parser\/package\.json$/,
+  /^packages\/parser\/tsconfig\.json$/,
+  /^bun\.lock$/,
+  /^tsconfig\.base\.json$/,
 ];
 
 function isParserBuildInput(file: string): boolean {

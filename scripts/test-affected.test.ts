@@ -408,6 +408,9 @@ describe("parserBuildNeeded", () => {
       "packages/babel/package.json",
       "packages/parser/src/frontend/babel.ts",
       "packages/parser/package.json",
+      "packages/parser/tsconfig.json",
+      "bun.lock",
+      "tsconfig.base.json",
     ])
       expect(parserBuildNeeded([f]), f).toBe(true);
   });
