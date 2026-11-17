@@ -29,8 +29,8 @@ call is outside the supported language-server policy path.
 Both dist and VSIX builds inline the registry and descriptors: their lazy
 synchronous `require` must not escape into a source module under Node ESM.
 Dist leaves core/parser external and builds index/bin independently. The
-index uses explicit exported value bindings: Bun 1.3.14 can emit a re-export-only entry
-containing exports with no bindings when the lazy descriptor graph is bundled.
+index is a plain re-export entry; Bun 1.3.14 bundled that form into a barrel
+whose exports had no bindings, and `src/dist-build.test.ts` is what catches it.
 `src/dist-build.test.ts` loads the built index under plain Node and exercises all wired page compilers
 and the region pipeline. VSIX externals remain defined only in
 `build/bundled-config.ts`; check with the editor's `check-vsix` and `ls-smoke`.
