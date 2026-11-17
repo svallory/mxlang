@@ -169,9 +169,12 @@ describe("cold start: the built dist loads the heavy dependencies lazily", () =>
     "lowering a plain file still loads no cosmiconfig",
     () => {
       const requests = probe(dist, "plain");
-      // `@babel/core` (traverse/types), `@babel/parser` and the TS strip
-      // plugin are the lowering path's own cost — the strip runs for every
-      // payload, TypeScript or not (it is not a no-op on TS-free programs).
+      // `@babel/core` (traverse/types) and the TS strip plugin are the
+      // lowering path's own cost — the strip runs for every payload,
+      // TypeScript or not (it is not a no-op on TS-free programs). Core
+      // parses with MX's fork, bundled into its dist, so core itself requires
+      // no `@babel/parser`; `@babel/core` may still load it, so its absence
+      // is not asserted.
       // cosmiconfig is only a config read's cost, and a plain file reads none.
       expect(requests).toContain("@babel/core");
       expect(requests.filter((r) => r === "cosmiconfig")).toEqual([]);
