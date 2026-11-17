@@ -7,6 +7,8 @@ tasks:
   typecheck:
     command: "bun"
     args: ["run", "typecheck"]
+    # types against @mxlang/web-elements' dists
+    deps: ["web-elements:build"]
     inputs:
       - "src/**/*"
       - "tsconfig.json"

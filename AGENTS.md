@@ -9,7 +9,7 @@ bun (bun workspaces). Do not use npm/pnpm/yarn, with two exceptions. (1) `packag
 Run either via bun directly or through moon:
 
 ```
-bun run typecheck   # or: moon run :typecheck  -- each moon typecheck task runs its package's `typecheck` script; both type against built workspace dists, so on a clean checkout run `bun run build` (or `moon run :build`) first
+bun run typecheck   # or: moon run :typecheck  -- each moon typecheck task runs its package's `typecheck` script after building the workspace dists that package types against; `bun run typecheck` types against built dists and builds none, so on a clean checkout run `bun run build` first
 bun run test        # or: moon run :test
 bun run lint        # or: moon run :lint
 bun run verify      # or: moon run :verify   -- delegates straight to `bun run verify`, see below

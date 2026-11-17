@@ -7,6 +7,9 @@ tasks:
   typecheck:
     command: "bun"
     args: ["run", "typecheck"]
+    # types against @mxlang/host-angular's, @mxlang/target-html's and
+    # @mxlang/web-elements' dists (its tests import the package by name)
+    deps: ["angular:build", "html:build", "web-elements:build"]
     inputs:
       - "src/**/*"
       - "test/**/*"

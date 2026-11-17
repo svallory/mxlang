@@ -7,6 +7,16 @@ tasks:
   typecheck:
     command: "bun"
     args: ["run", "typecheck"]
+    # types against @mxlang/core's, @mxlang/tsx-bridge's, @mxlang/target-html's,
+    # @mxlang/host-angular's and @mxlang/web-elements' dists
+    deps:
+      [
+        "core:build",
+        "tsx-bridge:build",
+        "html:build",
+        "angular:build",
+        "web-elements:build",
+      ]
     inputs:
       - "src/**/*"
       - "/test-fixtures/**/*"

@@ -7,6 +7,9 @@ tasks:
   typecheck:
     command: "bun"
     args: ["run", "typecheck"]
+    # types against @mxlang/core's, @mxlang/tsx-bridge's and
+    # @mxlang/web-elements' dists
+    deps: ["core:build", "tsx-bridge:build", "web-elements:build"]
     inputs:
       - "src/**/*"
       - "tsconfig.json"

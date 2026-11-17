@@ -7,6 +7,16 @@ tasks:
   typecheck:
     command: "bun"
     args: ["run", "typecheck"]
+    # types against @mxlang/core's, @mxlang/tsx-bridge's, @mxlang/target-html's,
+    # @mxlang/host-angular's and @mxlang/web-elements' dists
+    deps:
+      [
+        "core:build",
+        "tsx-bridge:build",
+        "html:build",
+        "angular:build",
+        "web-elements:build",
+      ]
     inputs:
       - "src/**/*"
       - "tsconfig.json"
@@ -18,7 +28,14 @@ tasks:
       runFromWorkspaceRoot: true
     # reads @mxlang/core's and @mxlang/tsx-bridge's dists, html's and
     # angular's through the registry, and its own (`src/dist-dispatch.test.ts`)
-    deps: ["core:build", "tsx-bridge:build", "html:build", "angular:build", "vite-plugin:build"]
+    deps:
+      [
+        "core:build",
+        "tsx-bridge:build",
+        "html:build",
+        "angular:build",
+        "vite-plugin:build",
+      ]
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
