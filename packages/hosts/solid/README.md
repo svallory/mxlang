@@ -35,15 +35,17 @@ thing that finds these regions — `walk.ts`/`bridge.ts`, unchanged in scope by
 this package. For each region, `packages/tsx-bridge/src/mx/bridge.ts` slices the
 raw region text and calls this package's `compileSolidMx(source, { filename,
 baseOffset, baseLine, baseColumn })`, which runs `@mxlang/core`'s
-`parseFragment` (Marko's parser, over just that substring, with every
-position shifted by the given base), resolves the Marko AST into the core
-IR under `solidDeclarations`, and emits Solid JSX text with `SolidEmitter`.
+`parseFragment` (MX's front end, over just that substring, with every
+position file-absolute from the given base), lowers the resulting MX AST into
+the core IR under `solidDeclarations`, and emits Solid JSX text with
+`SolidEmitter`.
 The result is re-parsed with Babel's own TSX expression parser and spliced
 back into the surrounding TypeScript AST at the exact span the MX region
 occupied, so diagnostics and the eventual source map stay anchored to
 `.solid.mx` line/column positions rather than to the JSX text handed back —
-covered by `reports a host/expression parse error past the enclosing region
-base` in `src/index.test.ts`.
+covered by `reports a host error past the enclosing region base` and
+`reports an expression parse error past the enclosing region base` in
+`src/index.test.ts`.
 
 ### A region's discovered-tag imports are hoisted; a tag *file* is a unit
 
