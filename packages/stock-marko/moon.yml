@@ -12,8 +12,12 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/stock-marko"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/stock-marko"]
+    options:
+      runFromWorkspaceRoot: true
+    # reads @mxlang/web-elements' dist
+    deps: ["web-elements:build"]
     inputs:
       - "src/**/*"
       - "vendor/**/*"

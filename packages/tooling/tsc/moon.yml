@@ -12,8 +12,12 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/tsc"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/tsc"]
+    options:
+      runFromWorkspaceRoot: true
+    # reads @mxlang/core's dist
+    deps: ["core:build"]
     inputs:
       - "src/**/*"
       # unknown-host-parity.test.ts runs the language server's diagnoseDocument.

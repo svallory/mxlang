@@ -14,8 +14,10 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/babel"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/babel"]
+    options:
+      runFromWorkspaceRoot: true
     inputs:
       - "src/**/*"
       - "/apps/docs/docs/architecture/ast.md"

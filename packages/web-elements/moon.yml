@@ -12,8 +12,23 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/web-elements"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/web-elements"]
+    options:
+      runFromWorkspaceRoot: true
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
+
+  # Delegates to package.json's build (`rm -rf dist`, the bundle and its
+  # declaration emit) so the two cannot drift.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    inputs:
+      - "src/**/*"
+      - "tsconfig.json"
+      - "tsconfig.build.json"
+      - "package.json"
+    outputs:
+      - "dist"

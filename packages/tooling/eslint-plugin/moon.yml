@@ -12,8 +12,10 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/eslint-plugin"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/eslint-plugin"]
+    options:
+      runFromWorkspaceRoot: true
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"

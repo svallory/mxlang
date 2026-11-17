@@ -12,8 +12,12 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/target-html"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/target-html"]
+    options:
+      runFromWorkspaceRoot: true
+    # reads @mxlang/core's dist
+    deps: ["core:build"]
     inputs:
       - "src/**/*"
       - "fixtures-marko/**/*"

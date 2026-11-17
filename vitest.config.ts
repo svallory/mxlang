@@ -1,4 +1,5 @@
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { configDefaults, defineConfig } from "vitest/config";
 import {
   CORE_DIR,
@@ -95,11 +96,12 @@ if (!process.env.MX_VITEST_QUIET) {
 //   hono, oracle, angular-checker, web-elements, ...) shares
 //   one module graph per worker with no reset.
 //
+// A relative `test.root` resolves against the cwd, not this file, so the core root is absolute.
 const coreProjects = [
   {
     test: {
       name: CORE_PROJECT,
-      root: CORE_DIR,
+      root: fileURLToPath(new URL(`./${CORE_DIR}/`, import.meta.url)),
       isolate: false,
       exclude: [...configDefaults.exclude, ...CORE_ISOLATED_FILES],
     },
@@ -107,7 +109,7 @@ const coreProjects = [
   {
     test: {
       name: CORE_ISOLATED_PROJECT,
-      root: CORE_DIR,
+      root: fileURLToPath(new URL(`./${CORE_DIR}/`, import.meta.url)),
       isolate: true,
       include: [...CORE_ISOLATED_FILES],
     },

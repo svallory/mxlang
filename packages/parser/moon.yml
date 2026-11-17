@@ -9,17 +9,20 @@ tasks:
     args: ["--noEmit"]
     inputs:
       - "src/**/*"
-      - "/packages/babel/src/mx-ast.ts"
+      - "/packages/babel/src/**/*"
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/parser"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/parser"]
+    options:
+      runFromWorkspaceRoot: true
     inputs:
       - "src/**/*"
-      - "/packages/babel/src/mx-ast.ts"
+      - "/packages/babel/src/**/*"
       - "/vitest.config.ts"
       - "vitest.config.ts"
+      - "package.json"
 
   # Delegates to package.json's build (`rm -rf dist`, the bundle and its
   # `--define`s) so the two cannot drift. `dist/babel.js` is core's

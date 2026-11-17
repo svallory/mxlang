@@ -12,8 +12,12 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/host-solid"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/host-solid"]
+    options:
+      runFromWorkspaceRoot: true
+    # reads @mxlang/core's dist
+    deps: ["core:build"]
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"

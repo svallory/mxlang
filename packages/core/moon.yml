@@ -12,11 +12,15 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/core*"]
+    # vitest runs from the repo root, where the root config's project paths
+    # resolve, and `bun x` finds it without `node_modules/.bin` on PATH.
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/core*"]
+    options:
+      runFromWorkspaceRoot: true
     # `src/babel.ts` imports `@mxlang/parser/frontend/babel`, i.e. the
     # parser's `dist/babel.js`: build it first so tests never read a stale one.
-    deps: ["parser:build"]
+    deps: ["parser:build", "web-elements:build"]
     inputs:
       - "src/**/*"
       - "/packages/parser/src/**/*"
@@ -24,3 +28,25 @@ tasks:
       - "/packages/babel/src/**/*"
       - "/vitest.config.ts"
       - "/scripts/vitest-lanes.ts"
+
+  # Delegates to package.json's build so the two cannot drift. Every test
+  # task of a package importing `@mxlang/core` depends on this task.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    deps: ["web-elements:build"]
+    inputs:
+      - "src/**/*"
+      - "build/**/*"
+      - "/packages/parser/src/**/*"
+      - "/packages/parser/package.json"
+      - "/packages/babel/src/**/*"
+      - "/packages/babel/package.json"
+      - "/packages/babel/LICENSE"
+      - "/packages/babel/UPSTREAM.md"
+      - "/scripts/third-party-notices.ts"
+      - "tsconfig.json"
+      - "tsconfig.build.json"
+      - "package.json"
+    outputs:
+      - "dist"

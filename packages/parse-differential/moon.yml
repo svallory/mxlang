@@ -13,8 +13,12 @@ tasks:
       - "/packages/parser/src/**/*"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/parse-differential"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/parse-differential"]
+    options:
+      runFromWorkspaceRoot: true
+    # reads @mxlang/core's dist
+    deps: ["core:build"]
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"

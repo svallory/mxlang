@@ -12,8 +12,10 @@ tasks:
       - "tsconfig.json"
 
   test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/vscode"]
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/vscode"]
+    options:
+      runFromWorkspaceRoot: true
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
