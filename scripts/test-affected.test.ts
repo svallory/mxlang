@@ -93,6 +93,19 @@ describe("isRelatedSource (what vitest related can see)", () => {
     expect(isRelatedSource("packages/parser/src/a.test.ts")).toBe(true);
   });
 
+  it("a vitest/vite config is not a related source; look-alikes and the vitest scripts still are", () => {
+    expect(isRelatedSource("vitest.config.ts")).toBe(false);
+    expect(isRelatedSource("packages/hosts/preact/vitest.config.ts")).toBe(
+      false,
+    );
+    expect(isRelatedSource("scripts/vitest.config.ts")).toBe(false);
+    expect(isRelatedSource("examples/mx-vite/vite.config.ts")).toBe(false);
+    expect(isRelatedSource("packages/x/vitest.config.mts")).toBe(false);
+    expect(isRelatedSource("scripts/vitest-lanes.ts")).toBe(true);
+    expect(isRelatedSource("packages/x/src/myvitest.config.ts")).toBe(true);
+    expect(isRelatedSource("packages/x/src/vitest.config.test.ts")).toBe(true);
+  });
+
   it("a lone .mx fixture selects its whole owning project, not related", () => {
     const changed = [
       "packages/oracle/fixtures/angular/tag-define-shadow/input.mx",
@@ -114,6 +127,28 @@ describe("isRelatedSource (what vitest related can see)", () => {
     expect(
       changed.filter((f) => !isRelatedSource(f)).map((f) => projectFor(f)),
     ).toEqual(["@mxlang/oracle"]);
+  });
+
+  it("a config change runs its project, the root one is unmapped, and neither is related", () => {
+    const dirs = projectDirs();
+    const changed = [
+      "vitest.config.ts",
+      "packages/web-elements/vitest.config.ts",
+      "packages/web-elements/src/index.ts",
+    ];
+    expect(relatedSources(changed, dirs)).toEqual([
+      "packages/web-elements/src/index.ts",
+    ]);
+    const { byProject, unmapped } = nonSourceProjects(
+      changed.filter((f) => !isRelatedSource(f)),
+      dirs,
+    );
+    expect(byProject).toEqual(
+      new Map([
+        ["@mxlang/web-elements", ["packages/web-elements/vitest.config.ts"]],
+      ]),
+    );
+    expect(unmapped).toEqual(["vitest.config.ts"]);
   });
 });
 

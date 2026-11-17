@@ -22,7 +22,9 @@
  * imports — the dominant kind being `.mx` fixtures read through `fs` — would
  * be silently skipped, and vitest 3 defaults `related` to `passWithNoTests:
  * true`, which turns "0 tests" into a green exit. Both are closed here: only
- * non-fixture JS/TS sources go to `vitest related`, with
+ * non-fixture JS/TS sources, and not vitest/vite config files (no test imports
+ * them; each runs its project whole, the root one is left to the gate), go to
+ * `vitest related`, with
  * `--passWithNoTests=false` so a zero-test run fails; every other changed
  * file under a workspace package (fixtures whatever their extension, `.mx`,
  * `.json`, corpora) runs that package's whole vitest project as a second
@@ -352,14 +354,21 @@ const FIXTURE_DIR = /(?:^|\/)(?:fixtures[^/]*|test-fixtures)\//;
 
 const SOURCE_EXT = /\.[cm]?[jt]sx?$/;
 
+/** A vitest/vite config: no test imports it, and vitest's default `forceRerunTriggers` does not match it as a related path. */
+const CONFIG_FILE = /(?:^|\/)(?:vitest|vite)\.config\.[cm]?[jt]s$/;
+
 /**
  * A file `vitest related` can see: a JS/TS source that is not under a
  * fixtures-style directory. `.mx` files and fixtures of any extension map to
  * their project instead — tests read them through the filesystem, so the
  * import graph would silently drop them (and a mixed change would stay green).
+ * A vitest/vite config goes to its project too, and the root one goes to
+ * `unmapped`.
  */
 export function isRelatedSource(file: string): boolean {
-  return SOURCE_EXT.test(file) && !FIXTURE_DIR.test(file);
+  return (
+    SOURCE_EXT.test(file) && !FIXTURE_DIR.test(file) && !CONFIG_FILE.test(file)
+  );
 }
 
 /** The longest project dir (`dirs` entries end in `/`) enclosing `file`, if any. */
