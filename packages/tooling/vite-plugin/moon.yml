@@ -50,5 +50,9 @@ tasks:
       - "tsconfig.json"
       - "tsconfig.build.json"
       - "package.json"
+      # bun build bundles the locked npm code that is not --external, and
+      # every package tsconfig extends the base one.
+      - "/bun.lock"
+      - "/tsconfig.base.json"
     outputs:
       - "dist"

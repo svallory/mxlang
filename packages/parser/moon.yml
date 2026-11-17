@@ -29,6 +29,8 @@ tasks:
   # `@mxlang/parser/frontend/babel`, and `core:test` depends on this task.
   # Keep these inputs in step with `PARSER_BUILD_INPUTS` in
   # scripts/test-affected.ts, which rebuilds the dist for `test:affected`.
+  # `tsconfig.json`, `/bun.lock` and `/tsconfig.base.json` are deliberately
+  # not mirrored there: plain `test:affected` does not rebuild for them.
   build:
     command: "bun"
     args: ["run", "build"]
@@ -37,5 +39,10 @@ tasks:
       - "/packages/babel/src/**/*"
       - "/packages/babel/package.json"
       - "package.json"
+      - "tsconfig.json"
+      # bun build bundles the locked npm code that is not --external, and
+      # every package tsconfig extends the base one.
+      - "/bun.lock"
+      - "/tsconfig.base.json"
     outputs:
       - "dist"

@@ -40,5 +40,10 @@ tasks:
       - "/packages/babel/LICENSE"
       - "/packages/babel/UPSTREAM.md"
       - "package.json"
+      - "tsconfig.json"
+      # bun build bundles the locked npm code that is not --external, and
+      # every package tsconfig extends the base one.
+      - "/bun.lock"
+      - "/tsconfig.base.json"
     outputs:
       - "dist"
