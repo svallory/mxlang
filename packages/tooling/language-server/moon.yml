@@ -21,6 +21,10 @@ tasks:
       - "src/**/*"
       - "/test-fixtures/**/*"
       - "tsconfig.json"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   test:
     command: "bun"
@@ -44,6 +48,11 @@ tasks:
       - "/test-fixtures/**/*"
       - "/vitest.config.ts"
       - "vitest.config.ts"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   # Delegates to package.json's build (`rm -rf dist`, the two bundles, the
   # notices and the declaration emit) so the two cannot drift.

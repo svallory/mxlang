@@ -22,5 +22,7 @@ tasks:
       - "/packages/editors/tree-sitter-mx/queries/**/*"
       - "package.json"
       - "docmd.config.json"
+      # docmd and the highlighter come from the locked npm code
+      - "/bun.lock"
     outputs:
       - "site"

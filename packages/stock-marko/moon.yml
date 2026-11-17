@@ -12,6 +12,10 @@ tasks:
     inputs:
       - "src/**/*"
       - "tsconfig.json"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   test:
     command: "bun"
@@ -24,3 +28,8 @@ tasks:
       - "src/**/*"
       - "vendor/**/*"
       - "/vitest.config.ts"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/bun.lock"

@@ -12,6 +12,10 @@ tasks:
     inputs:
       - "src/**/*"
       - "tsconfig.json"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   test:
     command: "bun"
@@ -25,6 +29,11 @@ tasks:
       - "fixtures-marko/**/*"
       - "/vitest.config.ts"
       - "vitest.config.ts"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   # Delegates to package.json's test:bun (the tsconfig override and all five
   # `*.bun.test.ts` files) so the two cannot drift.

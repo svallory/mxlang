@@ -8,6 +8,10 @@ tasks:
     args: ["x", "tsc", "--noEmit"]
     inputs:
       - "tsconfig.json"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   # The Rust unit tests of src/lib.rs (the TypeScript-plugin JSON per
   # target server), on the host target. CI runs the same command in the

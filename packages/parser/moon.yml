@@ -11,6 +11,10 @@ tasks:
       - "src/**/*"
       - "/packages/babel/src/**/*"
       - "tsconfig.json"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   test:
     command: "bun"
@@ -23,6 +27,11 @@ tasks:
       - "/vitest.config.ts"
       - "vitest.config.ts"
       - "package.json"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   # Delegates to package.json's build (`rm -rf dist`, the bundle and its
   # `--define`s) so the two cannot drift. `dist/babel.js` is core's

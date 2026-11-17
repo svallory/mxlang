@@ -22,6 +22,10 @@ tasks:
     inputs:
       - "src/**/*"
       - "tsconfig.json"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   test:
     command: "bun"
@@ -62,6 +66,11 @@ tasks:
       - "vitest.config.ts"
       - "/scripts/vitest-lanes.ts"
       - "$MX_TEST_LANE"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   # Delegates to package.json's build (`rm -rf dist`, the CJS bundle, then
   # scripts/bundled-build.ts, which reads core's dist) so the two cannot drift.

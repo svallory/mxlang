@@ -17,6 +17,10 @@ tasks:
       - "tsconfig.typecheck.json"
       - "/packages/core/src/**/*"
       - "/packages/tsx-bridge/src/public.d.ts"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   test:
     command: "bun"
@@ -31,6 +35,11 @@ tasks:
       - "test/**/*"
       - "/vitest.config.ts"
       - "vitest.config.ts"
+      # every package tsconfig extends the base one; types and transforms come
+      # from the locked npm code
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/bun.lock"
 
   # Delegates to package.json's build (`rm -rf dist`, the bundles, the
   # notices and the declaration emit) so the two cannot drift.
