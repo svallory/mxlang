@@ -333,6 +333,11 @@ function buildBaseline(root: string): void {
   symlinkSync("../real-1", join(root, "node_modules", "link"));
   symlinkSync("../tree-1", join(root, "src", "tree"));
   git(root, "init", "-q");
+  // The rows copy this repository as soon as it is committed; a background
+  // maintenance run started by `git commit` would change `.git/objects`
+  // during the copy (mx-cgjy). Turn it off in the repository's own config.
+  git(root, "config", "maintenance.auto", "false");
+  git(root, "config", "gc.auto", "0");
   git(root, "add", "-A");
   git(root, "commit", "-q", "--no-verify", "-m", "baseline");
 }

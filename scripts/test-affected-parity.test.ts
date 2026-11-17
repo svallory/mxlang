@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -34,6 +35,60 @@ describe("test:affected parity verifier rows", () => {
     },
     60_000,
   );
+});
+
+describe("the fixture repository", () => {
+  // A background `git maintenance run --auto` started by `git commit` can
+  // change `.git/objects` while a row copies the repository (mx-cgjy).
+  it("starts no git auto-maintenance on commit, and the check sees one when it is on", () => {
+    const baseline = makeBaseline();
+    const commit = (...override: string[]) =>
+      spawnSync(
+        "git",
+        [
+          "-c",
+          "user.name=parity",
+          "-c",
+          "user.email=parity@example.com",
+          "-c",
+          "commit.gpgsign=false",
+          "-c",
+          "core.hooksPath=/dev/null",
+          ...override,
+          "commit",
+          "-q",
+          "--allow-empty",
+          "--no-verify",
+          "-m",
+          "x",
+        ],
+        {
+          cwd: baseline,
+          encoding: "utf8",
+          env: { ...process.env, GIT_TRACE: "1" },
+        },
+      );
+    try {
+      // Control: maintenance on, in the foreground so nothing is left running.
+      const on = commit(
+        "-c",
+        "maintenance.auto=true",
+        "-c",
+        "maintenance.autoDetach=false",
+        "-c",
+        "gc.autoDetach=false",
+      );
+      expect(on.status).toBe(0);
+      expect(on.stderr).toMatch(/maintenance run --auto/);
+
+      const off = commit();
+      expect(off.status).toBe(0);
+      expect(off.stderr).not.toMatch(/maintenance run --auto/);
+      expect(off.stderr).not.toMatch(/gc --auto/);
+    } finally {
+      rmSync(baseline, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("nativeReason (the verifier's reading of a native fallback)", () => {
