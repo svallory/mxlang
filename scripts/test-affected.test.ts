@@ -420,6 +420,8 @@ describe("parserBuildNeeded", () => {
       "packages/core/src/babel.ts",
       "packages/babel/README.md",
       "packages/parser/moon.yml",
+      "packages/core/tsconfig.json",
+      "apps/docs/bun.lock",
     ])
       expect(parserBuildNeeded([f]), f).toBe(false);
     expect(parserBuildNeeded([])).toBe(false);

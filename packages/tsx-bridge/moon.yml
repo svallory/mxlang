@@ -7,7 +7,7 @@ tasks:
   typecheck:
     command: "bun"
     args: ["run", "typecheck"]
-    # types against @mxlang/core's dists
+    # types against @mxlang/core's dist
     deps: ["core:build"]
     inputs:
       - "src/**/*"
