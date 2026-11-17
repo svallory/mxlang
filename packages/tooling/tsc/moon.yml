@@ -9,7 +9,8 @@ tasks:
     args: ["run", "typecheck"]
     # types against @mxlang/core's, @mxlang/tsx-bridge's, @mxlang/target-html's,
     # @mxlang/host-angular's, @mxlang/web-elements' and
-    # @mxlang/angular-checker's dists
+    # @mxlang/angular-checker's dists, and the Vite plugin's, which
+    # src/host-dispatch-golden.test.ts imports by relative path
     deps:
       [
         "core:build",
@@ -18,6 +19,7 @@ tasks:
         "angular:build",
         "web-elements:build",
         "angular-checker:build",
+        "vite-plugin:build",
       ]
     inputs:
       - "src/**/*"
