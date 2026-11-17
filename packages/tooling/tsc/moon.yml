@@ -16,25 +16,64 @@ tasks:
     args: ["x", "vitest", "run", "--project", "@mxlang/tsc"]
     options:
       runFromWorkspaceRoot: true
-    # reads @mxlang/core's dist
-    deps: ["core:build"]
+    # reads @mxlang/core's and @mxlang/tsx-bridge's dists; html's and angular's
+    # through the language server's src and the registry; angular's,
+    # angular-checker's and the TypeScript plugin's (`src/index.ts`,
+    # `src/shorthand-mappings.test.ts`); the Vite plugin's
+    # (`src/host-dispatch-golden.test.ts`); and its own
+    # (`src/build-cache-build.test.ts`)
+    deps:
+      [
+        "core:build",
+        "tsx-bridge:build",
+        "html:build",
+        "angular:build",
+        "angular-checker:build",
+        "typescript-plugin:build",
+        "vite-plugin:build",
+        "tsc:build",
+      ]
     inputs:
       - "src/**/*"
       # unknown-host-parity.test.ts runs the language server's diagnoseDocument.
       - "/packages/tooling/language-server/src/**/*"
-      # host-dispatch-golden.test.ts imports the built Vite plugin bundle.
+      # host-dispatch-golden.test.ts imports the built Vite plugin bundle; the
+      # tests import @mxlang/typescript-plugin (its dist), build-cache-build.test.ts
+      # runs mx-tsc's dist, and third-party-target.test.ts reads core's.
       - "/packages/tooling/vite-plugin/dist/**/*"
-      # stock-parser-isolation.test.ts runs each tool's built dist in a child
-      # process (the language server, the TypeScript plugin, Vite, mx-tsc) and
-      # core's dist, against a stock htmljs-parser rebuilt from the patch.
-      - "/packages/tooling/language-server/dist/**/*"
       - "/packages/tooling/typescript-plugin/dist/**/*"
       - "/packages/tooling/tsc/dist/**/*"
       - "/packages/core/dist/**/*"
-      - "/patches/htmljs-parser@5.18.0.patch"
       - "/vitest.config.ts"
       # The lane config and MX_TEST_LANE (fast|slow|all) decide which files run,
       # so a cached "fast" pass must not satisfy an "all" run.
       - "vitest.config.ts"
       - "/scripts/vitest-lanes.ts"
       - "$MX_TEST_LANE"
+
+  # Delegates to package.json's build (the CJS bundle, then
+  # scripts/bundled-build.ts, which reads core's dist) so the two cannot drift.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    # reads the dists of its externals: core, tsx-bridge, angular,
+    # angular-checker and the TypeScript plugin (bundled-build.ts reads core's)
+    deps:
+      [
+        "core:build",
+        "tsx-bridge:build",
+        "angular:build",
+        "angular-checker:build",
+        "typescript-plugin:build",
+      ]
+    inputs:
+      - "src/**/*"
+      - "/scripts/bundled-build.ts"
+      - "/scripts/baked-paths.ts"
+      - "/scripts/third-party-notices.ts"
+      - "/packages/babel/LICENSE"
+      - "/packages/babel/UPSTREAM.md"
+      - "tsconfig.json"
+      - "package.json"
+    outputs:
+      - "dist"

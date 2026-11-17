@@ -16,8 +16,9 @@ tasks:
     args: ["x", "vitest", "run", "--project", "@mxlang/host-hono"]
     options:
       runFromWorkspaceRoot: true
-    # reads @mxlang/core's dist
-    deps: ["core:build"]
+    # reads @mxlang/core's and @mxlang/tsx-bridge's dists;
+    # `src/try-typecheck.test.ts` spawns mx-tsc's `dist/bin.cjs`
+    deps: ["core:build", "tsx-bridge:build", "tsc:build"]
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"

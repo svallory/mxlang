@@ -20,10 +20,29 @@ tasks:
     args: ["x", "vitest", "run", "--project", "@mxlang/host-angular"]
     options:
       runFromWorkspaceRoot: true
-    # reads @mxlang/core's dist
-    deps: ["core:build"]
+    # reads @mxlang/core's and @mxlang/tsx-bridge's dists (`src/emitter.ts`),
+    # and its own (`test/runtime.test.ts`)
+    deps: ["core:build", "tsx-bridge:build", "angular:build"]
     inputs:
       - "src/**/*"
       - "test/**/*"
       - "/vitest.config.ts"
       - "vitest.config.ts"
+
+  # Delegates to package.json's build (`rm -rf dist`, the bundles, the
+  # notices and the declaration emit) so the two cannot drift.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    # reads @mxlang/core's dist (external) and @mxlang/tsx-bridge's (bundled)
+    deps: ["core:build", "tsx-bridge:build"]
+    inputs:
+      - "src/**/*"
+      - "/scripts/third-party-notices.ts"
+      - "/packages/babel/LICENSE"
+      - "/packages/babel/UPSTREAM.md"
+      - "tsconfig.json"
+      - "tsconfig.build.json"
+      - "package.json"
+    outputs:
+      - "dist"

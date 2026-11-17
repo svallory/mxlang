@@ -17,8 +17,8 @@ tasks:
     args: ["x", "vitest", "run", "--project", "@mxlang/tsx-bridge"]
     options:
       runFromWorkspaceRoot: true
-    # reads @mxlang/core's dist
-    deps: ["core:build"]
+    # reads @mxlang/core's dist, and its own (`src/vendored.test.ts`)
+    deps: ["core:build", "tsx-bridge:build"]
     inputs:
       - "src/**/*"
       - "/packages/babel/src/**/*"
@@ -30,6 +30,8 @@ tasks:
   build:
     command: "bun"
     args: ["run", "build"]
+    # reads @mxlang/core's dist (external, loaded at run time)
+    deps: ["core:build"]
     inputs:
       - "src/**/*"
       - "/packages/babel/src/**/*"

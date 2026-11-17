@@ -22,7 +22,8 @@ tasks:
       runFromWorkspaceRoot: true
     # `src/babel.ts` imports `@mxlang/parser/frontend/babel`, i.e. the
     # parser's `dist/babel.js`: build it first so tests never read a stale one.
-    deps: ["parser:build", "web-elements:build"]
+    # reads core's own dist (`src/cold-start.test.ts`)
+    deps: ["parser:build", "web-elements:build", "core:build"]
     inputs:
       - "src/**/*"
       - "/packages/parser/src/**/*"

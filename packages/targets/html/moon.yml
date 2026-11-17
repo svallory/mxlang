@@ -16,8 +16,8 @@ tasks:
     args: ["x", "vitest", "run", "--project", "@mxlang/target-html"]
     options:
       runFromWorkspaceRoot: true
-    # reads @mxlang/core's dist
-    deps: ["core:build"]
+    # reads @mxlang/core's dist, and its own (`src/stock-parser.test.ts`)
+    deps: ["core:build", "html:build"]
     inputs:
       - "src/**/*"
       - "fixtures-marko/**/*"
@@ -33,9 +33,27 @@ tasks:
         "src/bun.test.ts",
         "src/contracts.bun.test.ts",
       ]
+    # reads @mxlang/core's dist (`src/bun.ts`), and its own: the emitted
+    # modules import `@mxlang/target-html` by bare specifier
+    deps: ["core:build", "html:build"]
     inputs:
       - "src/bun.ts"
       - "src/bun.test.ts"
       - "src/contracts.bun.test.ts"
       - "src/index.ts"
       - "fixtures-marko/attributes/**/*"
+
+  # Delegates to package.json's build (`rm -rf dist`, the bundle and its
+  # declaration emit) so the two cannot drift.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    # reads @mxlang/core's dist (external; the declarations type against it)
+    deps: ["core:build"]
+    inputs:
+      - "src/**/*"
+      - "tsconfig.json"
+      - "tsconfig.build.json"
+      - "package.json"
+    outputs:
+      - "dist"

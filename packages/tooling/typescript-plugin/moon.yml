@@ -16,8 +16,18 @@ tasks:
     args: ["x", "vitest", "run", "--project", "@mxlang/typescript-plugin"]
     options:
       runFromWorkspaceRoot: true
-    # reads @mxlang/core's dist
-    deps: ["core:build"]
+    # reads @mxlang/core's and @mxlang/tsx-bridge's dists, html's and
+    # angular's through the registry, angular-checker's (`src/ng-diagnostics.ts`)
+    # and its own (`src/dist-dispatch.test.ts` and the other dist readers)
+    deps:
+      [
+        "core:build",
+        "tsx-bridge:build",
+        "html:build",
+        "angular:build",
+        "angular-checker:build",
+        "typescript-plugin:build",
+      ]
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
@@ -33,9 +43,24 @@ tasks:
   build:
     command: "bun"
     args: ["run", "build"]
+    # reads @mxlang/core's and @mxlang/tsx-bridge's dists (external), and
+    # html's, angular's and angular-checker's (bundled; `src/ng-worker.ts`)
+    deps:
+      [
+        "core:build",
+        "tsx-bridge:build",
+        "html:build",
+        "angular:build",
+        "angular-checker:build",
+      ]
     inputs:
       - "src/**/*"
       - "build/**/*"
+      # The bundle inlines the registry and every host's src.
+      - "/packages/target-registry/src/**/*"
+      - "/packages/hosts/*/src/**/*"
+      - "/scripts/bundled-build.ts"
+      - "/scripts/baked-paths.ts"
       - "/scripts/third-party-notices.ts"
       - "/packages/babel/LICENSE"
       - "/packages/babel/UPSTREAM.md"
