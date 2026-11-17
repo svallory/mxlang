@@ -17,6 +17,7 @@ import {
   ownRunnerDirs,
   ownRunnerPlan,
   PROBE_CONSUMER,
+  parserBuildNeeded,
   probeConsumers,
   projectDirs,
   projectFor,
@@ -356,6 +357,28 @@ describe("probeConsumers", () => {
         "scripts/other.ts",
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("parserBuildNeeded", () => {
+  it("asks for the rebuild when a parser:build input changed", () => {
+    for (const f of [
+      "packages/babel/src/tokenizer/index.ts",
+      "packages/babel/package.json",
+      "packages/parser/src/frontend/babel.ts",
+      "packages/parser/package.json",
+    ])
+      expect(parserBuildNeeded([f]), f).toBe(true);
+  });
+  it("does not for any other change", () => {
+    for (const f of [
+      "packages/parser/src/frontend/parse.ts",
+      "packages/core/src/babel.ts",
+      "packages/babel/README.md",
+      "packages/parser/moon.yml",
+    ])
+      expect(parserBuildNeeded([f]), f).toBe(false);
+    expect(parserBuildNeeded([])).toBe(false);
   });
 });
 

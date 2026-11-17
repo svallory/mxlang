@@ -18,7 +18,9 @@ the dist; its private `mx-source` condition resolves to source, and only
 core's build passes it (`--conditions mx-source`), so core's dist bundles the
 one fork copy `mx-parse.ts` already does. Rebuild rule: an edit to
 `packages/babel/src` reaches core's tests only after `bun run build` here
-(`vendored.test.ts` tests the source directly). `./frontend` itself keeps
+(`vendored.test.ts` tests the source directly). `bun run test:affected` and
+`moon run core:test` rebuild `dist/babel.js` first; a direct `bun x vitest`
+run does not. `./frontend` itself keeps
 resolving to source.
 `@mxlang/babel` is a devDependency for `src/template/mx-sugar-module.test.ts`,
 which checks the atom row's claims against Babel's `parseExpression`, and for the front end's

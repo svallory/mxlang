@@ -46,6 +46,10 @@
  * tests, so a fast lane would hide slow-lane tests it selected (the watch-mode
  * tsc tests import core and parser). Which slow-lane packages were touched is
  * still printed.
+ *
+ * Core parses through `packages/parser/dist/babel.js`, a bundle of the Babel
+ * fork, so a change to one of its build inputs (`PARSER_BUILD_INPUTS`) first
+ * rebuilds that dist; under `--moon`, `core:test`'s `parser:build` dep does.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
@@ -100,6 +104,30 @@ export function probeConsumers(changed: readonly string[]): string[] {
       /^packages\/hosts\/(?:preact|react|hono|solid|astro)\/src\//.test(f),
   );
   return hit ? [PROBE_CONSUMER] : [];
+}
+
+/**
+ * The inputs of `packages/parser/dist/babel.js`, the bundle core parses
+ * through. Keep in step with `parser:build`'s inputs in
+ * packages/parser/moon.yml.
+ */
+const PARSER_BUILD_INPUTS: readonly RegExp[] = [
+  /^packages\/babel\/src\//,
+  /^packages\/babel\/package\.json$/,
+  /^packages\/parser\/src\/frontend\/babel\.ts$/,
+  /^packages\/parser\/package\.json$/,
+];
+
+function isParserBuildInput(file: string): boolean {
+  return PARSER_BUILD_INPUTS.some((re) => re.test(file));
+}
+
+/**
+ * Whether the change touches an input of `packages/parser/dist/babel.js`, so
+ * `main()` must rebuild it before core's tests read it.
+ */
+export function parserBuildNeeded(changed: readonly string[]): boolean {
+  return changed.some(isParserBuildInput);
 }
 
 /**
@@ -561,6 +589,18 @@ function main(): number {
   if (changed.length === 0) {
     console.log("test:affected: no changes vs origin/main; nothing to run.");
     return 0;
+  }
+  // Core's tests read the parser's dist; rebuild it when the change touches
+  // one of its inputs. Under --moon, `core:test`'s `parser:build` dep does.
+  if (!moon && parserBuildNeeded(changed)) {
+    console.log(
+      `test:affected: ${changed.find(isParserBuildInput)} is an input of packages/parser's dist -> bun run --cwd packages/parser build`,
+    );
+    const built = run(
+      ["bun", "run", "--cwd", "packages/parser", "build"],
+      process.env,
+    );
+    if (built !== 0) return built;
   }
   const dirs = projectDirs();
   // Project docs (.md) map to the Markdown readers only, never to their
