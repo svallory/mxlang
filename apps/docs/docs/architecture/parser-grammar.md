@@ -650,11 +650,12 @@ consumer's `onOpenTagName` returns `TagType.statement` (`TAG_NAME.exit`).
 | `static const a = 1` | empty | the tag `static` with the attributes `const` and `a`, the second with the value `1` | g0759 |
 
 The sets are the AST catalogue's ([ast.md §3.10](/architecture/ast/),
-"Statement keywords per target"): the language's
-`import`, `export`, `static`, `server`, `client` and `class`; on the data
-target `import`, `static`, `export`; and today an empty set on the hosts and
-`parseFragment` callers that MX1 TODO
-`statement-tags-not-declared-on-five-hosts` names.
+"Statement keywords per target"). The language's six, `import`, `export`,
+`static`, `server`, `client` and `class`, apply on every `compileSource` host
+and for every `parseFragment` caller; `import`, `static`, `export` apply under
+the `none` tag rules preset of the core IR entry point (`lowerSource`). The
+"empty" row is the template parser's behaviour for a consumer that supplies
+no set, and no MX entry point does that.
 
 ## Text, comments, CDATA, doctype, declarations and text bodies
 
@@ -2097,12 +2098,12 @@ the normative one.
     no after-value rule, so a spaced `:` after a value continues it, as in
     stock. `x=(a) : T => a` stays one value ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)).
 29. **`await :name`.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle.
-30. **Statement tags and their "attributes".** Spec §2 "Syntax" says `import`,
+30. **Statement tags and their "attributes".** Spec §2 "Syntax" said `import`,
     `static` and `export` parse as tags whose "attributes are the remaining
     words". With the statement set supplied, the parser reports no attributes
     for them ([E10](#the-parser-grammar-expression-boundaries-e10-statement-tags)); without the set the words are
-    attributes. *Recommendation:* correct spec §2 when MX1
-    TODO `statement-tags-not-declared-on-five-hosts` lands. Stock 5.18.0: the
+    attributes. *Settled*: every MX parse supplies the set, so a statement
+    has no attributes, and spec §2 is corrected to say so. Stock 5.18.0: the
     same events with the statement set and without.
 31. **A template literal's `${}` in a text body.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle.
 32. **Non-ASCII identifiers before an atom.** *Retired* as an atom question.

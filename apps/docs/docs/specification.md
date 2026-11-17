@@ -236,11 +236,10 @@ longest registered page extension, pages follow with no language change.
 
 ### Syntax
 
-`import`, `static` and `export` parse as **tags**, not statements — their
-attributes are the remaining words. This is Marko's grammar, and it has a
-consequence that costs real debugging time: `start` and `end` are `undefined`
-on these nodes, so the statement text is recovered by slicing on
-`loc` line/column.
+`import`, `static` and `export` parse as **module statements** whose text is
+code: an `MxModuleStatement` with `start`/`end` offsets
+([AST catalogue §3.10](/architecture/ast/)). Marko's parser, without the
+statement set, reads them as tags with the remaining words as attributes.
 
 **Statement tags on every target.** The six statement tags
 (`import`, `static`, `export`, `client`, `server`, `class`) are declared to the

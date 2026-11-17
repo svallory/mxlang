@@ -27,16 +27,17 @@ Template-parser source is cited in this repository, under
 to upstream except `states/ATTRIBUTE.ts` and `states/EXPRESSION.ts`, which
 carry the MX patch as source; see its `PROVENANCE.md`). "The IR spec" is
 [the IR specification](/architecture/ir-spec/). Paths without a prefix are
-relative to the repo root. "Probe" means a script run on 2026-10-05 against the installed
-compiler, kept outside the repo under `~/tmp/mx2-ast/` (`raw.ts`: parse-only
-translator, as `parseFragment` uses; `core.ts`: MX's core taglib registered
-the way `packages/targets/html/src/compiler.ts` `host` registers it).
+relative to the repo root. "Probe" means a script run on 2026-10-05 against
+the installed compiler, not kept in the repository. It used a parse-only
+translator, and MX's core taglib registered the way
+`packages/targets/html/src/compiler.ts` `host` registers it.
 
-**Version.** The workspace resolves `@marko/compiler` **5.42.11** (the only
-copy under `node_modules/.bun/`; `bun.lock`, its `@marko/compiler` entries; `packages/core/package.json` `dependencies`)
-and `htmljs-parser` **5.18.0** with the MX patch (root `package.json`: `devDependencies` `htmljs-parser` and `patchedDependencies`).
-The compiler's own `htmljs-parser` link resolves to the same patched 5.18.0
-copy. A research note citing 5.42.5 predates commit `c2e521347`.
+**Version.** `@marko/compiler` **5.42.11** is a core `devDependency`
+(`packages/core/package.json` `devDependencies`; `bun.lock`, its
+`@marko/compiler` entries), and §1-2 describe that version. The workspace
+resolves `htmljs-parser` **5.18.0** with the MX patch (root `package.json`:
+`devDependencies` `htmljs-parser` and `patchedDependencies`). The compiler's
+own `htmljs-parser` link resolves to the same patched 5.18.0 copy.
 
 ## 1. Marko AST as it is
 
