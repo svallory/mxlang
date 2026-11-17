@@ -4,7 +4,7 @@
  * The pure half: reading a `children` record into its explicit names and its
  * ordered `"*"` entries, compiling an entry's pattern, and matching a name.
  * Which tags are eligible, and the per-node record of what matched, live in
- * `wildcard-resolve.ts`, which runs over the Marko tree; registration checks
+ * `wildcard-resolve.ts`, which runs over the parsed tree; registration checks
  * live with the other declaration checks in `custom-tags.ts`.
  */
 

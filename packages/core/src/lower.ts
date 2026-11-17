@@ -2866,9 +2866,10 @@ function paramsOf(ctx: Ctx, node: Node): string[] {
   }
   return tagParamsOf(node).map((p: Node) => {
     // Babel's generator omits a TypeScript annotation when an Identifier is
-    // printed outside its parameter-list context. The Marko node's location
-    // covers the complete authored pattern, so use that exact source text for
-    // params and preserve annotations as well as destructuring.
+    // printed outside its parameter-list context. The param node the front
+    // end parsed has a `loc` that covers the complete authored pattern, so use
+    // that exact source text for params and preserve annotations as well as
+    // destructuring.
     const source = p.loc ? sliceLoc(ctx, p.loc) : "";
     return source || declName(ctx, p);
   });
@@ -6129,7 +6130,8 @@ function warningEnd(
 /**
  * Where an error that blames `node` ends, as an offset into the file: a tag at
  * the end of its `<name`, anything else where it ends. `undefined` for a node
- * with no MX span (a Marko node's end is a line and column, not an offset).
+ * with no MX span (a node with a `loc`, a Babel payload or a Marko-shaped
+ * node, ends at a line and column, not an offset).
  */
 function blameEndOffset(node: Node): number | undefined {
   const end = blameEnd(node);
@@ -6652,7 +6654,7 @@ function lowerComponent(
 ): IrNode {
   // The host gets first refusal, before any `Component` node exists: a call it
   // will not route must fail here rather than reach an emitter, which no
-  // longer has the Marko node to judge it by.
+  // longer has the authored tag to judge it by.
   if (target.kind === "name" && !taglibTag) {
     ctx.declarations.rejectComponentTag?.(
       target.name,
@@ -7133,11 +7135,12 @@ function isValueNonTemplateImport(ctx: Ctx, name: string): boolean {
 
 function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Both a bare `${expr}` line and `<${expr} .../>` parse to a tag whose
-  // *name* is the expression — Marko's concise mode has no other shape for
-  // a bare one (see the "four Marko facts" in AGENTS.md). Both are dynamic
-  // tags: when a host claims DYNAMIC_TAG it gets the DelegatedTag (shape "bare"
-  // or "tagged", as before); otherwise core lowers a `Component` with a
-  // dynamic target, resolved at run time like any other host.
+  // *name* is the expression — the concise syntax, as in Marko, has no other
+  // shape for a bare one (see the "four Marko facts" in AGENTS.md). Both are
+  // dynamic tags: when a host claims DYNAMIC_TAG it gets the DelegatedTag
+  // (shape "bare" or "tagged", as before); otherwise core lowers a
+  // `Component` with a dynamic target, resolved at run time like any other
+  // host.
   if (node.name && !hasStaticName(node)) {
     validateBoundAttributes(ctx, node);
     rejectArgsWithProps(ctx, node);
@@ -7633,9 +7636,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     );
   }
 
-  // An unknown lowercase tag that is neither a binding nor a real element is
-  // the silent-failure mode ADR 0001 names: a core tag the host has no
-  // lowering for must be an error, never a literal element.
+  // An unknown lowercase tag that is neither a binding nor a real element
+  // would be a silent failure if it rendered as a literal element, so a tag
+  // the host has no lowering for is an error. Stock Marko likewise refuses an
+  // unresolved hyphenated tag (`<my-widget>`: the html target's
+  // `fixtures-marko/unknown-element/`, `meta.json` `"marko": "error"`).
   if (!ctx.declarations.isElement(name, ctx)) {
     // The host's own wording first: a Marko-parity target reports Marko's
     // failure for an unresolved custom tag, which is what its users see and
@@ -8238,9 +8243,10 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         switch (child.type) {
           case "MarkoText":
           case "MxText":
-            // Already normalized: Marko's own `onText` dropped newline-bearing
-            // whitespace runs and collapsed the rest before we saw them. `value`
-            // carries that normalized text; `span` covers the authored range.
+            // Already normalized: the front end applied Marko's whitespace
+            // rule (ast §3.8), dropping newline-bearing whitespace runs and
+            // collapsing the rest before we saw them. `value` carries that
+            // normalized text; `span` covers the authored range.
             out.push({
               kind: "Text",
               value: child.value,

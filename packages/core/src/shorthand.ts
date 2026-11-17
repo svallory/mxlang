@@ -536,9 +536,10 @@ function partValue(ctx: Ctx, value: Node): Node {
   // here and has no position of its own: it takes the authored word, so the
   // IR value carries a span over the source it was made from. A node the
   // payload already positioned (`${y}` alone is the expression `y`) keeps its
-  // own range. `${"lit"}` alone comes from the parser as a one-quasi template
-  // whose `loc` has a start and no end (Marko's own `withLoc` shape): half a
-  // position is no position, so it takes the authored expression's range too.
+  // own range. `${"lit"}` alone comes from the front end as a one-quasi
+  // template (`stringQuasiTemplate`, which copies Marko's `withLoc` shape)
+  // whose `loc` has a start and no end: half a position is no position, so it
+  // takes the authored expression's range too.
   if (!node.loc?.end) return located(ctx, node, range);
   ranges.set(node, range);
   return node;

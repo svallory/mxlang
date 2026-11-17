@@ -1,7 +1,7 @@
 /**
  * Which authored tags a parent's `children["*"]` claims.
  *
- * Runs inside `resolveUnnamedTags`'s top-down walk over the Marko tree, so a
+ * Runs inside `resolveUnnamedTags`'s top-down walk over the parsed tree, so a
  * child's match is known before anything under it is read: an unnamed tag
  * inside `<title>` (as `attribute`) resolves through `attribute`'s
  * `defaultTag`, and a grandchild matches against the matched contract's own

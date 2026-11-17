@@ -824,7 +824,7 @@ export function customTagTaglib(
             ? {}
             : { preserveWhitespace: configured.preserveWhitespace }),
           // `openTagOnly` is enforced by the MX lowerer so a body produces a
-          // positioned MX TranslateError rather than Marko's parser error.
+          // positioned MX TranslateError rather than the template parser's error.
         }
       : undefined;
     definitions[`<${name}>`] = parseOptions ? { parseOptions } : {};

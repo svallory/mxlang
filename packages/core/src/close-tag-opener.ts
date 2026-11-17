@@ -7,9 +7,10 @@ import { createParser, TagType } from "@mxlang/parser/lexer";
  * location either, so MX finds it by replaying the source with its own
  * template lexer (`@mxlang/parser/lexer`).
  */
-// With colours on (CI, FORCE_COLOR) Marko wraps the reason in escape codes that
-// run to the end of the line, so allow SGR sequences between the reason and the
-// line end, and keep them (group 2) when inserting the position.
+// With colours on (CI, FORCE_COLOR), the front end's code frame (`mx-parse.ts`
+// `buildMessage`, as `@marko/compiler`'s did) wraps the reason in escape codes
+// that run to the end of the line, so allow SGR sequences between the reason
+// and the line end, and keep them (group 2) when inserting the position.
 const SGR = "(?:\\u001b\\[[0-9;]*m)*";
 const MISMATCH = new RegExp(
   `(The closing "[^"\\n]*" tag does not match the corresponding opening "[^"\\n]*" tag)(${SGR})(?=\\r?\\n|$)`,

@@ -8,7 +8,7 @@ PR 5) and lowers the MX AST, applies the
 structural lowerings (`<if>`/`<else>`, every `<for>` form, `<define>`,
 `<const>`, statement tags, the field and inert-shape guards) and **resolves
 them into a host-independent IR**. A host then *emits* from that IR and never
-walks a Marko node. `packages/core/README.md` documents the IR
+walks an AST node. `packages/core/README.md` documents the IR
 kinds, what a host implements in order, the hooks and the front doors — read it
 before adding either.
 
@@ -23,7 +23,7 @@ required: there is no pre-IR string-walk fallback.
 Both current hosts are on the driver. `@mxlang/target-html` uses
 `packages/targets/html/src/emitter.ts` for vanilla HTML strings;
 `@mxlang/host-astro` uses `packages/hosts/astro/src/astro-template.ts` for `.astro.mx`'s
-expression-shaped Astro syntax. Neither emitter reads a Marko node; a
+expression-shaped Astro syntax. Neither emitter reads an AST node; a
 host-specific resolve-time decision goes in `DelegatedTag.data` through
 `isDelegatedTag`/`resolveDelegatedTag`.
 
@@ -1116,7 +1116,7 @@ Five facts worth knowing before editing it:
   attribute name, and `<@content>` is rejected, because both would collide with
   the body slot. A tag declaring `parseOptions.openTagOnly` reports a
   positioned MX error at the call site (``` `<x>`: does not accept content ```)
-  rather than a Marko parse error, which is why `openTagOnly` is deliberately
+  rather than a template parse error, which is why `openTagOnly` is deliberately
   *not* forwarded into the injected taglib.
 - **The injected import is gensym'd and deduped by resolved path.** A
   discovered tag may be named `icon`, which `lower.ts`'s casing rule will never

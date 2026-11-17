@@ -1,11 +1,11 @@
 /**
  * MX's host-independent intermediate representation.
  *
- * The core parses a Marko template, validates it against a host's
+ * The core parses an MX template, validates it against a host's
  * declarations, and resolves the structural subset into the tree defined
  * here. A **host** then walks this tree and emits: the vanilla host prints a
  * string builder, Astro prints ternaries and `.map`, Solid prints
- * `<Show>`/`<For>`. None of them looks at a Marko node.
+ * `<Show>`/`<For>`. None of them looks at an AST node.
  *
  * ## Why an IR is possible here and not in Marko
  *
@@ -20,19 +20,20 @@
  * ## Positions
  *
  * Every node carries `loc`, in the shape `TranslateError` reports (1-based
- * line, 0-based column). Marko's own nodes carry no numeric offsets at all,
- * only `loc.{line,column}`, so that is what the IR can carry — see
- * `fragment.ts` for the measured limits.
+ * line, 0-based column). Most nodes also carry a `span`: file-absolute UTF-16
+ * code-unit offsets (`SourceSpan`) taken from the MX AST's offsets, absent
+ * where a node was synthesized with no authored source.
  *
  * ## Expressions
  *
  * An expression appears as `Expr`: its source text, parsed shape, and the
- * Marko/Babel node it came from. The lowerer computes the shape once so an
- * emitter never has to inspect that parser node to distinguish an object,
- * array, string, or other expression. The text is what every host ultimately
- * emits: it is sliced from the authored source once during lower (printed
- * with Marko's own generator only for a node with no offsets), which keeps
- * hosts from each reaching for a Babel generator.
+ * Babel payload node the front end parsed it into. The lowerer computes the
+ * shape once so an emitter never has to inspect that parser node to
+ * distinguish an object, array, string, or other expression. The text is what
+ * every host ultimately emits: it is sliced from the authored source once
+ * during lower (printed with core's own Babel generator, `babel.ts`, only for
+ * a node with no offsets), which keeps hosts from each reaching for a Babel
+ * generator.
  *
  * The normative contract for every type here is
  * `apps/docs/docs/architecture/ir-spec.md`.
@@ -459,7 +460,7 @@ export interface Branch extends IrBase {
  * real IR kinds, and everything a host defines for itself (`<try>`,
  * `<html-comment>`, a `server` block, a future `<signal>`) arrives here with
  * its name, attributes, children and attribute tags already resolved, so the
- * host emits rather than re-parses. The Marko node itself is not carried: a
+ * host emits rather than re-parses. The authored node itself is not carried: a
  * host that needs a field the IR does not model records it in `data` from
  * `resolveDelegatedTag`, while the node is still in hand.
  */
@@ -542,15 +543,15 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
    * `resolveDelegatedTag` hook.
    *
    * The point of the slot is that a host records its decision once, while the
-   * Marko node is still in hand, instead of re-deriving it at emit time — an
-   * emitter that had to re-inspect `node` would be walking Marko nodes again,
+   * authored node is still in hand, instead of re-deriving it at emit time — an
+   * emitter that had to re-inspect `node` would be walking AST nodes again,
    * which is the thing the IR exists to stop. `undefined` when the host
    * supplies no hook.
    *
    * This is also the seam user-tag macros will need: a user-defined tag that
    * carries compile-time meaning has to hand its
    * resolved form to every host through exactly this channel, since the core
-   * cannot know what the macro decided. The original Marko node is deliberately
+   * cannot know what the macro decided. The original authored node is deliberately
    * absent: emission must consume the IR and `data`, never re-walk parser nodes.
    */
   data: Data;

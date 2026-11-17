@@ -5,7 +5,7 @@
  * the `tags` table (queries the walk asks) sat beside `emitComponent` and
  * `emitSpecial` (callbacks that pushed text into a buffer mid-walk). That is
  * exactly the mix an IR cannot have — lower has to classify a tag without
- * emitting anything, and a host has to emit without re-walking Marko nodes.
+ * emitting anything, and a host has to emit without re-walking AST nodes.
  *
  * So the object splits in two. This file is the half `lower()` consults:
  * every member is a *question* about a tag name or a binding, and none of them
@@ -212,9 +212,9 @@ export interface HostDeclarations {
    * Records whatever this host decided about a claimed tag, into the
    * `DelegatedTag` node's `data` slot.
    *
-   * Called once per claimed tag, during lower, with the Marko node still in
+   * Called once per claimed tag, during lower, with the authored node still in
    * hand. Without it a host's emitter would have no resolved record of the
-   * decision; the original Marko node is deliberately absent from `DelegatedTag`,
+   * decision; the original authored node is deliberately absent from `DelegatedTag`,
    * so emission cannot fall back to walking parser nodes.
    *
    * Also the seam a user-tag macro needs: a user-defined tag with compile-time
@@ -268,9 +268,11 @@ export interface HostDeclarations {
    * Names the tag an unnamed tag (`<#id>`, `<.class>`, concise `#id`/`.class`)
    * stands for.
    *
-   * Marko's parser silently writes `div` into the AST for the shorthand; the
-   * core instead recognises it (a string-literal name with an empty source
-   * span) and asks here, once per unnamed tag. The returned name lowers
+   * In the MX AST an unnamed tag's name is `MxTagName` kind `unnamed`.
+   * Marko's parser writes `div` for the shorthand; the core instead asks
+   * here, once per unnamed tag. `node` is the tag's Marko-shaped view
+   * (`marko-view.ts`), whose name is a `StringLiteral` over an empty source
+   * span until this hook answers. The returned name lowers
    * exactly like an authored tag of that name: `#x` stays `id="x"`, `.a.b`
    * stays `class="a b"`. `parents` is the authored ancestor chain, nearest
    * first, control-flow tags (`if`, `for`) included; an unnamed ancestor
@@ -291,7 +293,7 @@ export interface HostDeclarations {
    *
    * Attribute tags are represented in the IR only for component calls. A host
    * whose target has a more specific concept (Astro named slots, for example)
-   * can explain the invalid element case while the Marko node and its precise
+   * can explain the invalid element case while the authored node and its precise
    * position are still available during lower.
    */
   rejectElementAttributeTags?(name: string, node: Node, ctx: Ctx): void;

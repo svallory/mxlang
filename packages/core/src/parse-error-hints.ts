@@ -21,8 +21,9 @@ import {
   writesMxSyntax,
 } from "./message-vocabulary.ts";
 
-// With colours on (CI, FORCE_COLOR) Marko wraps the reason in escape codes that
-// run to the end of the line, so allow SGR sequences after the reason.
+// With colours on (CI, FORCE_COLOR), the front end's code frame (`mx-parse.ts`
+// `buildMessage`, as `@marko/compiler`'s did) wraps the reason in escape codes
+// that run to the end of the line, so allow SGR sequences after the reason.
 const SGR = "(?:\\u001b\\[[0-9;]*m)*";
 
 type Located = Error & {
@@ -333,7 +334,7 @@ function hintOne(
 }
 
 /**
- * Appends a fix hint to a recognised Marko parse error's reason, in place
+ * Appends a fix hint to a recognised template parse error's reason, in place
  * (message and `label`, the two places a caller reads it from). An aggregate
  * error is handled entry by entry, mirroring `annotateCloseTagOpener`.
  */
