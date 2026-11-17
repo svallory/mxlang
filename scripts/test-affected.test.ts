@@ -5,6 +5,8 @@ import { configDefaults } from "vitest/config";
 import { createVitest } from "vitest/node";
 import {
   commandLog,
+  commentOnly,
+  commentOnlySplit,
   DOC_READERS,
   FIXTURE_CONSUMERS,
   fixtureConsumers,
@@ -24,6 +26,7 @@ import {
   projectsFor,
   relatedPassWithNoTests,
   relatedSources,
+  SOURCE_TEXT_READERS,
   splitDocs,
   testScript,
   VITEST_TEST_FILE,
@@ -246,6 +249,7 @@ describe("FIXTURE_CONSUMERS (fixtures read from another project)", () => {
     for (const consumers of [
       ...FIXTURE_CONSUMERS.map((row) => row.consumers),
       DOC_READERS,
+      ...SOURCE_TEXT_READERS.map((r) => r.consumers),
     ]) {
       for (const consumer of consumers) {
         expect(
@@ -648,5 +652,191 @@ describe("commandLog", () => {
     expect(commandLog(cmd)).toBe(
       "test:affected: bunx vitest run --project parser --passWithNoTests=false",
     );
+  });
+});
+
+const VITEST_ENV = ["@vitest", "environment"].join("-");
+
+describe("commentOnly", () => {
+  it.each([
+    [
+      "a line comment reworded",
+      "a.ts",
+      "// add one\nconst a = 1;\n",
+      "// adds one to nothing\nconst a = 1;\n",
+    ],
+    [
+      "a one-line block comment added before a statement on its line",
+      "a.ts",
+      "const a = 1;\nf(a);\n",
+      "const a = 1;\n/* call it */ f(a);\n",
+    ],
+    [
+      "a JSDoc block rewritten",
+      "a.ts",
+      "/** Adds. */\nexport function f(a: number) {\n  return a + 1;\n}\n",
+      "/**\n * Adds one.\n * @param a the number\n */\nexport function f(a: number) {\n  return a + 1;\n}\n",
+    ],
+    [
+      "indentation and trailing spaces changed",
+      "a.ts",
+      "if (a) {\n  b();\n}\n",
+      "if (a) {   \n\t\t  b( ) ;\n}  \n",
+    ],
+    [
+      "a plain comment edited beside an unchanged // @ts-expect-error",
+      "a.ts",
+      "// old note\n// @ts-expect-error\nconst a: number = 'x';\n",
+      "// new note\n// @ts-expect-error\nconst a: number = 'x';\n",
+    ],
+  ])("%s: comment-only", (_name, file, before, after) => {
+    expect(commentOnly(file, before, after)).toBe(true);
+  });
+
+  it.each([
+    ["an identifier renamed", "a.ts", "const a = 1;\n", "const b = 1;\n"],
+    [
+      'a string "// x" changed to "// y"',
+      "a.ts",
+      'const s = "// x";\n',
+      'const s = "// y";\n',
+    ],
+    [
+      "template text changed",
+      "a.ts",
+      "const s = `a${b}c`;\n",
+      "const s = `a${b}d`;\n",
+    ],
+    [
+      "a regex literal changed",
+      "a.ts",
+      "const r = /a\\/*b/;\n",
+      "const r = /a\\/*c/;\n",
+    ],
+    [
+      "JSX text changed",
+      "a.tsx",
+      "const e = <p>hi</p>;\n",
+      "const e = <p>ho</p>;\n",
+    ],
+    [
+      "leading spaces of JSX text removed",
+      "a.tsx",
+      "const e = <p>  hi</p>;\n",
+      "const e = <p>hi</p>;\n",
+    ],
+    [
+      "a line break inserted between two tokens",
+      "a.ts",
+      "function f() {\n  return x;\n}\n",
+      "function f() {\n  return\n  x;\n}\n",
+    ],
+  ])("%s: not comment-only", (_name, file, before, after) => {
+    expect(commentOnly(file, before, after)).toBe(false);
+  });
+
+  it.each([
+    [
+      "// @ts-expect-error added",
+      "const a: number = 'x';\n",
+      "// @ts-expect-error\nconst a: number = 'x';\n",
+    ],
+    [
+      "// @ts-expect-error removed",
+      "// @ts-expect-error\nconst a: number = 'x';\n",
+      "const a: number = 'x';\n",
+    ],
+    [
+      "// @ts-expect-error edited",
+      "// @ts-expect-error\nconst a: number = 'x';\n",
+      "// @ts-expect-error wrong type on purpose\nconst a: number = 'x';\n",
+    ],
+    [
+      "/* @vite-ignore */ added",
+      "await import(url);\n",
+      "await import(/* @vite-ignore */ url);\n",
+    ],
+    [
+      "// biome-ignore edited",
+      "// biome-ignore lint/x: y\nf();\n",
+      "// biome-ignore lint/x: z\nf();\n",
+    ],
+    [
+      "/*#__PURE__*/ added on the call's line",
+      "const a = f();\n",
+      "const a = /*#__PURE__*/ f();\n",
+    ],
+    [
+      "a same-line biome-ignore edited",
+      "a(); // biome-ignore lint/x: y\nb();\n",
+      "a(); // biome-ignore lint/x: z\nb();\n",
+    ],
+    [
+      // Split so vitest does not read the literal as this file's environment.
+      `// ${VITEST_ENV} edited`,
+      `// ${VITEST_ENV} node\nf();\n`,
+      `// ${VITEST_ENV} jsdom\nf();\n`,
+    ],
+    [
+      "a blank line inserted between // @ts-expect-error and its line",
+      "// @ts-expect-error\nconst a: number = 'x';\n",
+      "// @ts-expect-error\n\nconst a: number = 'x';\n",
+    ],
+  ])("marker %s: not comment-only", (_name, before, after) => {
+    expect(commentOnly("a.ts", before, after)).toBe(false);
+  });
+});
+
+describe("commentOnlySplit", () => {
+  const LOWER = "packages/core/src/lower.ts";
+  const before: Record<string, string> = {
+    [LOWER]: "// lowers\nexport const lower = 1;\n",
+    "packages/x/src/fixtures/a.ts": "// a\nexport const a = 1;\n",
+    "vitest.config.ts": "// c\nexport default {};\n",
+    "a.mx": "// m\n<p/>\n",
+    "packages/x/src/token.ts": "export const t = 1;\n",
+    "packages/x/src/comment.ts": "// one\nexport const c = 1;\n",
+  };
+  const after: Record<string, string> = {
+    [LOWER]: "// lowers the tree\nexport const lower = 1;\n",
+    "packages/x/src/fixtures/a.ts": "// b\nexport const a = 1;\n",
+    "vitest.config.ts": "// d\nexport default {};\n",
+    "a.mx": "// n\n<p/>\n",
+    "packages/x/src/new.ts": "// two\nexport const n = 1;\n",
+    "packages/x/src/token.ts": "export const t = 2;\n",
+    "packages/x/src/comment.ts": "// two\nexport const c = 1;\n",
+  };
+
+  it("picks only eligible comment-only files and adds their source-text readers", () => {
+    expect(
+      commentOnlySplit(
+        [
+          "packages/x/src/fixtures/a.ts",
+          LOWER,
+          "vitest.config.ts",
+          "a.mx",
+          "packages/x/src/new.ts",
+          "packages/x/src/token.ts",
+          "packages/x/src/comment.ts",
+        ],
+        (f) => before[f],
+        (f) => after[f] ?? "",
+      ),
+    ).toEqual({
+      commentOnly: [LOWER, "packages/x/src/comment.ts"],
+      kept: [
+        "packages/x/src/fixtures/a.ts",
+        "vitest.config.ts",
+        "a.mx",
+        "packages/x/src/new.ts",
+        "packages/x/src/token.ts",
+      ],
+      readers: [
+        "packages/core/src/diagnostic-code-sites.test.ts",
+        "packages/core/src/cold-start.test.ts",
+        "packages/tooling/language-server/src/bundled-deps.test.ts",
+        "packages/tooling/typescript-plugin/src/bundled-deps.test.ts",
+      ],
+    });
   });
 });

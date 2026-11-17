@@ -33,6 +33,16 @@
  * `FIXTURE_CONSUMERS` rows) runs only the Markdown readers (`DOC_READERS`,
  * through `vitest related`), never its whole project or own test script.
  *
+ * A JS/TS source whose edit changes only comments or same-line whitespace is
+ * left out (`commentOnly`, `commentOnlySplit`): TypeScript's parser reads the
+ * merge-base text (`git show`) and the working-tree text, and the file is
+ * left out only when the ordered tokens, the line breaks between them, the
+ * shebang and every load-bearing marker comment (`@ts-`, `biome-ignore`,
+ * `__PURE__` and the rest of `COMMENT_MARKERS`) are equal. The tests that read
+ * such a file's text (`SOURCE_TEXT_READERS`) still run. A file that is new,
+ * renamed or untracked, a fixture, `.mx`, `.json`, `.md` or a wide file keeps
+ * today's selection. The gate and CI run every test.
+ *
  * A project that owns a changed file but has no vitest test files (the
  * tree-sitter grammars, whose tests are `*.bun-test.mts`, and the Zed
  * extension) is not given to `vitest run --project`, which would fail with
@@ -54,6 +64,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import ts from "typescript";
 import { cacheMode } from "./test-affected-cache.ts";
 import {
   CORE_DIR,
@@ -423,16 +434,224 @@ function git(args: string[], cwd = root): string {
   return r.stdout;
 }
 
+/** The commit `HEAD` forked from `base`: what "changed" is measured against. */
+function mergeBase(base = "origin/main"): string {
+  return git(["merge-base", base, "HEAD"]).trim();
+}
+
 export function changedFiles(base = "origin/main"): string[] {
-  const mergeBase = git(["merge-base", base, "HEAD"]).trim();
+  return changedSince(mergeBase(base));
+}
+
+function changedSince(since: string): string[] {
   const names = new Set<string>();
   for (const out of [
-    git(["diff", "--name-only", "--diff-filter=d", mergeBase]),
+    git(["diff", "--name-only", "--diff-filter=d", since]),
     git(["ls-files", "--others", "--exclude-standard"]),
   ]) {
     for (const line of out.split("\n")) if (line) names.add(line);
   }
   return [...names].filter((f) => existsSync(resolve(root, f))).sort();
+}
+
+/**
+ * Comment text that can change a build, a type check, a lint or a test
+ * environment (case-sensitive substrings). A comment that contains one is
+ * load-bearing: adding, removing, editing or moving it is not comment-only.
+ */
+const COMMENT_MARKERS: readonly string[] = [
+  "@ts-",
+  "@jsx",
+  "@vitest-environment",
+  "@vite-ignore",
+  "__PURE__",
+  "__NO_SIDE_EFFECTS__",
+  "biome-ignore",
+  "eslint-",
+  "prettier-ignore",
+  "v8 ignore",
+  "c8 ignore",
+  "istanbul ignore",
+  "<reference",
+  "<amd-",
+  "sourceMappingURL",
+  "sourceURL",
+  "webpack",
+  "@license",
+  "@preserve",
+];
+
+function scriptKind(fileName: string): ts.ScriptKind {
+  if (/\.tsx$/.test(fileName)) return ts.ScriptKind.TSX;
+  if (/\.jsx$/.test(fileName)) return ts.ScriptKind.JSX;
+  if (/\.[cm]?js$/.test(fileName)) return ts.ScriptKind.JS;
+  return ts.ScriptKind.TS;
+}
+
+const LINE_BREAK = /\r\n?|[\n\u2028\u2029]/g;
+
+/**
+ * What a comment-only edit leaves equal, as one string: the shebang line;
+ * every leaf of the `getChildren` tree (JSDoc nodes skipped) as kind, text
+ * (`JsxText` whole, leading spaces included) and whether a line break precedes
+ * it; and every marker comment (`COMMENT_MARKERS`) as its text, the index of
+ * the leaf it precedes and the line breaks between the two.
+ */
+function tokenSignature(fileName: string, text: string): string {
+  const sf = ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind(fileName),
+  );
+  const leaves: [ts.SyntaxKind, string, boolean][] = [];
+  const markers: [string, number, number][] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      node.kind >= ts.SyntaxKind.FirstJSDocNode &&
+      node.kind <= ts.SyntaxKind.LastJSDocNode
+    ) {
+      return;
+    }
+    const children = node.getChildren(sf);
+    if (children.length > 0) {
+      for (const child of children) visit(child);
+      return;
+    }
+    // An empty list (`()`'s parameters, say) or a node a parse error left
+    // missing has no text and no trivia of its own.
+    if (node.pos === node.end && node.kind !== ts.SyntaxKind.EndOfFileToken) {
+      leaves.push([node.kind, "", false]);
+      return;
+    }
+    const start = node.getStart(sf);
+    const leafText =
+      node.kind === ts.SyntaxKind.JsxText
+        ? text.slice(node.pos, node.end)
+        : node.getText(sf);
+    const trivia = text.slice(node.pos, start);
+    const index = leaves.length;
+    leaves.push([node.kind, leafText, /[\r\n\u2028\u2029]/.test(trivia)]);
+    // Trailing ranges are the comments before the first line break, leading
+    // ones the comments after it; at position 0 both return the same ranges.
+    const ranges = new Map<number, ts.CommentRange>();
+    for (const r of [
+      ...(ts.getTrailingCommentRanges(text, node.pos) ?? []),
+      ...(ts.getLeadingCommentRanges(text, node.pos) ?? []),
+    ]) {
+      ranges.set(r.pos, r);
+    }
+    for (const r of [...ranges.values()].sort((a, b) => a.pos - b.pos)) {
+      const comment = text.slice(r.pos, r.end);
+      if (!COMMENT_MARKERS.some((m) => comment.includes(m))) continue;
+      const breaks = text.slice(r.end, start).match(LINE_BREAK)?.length ?? 0;
+      markers.push([comment, index, breaks]);
+    }
+  };
+  visit(sf);
+  const shebang = text.startsWith("#!")
+    ? (text.split(/\r\n?|[\n\u2028\u2029]/, 1)[0] ?? "")
+    : "";
+  return JSON.stringify([shebang, leaves, markers]);
+}
+
+/**
+ * Whether `before` and `after` differ only in comments and same-line
+ * whitespace: TypeScript parses both (the kind from `fileName`'s extension)
+ * and their token signatures are equal. A line break added or removed between
+ * two tokens (it can change ASI), a JSX text edit and any change to a marker
+ * comment (`COMMENT_MARKERS`) are not comment-only; neither is a text the
+ * parse throws on.
+ */
+export function commentOnly(
+  fileName: string,
+  before: string,
+  after: string,
+): boolean {
+  try {
+    return tokenSignature(fileName, before) === tokenSignature(fileName, after);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tests that read a source file's text (comments included), so a
+ * comment-only edit to it can change their result. Each row lists every
+ * consumer test file a `git grep` for test files that read a `.ts` under some
+ * `src/`, or scan a `src` directory's `.ts` files, found; a path built at run
+ * time is not detected, so a new reader adds its row by hand.
+ */
+export const SOURCE_TEXT_READERS: readonly {
+  path: RegExp;
+  consumers: readonly string[];
+}[] = [
+  {
+    path: /^packages\/core\/src\/(?!(?:.*\/)?fixtures\/).*(?<!\.test)\.ts$/,
+    consumers: [
+      "packages/core/src/diagnostic-code-sites.test.ts",
+      "packages/core/src/cold-start.test.ts",
+      "packages/tooling/language-server/src/bundled-deps.test.ts",
+      "packages/tooling/typescript-plugin/src/bundled-deps.test.ts",
+    ],
+  },
+  {
+    path: /^packages\/core\/src\/ir-entry\/index\.ts$/,
+    consumers: ["packages/core/src/ir-entry/partial.test.ts"],
+  },
+  {
+    path: /^packages\/parser\/src\/template\/.*\.ts$/,
+    consumers: ["packages/parser/src/frontend/boundary.test.ts"],
+  },
+  {
+    path: /^packages\/babel\/src\/mx-ast\.ts$/,
+    consumers: [
+      "packages/babel/src/mx-ast.test.ts",
+      "packages/parser/src/mx-error-code.test.ts",
+    ],
+  },
+  {
+    path: /^packages\/hosts\/angular\/src\/runtime\.ts$/,
+    consumers: ["packages/hosts/angular/test/runtime.test.ts"],
+  },
+  {
+    path: /^packages\/editors\/vscode\/src\/extension\.ts$/,
+    consumers: [
+      "packages/editors/vscode/scripts/bundled-entries.test.ts",
+      "packages/editors/vscode/src/manifest.test.ts",
+    ],
+  },
+];
+
+/**
+ * `changed` split into the files whose edit is comment-only (`commentOnly`;
+ * only non-wide related sources that exist at the same path in the
+ * merge-base, read by `before`) and the rest (`kept`), plus the deduped
+ * `SOURCE_TEXT_READERS` consumers of the comment-only files (`readers`). Each
+ * list keeps input order.
+ */
+export function commentOnlySplit(
+  changed: readonly string[],
+  before: (f: string) => string | undefined,
+  after: (f: string) => string,
+): { commentOnly: string[]; kept: string[]; readers: string[] } {
+  const only: string[] = [];
+  const kept: string[] = [];
+  for (const f of changed) {
+    const old = isRelatedSource(f) && !isWide(f) ? before(f) : undefined;
+    (old !== undefined && commentOnly(f, old, after(f)) ? only : kept).push(f);
+  }
+  const readers = [
+    ...new Set(
+      only.flatMap((f) =>
+        SOURCE_TEXT_READERS.filter((row) => row.path.test(f)).flatMap(
+          (row) => row.consumers,
+        ),
+      ),
+    ),
+  ];
+  return { commentOnly: only, kept, readers };
 }
 
 /**
@@ -585,9 +804,39 @@ function main(): number {
   const argv = process.argv.slice(2);
   const moon = argv.includes("--moon");
   const extra = argv.filter((a) => a !== "--moon");
-  const changed = changedFiles();
+  const base = mergeBase();
+  const changed = changedSince(base);
   if (changed.length === 0) {
     console.log("test:affected: no changes vs origin/main; nothing to run.");
+    return 0;
+  }
+  // A source whose tokens, line breaks and marker comments are unchanged
+  // since the merge-base is left out; the tests that read its text still run.
+  const split = commentOnlySplit(
+    changed,
+    (f) => {
+      const r = spawnSync("git", ["show", `${base}:${f}`], {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 256 * 1024 * 1024,
+      });
+      return r.status === 0 ? r.stdout : undefined;
+    },
+    (f) => readFileSync(resolve(root, f), "utf8"),
+  );
+  const { kept, readers } = split;
+  if (split.commentOnly.length > 0) {
+    console.log(
+      `test:affected: comment-only change (no token changed) -> not run: ${split.commentOnly.join(", ")}` +
+        (readers.length > 0
+          ? `; source-text readers via vitest related: ${readers.join(", ")}`
+          : ""),
+    );
+  }
+  if (kept.length === 0 && readers.length === 0) {
+    console.log(
+      "test:affected: only comment-only changes vs origin/main; nothing to run.",
+    );
     return 0;
   }
   // Core's tests read the parser's dist; rebuild it when the change touches
@@ -605,22 +854,22 @@ function main(): number {
   const dirs = projectDirs();
   // Project docs (.md) map to the Markdown readers only, never to their
   // owner's whole project or own test script.
-  const { docs, rest } = splitDocs(changed, dirs);
+  const { docs, rest } = splitDocs(kept, dirs);
   if (docs.length > 0) {
     console.log(
       `test:affected: docs-only change -> no whole project (${docs.join(", ")}); Markdown readers via vitest related`,
     );
   }
-  const sources = relatedSources(changed, dirs);
+  const sources = [...new Set([...relatedSources(kept, dirs), ...readers])];
   const nonSources = rest.filter((f) => !isRelatedSource(f));
-  const wide = changed.filter(isWide);
+  const wide = kept.filter(isWide);
   if (wide.length > 0) {
     console.warn(
       `test:affected: ${wide.join(", ")} can affect tests the import graph does not show.\n` +
         "  Run the affected set, then let the gate (gate-auto.sh --packages ...) cover the rest.",
     );
   }
-  const slowTouched = laneFor(changed);
+  const slowTouched = laneFor(kept);
   if (slowTouched.length > 0) {
     console.log(
       `test:affected: ${slowTouched.join(", ")} changed, so slow-lane tests (tsc watch programs, typescript-plugin index) may be selected; lane=all.`,
@@ -656,7 +905,7 @@ function main(): number {
       "related",
       ...sources,
       "--run",
-      `--passWithNoTests=${relatedPassWithNoTests(changed, own, dirs)}`,
+      `--passWithNoTests=${relatedPassWithNoTests(kept, own, dirs)}`,
       ...cacheArgs(process.env, extra),
       ...extra,
     ];
@@ -701,7 +950,7 @@ function main(): number {
       );
       rc = Math.max(rc, run(r.cmd, env));
     } else {
-      const files = changed.filter((f) => ownerDir(f, dirs) === r.dir);
+      const files = kept.filter((f) => ownerDir(f, dirs) === r.dir);
       console.log(
         `test:affected: ${r.name} has no vitest tests and no test script (${files.join(", ")}); not run here, CI covers it.`,
       );
