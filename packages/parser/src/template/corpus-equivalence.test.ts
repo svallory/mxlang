@@ -1,6 +1,8 @@
 /**
- * The copy in `src/template/` must tokenize exactly like the patched npm
- * `htmljs-parser` that core still parses through (`patches/htmljs-parser@5.18.0.patch`).
+ * The copy in `src/template/` is the tokenizer MX's front end, and so core,
+ * parses templates through. It must tokenize exactly like the patched npm
+ * `htmljs-parser` (`patches/htmljs-parser@5.18.0.patch`), which remains the
+ * parser of the workspace's `@marko/compiler`.
  *
  * Corpus: every tracked `.mx`, `.marko` and `.amx` file, plus the `mx` and
  * `marko` fenced blocks of every tracked Markdown file. Each input is parsed by
