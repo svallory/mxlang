@@ -12,7 +12,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates curl unzip util-linux \
   && rm -rf /var/lib/apt/lists/*
 # Bun is pinned to the repo's `packageManager` version.
-RUN npm install -g bun@1.3.14
+RUN npm install -g bun@1.4.4
 WORKDIR /repo
 COPY . .
 RUN bun install --frozen-lockfile

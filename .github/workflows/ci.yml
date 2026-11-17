@@ -29,7 +29,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - run: bun run changelog:check
       - run: bun run build
@@ -58,7 +58,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - run: bun run scripts/pre-verify.ts
       - run: bun run build
@@ -114,7 +114,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - run: bun run build
       - name: Assert the floor is what runs
@@ -137,7 +137,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       # moonrepo/setup-toolchain v0.6.4
       - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095
@@ -174,7 +174,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run consumer-check:html
@@ -223,7 +223,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       # actions/download-artifact v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -251,7 +251,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bunx playwright install --with-deps chromium
@@ -292,7 +292,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
 
       # All three fallbacks build with tree-sitter-cli 0.26.9's
@@ -389,7 +389,7 @@ jobs:
       # oven-sh/setup-bun v2.0.2
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       # package runs the plugin's self-contained build (build:bundled),
       # bundling the workspace packages' built dist/, then staging the VSIX.
