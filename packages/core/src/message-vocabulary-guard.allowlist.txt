@@ -91,6 +91,7 @@ lower.ts :: fix :: native html `<script>` element -- html: the html element, not
 lower.ts :: scriptShapeRefusals :: native html `<script>` element -- html: the html element, not the built-in tag
 lower.ts :: refusePlaceholder :: native html `<script>` element -- html: the html element, not the built-in tag
 lower.ts :: <top> :: `<if=cond>` / `<for|item| of=list>` -- example: the suggested rewrite is written in MX's syntax
+lower.ts :: lowerAttrNamed :: `<for by>` -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: lowerForHead :: `<for|item| of=…>` -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: lowerForHead :: `<for step=...>` -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: lowerForHead :: `<for ${…}>` -- example: the suggested rewrite is written in MX's syntax

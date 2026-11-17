@@ -649,6 +649,9 @@ export function createJsxDeclarations(
     hostName: dialectName,
     nativeTags: WEB_ELEMENTS,
     attributeArgs: "refuse",
+    // `key=` on a native element is the JSX reconciliation key here (a
+    // recorded divergence, divergences.md); core refuses it on other hosts.
+    acceptsReservedAttrNames: ["key"],
     defineCallPassesAttrs: true,
     // The render-path model on this host: the compiled unit exposes `.render`,
     // and the dynamic dispatch (`__mxDynamicPair`) reaches it, so a `/var` on

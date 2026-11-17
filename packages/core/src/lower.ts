@@ -2473,6 +2473,13 @@ function wholeAttrSpan(
     : undefined;
 }
 
+/**
+ * The attribute name Marko refuses on a native element ("`key` is not a valid
+ * attribute, did you mean `<for by>`?") unless the host's declarations list it
+ * in `acceptsReservedAttrNames`.
+ */
+const RESERVED_NATIVE_ATTR = "key";
+
 function lowerAttrNamed(
   ctx: Ctx,
   attr: Node,
@@ -2545,6 +2552,27 @@ function lowerAttrNamed(
     raise(
       INVALID_ATTRIBUTE_CODE,
       `\`on:\` is not a valid ${voiceOfCtx(ctx).attribute}, did you mean \`on\`?`,
+      attr,
+    );
+  }
+
+  // Marko refuses an authored `key` on a native element (rows are keyed with
+  // `<for by>`). A host whose output language gives the name a meaning of its
+  // own lists it in `acceptsReservedAttrNames`. `key:x` (a modifier) is
+  // another name; a bound `key:=` and a method `key(){}` are still `key`.
+  if (
+    isElement &&
+    attr.name === RESERVED_NATIVE_ATTR &&
+    attr.modifier == null &&
+    !ctx.declarations.acceptsReservedAttrNames?.includes(RESERVED_NATIVE_ATTR)
+  ) {
+    raise(
+      INVALID_ATTRIBUTE_CODE,
+      `\`${RESERVED_NATIVE_ATTR}\` is not a valid ${voiceOfCtx(ctx).attribute}, did you mean ${
+        writesMxSyntax(ctx, "for")
+          ? "`<for by>`"
+          : `${voiceOfCtx(ctx).tag("for")} with \`by=\``
+      }?`,
       attr,
     );
   }

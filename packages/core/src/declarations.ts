@@ -133,6 +133,17 @@ export interface HostDeclarations {
    */
   acceptsForeignAttrNames?: boolean;
   /**
+   * Names stock Marko refuses on a native element that this host's output
+   * language gives a meaning of its own; core passes such a name through on a
+   * native element instead of refusing it. Only a host whose output language
+   * gives `key` a meaning of its own, such as a reconciliation key, lists it;
+   * every other host refuses `key=` on a native element the way Marko 6.4.4
+   * does ("`key` is not a valid attribute, did you mean `<for by>`?"),
+   * positioned at the attribute. Core reserves only `key` today; a listed name
+   * core does not reserve has no effect.
+   */
+  acceptsReservedAttrNames?: readonly string[];
+  /**
    * Refuse ordinary call/element attribute argument lists where Marko does.
    * Structural acceptance and builtin/host-tag errors retain precedence.
    * Unset, arguments remain in `Attr.args` for IR consumers. Method shorthand

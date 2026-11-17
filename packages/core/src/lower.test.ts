@@ -3226,6 +3226,105 @@ describe("<for> by=/key= (Marko parity)", () => {
 });
 
 /**
+ * Marko 6.4.4's translator refuses an authored `key` on a native element
+ * (`assertValidNativeAttrName`, `knownWrongAttrs`: "`key` is not a valid
+ * attribute, did you mean `<for by>`?"), at the attribute. Core does the same
+ * unless the host's declarations list `key` in `acceptsReservedAttrNames`
+ * (D171). Other names, spreads and a component's or dynamic tag's `key` input
+ * are not affected.
+ */
+describe("key= on a native element (Marko parity, D171)", () => {
+  // A host that lowers `<let>` (the builtin, handed to the host) and allows
+  // an attribute method, so every source reaches the `key` check.
+  const host = (overrides: Partial<Policy> = {}): Policy =>
+    fakeDeclarations({
+      isBuiltinTag: (name) => name === "let",
+      isDelegatedTag: (name) => name === "let",
+      resolveDelegatedTag: () => ({}),
+      resolveAttributeMethod: () => true,
+      ...overrides,
+    });
+  // `§` marks where the error must land; it is stripped before lowering.
+  const refused = [
+    "<div §key=x/>",
+    "<div §key/>",
+    '<input §key="a"/>',
+    "<textarea §key=1/>",
+    "<svg><path §key=1/></svg>",
+    "<let/x=1/><div §key=x/>",
+    "<for|i| of=[1]><li §key=i/></for>",
+    "<div §key:=x/>",
+    "<div §key(){}/>",
+    "<html-script §key=1/>",
+    "<div §key=1 key=2/>",
+    "div §key=1",
+  ];
+
+  it.each(refused)("refuses %s at the attribute", (marked) => {
+    const column = marked.indexOf("§");
+    const source = marked.replace("§", "");
+    expect(() => lowerSource(source, host())).toThrow(
+      expect.objectContaining({
+        message: "`key` is not a valid attribute, did you mean `<for by>`?",
+        diagnosticCode: "MX_INVALID_ATTRIBUTE",
+        line: 1,
+        column,
+      }),
+    );
+  });
+
+  it.each(refused)("passes %s through when the host opts in", (marked) => {
+    const source = marked.replace("§", "");
+    expect(() =>
+      lowerSource(source, host({ acceptsReservedAttrNames: ["key"] })),
+    ).not.toThrow();
+  });
+
+  it("keeps an opted-in `key` as an attribute named `key`", () => {
+    const ir = lowerSource(
+      "<div key=x/>",
+      host({ acceptsReservedAttrNames: ["key"] }),
+    );
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "dynamic", name: "key", value: { code: "x" } },
+    ]);
+  });
+
+  it("refuses `key` when the host lists only other names", () => {
+    expect(() =>
+      lowerSource("<div key=x/>", host({ acceptsReservedAttrNames: ["ref"] })),
+    ).toThrow(
+      expect.objectContaining({
+        message: "`key` is not a valid attribute, did you mean `<for by>`?",
+        diagnosticCode: "MX_INVALID_ATTRIBUTE",
+        line: 1,
+        column: 5,
+      }),
+    );
+  });
+
+  it.each([
+    "<div Key=1/>",
+    "<div key-a=1/>",
+    "<div key:x=1/>",
+    "<div key.a=1/>",
+    "<div ...{key: 1}/>",
+    "<define/Foo>x</define><Foo key=1/>",
+    '<const/x="div"/><${x} key=1/>',
+    "<${input.t} key=1/>",
+  ])("lowers %s, which is not an authored native `key`", (source) => {
+    expect(() => lowerSource(source, host())).not.toThrow();
+  });
+
+  it("keeps `key:x` as today's ordinary colon name", () => {
+    const ir = lowerSource("<div key:x=1/>", host());
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "dynamic", name: "key:x", value: { code: "1" } },
+    ]);
+  });
+});
+
+/**
  * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
  * name at its **last** `:`; an empty head is not an error but the `value`
  * attribute, so `<div :foo="y"/>` is `value` with modifier `foo` and compiles
