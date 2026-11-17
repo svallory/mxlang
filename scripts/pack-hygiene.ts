@@ -266,6 +266,22 @@ export function workspaceDirs(): string[] {
   return dirs;
 }
 
+/** Workspace package name -> `private === true` in its own `package.json`. */
+export function workspacePrivacy(): Map<string, boolean> {
+  const privacy = new Map<string, boolean>();
+  for (const dir of workspaceDirs()) {
+    let pkg: Partial<PackageJson>;
+    try {
+      pkg = readPackageJson(join(repoRoot, dir));
+    } catch {
+      continue;
+    }
+    if (typeof pkg.name !== "string") continue;
+    privacy.set(pkg.name, pkg.private === true);
+  }
+  return privacy;
+}
+
 /**
  * Splits the workspace packages a consumer install must pin (it cannot fetch
  * them) by each package's own `private` flag: `private: true` -> an empty stub
@@ -487,6 +503,24 @@ export function escapesRoot(
   if (!specifier.startsWith(".")) return false;
   const target = resolve(dirname(file), specifier);
   return target !== root && !target.startsWith(`${root}/`);
+}
+
+/**
+ * The refs whose bare specifier names a private workspace package. A declared
+ * private dependency passes `declaredNames`, and pack-probe stubs it, so only
+ * this catches a public `.d.ts` that names one. Relative and builtin
+ * specifiers never match.
+ */
+export function privateWorkspaceImports(
+  refs: readonly SpecifierRef[],
+  isPrivate: (name: string) => boolean,
+): SpecifierRef[] {
+  return refs.filter(
+    ({ specifier }) =>
+      !specifier.startsWith(".") &&
+      !isBuiltin(specifier) &&
+      isPrivate(packageNameOf(specifier)),
+  );
 }
 
 /** Names a package must declare (dependencies or peers) for `specifier` to resolve. */

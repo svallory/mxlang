@@ -25,10 +25,12 @@ import {
   packedFiles,
   partitionPinned,
   pkgDirOf,
+  privateWorkspaceImports,
   readPackageJson,
   repoRoot,
   runtimeSpecifiers,
   undeclaredRuntimeImports,
+  workspacePrivacy,
 } from "./pack-hygiene.ts";
 import {
   BABEL_FORK_MARKER,
@@ -52,6 +54,35 @@ describe("packageNameOf", () => {
     expect(packageNameOf("@mxlang/target-html/types/marko")).toBe(
       "@mxlang/target-html",
     );
+  });
+});
+
+describe("privateWorkspaceImports", () => {
+  const privacy = new Map([
+    ["@mxlang/parser", true],
+    ["@mxlang/core", false],
+  ]);
+  const isPrivate = (name: string) => privacy.get(name) === true;
+
+  it("flags a private workspace specifier, not a public, third-party, relative or builtin one", () => {
+    const refs = [
+      "@mxlang/parser/lexer",
+      "@mxlang/core",
+      "typescript",
+      "./x.js",
+      "node:fs",
+    ].map((specifier) => ({ specifier, file: "/d/index.d.ts" }));
+    expect(privateWorkspaceImports(refs, isPrivate)).toEqual([
+      { specifier: "@mxlang/parser/lexer", file: "/d/index.d.ts" },
+    ]);
+  });
+
+  it("reads each workspace package's own `private` flag", () => {
+    const real = workspacePrivacy();
+    expect(real.get("@mxlang/parser")).toBe(true);
+    expect(real.get("@mxlang/babel")).toBe(true);
+    expect(real.get("@mxlang/core")).toBe(false);
+    expect(real.get("@mxlang/web-elements")).toBe(false);
   });
 });
 
@@ -292,6 +323,21 @@ for (const p of PACKED_PACKAGES) {
       }
       expect(undeclared).toEqual([]);
     });
+
+    if (pkg.private !== true) {
+      it("names no private workspace package", () => {
+        const privacy = workspacePrivacy();
+        expect(
+          privateWorkspaceImports(
+            files.flatMap((file) => moduleSpecifiers(file)),
+            (name) => privacy.get(name) === true,
+          ).map(
+            ({ file, specifier }) =>
+              `${file.slice(dir.length + 1)}: ${specifier}`,
+          ),
+        ).toEqual([]);
+      });
+    }
 
     it("import no node builtins", () => {
       const builtins = files.flatMap((file) =>
