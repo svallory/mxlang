@@ -1,6 +1,10 @@
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { configDefaults, defineConfig } from "vitest/config";
+import {
+  configDefaults,
+  defineConfig,
+  type TestProjectConfiguration,
+} from "vitest/config";
 import {
   CORE_DIR,
   CORE_ISOLATED_FILES,
@@ -116,8 +120,8 @@ const coreProjects = [
   },
 ];
 
-const projects = PROJECT_GLOBS.flatMap((g) =>
-  g === CORE_DIR ? coreProjects : [g],
+const projects: TestProjectConfiguration[] = PROJECT_GLOBS.flatMap(
+  (g): TestProjectConfiguration[] => (g === CORE_DIR ? coreProjects : [g]),
 );
 
 // `MX_TEST_LANE=slow` must run only the slow files. Every project other than

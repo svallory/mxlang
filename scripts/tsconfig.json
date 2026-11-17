@@ -1,10 +1,11 @@
 {
   // Typecheck config for the root scripts/ directory (the .cjs files stay out).
+  // It also checks the root vitest.config.ts, because the repository root has no tsconfig.
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "types": ["node", "bun"]
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "../vitest.config.ts"]
 }
