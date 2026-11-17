@@ -1,8 +1,9 @@
 /**
- * `@mxlang/core`: the Marko-node consumer every MX host is built on.
+ * `@mxlang/core`: the MX AST consumer every MX host is built on.
  *
- * Resolves Marko's AST to the host-independent IR, with everything
- * host-specific behind `HostDeclarations`. MX is the language, this package is
+ * Resolves the MX AST (parsed by `@mxlang/parser`'s front end, `mx-parse.ts`)
+ * to the host-independent IR, with everything host-specific behind
+ * `HostDeclarations`. MX is the language, this package is
  * the core, and each host supplies declarations
  * plus an `Emitter`.
  *
@@ -20,17 +21,15 @@
  *   (`HostDeclarations.nativeTags`, `@mxlang/web-elements` on every built-in
  *   target).
  *
- * Two shapes of Marko's AST drive nearly everything here, both measured
- * against 5.42.5 rather than assumed:
+ * Two facts about the MX AST drive nearly everything here:
  *
- * - Whitespace is already normalized. Marko's own `onText` drops a
- *   whitespace-only run containing a newline and collapses a newline-free run
- *   to one space, so `MarkoText.value` arrives normalized and this file does
- *   not re-normalize it.
- * - Statement tags (`import`, `static`, `export`) parse as *tags* whose
- *   attributes are word soup, and their `start`/`end` are undefined. Their
- *   `loc` line/column, however, spans exactly the statement, so the source
- *   text is sliced back out by `loc` and re-parsed.
+ * - Whitespace is already normalized. The front end applies Marko's `onText`
+ *   rule in a normalizing body (ast §3.8): it drops a whitespace-only run
+ *   containing a newline and collapses a newline-free run to one space, so
+ *   `MxText.value` arrives normalized and this file does not re-normalize it.
+ * - Module statements (`import`, `static`, `export`, `server`, `client`,
+ *   `class`) arrive as `MxModuleStatement` nodes carrying their keyword, their
+ *   parsed statements and their offsets (ast §3.10), not as tags.
  */
 
 import {
@@ -133,7 +132,9 @@ export class TranslateError extends Error {
    * boundary (`recover`, `lower`, `lowerChildren`) fills `line`/`column`
    * from the source before the error leaves it (PR 4 addendum). The span stays
    * after that, for a reporter that wants exact
-   * offsets. Unset on an error raised on a Marko node.
+   * offsets. Unset on an error raised on a node with a `loc` (a Babel
+   * payload node, a Marko-shaped view, a `shorthand.ts` record) or with no
+   * position.
    */
   span?: SourceSpan;
   /**
@@ -400,7 +401,7 @@ export interface Ctx {
   transformDepth?: number;
   /** Authored tag ancestors, innermost last; control flow is transparent and units start empty. */
   authoredAncestors?: string[];
-  /** The Marko nodes behind `authoredAncestors`, same order (a module's scopes, through `LoweredUnit`). */
+  /** The MX tag nodes (`MxTag`, `MxAttributeTag`) behind `authoredAncestors`, same order (a module's scopes, through `LoweredUnit`). */
   authoredAncestorNodes?: Node[];
   /** Every custom tag call of this unit, by node, for `LoweredUnit.calls`. */
   contractFacts?: Map<Node, ContractFact>;
@@ -1826,9 +1827,9 @@ export function shadowBindings(
  * Returns the source text with registered identifier references replaced.
  *
  * Slicing the text (rather than returning a rewritten Babel node to be printed)
- * is what preserves TypeScript type arguments: Marko's parser drops them from the
- * AST, so a generated node would be missing them, while the original source text
- * retains them exactly as authored.
+ * is what preserves TypeScript type arguments: for a build, `stripMxTypes`
+ * removed them from the payload before lowering, so a generated node would be
+ * missing them, while the original source text retains them exactly as authored.
  */
 function rewriteReferencesSource(
   ctx: Ctx,
@@ -1846,8 +1847,9 @@ function rewriteReferencesSource(
   }
 
   const { types, traverse } = coreBabel();
-  // `traverse` needs a Program to walk, and these nodes came out of Marko's
-  // own Babel instance, so its bundled traverse is the one that knows them.
+  // `traverse` needs a Program to walk. The payloads are plain Babel nodes
+  // (from MX's Babel fork), so core's `@babel/core` traverse walks them
+  // (`babel.ts`).
   const file = types.file(
     types.program([types.expressionStatement(node as Node)]),
   );
@@ -1936,16 +1938,10 @@ function rewriteReferences(ctx: Ctx, node: Node): Node {
 }
 
 /**
- * The statement's own source text.
- *
- * `import`/`static`/`export` arrive as tags whose attributes are word soup and
- * whose `start`/`end` are undefined; only `loc` spans the statement, so the
- * text is recovered by line/column and handed back to a real JS parser.
- */
-/**
- * A node's authored source text: a Marko node's `loc` through `sliceLoc`, an
- * MX node's offsets (`mxSpanOf`) straight from `ctx.source`. The two agree,
- * CRLF included: `ctx.lines` splits on `\n` alone.
+ * A node's authored source text: a node with a `loc` (a Babel payload node or
+ * a Marko-shaped view) through `sliceLoc`, an MX node's offsets (`mxSpanOf`)
+ * straight from `ctx.source`. The two agree, CRLF included: `ctx.lines` splits
+ * on `\n` alone.
  */
 export function sliceNode(ctx: Ctx, node: Node): string {
   const span = node?.loc ? undefined : mxSpanOf(node);
@@ -2139,7 +2135,7 @@ export function isFunctionLikeValue(node: Node | null | undefined): boolean {
 }
 
 /**
- * True when a child list holds anything that renders. Marko's parser has
+ * True when a child list holds anything that renders. MX's front end has
  * already normalized text: a retained space is content,
  * while dropped newline indentation creates no node. Never trim it again.
  */
@@ -2287,9 +2283,11 @@ export function productOf(ctx: Ctx): string {
 }
 
 /**
- * Node kinds lowering reads from either AST while it takes both (PR 4; the
- * Marko half goes with PR 5). A tag is an `MxTag` or an `MxReturn` (Marko's
- * `<return>` is a `MarkoTag`); an attribute tag is `isMxAttributeTag`'s.
+ * Node kinds lowering reads. A tag is an `MxTag` or an `MxReturn`; an
+ * attribute tag is `isMxAttributeTag`'s. The `MarkoTag` branch (Marko's
+ * `<return>` is a `MarkoTag` too) is reached by no production caller: only
+ * core's tests that lower Marko's own tree (parsed with `@marko/compiler`)
+ * pass one.
  */
 export function isTagNode(node: Node): boolean {
   const type = node?.type;
@@ -2309,7 +2307,8 @@ export function isStatementNode(node: Node): boolean {
 /**
  * A tag or a module statement: Marko parses a statement as a tag named by
  * its keyword, so every scan for `import`/`static`/`export` by name reads
- * both. The Marko half goes with PR 5.
+ * both. Its `MarkoTag` half (through `isTagNode`) is reached only by core's
+ * tests that lower Marko's own tree.
  */
 export function isTagOrStatementNode(node: Node): boolean {
   return isTagNode(node) || node?.type === "MxModuleStatement";
@@ -2341,7 +2340,10 @@ export function isSpreadAttributeNode(node: Node): boolean {
  * Is `node` an attribute tag: an `MxAttributeTag`, or a Marko tag named
  * `@…`? A name test only; `<@if>`/`<@for>` pass it, and a caller that treats
  * those as controls (the body scan in `lowerAttributeTags`) checks
- * `isControl` itself. The Marko branch goes when `lower()` takes the MX AST.
+ * `isControl` itself. The Marko branch reads the Marko-shaped view
+ * (`marko-view.ts`) a host hands `firstAttributeTag`, and the Marko tree
+ * core's tests lower; a view keeps its attribute tags in `attributeTags`,
+ * so among a view's children it finds none.
  */
 export function isMxAttributeTag(node: Node): boolean {
   return (
@@ -2350,21 +2352,26 @@ export function isMxAttributeTag(node: Node): boolean {
   );
 }
 
-/** Hybrid body read: MX has `body: MxChild[]`, Marko has `body: { body }`. */
+/**
+ * Hybrid body read: an MX node has `body: MxChild[]`; a Marko-shaped view
+ * (`marko-view.ts`), which a host hook may hand `firstAttributeTag`, has
+ * `body: { body }`.
+ */
 export function bodyChildren(node: Node): Node[] {
   if (!node.body) return [];
   // MX AST: body is direct child list (no wrapper); its line triggers as
   // lowered by the trigger pass.
   if (Array.isArray(node.body)) return childrenWithTriggers(node.body);
-  // Marko AST: body.body is the child list
+  // A Marko-shaped view: body.body is the child list
   return node.body.body ?? [];
 }
 
 /**
  * The first attribute tag a tag carries, for a diagnostic to point at.
  *
- * @param node A tag of either AST: Marko keeps attribute tags in its
- *   `attributeTags` field, the MX AST as `MxAttributeTag` children of `body`.
+ * @param node An MX tag, which holds attribute tags as `MxAttributeTag`
+ *   children of `body`, or a Marko-shaped view of one (`marko-view.ts`, what
+ *   a host hook receives), which holds them in its `attributeTags` field.
  * @returns The first one in source order, or `undefined` when there is none.
  */
 export function firstAttributeTag(node: Node): Node | undefined {
@@ -2376,15 +2383,15 @@ export function firstAttributeTag(node: Node): Node | undefined {
 /**
  * Rejects the node fields this translator does not read.
  *
- * Marko's parser fills in more than the string target lowers: attribute tags,
- * tag arguments, a tag variable and type arguments are all separated out of
- * the body at parse time, so a path that walks only `body.body` renders none
- * of them and reports nothing. That is the silent-drop failure S8 exists to
+ * The front end parses more than the string target lowers: a tag's variable,
+ * arguments, parameters and type arguments go in their own `MxTag` fields, and
+ * attribute tags are `MxAttributeTag` children of its body, so a path that
+ * renders only the ordinary children renders none of them and reports nothing. That is the silent-drop failure S8 exists to
  * close — the same class as `by=`, and worse, because whole authored content
  * disappears from a successful compile.
  *
  * One guard rather than a check per emission path: seven scattered copies
- * would drift, and the next field Marko adds would be dropped by whichever
+ * would drift, and the next field the AST gains would be dropped by whichever
  * copy was forgotten.
  *
  * `allow` names the fields the calling path genuinely lowers — only a

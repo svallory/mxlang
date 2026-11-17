@@ -13,7 +13,7 @@ kinds, what a host implements in order, the hooks and the front doors — read i
 before adding either.
 
 The three pieces: `src/ir.ts` (the node kinds, a position on every one),
-`src/lower.ts` (Marko AST in, `Ir` out, carrying every validation and every
+`src/lower.ts` (the MX AST in, `Ir` out, carrying every validation and every
 error message the emitting walk had), and `src/emit.ts` (`Emitter<Out>`, one
 method per kind, plus the `drive`/`emit` driver). `src/declarations.ts` holds
 `HostDeclarations` — the questions the lowerer asks — and `Policy` remains a

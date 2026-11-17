@@ -1,11 +1,11 @@
 /**
- * The lowerer: Marko's AST in, MX's host-independent IR out.
+ * The lowerer: the MX AST in, MX's host-independent IR out.
  *
  * This is the core's whole node walk, with every `out +=` removed. It does all
  * the validation the emitting walk used to do — dispositions and inert shapes,
  * the field guard, `checkBinding`, the four `<for>` forms, if-chain grouping,
  * attribute-tag collection, statement-tag hoisting — and produces `IrNode`s
- * instead of text. A host then emits from the IR and never sees a Marko node.
+ * instead of text. A host then emits from the IR and never walks an AST node.
  *
  * Error messages and positions are preserved **byte for byte** from the
  * emitting walk: `packages/targets/html`'s error fixtures and the oracle's error
