@@ -5,12 +5,15 @@ language: "typescript"
 
 tasks:
   typecheck:
-    command: "tsc"
-    args: ["--noEmit"]
+    command: "bun"
+    args: ["run", "typecheck"]
     inputs:
       - "src/**/*"
       - "test/**/*"
       - "tsconfig.json"
+      - "tsconfig.typecheck.json"
+      - "/packages/core/src/**/*"
+      - "/packages/tsx-bridge/src/public.d.ts"
 
   test:
     command: "bun"

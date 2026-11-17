@@ -5,8 +5,8 @@ language: "typescript"
 
 tasks:
   typecheck:
-    command: "tsc"
-    args: ["--noEmit"]
+    command: "bun"
+    args: ["run", "typecheck"]
     inputs:
       - "src/**/*"
       - "types/**/*"

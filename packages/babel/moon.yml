@@ -7,8 +7,8 @@ language: "typescript"
 # bundles it into its dist.
 tasks:
   typecheck:
-    command: "tsc"
-    args: ["--noEmit"]
+    command: "bun"
+    args: ["run", "typecheck"]
     inputs:
       - "src/**/*"
       - "tsconfig.json"

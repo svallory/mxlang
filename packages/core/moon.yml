@@ -4,9 +4,11 @@ $schema: "https://moonrepo.dev/schemas/project.json"
 language: "typescript"
 
 tasks:
+  # Delegates to package.json's typecheck so the two cannot drift; `bun run`
+  # puts `node_modules/.bin` on PATH, which moon does not do on every host.
   typecheck:
-    command: "tsc"
-    args: ["--noEmit"]
+    command: "bun"
+    args: ["run", "typecheck"]
     inputs:
       - "src/**/*"
       - "tsconfig.json"

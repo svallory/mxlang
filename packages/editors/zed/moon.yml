@@ -4,8 +4,8 @@ language: "typescript"
 
 tasks:
   typecheck:
-    command: "tsc"
-    args: ["--noEmit"]
+    command: "bun"
+    args: ["x", "tsc", "--noEmit"]
     inputs:
       - "tsconfig.json"
 
