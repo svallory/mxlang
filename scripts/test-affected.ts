@@ -144,17 +144,20 @@ export function parserBuildNeeded(changed: readonly string[]): boolean {
 }
 
 /**
- * Fixture directories a test in a DIFFERENT project (or in no project's dir)
- * reads, by a relative path or an import that hops out of its own package.
- * `projectsFor` maps a changed fixture only to the project that owns it, so
- * without this table a change here would skip (or, for a directory in no
- * project, never run) the tests that read it. Each row lists every consumer
- * test file a `git grep` for paths into that directory found. The
- * "FIXTURE_CONSUMERS guard" in `scripts/test-affected.test.ts` fails when a
- * test it detects reading another project's fixture has no row; it cannot see
+ * Files outside the import graph (fixtures, docs, manifests, patches, the
+ * lockfile, root config) that a test in a DIFFERENT project (or in no
+ * project's dir) reads, or that any test reads for a project doc, by a
+ * relative path or an import that hops out of its own package. `projectsFor`
+ * maps a changed file only to the project that owns it, a project doc
+ * (`isProjectDoc`) selects no project at all, and a file in no project runs
+ * nothing, so without this table a change here would skip the tests that
+ * read it. Each row lists every consumer test file that reads what it
+ * matches. The "FIXTURE_CONSUMERS guard" in `scripts/test-affected.test.ts`
+ * fails when a test it detects reading such a file has no row; it cannot see
  * a path built in another module, passed through a function parameter of an
- * imported helper, or written root-relative inside a string, so such a reader
- * adds its row by hand.
+ * imported helper, written root-relative inside a string, built from an
+ * imported constant or helper, loaded through `require`, or enumerated
+ * through git, so such a reader adds its row by hand.
  */
 export const FIXTURE_CONSUMERS: readonly {
   path: RegExp;
@@ -202,12 +205,69 @@ export const FIXTURE_CONSUMERS: readonly {
     consumers: ["packages/targets/html/src/member-syntax.test.ts"],
   },
   {
+    path: /^packages\/babel\/UPSTREAM\.md$/,
+    consumers: ["scripts/pack-hygiene.test.ts"],
+  },
+  {
+    path: /^packages\/editors\/vscode\/package\.json$/,
+    consumers: ["packages/target-registry/src/parity.test.ts"],
+  },
+  {
+    path: /^packages\/parser\/src\/template\/(?:mx-nameless-ascii|mx-unicode-words)\.main\.json$/,
+    consumers: ["patches/htmljs-parser.test.ts"],
+  },
+  {
+    path: /^packages\/tooling\/(?:language-server|typescript-plugin)\/package\.json$/,
+    consumers: [
+      "packages/editors/vscode/scripts/bundled-entries.test.ts",
+      "packages/tooling/tsc/src/peer-typescript.test.ts",
+    ],
+  },
+  {
+    // Every workspace manifest (`WORKSPACE_PARENTS` in `scripts/pack-hygiene.ts`).
+    path: /^(?:packages\/(?:[^/]+\/)?[^/]+|examples\/[^/]+|apps\/[^/]+)\/package\.json$/,
+    consumers: [
+      "scripts/pack-hygiene.test.ts",
+      "scripts/workspace-cycles.test.ts",
+    ],
+  },
+  {
     path: /^examples\/angular-app\//,
     consumers: ["packages/hosts/angular/test/example-app.test.ts"],
   },
   {
     path: /^examples\/astro-static\/src\/components\//,
     consumers: ["packages/tooling/typescript-plugin/src/index.test.ts"],
+  },
+  {
+    path: /^apps\/docs\/docs\/architecture\/ast\.md$/,
+    consumers: ["packages/babel/src/mx-ast.test.ts"],
+  },
+  {
+    path: /^apps\/docs\/docs\/architecture\/ir-entry\.md$/,
+    consumers: ["packages/core/src/ir-entry/partial.test.ts"],
+  },
+  {
+    path: /^apps\/docs\/docs\/architecture\/parser-grammar\.md$/,
+    consumers: ["packages/parser/src/template/grammar-spec.test.ts"],
+  },
+  {
+    path: /^apps\/docs\/docs\/custom-tags\/sidecars\.md$/,
+    consumers: ["packages/core/src/parents.test.ts"],
+  },
+  {
+    path: /^apps\/docs\/docs\/language\/attr-tag\.md$/,
+    consumers: [
+      "packages/hosts/preact/src/attr-tag-docs.test.ts",
+      "packages/targets/html/src/attr-tag-docs.test.ts",
+    ],
+  },
+  {
+    path: /^apps\/docs\/docs\/specification\.md$/,
+    consumers: [
+      "packages/core/src/ir-entry/partial.test.ts",
+      "packages/core/src/parents.test.ts",
+    ],
   },
   {
     path: /^fixtures\//,
@@ -263,6 +323,29 @@ export const FIXTURE_CONSUMERS: readonly {
       "packages/tooling/vite-plugin/src/index.test.ts",
     ],
   },
+  {
+    path: /^patches\/htmljs-parser@5\.18\.0\.patch$/,
+    consumers: [
+      "packages/stock-marko/src/vendor.test.ts",
+      "packages/targets/html/src/stock-parser.test.ts",
+    ],
+  },
+  {
+    path: /^\.gitignore$/,
+    consumers: ["packages/editors/vscode/scripts/bundled-entries.test.ts"],
+  },
+  {
+    path: /^biome\.json$/,
+    consumers: ["scripts/biome-plugins/no-declare-call-statement.test.ts"],
+  },
+  {
+    path: /^bun\.lock$/,
+    consumers: ["packages/stock-marko/src/vendor.test.ts"],
+  },
+  {
+    path: /^package\.json$/,
+    consumers: ["packages/stock-marko/src/marko.test.ts"],
+  },
 ];
 
 /** The consumer test files (`FIXTURE_CONSUMERS`) that read `file` from another project. */
@@ -297,15 +380,19 @@ export function nonSourceProjects(
 }
 
 /**
- * Tests that read package Markdown files. corpus-equivalence reads the
- * `mx`/`marko` fences of every tracked Markdown file (`git ls-files`), so a
- * changed project doc selects it whatever the doc contains. A new test that
- * reads a package's `.md` adds its row here (or to `FIXTURE_CONSUMERS` for a
- * fixture-style file).
+ * Tests that read Markdown files by enumerating them. corpus-equivalence reads
+ * the `mx`/`marko` fences of every tracked Markdown file and every tracked
+ * `.mx`/`.marko`/`.amx` file (`git ls-files`), so any changed corpus input
+ * (`CORPUS_INPUT`: a `.md`, `.mdx`, `.mx`, `.marko` or `.amx` file anywhere)
+ * selects it whatever the file contains. A test that reads named files adds a
+ * `FIXTURE_CONSUMERS` row instead.
  */
 export const DOC_READERS: readonly string[] = [
   "packages/parser/src/template/corpus-equivalence.test.ts",
 ];
+
+/** A corpus-equivalence input: its `git ls-files` walk reads every tracked file this matches. */
+const CORPUS_INPUT = /\.(?:mdx?|mx|marko|amx)$/;
 
 /**
  * A project doc: a `.md` inside a project dir that is not under a
@@ -336,20 +423,17 @@ export function splitDocs(
  * What `vitest related` gets: the changed related sources, the subprocess
  * probe's consumer (`probeConsumers`), for a related source under a
  * `FIXTURE_CONSUMERS` path (the tree-sitter-mx corpus readers, say) the
- * tests in other projects that read it, and `DOC_READERS` when a project doc
- * changed. Deduped, in that order.
+ * tests in other projects that read it, and `DOC_READERS` when any changed
+ * file is a corpus input (`CORPUS_INPUT`). Deduped, in that order.
  */
-export function relatedSources(
-  changed: readonly string[],
-  dirs: readonly string[] = projectDirs(),
-): string[] {
+export function relatedSources(changed: readonly string[]): string[] {
   const related = changed.filter(isRelatedSource);
   return [
     ...new Set([
       ...related,
       ...probeConsumers(changed),
       ...related.flatMap(fixtureConsumers),
-      ...(splitDocs(changed, dirs).docs.length > 0 ? DOC_READERS : []),
+      ...(changed.some((f) => CORPUS_INPUT.test(f)) ? DOC_READERS : []),
     ]),
   ];
 }
@@ -903,7 +987,7 @@ function main(): number {
       `test:affected: docs-only change -> no whole project (${docs.join(", ")}); Markdown readers via vitest related`,
     );
   }
-  const sources = [...new Set([...relatedSources(kept, dirs), ...readers])];
+  const sources = [...new Set([...relatedSources(kept), ...readers])];
   const nonSources = rest.filter((f) => !isRelatedSource(f));
   const wide = kept.filter(isWide);
   if (wide.length > 0) {

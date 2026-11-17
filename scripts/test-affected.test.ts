@@ -11,7 +11,6 @@ import {
   commentOnlySplit,
   DOC_READERS,
   FIXTURE_CONSUMERS,
-  FIXTURE_DIR,
   fixtureConsumers,
   hasVitestTests,
   isProjectDoc,
@@ -139,7 +138,7 @@ describe("isRelatedSource (what vitest related can see)", () => {
       "packages/web-elements/vitest.config.ts",
       "packages/web-elements/src/index.ts",
     ];
-    expect(relatedSources(changed, dirs)).toEqual([
+    expect(relatedSources(changed)).toEqual([
       "packages/web-elements/src/index.ts",
     ]);
     const { byProject, unmapped } = nonSourceProjects(
@@ -634,24 +633,27 @@ describe("Markdown selection", () => {
 
   it("a project doc adds the Markdown readers to vitest related", () => {
     expect(
-      relatedSources(["packages/tooling/typescript-plugin/AGENTS.md"], dirs),
+      relatedSources(["packages/tooling/typescript-plugin/AGENTS.md"]),
     ).toEqual([CORPUS]);
     expect(
-      relatedSources(
-        [
-          "packages/core/README.md",
-          "packages/hosts/solid/src/emitter.ts",
-          "packages/parser/src/template/corpus-equivalence.test.ts",
-          "packages/core/CHANGELOG.md",
-        ],
-        dirs,
-      ),
+      relatedSources([
+        "packages/core/README.md",
+        "packages/hosts/solid/src/emitter.ts",
+        "packages/parser/src/template/corpus-equivalence.test.ts",
+        "packages/core/CHANGELOG.md",
+      ]),
     ).toEqual(["packages/hosts/solid/src/emitter.ts", CORPUS, PROBE_CONSUMER]);
   });
 
-  it("a root doc or a source-only change adds no Markdown reader", () => {
-    expect(relatedSources(["docs/a.md"], dirs)).toEqual([]);
-    expect(relatedSources(["packages/core/src/core.ts"], dirs)).toEqual([
+  it("any corpus input adds the Markdown readers; a source-only change adds none", () => {
+    expect(relatedSources(["docs/a.md"])).toEqual([CORPUS]);
+    expect(relatedSources(["apps/docs/docs/specification.md"])).toEqual([
+      CORPUS,
+    ]);
+    expect(
+      relatedSources(["packages/oracle/fixtures/marko/x/input.mx"]),
+    ).toEqual([CORPUS]);
+    expect(relatedSources(["packages/core/src/core.ts"])).toEqual([
       "packages/core/src/core.ts",
     ]);
   });
@@ -1256,15 +1258,23 @@ function sourceTargets(listed: readonly string[]): string[] {
   );
 }
 
-/** The fixture guard's targets: files under a fixtures-style dir, `.mx` files and files a row matches. */
+/**
+ * The FIXTURE_CONSUMERS guard's targets: every non-test file whose change
+ * takes the non-source, doc or unmapped path (fixtures, `.mx`, docs,
+ * manifests, patches, the lockfile, root config), plus files a row matches.
+ */
 function fixtureTargets(listed: readonly string[]): string[] {
   return listed.filter(
     (f) =>
       !VITEST_TEST_FILE.test(f) &&
-      (FIXTURE_DIR.test(f) ||
-        f.endsWith(".mx") ||
+      (!isRelatedSource(f) ||
         FIXTURE_CONSUMERS.some((row) => row.path.test(f))),
   );
+}
+
+/** The projects whose selection a change to `file` runs: none for a project doc. */
+function readOwners(file: string, dirs: readonly string[]): string[] {
+  return isProjectDoc(file, dirs) ? [] : projectsFor(file, dirs);
 }
 
 /** Detected readers whose result cannot change on a comment-only edit. */
@@ -1291,7 +1301,7 @@ const EXEMPT: readonly { test: string; reason: string }[] = [
   },
 ];
 
-/** Detected cross-project readers that read no fixture. */
+/** Detected readers that read no file a FIXTURE_CONSUMERS row would need. */
 const FIXTURE_EXEMPT: readonly { test: string; reason: string }[] = [
   // Their walk skips `fixtures` directories (`if (name !== "fixtures") walk(path)`) and reads only `.ts`.
   {
@@ -1301,6 +1311,26 @@ const FIXTURE_EXEMPT: readonly { test: string; reason: string }[] = [
   {
     test: "packages/tooling/typescript-plugin/src/bundled-deps.test.ts",
     reason: "walk skips fixtures directories",
+  },
+  // Its `template/` walk reads only `.ts` (`path.endsWith(".ts")`); the read reaches only PROVENANCE.md, a project doc.
+  {
+    test: "packages/parser/src/frontend/boundary.test.ts",
+    reason: "template walk reads only .ts files",
+  },
+  // Its directory reads are the manifest's grammar and configuration JSON; the read reaches only the package's .md docs.
+  {
+    test: "packages/editors/vscode/src/manifest.test.ts",
+    reason: "reads only the manifest's grammar and configuration JSON",
+  },
+  // Its prefix read is `join(pkgDir, pkg.types)`, the built dist .d.ts; the read reaches only the package's .md docs.
+  {
+    test: "packages/tsx-bridge/src/pack-contents.test.ts",
+    reason: "reads only the built dist .d.ts",
+  },
+  // Excluded from html's vitest project (its vitest.config.ts `exclude`); `test:bun` runs it, `test:affected` never does.
+  {
+    test: "packages/targets/html/src/example.bun.test.ts",
+    reason: "not a vitest test; runs under test:bun",
   },
 ];
 
@@ -1398,6 +1428,10 @@ describe("SOURCE_TEXT_READERS guard", () => {
       "packages/x/src/fixtures/f.ts",
       "packages/x/src/page.mx",
       "packages/editors/tree-sitter-mx/test/corpus/a.txt",
+      "apps/docs/docs/x.md",
+      "bun.lock",
+      "packages/x/package.json",
+      "packages/x/vitest.config.ts",
     ];
     expect(sourceTargets(listed)).toEqual([
       "packages/x/src/a.ts",
@@ -1408,6 +1442,10 @@ describe("SOURCE_TEXT_READERS guard", () => {
       "packages/x/src/fixtures/f.ts",
       "packages/x/src/page.mx",
       "packages/editors/tree-sitter-mx/test/corpus/a.txt",
+      "apps/docs/docs/x.md",
+      "bun.lock",
+      "packages/x/package.json",
+      "packages/x/vitest.config.ts",
     ]);
   });
 
@@ -1577,7 +1615,7 @@ describe("SOURCE_TEXT_READERS guard", () => {
 
 describe("FIXTURE_CONSUMERS guard", () => {
   let repoReads: SourceRead[] | undefined;
-  /** The repository's cross-project fixture reads; computed once. */
+  /** The repository's cross-project and project-doc reads of non-source files; computed once. */
   const scanRepo = (): SourceRead[] => {
     if (repoReads !== undefined) return repoReads;
     const { listed, tests } = scanInputs();
@@ -1586,7 +1624,7 @@ describe("FIXTURE_CONSUMERS guard", () => {
     const ownersOf = (f: string) => {
       const known = owners.get(f);
       if (known !== undefined) return known;
-      const ps = projectsFor(f, dirs);
+      const ps = readOwners(f, dirs);
       owners.set(f, ps);
       return ps;
     };
@@ -1600,7 +1638,7 @@ describe("FIXTURE_CONSUMERS guard", () => {
     return repoReads;
   };
 
-  it("every detected cross-project fixture reader has a row or an exemption", () => {
+  it("every detected cross-project non-source file reader has a row or an exemption", () => {
     expect(
       uncovered(
         scanRepo(),
@@ -1623,6 +1661,47 @@ describe("FIXTURE_CONSUMERS guard", () => {
     ).toEqual([
       "packages/hosts/angular/test/ng-mx-mapping-invariant.test.ts reads packages/oracle/fixtures/angular/ with no FIXTURE_CONSUMERS row",
     ]);
+  });
+
+  it("catches a patch reader: stock-marko's vendor test without its patch row", () => {
+    const reader = "packages/stock-marko/src/vendor.test.ts";
+    const rows = FIXTURE_CONSUMERS.map((row) =>
+      row.path.test("patches/htmljs-parser@5.18.0.patch")
+        ? { ...row, consumers: row.consumers.filter((c) => c !== reader) }
+        : row,
+    );
+    expect(
+      uncovered(scanRepo(), rows, FIXTURE_EXEMPT, "FIXTURE_CONSUMERS"),
+    ).toEqual([
+      "packages/stock-marko/src/vendor.test.ts reads patches/htmljs-parser@5.18.0.patch with no FIXTURE_CONSUMERS row",
+    ]);
+  });
+
+  it("catches a same-project project-doc read: the parser boundary test without its exemption", () => {
+    const exempt = FIXTURE_EXEMPT.filter(
+      (e) => e.test !== "packages/parser/src/frontend/boundary.test.ts",
+    );
+    expect(
+      uncovered(scanRepo(), FIXTURE_CONSUMERS, exempt, "FIXTURE_CONSUMERS"),
+    ).toEqual([
+      "packages/parser/src/frontend/boundary.test.ts reads packages/parser/src/template/ with no FIXTURE_CONSUMERS row",
+    ]);
+  });
+
+  it("a project doc has no owner; any other file keeps its projects", () => {
+    const dirs = projectDirs();
+    expect(readOwners("packages/core/README.md", dirs)).toEqual([]);
+    expect(readOwners("apps/docs/docs/specification.md", dirs)).toEqual([]);
+    expect(readOwners("packages/core/package.json", dirs)).toEqual([
+      "@mxlang/core",
+      "@mxlang/core-isolated",
+    ]);
+    expect(readOwners("packages/babel/UPSTREAM.md", dirs)).toEqual([
+      "@mxlang/babel",
+    ]);
+    expect(
+      readOwners("packages/oracle/fixtures/angular/README.md", dirs),
+    ).toEqual(["@mxlang/oracle"]);
   });
 
   it("every exemption is detected and covered by no row", () => {
