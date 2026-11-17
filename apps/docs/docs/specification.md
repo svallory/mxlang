@@ -513,7 +513,7 @@ Import binding names are recovered by **parsing** the hoisted line with Babel �
 default, namespace, named, aliased and combined forms — never by regex.
 
 **Neither explicit imports nor `export interface Input` are required.** Both
-were conventions of the retired `.mx` dialect, killed and
+were conventions of the old, retired `.mx` dialect, killed and
 kept dead. Marko allows arbitrary TypeScript in a `static` block
 regardless.
 
@@ -599,20 +599,22 @@ there before any host runs. Host handling of `$!{}` in content position varies
 (§13): the Solid host lowers a lone `$!{html}` child to `innerHTML` and errors on
 a mixed body or a body with tag params (`<Row|item|>$!{item}</Row>`, `<for|item|>`: Marko renders it in the callback, Solid has no wrapper-free raw form; wrap in `<div>$!{item}</div>`); the Angular host emits `[innerHTML]` with a warning.
 
-Core raises no dedicated interpolation diagnostic — a `MarkoPlaceholder` lowers
-unconditionally with `escaped` taken from the node, so `$!{}` is simply
+Core raises no dedicated interpolation diagnostic — an `MxPlaceholder` lowers
+unconditionally with `escaped` taken from its `escape`, so `$!{}` is simply
 `escaped: false`.
 
 ### Whitespace
 
-**MX follows Marko's rule, not JSX's, and does not implement it.** Marko's own
-`onText` has already applied it before `@mxlang/core` sees a text node. There is
+**MX follows Marko's rule, not JSX's, and core does not implement it.** MX's
+front end applies Marko's rule (Marko's `onText`, reproduced in
+`packages/parser/src/frontend/parse.ts` `onText`) once, before `@mxlang/core`
+sees a text node. There is
 no `normalizeText` in core, and **a second normalization pass on any host's path
 would collapse whitespace twice** — this is the same single rule on every host,
 Solid included.
 
-Marko's parser owns boundary trimming and collapses remaining whitespace
-runs with `value.replace(/\s+/g, " ")`. It ignores
+The front end owns boundary trimming, as Marko's parser does, and collapses
+remaining whitespace runs (spaces, tabs, CR, LF and form feed) to one space. It ignores
 comments when finding adjacent content. At a body's beginning/end it removes
 leading/trailing CR/LF plus indentation; a whitespace-only run beginning with
 CR/LF is dropped by `onText` before a node is created. `preserveWhitespace`
