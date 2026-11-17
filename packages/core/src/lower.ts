@@ -7137,11 +7137,11 @@ function isValueNonTemplateImport(ctx: Ctx, name: string): boolean {
 function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Both a bare `${expr}` line and `<${expr} .../>` parse to a tag whose
   // *name* is the expression — the concise syntax, as in Marko, has no other
-  // shape for a bare one (see the "four Marko facts" in AGENTS.md). Both are
-  // dynamic tags: when a host claims DYNAMIC_TAG it gets the DelegatedTag
-  // (shape "bare" or "tagged", as before); otherwise core lowers a
-  // `Component` with a dynamic target, resolved at run time like any other
-  // host.
+  // shape for a bare one (see the "Four Marko facts" list in
+  // `packages/tsx-bridge/AGENTS.md`). Both are dynamic tags: when a host
+  // claims DYNAMIC_TAG it gets the DelegatedTag (shape "bare" or "tagged", as
+  // before); otherwise core lowers a `Component` with a dynamic target,
+  // resolved at run time like any other host.
   if (node.name && !hasStaticName(node)) {
     validateBoundAttributes(ctx, node);
     rejectArgsWithProps(ctx, node);

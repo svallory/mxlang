@@ -1308,8 +1308,9 @@ describe("one fixture per IR kind", () => {
 
 /**
  * A bare `${expr}` line and `<${expr}/>` parse to the same Marko node (no
- * attrs, no body) — see the "four Marko facts" in `AGENTS.md`. `isDelegatedTag`'s
- * `shape` argument is the only signal that lets a host tell them apart.
+ * attrs, no body) — see the "Four Marko facts" list in
+ * `packages/tsx-bridge/AGENTS.md`. `isDelegatedTag`'s `shape` argument is the
+ * only signal that lets a host tell them apart.
  */
 describe("a dynamic tag's bare shape", () => {
   it("rejects arguments combined with a plain attribute with a positioned diagnostic (Marko's own rule, MX's own wording)", () => {

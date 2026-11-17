@@ -631,8 +631,8 @@ describe("components", () => {
 
   it("emits a bare `${expr}` line the same way, as a dynamic tag", () => {
     // A bare concise-position `${expr}` line and `<${expr}/>` parse to the
-    // same Marko node and both are the dynamic-tag shape — see the "four
-    // Marko facts" in AGENTS.md.
+    // same Marko node and both are the dynamic-tag shape — see the "Four
+    // Marko facts" list in `packages/tsx-bridge/AGENTS.md`.
     expect(markup("<${input.tag}/>")).toBe("{__mxDynamic(input.tag, {  })}");
   });
 

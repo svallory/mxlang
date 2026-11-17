@@ -400,11 +400,11 @@ export const astroTemplateDeclarations: HostDeclarations = {
 
     // A bare top-level `${expr}` line and a tagged `<${expr} .../>` both
     // parse to Marko's expression-named tag shape, and both are the
-    // dynamic-tag construct (see the "four Marko facts" in AGENTS.md, and
-    // `@mxlang/core`'s `lowerTag`) — Astro resolves component names
-    // statically and cannot express either, so both are the same
-    // host-specific error rather than the bare shape silently becoming an
-    // interpolation.
+    // dynamic-tag construct (see the "Four Marko facts" list in
+    // `packages/tsx-bridge/AGENTS.md`, and `@mxlang/core`'s `lowerTag`) —
+    // Astro resolves component names statically and cannot express either,
+    // so both are the same host-specific error rather than the bare shape
+    // silently becoming an interpolation.
     fail(
       "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/host-astro: Astro resolves component names statically",
       node,

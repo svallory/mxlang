@@ -796,9 +796,10 @@ describe("unsupported constructs", () => {
 
   it("rejects a bare `${expr}` concise-position line the same way, not as a silent interpolation", () => {
     // A bare line and the tagged form parse to the same dynamic-tag shape
-    // (see AGENTS.md's "four Marko facts"); Astro cannot express either, so
-    // both are the same error rather than the bare shape silently rendering
-    // as an interpolation of the tag-name expression.
+    // (see the "Four Marko facts" list in `packages/tsx-bridge/AGENTS.md`);
+    // Astro cannot express either, so both are the same error rather than the
+    // bare shape silently rendering as an interpolation of the tag-name
+    // expression.
     const message = errorFor("${Tag}\n").message;
     expect(message).toContain("isn't supported by @mxlang/host-astro");
     expect(message).toContain("resolves component names statically");

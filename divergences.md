@@ -190,8 +190,9 @@ placeholder. The in-repo stock fixture
 `packages/targets/html/fixtures-marko/dynamic-tag-bare/` shows the same fact:
 `${input.tag}` with `tag: "div"` renders `<div></div>` under stock Marko
 (`oracle:marko`). A bare `${expr}` line and `<${expr}/>` parse to the identical
-Marko node (see the "four Marko facts" in `AGENTS.md`); MX 1.0's bare-is-text
-special case was an undocumented divergence from that, never a recorded one.
+Marko node (see the "Four Marko facts" list in `packages/tsx-bridge/AGENTS.md`);
+MX 1.0's bare-is-text special case was an undocumented divergence from that,
+never a recorded one.
 Fixed: `@mxlang/core`'s `lowerTag` now treats both shapes as the dynamic-tag
 construct — a claiming host still gets its `DelegatedTag`, and an unclaiming host
 gets a `Component` with a dynamic target instead of a silent `Interpolation`.

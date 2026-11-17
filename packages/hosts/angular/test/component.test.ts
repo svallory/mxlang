@@ -355,9 +355,9 @@ describe("Component dynamic target (via DelegatedTag routing)", () => {
     // core PR #103 (main 50877ea8): a bare `${Cmp}` placeholder and
     // `<${Cmp}/>` are the identical dynamic-tag construct on every host now
     // (Marko's own grammar has no way to tell them apart, and Marko itself
-    // treats both as a dynamic tag — AGENTS.md's "four Marko facts"). This
-    // host no longer draws its own bare/tagged split; both emit
-    // `ngComponentOutlet`.
+    // treats both as a dynamic tag — the "Four Marko facts" list in
+    // `packages/tsx-bridge/AGENTS.md`). This host no longer draws its own
+    // bare/tagged split; both emit `ngComponentOutlet`.
     const out = emit("<${Cmp}/>");
     expect(out).toBe('<ng-container [ngComponentOutlet]="Cmp"></ng-container>');
     assertAngularParses(out);
