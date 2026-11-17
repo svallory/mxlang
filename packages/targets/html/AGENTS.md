@@ -300,9 +300,13 @@ Marko is: `<log=1 foo="bar"/>` is refused there,
 while `<lifecycle foo="bar"/>` compiles (a lifecycle tag's attributes are its
 configuration), and `<script>` is the one inert tag taking a body (raw text).
 
-Some constructs need no row at all, because Marko's own parser rejects them
-before a translator runs — do not add code for these, and do not read their
-absence as tolerance: `key=` on an element. `$!{…}` in an attribute value
+Some constructs need no row at all, because core refuses them before this
+translator runs — do not add code for these, and do not read their absence as
+tolerance. `key=` on an element is one: core refuses it
+(`MX_INVALID_ATTRIBUTE`, with stock Marko's message, in `lowerAttrNamed`) on
+every host whose declarations do not list it in `acceptsReservedAttrNames`,
+html among them. In stock Marko it is the **translator** (`knownWrongAttrs`)
+that refuses it, not the parser. `$!{…}` in an attribute value
 needs no row either: the MX front end refuses it before lowering runs
 (`MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE`,
 `packages/parser/src/frontend/parse.ts`).

@@ -442,9 +442,10 @@ table above is not mistaken for silent tolerance:
   `TranslateError` (``Expected a single expression, but found `{` after it.``).
 - A `.marko` file where a tag is looked up (`tags/`, an import used as a tag) —
   a positioned error telling you to convert it to `.mx`.
-
-`key=` on an element is not among them: it is an ordinary attribute and is
-emitted as written. Only `key=` on `<for>` is refused (see the inert table).
+- `key=` on an element (`<div key=x/>`) — core refuses it as stock Marko does,
+  at the attribute (`MX_INVALID_ATTRIBUTE`:
+  `` `key` is not a valid attribute, did you mean `<for by>`? ``). Rows of a
+  `<for>` are keyed with `by=`.
 
 ## Attribute tags follow Marko's own convention
 

@@ -1733,6 +1733,19 @@ and so does every host that renders JSX (Preact, React, Hono, Solid) and the htm
 target. The raw-HTML form is `$!{html}`. Only an authored attribute is refused; a
 spread's keys are runtime data.
 
+### `key`
+
+`key` is not an attribute of a native element: stock Marko refuses it
+(``` `key` is not a valid attribute, did you mean `<for by>`? ```), and so do the
+html target and the Solid, Angular and Astro hosts, at the attribute. On
+Preact, React and Hono, `key=` on a native element is the JSX reconciliation
+key, as it is in those frameworks, a recorded divergence (`divergences.md`).
+A host opts in through the generic `acceptsReservedAttrNames` hook, which lists
+the names its output language gives a meaning of its own. The rows of a
+`<for>` are keyed with `by=` on every host. Only an authored `key` is affected;
+a spread's keys, a component's or dynamic tag's `key` input, and other names
+(`key:x`, `Key`) are not.
+
 ### Spread and trust
 
 Spreading an attacker-controlled object whose key is a legitimate handler name
