@@ -6333,7 +6333,8 @@ function authoredChildTree(
  * Lowers one registered custom tag call and splices its ordinary IR roots.
  *
  * `content` is gated on `hasContent` for an ordinary (user-registered) tag.
- * Retained Marko-normalized whitespace is content, not layout; only comments
+ * Whitespace the front end kept (after Marko's whitespace rule) is content,
+ * not layout; only comments
  * and empty text mean "no children supplied". A core-owned
  * built-in like `<try>` is a structural pass-through wrapper, so `isBuiltin`
  * still bypasses the gate and always lowers the block, like `lowerDelegatedTag`.

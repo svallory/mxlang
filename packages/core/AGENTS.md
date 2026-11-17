@@ -439,9 +439,10 @@ Five facts worth knowing before editing it:
   `ctx.build.delegatedTag("try", children, attributeTags)` (a fourth `attrs`
   argument carries attributes; omitted means none). `lowerCustomTag`
   passes an `isBuiltin` flag that skips the ordinary `hasContent` gate on a
-  custom tag's body. `hasContent` tests Marko-normalized text for nonemptiness,
-  never trims it again — same-line spaces/tabs are content,
-  while newline indentation already removed by Marko is absent. `<try>` is
+  custom tag's body. `hasContent` tests text the front end has already
+  normalized by Marko's whitespace rule for nonemptiness, never trims it
+  again — a retained space is content, while dropped newline indentation
+  creates no node. `<try>` is
   a structural pass-through wrapper and reproduces the caller's body unchanged, matching what
   `lowerDelegatedTag` always did. Each host's `isDelegatedTag`/`resolveDelegatedTag` for
   `"try"` only decides how the primitive renders now — `@mxlang/target-html`,
@@ -1217,8 +1218,9 @@ Five facts worth knowing before editing it:
   ends); `DelegatedTag`, `Element`,
   `Component` and `AttributeTag` `nameSpan` + whole-tag `span` (opening tag,
   body and closing tag); `For`/`Define` `paramSpans`; `Define.nameSpan`;
-  and — added by core-ir-spans — `Text.span` (the authored text, which
-  `value` has Marko-normalized), `Interpolation.span` (the whole
+  and — added by core-ir-spans — `Text.span` (the authored text; `value` is
+  the front end's, normalized by Marko's whitespace rule in a normalizing
+  body), `Interpolation.span` (the whole
   `${…}`/`$!{…}`, delimiters included), `Comment.span` (delimiters included),
   `IfChain.span` (the `<if>` through the last branch's closing tag, layout
   between branches included) and per-`Branch.span` (that branch's own tag),

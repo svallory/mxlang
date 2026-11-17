@@ -931,7 +931,7 @@ shape `TranslateError` reports, which is what an editor squiggle needs):
 | `Hoisted` | A statement lifted by the `hoist` hook |
 | `DelegatedTag` | A tag the host claimed, with attrs/children/attribute tags/params/var resolved, plus its own opaque `data` |
 | `DocumentType` | `<!doctype html>`, delimiters already stripped by the parser |
-| `Comment` | A comment; `html` distinguishes `<!-- -->` from `//`, which only the source can tell apart |
+| `Comment` | A comment; `html` is true for `<!-- -->` and false for a `//` or `/* */` comment (`MxComment.kind`) |
 
 An expression arrives as `Expr`: the printed `code` (sliced from source if untouched, or rewritten through
 the binding registry, so an emitter stays dumb) plus the original `node`, for a

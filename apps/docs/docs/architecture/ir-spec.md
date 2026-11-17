@@ -308,7 +308,7 @@ This is the narrow escape hatch from the rule that emitters read only the IR: ev
 
 ### 5.14 `DocumentType` and `Comment`
 
-`DocumentType` is `{ value }`, delimiters stripped. `Comment` is `{ value, html: boolean, span? }`: `value` has the delimiters stripped, and `html` is true for `<!-- -->`, false for a `//` line comment (only the source can tell). A `//` comment (`html: false`) is author-only: no host writes it out. An HTML comment is written out by Astro and Angular as `<!--value-->` and dropped by html, Preact (React, Hono) and Solid, as stock Marko drops it (`<html-comment>` is how an author emits one there). Pinned by `lower.test.ts` › "Comment records whether the source spelled an HTML comment"; `ir-contract.test.ts` › "5.14: …" in html, preact, solid, astro and angular. (`HostDeclarations.keepComments` is declared and set by Astro, but no code reads it: the emitter's own `comment()` decides.)
+`DocumentType` is `{ value }`, delimiters stripped. `Comment` is `{ value, html: boolean, span? }`: `value` has the delimiters stripped, and `html` is true for `<!-- -->` and false for a `//` line or `/* */` block comment, as the front end recorded it (`MxComment.kind`). A `//` comment (`html: false`) is author-only: no host writes it out. An HTML comment is written out by Astro and Angular as `<!--value-->` and dropped by html, Preact (React, Hono) and Solid, as stock Marko drops it (`<html-comment>` is how an author emits one there). Pinned by `lower.test.ts` › "Comment records whether the source spelled an HTML comment"; `ir-contract.test.ts` › "5.14: …" in html, preact, solid, astro and angular. (`HostDeclarations.keepComments` is declared and set by Astro, but no code reads it: the emitter's own `comment()` decides.)
 
 ## 6. `Attr`
 

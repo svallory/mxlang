@@ -663,9 +663,11 @@ empty; `valueSpan` lies inside the node span.
 | `expression` | `MxExpression` | no | the expression |
 
 Spans: `start` at `$`, `end` after `}`; `expression.span` inside the braces.
-Source forms: `${x}` in HTML content, in parsed-text bodies (`<script>`: the
-probe shows a `MarkoPlaceholder` inside `<script>`), and a bare `${expr}`
-concise line.
+Source forms: `${x}` in HTML content and in parsed-text bodies (`<script>`: the
+probe shows a `MarkoPlaceholder` inside `<script>`). A bare `${expr}` concise
+line is not a placeholder: it is an `MxTag` with a `dynamic` name (§3.3), as in
+Marko (the stock fixture `packages/targets/html/fixtures-marko/dynamic-tag-bare/`
+renders `${input.tag}` as that tag). Text on its own line is `-- ${x}`.
 
 Example: in `<p>$!{html}</p>` the placeholder is `[3, 11)` with `escape:
 false`; `expression.span` `[6, 10)`.

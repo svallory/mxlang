@@ -247,7 +247,10 @@ let current: {
  * The emitted module is text rather than a Babel AST, so every expression
  * the front end parsed has to become code again. The nodes are Babel AST
  * nodes: the front end's payloads, which core's `@babel/parser` fork parsed,
- * and nodes rewritten from them. Core prints them with its own Babel's
+ * and nodes rewritten from them. Where lowering runs over `@marko/compiler`'s
+ * own parse (core's `lower.test.ts` `lowerSource` and
+ * `@mxlang/parse-differential`'s `today-lower.ts`), the nodes come from
+ * Marko's parser, and the same generator prints them. Core prints them with its own Babel's
  * generator (`coreBabel()` in `babel.ts`), which is stock `@babel/generator`.
  * That generator agrees with the fork's AST because the fork parses as npm
  * `@babel/parser` does. `babel.ts`'s header says why this replaced Marko's
