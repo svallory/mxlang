@@ -91,9 +91,9 @@ function offsetOfPosition(
 }
 
 /**
- * Offsets of the nodes this pass builds. Marko's parser leaves a shorthand
- * part with a line/column `loc` only (no `start`/`end`, no `index`), and the
- * IR carries the node, so the offsets live here.
+ * Offsets of the nodes this pass builds. They carry Marko's line/column-only
+ * `loc` (`markoLoc`: no `start`/`end`, no `index`), and the IR carries the
+ * node, so the offsets live here.
  */
 const ranges = new WeakMap<Node, Located>();
 
@@ -417,13 +417,14 @@ export function shorthandCacheSize(): number {
 
 /**
  * Is `word` something Marko's shorthand (`<a.word>`, `<a#word>`) accepts as
- * one token? Decided by the parser itself: the `htmljs-parser` that
- * `@marko/compiler` resolves parses `<a{sigil}{word}/>` and the word counts when
- * it comes back as exactly one shorthand part, with no error and no
- * placeholder. Its rule (`TAG_NAME` state, `htmljs-parser` 5.15.0): a shorthand
- * runs to whitespace, `=`, `:=`, `(`, `/`, `|`, `<`, `,` or `>`, and `.`/`#`
- * start the next part, so `1a`, `2xl`, `é`, `a@b` and `a+b` are all fine. The
- * pure fallback below mirrors that list for a probe that cannot run.
+ * one token? Decided by MX's template lexer (`@mxlang/parser/lexer`, through
+ * `markoParser` in `stock-parser.ts`), which keeps Marko's shorthand rule: it
+ * parses `<a{sigil}{word}/>` and the word counts when it comes back as exactly
+ * one shorthand part, with no error and no placeholder. The rule (`TAG_NAME`
+ * state, `htmljs-parser` 5.15.0): a shorthand runs to whitespace, `=`, `:=`,
+ * `(`, `/`, `|`, `<`, `,` or `>`, and `.`/`#` start the next part, so `1a`,
+ * `2xl`, `é`, `a@b` and `a+b` are all fine. The pure fallback below mirrors
+ * that list, but does not run while `markoParser` always returns the lexer.
  */
 export function isShorthandWord(sigil: string, word: string): boolean {
   const key = `${sigil}${word}`;
@@ -544,7 +545,7 @@ function partValue(ctx: Ctx, value: Node): Node {
 }
 
 /**
- * The tag head's class parts and id part, as Marko's parser read them, and
+ * The tag head's class parts and id part, as `MxTag.shorthands` holds them, and
  * the range the class parts were written over: the word after the first class
  * sigil through the end of the last class word (an id between them is inside
  * it, as in the class attribute's name span).
@@ -791,8 +792,8 @@ function placeTriggerShorthands(
 export function rewriteShorthands(ctx: Ctx, tag: Node): void {
   const type = tag?.type;
   if (done.has(tag)) return;
-  // Marko's own tree (the IR differential lowers it) already holds the
-  // shorthand as attributes: only the part checks apply.
+  // Marko's own tree (core's tests and `@mxlang/parse-differential` lower it)
+  // already holds the shorthand as attributes: only the part checks apply.
   if (type === "MarkoTag") {
     done.add(tag);
     if (Array.isArray(tag.attributes)) checkHead(ctx, tag.attributes);

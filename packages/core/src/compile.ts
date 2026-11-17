@@ -1,5 +1,5 @@
 /**
- * The whole-file front door: a Marko template in, an emitted module out,
+ * The whole-file front door: an MX source in, an emitted module out,
  * with the host's policy deciding everything host-specific.
  *
  * Named `compileSource`, not `compileFile`: it takes source text, and a host
@@ -7,12 +7,12 @@
  * API (`@mxlang/target-html` does) without two different signatures sharing one
  * name across the two packages.
  *
- * This is the seam ADR 0001 names: `@marko/compiler` selects a translator by
- * `config.translator`, and a translator supplying only `translate` (plus its
- * taglibs) injects no runtime at all. The code used to live in
- * `@mxlang/target-html`'s `index.ts`; it is core's because the seam is the
- * same for every host — only the taglib list, the policies and any post-pass
- * over the emitted code differ, and those arrive as arguments.
+ * The seam: a host supplies a translator (its taglibs and a `translate`
+ * visitor) that injects no runtime, and `compileSource` parses with the MX
+ * front end and runs the visitor's `Program.exit` itself. The code used to
+ * live in `@mxlang/target-html`'s `index.ts`; it is core's because the seam
+ * is the same for every host — only the taglib list, the policies and any
+ * post-pass over the emitted code differ, and those arrive as arguments.
  */
 
 import { realpathSync } from "node:fs";
@@ -178,10 +178,13 @@ export interface HostOptions extends TranslatorOptions {
    */
   postEmit?: (code: string) => string;
   /**
-   * Passed to Marko's compiler as `stripTypes`. Marko's `output: "html"`
-   * defaults it to true, which erases TypeScript annotations from any
-   * expression it has to reprint; type-checking tooling sets it to false to
-   * keep them. Leave unset for a build.
+   * Whether core strips TypeScript from the parsed expressions before
+   * lowering. Unset or `true` (a build): `stripMxTypes` drops annotations and
+   * type arguments from every payload, as stock Marko's `output: "html"`
+   * does. `false` (type-checking tooling): payloads keep them, lowering keeps
+   * tag-variable and attribute types (`ctx.keepTypes`), and only
+   * angle-bracket casts and tag type-argument and type-parameter containers
+   * are stripped (`stripAngleAssertions`).
    */
   stripTypes?: boolean;
   /** Emits the module from the lowered IR. */
@@ -210,11 +213,11 @@ export interface Translator {
 /**
  * The compile in flight.
  *
- * `translate` is a plain visitor the compiler calls; it receives the AST but
+ * `translate` is a plain visitor `compileSource` calls; it receives the AST but
  * not the original source text or the tag table, both of which the
  * lowering needs (source for statement-tag slicing, the table for element
  * and component resolution). A module-scoped handle is how the visitor reaches
- * them. `compileSync` is synchronous and single-threaded, so there is never
+ * them. `compileSource` is synchronous and single-threaded, so there is never
  * more than one.
  */
 let current: {
@@ -501,12 +504,12 @@ function policyUnder(rules: TagRules, policy: Policy): Policy {
 }
 
 /**
- * Compiles one Marko template under `policy`.
+ * Compiles one MX source file under `policy`.
  *
- * The returned map is a placeholder identity map: the emitter builds text
- * directly rather than printing a Babel AST, so there are no node positions to
- * derive real mappings from yet. Marko's nodes do carry real `loc`, so genuine
- * mappings are possible — a separate task.
+ * The returned map is a placeholder with empty `mappings`: the emitter builds
+ * text directly rather than printing a Babel AST. MX AST nodes carry file
+ * offsets (`start`/`end`), so real mappings are possible, but they are not
+ * built yet.
  */
 export function compileSource(
   source: string,

@@ -1230,8 +1230,8 @@ function codedErrorOf(
 /**
  * The UTF-16 offsets an MX AST node carries: `start`/`end` on an `Mx*` node,
  * `span` on a field shape (a tag's `name`, `closeTag`). `undefined` for any
- * other node: a Marko or Babel node has `loc`, and a synthesized node with
- * neither has no position.
+ * other node: a Babel payload node, a Marko-shaped view or a `shorthand.ts`
+ * record has `loc`, and a synthesized node with neither has no position.
  */
 export function mxSpanOf(node: Node): SourceSpan | undefined {
   const at = String(node?.type ?? "").startsWith("Mx") ? node : node?.span;
@@ -2285,9 +2285,10 @@ export function productOf(ctx: Ctx): string {
 /**
  * Node kinds lowering reads. A tag is an `MxTag` or an `MxReturn`; an
  * attribute tag is `isMxAttributeTag`'s. The `MarkoTag` branch (Marko's
- * `<return>` is a `MarkoTag` too) is reached by no production caller: only
- * core's tests that lower Marko's own tree (parsed with `@marko/compiler`)
- * pass one.
+ * `<return>` is a `MarkoTag` too) is reached by no production caller: a
+ * `MarkoTag` reaches it only from Marko's own tree (parsed with
+ * `@marko/compiler`), which core's tests and `@mxlang/parse-differential`'s
+ * `today-lower.ts` lower.
  */
 export function isTagNode(node: Node): boolean {
   const type = node?.type;
@@ -2305,10 +2306,11 @@ export function isStatementNode(node: Node): boolean {
 }
 
 /**
- * A tag or a module statement: Marko parses a statement as a tag named by
- * its keyword, so every scan for `import`/`static`/`export` by name reads
- * both. Its `MarkoTag` half (through `isTagNode`) is reached only by core's
- * tests that lower Marko's own tree.
+ * A tag or an `MxModuleStatement`, for the scans that look for
+ * `import`/`static`/`export` by name: they read both, because `tagNameOf`
+ * names a statement by its keyword. Its `MarkoTag` half (through
+ * `isTagNode`) is reached only from Marko's own tree, which core's tests and
+ * `@mxlang/parse-differential`'s `today-lower.ts` lower.
  */
 export function isTagOrStatementNode(node: Node): boolean {
   return isTagNode(node) || node?.type === "MxModuleStatement";
@@ -2340,10 +2342,11 @@ export function isSpreadAttributeNode(node: Node): boolean {
  * Is `node` an attribute tag: an `MxAttributeTag`, or a Marko tag named
  * `@…`? A name test only; `<@if>`/`<@for>` pass it, and a caller that treats
  * those as controls (the body scan in `lowerAttributeTags`) checks
- * `isControl` itself. The Marko branch reads the Marko-shaped view
- * (`marko-view.ts`) a host hands `firstAttributeTag`, and the Marko tree
- * core's tests lower; a view keeps its attribute tags in `attributeTags`,
- * so among a view's children it finds none.
+ * `isControl` itself. The `MarkoTag` branch matches only in Marko's own
+ * tree, which core's tests and `@mxlang/parse-differential`'s
+ * `today-lower.ts` lower. A view (`marko-view.ts`) keeps its attribute tags
+ * in `attributeTags`, which `firstAttributeTag` reads before the body, so the
+ * branch never matches among a view's children.
  */
 export function isMxAttributeTag(node: Node): boolean {
   return (
@@ -2386,9 +2389,10 @@ export function firstAttributeTag(node: Node): Node | undefined {
  * The front end parses more than the string target lowers: a tag's variable,
  * arguments, parameters and type arguments go in their own `MxTag` fields, and
  * attribute tags are `MxAttributeTag` children of its body, so a path that
- * renders only the ordinary children renders none of them and reports nothing. That is the silent-drop failure S8 exists to
- * close — the same class as `by=`, and worse, because whole authored content
- * disappears from a successful compile.
+ * renders only the ordinary children renders none of them and reports
+ * nothing. That is the silent-drop failure S8 exists to close — the same
+ * class as `by=`, and worse, because whole authored content disappears from
+ * a successful compile.
  *
  * One guard rather than a check per emission path: seven scattered copies
  * would drift, and the next field the AST gains would be dropped by whichever

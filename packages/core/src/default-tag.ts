@@ -25,11 +25,12 @@ import {
 } from "./wildcard-resolve.ts";
 
 /**
- * Marko's parser writes `div` into the name of every tag that has only a
- * shorthand (`<#a>`, `<.a>`, concise `#a`) — `tagName.value ||= "div"` in
- * `@marko/compiler`'s parser, because Marko has one host. The name node it
- * leaves is a `StringLiteral` with an *empty* source span, which no named tag
- * has; that is the one reliable mark of the unnamed tag.
+ * An unnamed tag (`<#a>`, `<.a>`, concise `#a`) is `MxTagName` kind
+ * `unnamed` in the MX AST. A Marko-shaped tag marks it with a `StringLiteral`
+ * name over an *empty* source span, which no named tag has. That covers
+ * Marko's own tree, where `@marko/compiler`'s parser writes `div` into the
+ * name (`tagName.value ||= "div"`, because Marko has one host), and a view
+ * (`marko-view.ts`).
  */
 function isUnnamedTag(node: Node): boolean {
   // The MX AST says so itself (`MxTagName` kind `unnamed`).

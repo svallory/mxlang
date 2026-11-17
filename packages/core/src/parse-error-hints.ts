@@ -1,8 +1,9 @@
 /**
- * Fix hints for Marko's own parse errors (audit item 14).
+ * Fix hints for template parse errors (audit item 14).
  *
- * `@marko/compiler` reports a syntax mistake in the vocabulary of its parser
- * ("Unexpected token, expected \"{\""), which says what it could not read but
+ * The front end reports a syntax mistake in the words `@marko/compiler` used,
+ * as a Marko-shaped `CompileError` (`mx-parse.ts` `compileErrorOf`), such as
+ * "Unexpected token, expected \"{\"". That says what it could not read but
  * not what to write. MX recognises the few mistakes authors from other
  * template languages make and appends one short sentence to the reason, in
  * place: same message, same position, nothing else changes. An error it does

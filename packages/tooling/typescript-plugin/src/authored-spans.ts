@@ -49,13 +49,14 @@ const NOT_CODE = new Set([
  * shifts every span, for a source that is a slice of a larger file.
  *
  * The spans are the ones the Marko-tree walk produced before port PR 5,
- * measured equal over every whole-file `.mx` in the repository: a module
- * statement is a `tag` (Marko parsed it as a statement tag); an attribute tag
- * and its body have none (Marko moved them off the body); an attribute starts
- * at its name (an `async` method's keyword is outside) and a shorthand a
- * syntax trigger placed ends after its default value; a quoted string is not
- * code, and a string literal a dialect node lowered to (its forward, whose
- * text in the source is the node, not a quote) is.
+ * measured equal over every whole-file `.mx` in the repository: an
+ * `MxModuleStatement` is a `tag` span (Marko's tree held it as a statement
+ * tag); an `MxAttributeTag` and its body give none (Marko's tree held them
+ * off the body); an attribute starts at its name (an `async` method's
+ * keyword is outside) and a shorthand a syntax trigger placed ends after its
+ * default value; a quoted string is not code, and a string literal a dialect
+ * node lowered to (its forward, whose text in the source is the node, not a
+ * quote) is.
  */
 /**
  * The native elements the spans parse with: the default target's, which every

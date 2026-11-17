@@ -470,21 +470,6 @@ function builtShorthandSpan(
 }
 
 /**
- * The span of an attribute's authored name.
- *
- * A default attribute (`<x="post">`) is `name: "value"` to the parser, but its
- * `loc` starts at the `=`: there is no spelled name. Marko anchors it with an
- * EMPTY range at the attribute start (htmljs-parser 5.18.0 `ensureAttrName`;
- * `@marko/language-tools` 2.7.0 treats the empty range as "default"), so this
- * returns a zero-width span there instead of measuring `"value".length` over
- * the `=` and the value's first characters.
- *
- * The `:modifier` shorthand is the one default attribute that *was* spelled:
- * Marko's parser fills the empty head with `"value"` and remembers the
- * shorthand in `attr.default`, so the authored name is `:foo` — measured from
- * the attribute's own start, which is the `:`.
- */
-/**
  * `attrNameSpan` for an attribute of `tag`, as `lowerAttrs` reads it: the
  * rule the host hook view (`host-view.ts`) shares with `Attr.nameSpan`.
  */
@@ -492,6 +477,21 @@ export function tagAttrNameSpan(ctx: Ctx, attr: Node, tag: Node): SourceSpan {
   return attrNameSpan(ctx, attr, posOf(ctx, tag));
 }
 
+/**
+ * The span of an attribute's authored name.
+ *
+ * A default attribute (`<x="post">`) has no spelled name. The front end gives
+ * it `name: null`, and this returns a zero-width span at the attribute's
+ * start, where Marko anchors it with an EMPTY range (htmljs-parser 5.18.0
+ * `ensureAttrName`; `@marko/language-tools` 2.7.0 treats the empty range as
+ * "default"), instead of measuring `"value".length` over the `=` and the
+ * value's first characters.
+ *
+ * The `:modifier` shorthand is the spelled default: `name: null` with a
+ * `modifierSpan`, so the authored name is `:foo`, measured from the `:`. A
+ * Marko-shaped record `shorthand.ts` builds (`name: "value"`, `default: true`,
+ * `loc`) reaches the last branch, which spells the same `:foo`.
+ */
 function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
   // A shorthand record a syntax trigger placed (`#b`, `.c`) is spelled as
   // one token.
@@ -523,10 +523,10 @@ function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
       sourceEnd: (attr.modifierSpan ?? attr.nameSpan).end,
     };
   }
-  // A tag's own shorthand (`<a#x.y/>`, `a#x.y`) has no attribute position in
-  // Marko's AST, only its value does, and that value is the token without its
-  // sigil. The name is spelled as the sigil plus the token, the same span a
-  // trigger-placed shorthand (` .y`) reports.
+  // A tag's own shorthand (`<a#x.y/>`, `a#x.y`): the record `shorthand.ts`
+  // builds for it has no position of its own, only its value does, and that
+  // value is the token without its sigil. The name is spelled as the sigil
+  // plus the token, the same span a trigger-placed shorthand (` .y`) reports.
   if (!attr?.loc && attr?.start == null) {
     const value = exprSpan(ctx, attr?.value);
     // A merged or interpolated shorthand (`.a.${x}`, `.a${x}`, `#a${x}`) is a
@@ -573,15 +573,17 @@ function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
 /**
  * Is this an ordinary colon-named attribute rather than a real modifier?
  *
- * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
- * name at its LAST `:`; an empty head is filled with `"value"`, so
- * `<div :foo="y"/>` parses as `{ name: "value", modifier: "foo", default: true }`
- * and compiles to `<div value:foo=y>` (`<div value:foo="y"/>` is the same
- * attribute). `attr.default` is the flag that marks the `:foo` spelling, but
- * both spellings are the same attribute, so both answer true here. An empty
- * modifier is still present (`:` becomes `value:`), and a head already starting
- * with `value:` keeps its earlier colons (`value:foo:bar` splits into
- * `name: "value:foo", modifier: "bar"`). Marko joins them again on emission.
+ * The front end (`parse.ts` `onAttrName`) splits an attribute name at its
+ * LAST `:`, as Marko's own parser does (`babel-plugin/parser.js`,
+ * `onAttrName`). An empty head is the default attribute (`name: null`, read
+ * as `"value"`), so `<div :foo="y"/>` parses as `{ name: null, modifier:
+ * "foo" }` and compiles to `<div value:foo=y>` (`<div value:foo="y"/>`, with
+ * `name: "value"`, is the same attribute). A null name marks the `:foo`
+ * spelling, but both spellings are the same attribute, so both answer true
+ * here. An empty modifier is still present (`:` is `name: null, modifier:
+ * ""`, read as `value:`), and a head already holding a colon keeps it
+ * (`value:foo:bar` splits into `name: "value:foo", modifier: "bar"`). They
+ * are joined again on emission, as Marko does.
  * This applies to every colon name (`x:`, `x:foo`, `data:x`), not just `value`.
  * On native elements only the `class:`, `style:` and `on:` prefixes remain
  * reserved, including additional colons; component props have no reservation.
@@ -2478,9 +2480,9 @@ function lowerAttrNamed(
   isElement = false,
   tagLoc?: Position,
 ): Attr {
-  // A shorthand `#id`/`.class` attribute has no position of its own in
-  // Marko's AST; it belongs to its tag, so an error about it points there
-  // instead of at 0:0.
+  // A shorthand `#id`/`.class` attribute: the record `shorthand.ts` builds
+  // for a tag's own shorthand has no position of its own; it belongs to its
+  // tag, so an error about it points there instead of at 0:0.
   // A merged sugar `class` reports at its first sugar token, even when the
   // attribute is the tag's own shorthand (no position of its own).
   const loc = attr?.sugarAt
@@ -7675,7 +7677,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // core's own HTML elements), so a body the parse kept is never dropped.
   const isVoid = isNativeVoid(ctx.declarations.nativeTags, name);
   // Filter attribute tags from children — they're processed by lowerAttributeTags,
-  // not as regular children. MX AST has them in body; Marko AST had them separate.
+  // not as regular children. The MX AST keeps attribute tags in the tag's body.
   const contentChildren = body.filter(
     (child: Node) => !isMxAttributeTag(child),
   );
@@ -8360,8 +8362,10 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           // code frame underlines.
           //
           // A *raw-text* body (`<script>`, `<style>`, `<textarea>`, `<title>`)
-          // never reaches here: Marko's parser reads those as one `MarkoText`, so
-          // the construct there is text and stays text. That is the parser's call,
+          // never reaches here. The file's tag table gives those tags a text
+          // body (`parseOptions.text`), the template lexer reads it in its
+          // parsed-text state, and that state has no CDATA check, so the
+          // construct there is text and stays text. That is the parser's call,
           // not this switch's, which is why nothing here has to special-case them.
           case "MarkoCDATA":
           case "MxCDATA":

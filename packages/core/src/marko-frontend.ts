@@ -5,17 +5,20 @@
  *
  * Since port PR 5 core parses templates with the MX front end
  * (`@mxlang/parser/frontend`, `mx-parse.ts`), not with this layer, and so
- * does the IR entry's tag scan (`parseMxDocument`): no production call site
- * compiles or parses a template with `@marko/compiler`. What is still loaded
- * here is the taglib lookup (`taglib.buildLookup`); the syntax table's
- * parser (`mxTemplateParser`) loads `@mxlang/parser` instead. The error-path re-lexes use `@mxlang/parser/lexer`
- * directly (PR 6 slice S2); printing, the TS strip, code frames and the
- * error kit use core's own Babel (`babel.ts`, slice S1), and `markoBabel()`
- * is left only for the differential in `babel.test.ts`. Nothing calls
- * `compileSync` (`parseFragmentNative` delegates to `parseFragment`). The
- * whole file goes with the Marko readers in PR 6 (slice S5).
+ * does the IR entry's tag scan (`parseMxDocument`): no core production file
+ * calls `markoCompiler()` or `markoBabel()`. The only function here core's
+ * production code uses is `mxTemplateParser` (`syntax-table.ts`), which loads
+ * `@mxlang/parser`, not this layer. Core's tag table (`tag-table.ts`)
+ * reproduces the merge `taglib.buildLookup` performed. The error-path
+ * re-lexes use `@mxlang/parser/lexer` directly (PR 6 slice S2); printing, the
+ * TS strip, code frames and the error kit use core's own Babel (`babel.ts`,
+ * slice S1). `markoCompiler` stays exported for `@mxlang/parse-differential`
+ * (`src/marko.ts`, `src/today-lower.ts`, which call its `compileSync`) and
+ * core's tests; `markoBabel` stays for the differential in `babel.test.ts`.
+ * The whole file goes with the Marko readers in PR 6 (slice S5).
  *
- * Until then core's build bundles that layer into `dist/marko-frontend.cjs`,
+ * Until then core's build (`build/frontend.ts`) bundles that layer, from
+ * `@marko/compiler`, a core `devDependency`, into `dist/marko-frontend.cjs`,
  * with the `htmljs-parser` specifier resolved to MX's own template parser
  * (`packages/parser/src/template/`). The build defines `MX_MARKO_FRONTEND`
  * as that file's path relative to `dist/index.js`, so a registry install of
@@ -26,10 +29,10 @@
  * `patchedDependencies` entry gives `htmljs-parser` the same rules
  * (`packages/parser/src/template/corpus-equivalence.test.ts` pins that).
  *
- * Every package that needs Marko's compiler or its Babel goes through these
- * functions (re-exported from the package index), so one compiler and one
- * Babel instance load per process: nodes, taglib caches and compile state
- * are per instance.
+ * Every caller that needs `@marko/compiler` or its Babel goes through these
+ * functions (`markoCompiler` is re-exported from the package index;
+ * `markoBabel` is not), so one compiler and one Babel instance load per
+ * process: nodes, taglib caches and compile state are per instance.
  *
  * Each piece is required lazily: importing core's type surface, or a target
  * descriptor, loads none of it.

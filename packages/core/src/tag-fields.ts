@@ -37,7 +37,7 @@ function isMxTagShape(node: Node): boolean {
  */
 export function tagNameOf(node: Node): string | undefined {
   if (node?.type === "MxAttributeTag") return `@${node.name.value}`;
-  // Marko parses a statement as a tag named by its keyword (`rawValue`).
+  // A module statement is named by its keyword.
   if (node?.type === "MxModuleStatement") return node.keyword;
   if (isMxTagShape(node)) {
     const resolved = resolvedNames.get(node);
