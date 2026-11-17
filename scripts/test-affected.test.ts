@@ -26,6 +26,7 @@ import {
   projectDirs,
   projectFor,
   projectsFor,
+  readersOnly,
   relatedPassWithNoTests,
   relatedSources,
   SOURCE_TEXT_READERS,
@@ -273,6 +274,22 @@ describe("FIXTURE_CONSUMERS (fixtures read from another project)", () => {
     expect(
       fixtureConsumers("packages/core/src/fixtures/syntax/declares-fixture.ts"),
     ).toEqual([]);
+  });
+
+  it("readersOnly: every matching row flagged, else false", () => {
+    const rows = [
+      { path: /^a\//, consumers: ["a/x.test.ts"], readersOnly: true as const },
+      { path: /^a\/b\//, consumers: ["a/y.test.ts"] },
+    ];
+    expect(readersOnly("a/c.txt", rows)).toBe(true);
+    expect(readersOnly("a/b/c.txt", rows)).toBe(false);
+    expect(readersOnly("z/c.txt", rows)).toBe(false);
+    expect(readersOnly("apps/docs/docs/specification.md")).toBe(true);
+    expect(
+      readersOnly("packages/core/src/message-vocabulary-guard.allowlist.txt"),
+    ).toBe(true);
+    expect(readersOnly("fixtures/counter/template.mx")).toBe(false);
+    expect(readersOnly("packages/core/package.json")).toBe(false);
   });
 
   it("a file in no project with no reader stays unmapped", () => {
@@ -607,6 +624,34 @@ describe("Markdown selection", () => {
     ]).toEqual(["@mxlang/core", "@mxlang/core-isolated"]);
   });
 
+  it("a readers-only file leaves rest, so it reaches no whole project", () => {
+    const split = splitDocs(
+      [
+        "apps/docs/docs/specification.md",
+        "packages/core/README.md",
+        "packages/core/src/message-vocabulary-guard.allowlist.txt",
+        "packages/core/src/fixtures/a.json",
+      ],
+      dirs,
+    );
+    expect(split).toEqual({
+      docs: ["packages/core/README.md"],
+      readersOnly: [
+        "apps/docs/docs/specification.md",
+        "packages/core/src/message-vocabulary-guard.allowlist.txt",
+      ],
+      rest: ["packages/core/src/fixtures/a.json"],
+    });
+    expect([...nonSourceProjects(split.rest, dirs).byProject.keys()]).toEqual([
+      "@mxlang/core",
+      "@mxlang/core-isolated",
+    ]);
+    expect(nonSourceProjects([], dirs)).toEqual({
+      byProject: new Map(),
+      unmapped: [],
+    });
+  });
+
   it("a grammar package's doc triggers no own runner; its grammar.js does", () => {
     const own = [
       "packages/core/",
@@ -650,11 +695,21 @@ describe("Markdown selection", () => {
     ).toEqual(["packages/hosts/solid/src/emitter.ts", CORPUS, PROBE_CONSUMER]);
   });
 
+  it("a readers-only file sends only its readers to vitest related", () => {
+    expect(relatedSources(["apps/docs/docs/specification.md"])).toEqual([
+      "packages/core/src/ir-entry/partial.test.ts",
+      "packages/core/src/parents.test.ts",
+      "packages/parser/src/template/corpus-equivalence.test.ts",
+    ]);
+    expect(
+      relatedSources([
+        "packages/core/src/message-vocabulary-guard.allowlist.txt",
+      ]),
+    ).toEqual(["packages/core/src/message-vocabulary-guard.test.ts"]);
+  });
+
   it("any corpus input adds the Markdown readers; a source-only change adds none", () => {
     expect(relatedSources(["docs/a.md"])).toEqual([CORPUS]);
-    expect(relatedSources(["apps/docs/docs/specification.md"])).toEqual([
-      CORPUS,
-    ]);
     expect(
       relatedSources(["packages/oracle/fixtures/marko/x/input.mx"]),
     ).toEqual([CORPUS]);
@@ -1227,17 +1282,26 @@ function coveredRead(read: SourceRead, rows: ReaderRows): boolean {
   );
 }
 
+/** An exemption: every read by `test`, or with `path` only a read whose files all match it. */
+type Exemption = { test: string; path?: RegExp };
+
+/** Whether `e` exempts `read`. */
+function exempts(e: Exemption, read: SourceRead): boolean {
+  return (
+    e.test === read.test &&
+    (e.path === undefined || read.files.every((f) => e.path?.test(f)))
+  );
+}
+
 /** One sorted, deduped message per read neither covered by `rows` (named `table`) nor exempt. */
 function uncovered(
   reads: readonly SourceRead[],
   rows: ReaderRows,
-  exempt: readonly { test: string }[],
+  exempt: readonly Exemption[],
   table: string,
 ): string[] {
   const messages = reads
-    .filter(
-      (r) => !exempt.some((e) => e.test === r.test) && !coveredRead(r, rows),
-    )
+    .filter((r) => !exempt.some((e) => exempts(e, r)) && !coveredRead(r, rows))
     .map((r) => `${r.test} reads ${r.path} with no ${table} row`);
   return [...new Set(messages)].sort();
 }
@@ -1277,9 +1341,15 @@ function fixtureTargets(listed: readonly string[]): string[] {
   );
 }
 
-/** The projects whose selection a change to `file` runs: none for a project doc. */
+/**
+ * The projects whose selection a change to `file` runs: none for a project
+ * doc or a readers-only file (`readersOnly`), which runs only its rows'
+ * readers, so a same-project reader of it is checked like a cross-project one.
+ */
 function readOwners(file: string, dirs: readonly string[]): string[] {
-  return isProjectDoc(file, dirs) ? [] : projectsFor(file, dirs);
+  return isProjectDoc(file, dirs) || readersOnly(file)
+    ? []
+    : projectsFor(file, dirs);
 }
 
 /** Detected readers whose result cannot change on a comment-only edit. */
@@ -1306,8 +1376,15 @@ const EXEMPT: readonly { test: string; reason: string }[] = [
   },
 ];
 
-/** Detected readers that read no file a FIXTURE_CONSUMERS row would need. */
-const FIXTURE_EXEMPT: readonly { test: string; reason: string }[] = [
+/** Core's message-vocabulary allowlist, a readers-only file. */
+const ALLOWLIST =
+  /^packages\/core\/src\/message-vocabulary-guard\.allowlist\.txt$/;
+
+/**
+ * Detected readers that read no file a FIXTURE_CONSUMERS row would need. An
+ * entry with `path` exempts only a read whose files all match it.
+ */
+const FIXTURE_EXEMPT: readonly (Exemption & { reason: string })[] = [
   // Their walk skips `fixtures` directories (`if (name !== "fixtures") walk(path)`) and reads only `.ts`.
   {
     test: "packages/tooling/language-server/src/bundled-deps.test.ts",
@@ -1336,6 +1413,26 @@ const FIXTURE_EXEMPT: readonly { test: string; reason: string }[] = [
   {
     test: "packages/targets/html/src/example.bun.test.ts",
     reason: "not a vitest test; runs under test:bun",
+  },
+  // Core tests whose `packages/core/src/` read reaches the readers-only
+  // allowlist (no owner in the guard) but never opens it.
+  {
+    test: "packages/core/src/cold-start.test.ts",
+    path: ALLOWLIST,
+    reason:
+      'its src walk keeps only `name.endsWith(".ts") && !name.endsWith(".test.ts")`',
+  },
+  {
+    test: "packages/core/src/diagnostic-code-sites.test.ts",
+    path: ALLOWLIST,
+    reason:
+      'its src walk keeps only `entry.endsWith(".ts") && !entry.endsWith(".test.ts")`',
+  },
+  {
+    test: "packages/core/src/ir-entry/ir-version.test.ts",
+    path: ALLOWLIST,
+    reason:
+      'its `join(import.meta.dirname, "..", file)` reads only the named `.ts` files (`declarations("ir.ts")`)',
   },
 ];
 
@@ -1682,6 +1779,44 @@ describe("FIXTURE_CONSUMERS guard", () => {
     ]);
   });
 
+  it("catches a same-project readers-only read: the vocabulary guard without its allowlist row", () => {
+    const reader = "packages/core/src/message-vocabulary-guard.test.ts";
+    const rows = FIXTURE_CONSUMERS.map((row) =>
+      row.path.test("packages/core/src/message-vocabulary-guard.allowlist.txt")
+        ? { ...row, consumers: row.consumers.filter((c) => c !== reader) }
+        : row,
+    );
+    expect(
+      uncovered(scanRepo(), rows, FIXTURE_EXEMPT, "FIXTURE_CONSUMERS"),
+    ).toEqual([
+      "packages/core/src/message-vocabulary-guard.test.ts reads packages/core/src/ with no FIXTURE_CONSUMERS row",
+      "packages/core/src/message-vocabulary-guard.test.ts reads packages/core/src/message-vocabulary-guard.allowlist.txt with no FIXTURE_CONSUMERS row",
+    ]);
+  });
+
+  it("a path-scoped exemption covers only reads whose files all match it", () => {
+    const allow = "packages/core/src/message-vocabulary-guard.allowlist.txt";
+    const reads: SourceRead[] = [
+      {
+        test: "packages/core/src/a.test.ts",
+        path: "packages/core/src/",
+        files: [allow],
+      },
+      {
+        test: "packages/core/src/b.test.ts",
+        path: "packages/core/src/",
+        files: [allow, "packages/core/src/x.json"],
+      },
+    ];
+    const exempt = [
+      { test: "packages/core/src/a.test.ts", path: ALLOWLIST },
+      { test: "packages/core/src/b.test.ts", path: ALLOWLIST },
+    ];
+    expect(uncovered(reads, [], exempt, "FIXTURE_CONSUMERS")).toEqual([
+      "packages/core/src/b.test.ts reads packages/core/src/ with no FIXTURE_CONSUMERS row",
+    ]);
+  });
+
   it("catches a same-project project-doc read: the parser boundary test without its exemption", () => {
     const exempt = FIXTURE_EXEMPT.filter(
       (e) => e.test !== "packages/parser/src/frontend/boundary.test.ts",
@@ -1693,10 +1828,16 @@ describe("FIXTURE_CONSUMERS guard", () => {
     ]);
   });
 
-  it("a project doc has no owner; any other file keeps its projects", () => {
+  it("a project doc or a readers-only file has no owner; any other file keeps its projects", () => {
     const dirs = projectDirs();
     expect(readOwners("packages/core/README.md", dirs)).toEqual([]);
     expect(readOwners("apps/docs/docs/specification.md", dirs)).toEqual([]);
+    expect(
+      readOwners(
+        "packages/core/src/message-vocabulary-guard.allowlist.txt",
+        dirs,
+      ),
+    ).toEqual([]);
     expect(readOwners("packages/core/package.json", dirs)).toEqual([
       "@mxlang/core",
       "@mxlang/core-isolated",
@@ -1712,7 +1853,7 @@ describe("FIXTURE_CONSUMERS guard", () => {
   it("every exemption is detected and covered by no row", () => {
     const reads = scanRepo();
     expect(
-      FIXTURE_EXEMPT.filter((e) => !reads.some((r) => r.test === e.test)).map(
+      FIXTURE_EXEMPT.filter((e) => !reads.some((r) => exempts(e, r))).map(
         (e) => e.test,
       ),
     ).toEqual([]);

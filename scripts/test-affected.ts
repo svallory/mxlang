@@ -34,6 +34,10 @@
  * A `.md` inside a project dir (outside fixtures-style dirs and
  * `FIXTURE_CONSUMERS` rows) runs only the Markdown readers (`DOC_READERS`,
  * through `vitest related`), never its whole project or own test script.
+ * A file matched only by `readersOnly` `FIXTURE_CONSUMERS` rows (the
+ * `apps/docs/docs` pages, core's message-vocabulary allowlist) runs only the
+ * rows' consumer test files through `vitest related`, never its owner's or a
+ * consumer's whole project.
  *
  * A JS/TS source whose edit changes only comments or same-line whitespace is
  * left out (`commentOnly`, `commentOnlySplit`): TypeScript's parser reads the
@@ -162,10 +166,17 @@ export function parserBuildNeeded(changed: readonly string[]): boolean {
  * imported helper, written root-relative inside a string, built from an
  * imported constant or helper, loaded through `require`, or enumerated
  * through git, so such a reader adds its row by hand.
+ *
+ * `readersOnly`: a changed file matched only by `readersOnly` rows
+ * (`readersOnly()`) runs exactly the rows' consumer files through `vitest
+ * related`, never its owner's project or a consumer's project. Use it only
+ * when the row lists every test that reads the file: the guard then treats
+ * the file as having no owner, so a same-project reader needs the row too.
  */
 export const FIXTURE_CONSUMERS: readonly {
   path: RegExp;
   consumers: readonly string[];
+  readersOnly?: true;
 }[] = [
   {
     path: /^packages\/oracle\/fixtures\/angular\//,
@@ -209,6 +220,11 @@ export const FIXTURE_CONSUMERS: readonly {
     consumers: ["packages/targets/html/src/member-syntax.test.ts"],
   },
   {
+    path: /^packages\/core\/src\/message-vocabulary-guard\.allowlist\.txt$/,
+    consumers: ["packages/core/src/message-vocabulary-guard.test.ts"],
+    readersOnly: true,
+  },
+  {
     path: /^packages\/babel\/UPSTREAM\.md$/,
     consumers: ["scripts/pack-hygiene.test.ts"],
   },
@@ -246,18 +262,22 @@ export const FIXTURE_CONSUMERS: readonly {
   {
     path: /^apps\/docs\/docs\/architecture\/ast\.md$/,
     consumers: ["packages/babel/src/mx-ast.test.ts"],
+    readersOnly: true,
   },
   {
     path: /^apps\/docs\/docs\/architecture\/ir-entry\.md$/,
     consumers: ["packages/core/src/ir-entry/partial.test.ts"],
+    readersOnly: true,
   },
   {
     path: /^apps\/docs\/docs\/architecture\/parser-grammar\.md$/,
     consumers: ["packages/parser/src/template/grammar-spec.test.ts"],
+    readersOnly: true,
   },
   {
     path: /^apps\/docs\/docs\/custom-tags\/sidecars\.md$/,
     consumers: ["packages/core/src/parents.test.ts"],
+    readersOnly: true,
   },
   {
     path: /^apps\/docs\/docs\/language\/attr-tag\.md$/,
@@ -265,6 +285,7 @@ export const FIXTURE_CONSUMERS: readonly {
       "packages/hosts/preact/src/attr-tag-docs.test.ts",
       "packages/targets/html/src/attr-tag-docs.test.ts",
     ],
+    readersOnly: true,
   },
   {
     path: /^apps\/docs\/docs\/specification\.md$/,
@@ -272,6 +293,7 @@ export const FIXTURE_CONSUMERS: readonly {
       "packages/core/src/ir-entry/partial.test.ts",
       "packages/core/src/parents.test.ts",
     ],
+    readersOnly: true,
   },
   {
     path: /^fixtures\//,
@@ -360,6 +382,21 @@ export function fixtureConsumers(file: string): string[] {
 }
 
 /**
+ * Whether `file` is readers-only: at least one row of `rows` matches it and
+ * every matching row has `readersOnly`. Such a file runs only its rows'
+ * consumer files (`relatedSources`), never a whole project (`splitDocs`).
+ */
+export function readersOnly(
+  file: string,
+  rows: readonly { path: RegExp; readersOnly?: true }[] = FIXTURE_CONSUMERS,
+): boolean {
+  const matching = rows.filter((row) => row.path.test(file));
+  return (
+    matching.length > 0 && matching.every((row) => row.readersOnly === true)
+  );
+}
+
+/**
  * The vitest projects to run whole for the changed files the import graph
  * cannot see: each file's owning projects (`projectsFor`) plus the project of
  * every test in another project that reads it (`FIXTURE_CONSUMERS`). A file
@@ -412,23 +449,34 @@ export function isProjectDoc(file: string, dirs: readonly string[]): boolean {
   );
 }
 
-/** `changed` split by `isProjectDoc`, each part in input order. */
+/**
+ * `changed` split into project docs (`isProjectDoc`), readers-only files
+ * (`readersOnly`) and the rest, each part in input order. Neither of the
+ * first two reaches a whole project.
+ */
 export function splitDocs(
   changed: readonly string[],
   dirs: readonly string[],
-): { docs: string[]; rest: string[] } {
+): { docs: string[]; readersOnly: string[]; rest: string[] } {
   const docs: string[] = [];
+  const readerFiles: string[] = [];
   const rest: string[] = [];
-  for (const f of changed) (isProjectDoc(f, dirs) ? docs : rest).push(f);
-  return { docs, rest };
+  for (const f of changed) {
+    if (isProjectDoc(f, dirs)) docs.push(f);
+    else if (readersOnly(f)) readerFiles.push(f);
+    else rest.push(f);
+  }
+  return { docs, readersOnly: readerFiles, rest };
 }
 
 /**
  * What `vitest related` gets: the changed related sources, the subprocess
  * probe's consumer (`probeConsumers`), for a related source under a
  * `FIXTURE_CONSUMERS` path (the tree-sitter-mx corpus readers, say) the
- * tests in other projects that read it, and `DOC_READERS` when any changed
- * file is a corpus input (`CORPUS_INPUT`). Deduped, in that order.
+ * tests in other projects that read it, the consumers of every readers-only
+ * file (`readersOnly`: its readers run here instead of a whole project), and
+ * `DOC_READERS` when any changed file is a corpus input (`CORPUS_INPUT`).
+ * Deduped, in that order.
  */
 export function relatedSources(changed: readonly string[]): string[] {
   const related = changed.filter(isRelatedSource);
@@ -437,6 +485,7 @@ export function relatedSources(changed: readonly string[]): string[] {
       ...related,
       ...probeConsumers(changed),
       ...related.flatMap(fixtureConsumers),
+      ...changed.filter((f) => readersOnly(f)).flatMap(fixtureConsumers),
       ...(changed.some((f) => CORPUS_INPUT.test(f)) ? DOC_READERS : []),
     ]),
   ];
@@ -985,10 +1034,16 @@ function main(): number {
   const dirs = projectDirs();
   // Project docs (.md) map to the Markdown readers only, never to their
   // owner's whole project or own test script.
-  const { docs, rest } = splitDocs(kept, dirs);
+  // Readers-only files (`readersOnly` rows) run only their rows' readers.
+  const { docs, readersOnly: readerFiles, rest } = splitDocs(kept, dirs);
   if (docs.length > 0) {
     console.log(
       `test:affected: docs-only change -> no whole project (${docs.join(", ")}); Markdown readers via vitest related`,
+    );
+  }
+  if (readerFiles.length > 0) {
+    console.log(
+      `test:affected: ${readerFiles.join(", ")} -> no whole project; their readers via vitest related`,
     );
   }
   const sources = [...new Set([...relatedSources(kept), ...readers])];
