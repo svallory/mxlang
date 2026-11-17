@@ -197,7 +197,8 @@ function warningDiagnostics(
 }
 
 /**
- * How many code frames a message carries. One per Marko parser error, so a
+ * How many code frames a message carries. One per template parse error (core's
+ * front end frames each error, as `@marko/compiler` did), so a
  * callee reported as an aggregate carries every error's frame — while the
  * split message keeps only the first frame's reason.
  */
