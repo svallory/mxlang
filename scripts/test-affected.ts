@@ -594,6 +594,7 @@ export const SOURCE_TEXT_READERS: readonly {
       "packages/core/src/cold-start.test.ts",
       "packages/tooling/language-server/src/bundled-deps.test.ts",
       "packages/tooling/typescript-plugin/src/bundled-deps.test.ts",
+      "packages/core/src/message-vocabulary-guard.test.ts",
     ],
   },
   {

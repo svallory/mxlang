@@ -789,8 +789,10 @@ describe("commentOnly", () => {
 
 describe("commentOnlySplit", () => {
   const LOWER = "packages/core/src/lower.ts";
+  const IR_INDEX = "packages/core/src/ir-entry/index.ts";
   const before: Record<string, string> = {
     [LOWER]: "// lowers\nexport const lower = 1;\n",
+    [IR_INDEX]: "// entry\nexport const ir = 1;\n",
     "packages/x/src/fixtures/a.ts": "// a\nexport const a = 1;\n",
     "vitest.config.ts": "// c\nexport default {};\n",
     "a.mx": "// m\n<p/>\n",
@@ -799,10 +801,11 @@ describe("commentOnlySplit", () => {
   };
   const after: Record<string, string> = {
     [LOWER]: "// lowers the tree\nexport const lower = 1;\n",
+    [IR_INDEX]: "// the IR entry\nexport const ir = 1;\n",
     "packages/x/src/fixtures/a.ts": "// b\nexport const a = 1;\n",
     "vitest.config.ts": "// d\nexport default {};\n",
     "a.mx": "// n\n<p/>\n",
-    "packages/x/src/new.ts": "// two\nexport const n = 1;\n",
+    "packages/x/src/new.ts": "/* new */",
     "packages/x/src/token.ts": "export const t = 2;\n",
     "packages/x/src/comment.ts": "// two\nexport const c = 1;\n",
   };
@@ -818,12 +821,13 @@ describe("commentOnlySplit", () => {
           "packages/x/src/new.ts",
           "packages/x/src/token.ts",
           "packages/x/src/comment.ts",
+          IR_INDEX,
         ],
         (f) => before[f],
         (f) => after[f] ?? "",
       ),
     ).toEqual({
-      commentOnly: [LOWER, "packages/x/src/comment.ts"],
+      commentOnly: [LOWER, "packages/x/src/comment.ts", IR_INDEX],
       kept: [
         "packages/x/src/fixtures/a.ts",
         "vitest.config.ts",
@@ -836,6 +840,8 @@ describe("commentOnlySplit", () => {
         "packages/core/src/cold-start.test.ts",
         "packages/tooling/language-server/src/bundled-deps.test.ts",
         "packages/tooling/typescript-plugin/src/bundled-deps.test.ts",
+        "packages/core/src/message-vocabulary-guard.test.ts",
+        "packages/core/src/ir-entry/partial.test.ts",
       ],
     });
   });
