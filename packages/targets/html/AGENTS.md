@@ -470,7 +470,7 @@ own `vitest.config.ts` excludes it from the vitest project so the root
 virtual modules under the `mx-virtual:` scheme, never `data:` URLs: Bun 1.3.14
 fails `require("data:…")` with `NameTooLong` past ~1.5 KB, and nested tags
 embed base64 in base64. Bun 1.4.x has no such limit, so `test:bun` passes there
-even if a `data:` path comes back, and CI (pinned to Bun 1.4 in `ci.yml` and
+even if a `data:` path comes back, and CI (pinned to a Bun 1.4.x in `ci.yml` and
 `.prototools`) no longer catches one. To check for this class of bug, run
 `test:bun` by hand under a Bun 1.3.x (for example `PATH=~/.proto/tools/bun/1.3.14:$PATH`).
 
