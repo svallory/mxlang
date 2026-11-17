@@ -51,7 +51,7 @@ tasks:
       - "/scripts/vitest-lanes.ts"
       - "$MX_TEST_LANE"
 
-  # Delegates to package.json's build (the CJS bundle, then
+  # Delegates to package.json's build (`rm -rf dist`, the CJS bundle, then
   # scripts/bundled-build.ts, which reads core's dist) so the two cannot drift.
   build:
     command: "bun"
