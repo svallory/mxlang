@@ -17,7 +17,7 @@ The key words **must**, **must not**, **may** and **should** are used in the RFC
 
 The IR is not the parser's output. It is the result of a parse **plus** a sequence of resolution steps, several of which consult the host. A new lowering must perform every step below, in this order, or produce the same result by other means.
 
-`compileSource` (`compile.ts`) parses the whole file with MX's front end (`parseMx`, the MX AST of `@mxlang/babel`) and, in the translator's `Program.exit`, builds a `Ctx` and calls `lower(ctx, body)` once, then hands the result to the host's required `HostOptions.emitIr(ir, ctx)`. `parseFragment` (`fragment.ts`) is the same parse for a substring of a larger file, with positions shifted (section 3.4). `lower()` (`lower.ts`) then runs:
+`compileSource` (`compile.ts`) parses the whole file with MX's front end (`parseMx`, the MX AST of `@mxlang/babel`) and, in the translator's `Program.exit`, builds a `Ctx` and calls `lower(ctx, body)` once, then hands the result to the host's required `HostOptions.emitIr(ir, ctx)`. `parseFragment` (`fragment.ts`) is the same parse for a substring of a larger file, with positions measured against the enclosing file (section 3.4). `lower()` (`lower.ts`) then runs:
 
 1. **Tree rewrites, before any tag name is read** (`resolveUnnamedTags`, `default-tag.ts`). Top-down over the parsed tree, per tag:
    1. **Shorthand** (`shorthand.ts` `rewriteShorthands`): the tag-adjacent `#id` and `.class` become the `id`/`class` attributes the author would otherwise have written, as in Marko. The rewritten attribute remembers its token as `sugarLabel`, which becomes `Attr.sugar` (section 6). A `:` in a tag head is part of the tag name or the shorthand part; core splits nothing at it.
@@ -114,15 +114,15 @@ What each span covers is listed with its field. The rule throughout: slicing the
 
 ### 3.4 Fragments and `baseOffset`
 
-When MX is a region inside another file (a `.solid.mx` region, found by `packages/tsx-bridge/src/mx/bridge.ts`), `parseFragment(source, { filename, baseOffset, baseLine, baseColumn })` parses the substring and shifts every position so the IR is file-absolute. The bridge passes `baseOffset: inner.start`. The numbers (`fragment.ts`, `FragmentBase`):
+When MX is a region inside another file (a `.solid.mx` region, found by `packages/tsx-bridge/src/mx/bridge.ts`), `parseFragment(source, { filename, baseOffset, baseLine, baseColumn })` hands the base to MX's front end (`parseMx`), which adds it when it creates each node, so the tree, and the IR lowered from it, are file-absolute at creation; there is no walk over the tree afterwards. The bridge passes `baseOffset: inner.start`. The numbers (`fragment.ts`, `FragmentBase`):
 
 - all three count UTF-16 code units;
 - `baseOffset` is the number of units before the fragment; `baseLine` is zero-based (the number of `\n` before it); `baseColumn` is zero-based (units between the last `\n` and the fragment);
 - `baseLine === 0` requires `baseOffset === baseColumn`; `baseLine >= 1` requires `baseOffset >= baseLine + baseColumn`. `assertBaseContract` rejects anything else.
 
-Line/column positions shift by `baseLine` (and by `baseColumn` on the fragment's first line only); index positions shift by `baseOffset`. Shared position objects are shifted once (the walk dedupes them). A thrown parse error's position is on the exception and is shifted separately. A host never builds that padded copy or the base by hand: core's `positionRegionSource(region, at, { wrapper?, filename? })` returns a region's padded source and its base position from one call (the "padding contract" in `fragment.ts`), and the Solid and Angular hosts use it. `parseFragment` throws a positioned error on a base that breaks the invariant above, and no host clamps a base to hide one. Pinned by `fragment.test.ts`.
+The front end computes every offset as `baseOffset` plus the offset in the fragment; a line adds `baseLine`, and a column adds `baseColumn` on the fragment's first line only (`lineColumnAt`, `packages/parser/src/frontend/line-column.ts`). The parse error `parseFragment` throws for a template error, and a rewritten `|params|` error, carries its position on the exception, measured in the fragment, so `parseFragment` shifts that `loc` by the base before it rethrows it; a position object shared by `start` and `end` is shifted once. The errors built from the tree's offsets (a bare `,` line, a syntax-table error) are file-absolute already. A host never builds that padded copy or the base by hand: core's `positionRegionSource(region, at, { wrapper?, filename? })` returns a region's padded source and its base position from one call (the "padding contract" in `fragment.ts`), and the Solid host, the Angular host and the shared JSX region path (`packages/hosts/preact/src/region.ts`) use it. `parseFragment` throws a positioned error on a base that breaks the invariant above, and no host clamps a base to hide one. Pinned by `fragment.test.ts`.
 
-A new lowering over its own parser has no reason to reproduce the shift mechanics, but it must produce the same result: every `loc` and every span in the IR is measured against the enclosing file.
+A new lowering over its own parser must produce the same result: every `loc` and every span in the IR is measured against the enclosing file.
 
 ### 3.5 What diagnostics require
 

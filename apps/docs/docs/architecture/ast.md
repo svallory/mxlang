@@ -62,8 +62,7 @@ fields, `loc`, comments and `extra`, never `start`/`end`
 (`[C]babel.js:13217-13241`). Probe `raw.ts` on `<div#a.b x=foo :y/>`
 confirms it: every Marko node has `start === undefined`; Marko nodes carry
 `loc` without `index`; Babel expression nodes inside them carry
-`loc.start.index`. `packages/core/src/fragment.ts` `shiftNode` relies on exactly
-this ("Present on plain Babel nodes only; absent on Marko's own").
+`loc.start.index`.
 
 ### 1.2 The thirteen node types
 
@@ -257,7 +256,7 @@ the row says "not stated".
 | A9 | `MarkoClass` (`[C]babel.js:8152-8161`), a `Class`-aliased node. | Marko 5's class components. | MX has no class components; `class` is not a statement MX accepts (`lower.ts` `lowerStatement` rejects anything but `import`/`static`/`export`). | No node. `class { }` at the top level is an `MxModuleStatement { keyword: "class" }` that lowering rejects (§3.10), so the error keeps its position. |
 | A10 | `MarkoParseError` is an `Expression` and `Statement` alias (`[C]babel.js:8070-8074`) put in place of the failed expression; `onError` from the template parser **throws** (`[C]chunk-src.js:5975-5984`). Two error channels, neither carries a code. | Lets the translator keep going until it reaches the bad expression, then throw. | MX requires structured errors from its parser. MX needs every error as data: a code, a range, a message. Several template errors per parse would need parser recovery, which is ruled out for now (Q20). | `MxParseError { code, origin, message, start, end }` in `MxDocument.errors`, and an `error` field on the expression container that failed (§3.13, §4). Expression and front-end errors no longer throw; a template-parser error still ends the parse (htmljs `emitError`), but the tree built so far is kept (§3.13); `compileSource` lowers no document with errors and reports them all (§3.13). |
 | A11 | Tag params and tag type parameters are stored on **`MarkoTagBody`** (`[C]chunk-src.js:6059`, `:6102`), not on the tag. | `MarkoTagBody` is the Babel scope that binds them (A1). | The params belong to the tag head the author wrote; scope is a lowering concern. | `MxTag.params`, `MxTag.typeParams` (§3.2). The body is a plain child list. |
-| A12 | Positions: Marko nodes get `start`/`end` and a `loc` without `index` (`withLoc`, `[C]chunk-src.js:5909-5914`), then lose `start`/`end` in the clone (`[C]chunk-src.js:6710`, `[C]babel.js:13217-13241`); Babel nodes keep `loc.index`. Position objects are shared between nodes (`packages/core/AGENTS.md`, `parseFragment` bullet). Fragments are shifted by a tree walk afterwards (`fragment.ts` `shiftNode`). `Program.end` is `code.length - 1` (`[C]chunk-src.js:6241`). | Babel's `File`/`loc` model; the clone is how the compiler hands the tree to Babel. | One numeric span on every node, file-relative, in UTF-16 units, with line/column computed on demand (§5). | `start`/`end` on every MX node; no `loc` stored (§5). |
+| A12 | Positions: Marko nodes get `start`/`end` and a `loc` without `index` (`withLoc`, `[C]chunk-src.js:5909-5914`), then lose `start`/`end` in the clone (`[C]chunk-src.js:6710`, `[C]babel.js:13217-13241`); Babel nodes keep `loc.index`. Position objects are shared between nodes (`packages/core/AGENTS.md`, `parseFragment` bullet). `Program.end` is `code.length - 1` (`[C]chunk-src.js:6241`). | Babel's `File`/`loc` model; the clone is how the compiler hands the tree to Babel. | One numeric span on every node, file-relative, in UTF-16 units, with line/column computed on demand (§5). | `start`/`end` on every MX node; no `loc` stored (§5). |
 | A13 | Text is whitespace-normalized in the front end, with neighbour lookahead (`[C]chunk-src.js:5985-6037`); the node's `loc` is moved to the trimmed text. | Marko's HTML output rules. | MX needs both: the normalized value the IR's `Text.value` carries, and the authored span (`ir.ts` `ComponentTarget`). | `MxText { value, raw }` plus span (§3.8, §8 D6). |
 | A14 | Open-tag comments become Babel comments attached to the next attribute, the last attribute, or the tag (`[C]chunk-src.js:5941-5948`). | Babel's comment attachment model. | A comment is source; tools need it where it was written. | `MxComment` items in `MxTag.attributes` order (§3.11). |
 | A15 | The tag's parse mode (text, void, statement, preserve-whitespace) comes from a taglib lookup at name time (`[C]chunk-src.js:6080-6086`), fed by Marko's built-in element taglibs (`marko-html.json` at `[C]chunk-src.js:3057`, SVG at `:5348`, MathML at `:5175`), MX's `core-tags.json`, and custom tags' `text`/`preserveWhitespace` (`core/src/custom-tags.ts` `customTagTaglib`). | Marko's taglibs. | The parse mode is still name-dependent. MX needs it as an explicit input to the front end, not a taglib. | A `tagShape(name)` callback on the front end, and `MxTag.bodyMode` recording what was answered (§3.12; the full input list is §7.1). |
@@ -1339,21 +1338,22 @@ today's `FragmentBase` (`baseOffset`, zero-based `baseLine`, zero-based
 `baseColumn`; `fragment.ts` `FragmentBase`) and its invariants (`baseOffset ===
 baseColumn` on line 0; `baseOffset >= baseLine + baseColumn` otherwise).
 
-- Every offset is `base.offset + local offset`, at creation; there is no
-  post-hoc walk (today's `shiftNode`, `fragment.ts`, and its
-  shared-position dedupe both disappear).
+- Every offset is `base.offset + local offset`, set at creation; there is no
+  walk over the tree afterwards (`fragment.ts`).
 - `lineColumnAt` adds `base.line` to the line and, on the fragment's first
   line only, `base.column` to the column.
 - A Babel sub-parse receives `startIndex = base.offset + local start`,
   `startLine = 1 + base.line + local line`, `startColumn` = local column plus
-  `base.column` when on the first line. This is what `parseFragmentNative`
-  already demonstrates through Marko's offset options (`fragment.ts`).
+  `base.column` when on the first line
+  (`packages/parser/src/frontend/expressions.ts`, `startIndex`/`startLine`/
+  `startColumn`).
 
-The IR spec states the required result, not the mechanism: "every `loc` and
-every span in the IR is measured against the enclosing file", and a new
-lowering over its own parser "has no reason to reproduce the shift mechanics"
-(IR spec §3.4). Offsets at creation satisfy that. Parse errors are data
-(§3.13), so the separately-shifted thrown error of today disappears too.
+The IR spec states the required result: "every `loc` and every span in the IR
+is measured against the enclosing file" (IR spec §3.4). Offsets at creation
+satisfy that. `MxParseError` nodes (§3.13) are positioned at creation like
+every other node. `parseFragment` still throws for a template error, and that
+error's `loc` lives on the exception, measured in the fragment, so
+`parseFragment` shifts it by the base before it rethrows it (`fragment.ts`).
 
 ## 6. Mapping to the IR
 
@@ -1769,7 +1769,7 @@ depend on an input marked "front end" in the last column.
 | `tagDef.parseOptions.rawOpenTag` → `rawValue` | `:6173-6177` | `core-tags.json` statement tags, `<style>` | dropped (A18) |
 | `tagDef.parseOptions.controlFlow` and `tagDef.controlFlow` | `:6196`, `:6200` | `core-tags.json` (`<if>`, `<else>`, `<else-if>`, `<for>`) | moves to **lowering** (attribute tags are not moved, D2) |
 | `tagDef.parser` hook (parse visitors) | `:6184-6191` | none in MX: `core-tags.json` and `customTagTaglib` carry no `parser` | dropped |
-| `htmlParseOptions.preserveWhitespace` (file-wide) | `:5898-5899` | not passed by MX (`fragment.ts` `parseFragmentNative` passes only offsets, in the unused `parseFragmentNative`) | dropped |
+| `htmlParseOptions.preserveWhitespace` (file-wide) | `:5898-5899` | not passed by MX (`parseFragment` passes only the base to `parseMx`) | dropped |
 | `tagDiscoveryDirs` (`tags/*.marko` found by Marko's scanner) | taglib lookup | the html target passed `["tags"]` (`targets/html/src/compiler.ts` `host`) until PR 6 slice S3b, which dropped it from the translator | **dropped** with `@marko/compiler` (ruling Q22): no `marko-tag.json`/`marko.json` exists, and the two discovered `.marko` tags (`targets/html/fixtures-marko/tags-discovery/tags/badge.marko`, `fixtures-marko/try-child-throw/tags/boom.marko`) carry no parse options (a `.marko` file can only get them from a `marko-tag.json`), so nothing depends on it |
 | Babel parser options (`typescript` plugin, `allow*` flags) | `:6699-6705` (`manipulateOptions(opts) {` is at `:6699`) | the compiler | **front end**, fixed configuration of the expression sub-parser |
 | The expression sub-parser itself | `parseExpression` and friends, `[C]chunk-src.js:947-1016` | Marko's bundled `@babel/parser` **7.29.7** (`[C]babel.js`, region `@babel+parser@7.29.7`) | **front end**: MX's Babel fork (`packages/babel/src`, from `@babel/parser` 7.29.8). It must produce node shapes equal to today's, including `extra.raw`, `extra.parenthesized` and comments, or emitted code changes (ruling Q13/P3) |
