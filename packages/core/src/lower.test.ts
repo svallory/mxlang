@@ -69,9 +69,10 @@ function fakeDeclarations(overrides: Partial<Policy> = {}): Policy {
 /**
  * Lowers `source` to an IR, through the real Marko parse.
  *
- * `compileSource` is driven for its parse and its taglib lookup, and the
- * translate visitor is hijacked to lower rather than emit — the lowerer has
- * to see exactly the nodes a real compile produces, not a hand-built tree.
+ * `@marko/compiler`'s `compileSync` is driven for its parse and its taglib
+ * lookup, and the translate visitor is hijacked to lower rather than emit —
+ * the lowerer has to see exactly the nodes a real compile produces, not a
+ * hand-built tree.
  */
 function lowerSource(
   source: string,

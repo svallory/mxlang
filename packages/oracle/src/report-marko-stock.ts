@@ -19,7 +19,7 @@ import { renderTranslator } from "./translator-render";
  * expected to pass, and a skip needs a reason — "this target
  * cannot", never "my code cannot".
  *
- * Same comparison as the first table: `htmlEquals` parses both sides with
+ * The comparison: `htmlEquals` parses both sides with
  * parse5 and compares decoded content, and Marko's resume/hydration markers
  * are stripped (they have no expressions-only equivalent and their ids are
  * random per compile).

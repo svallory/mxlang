@@ -250,9 +250,9 @@ let current: {
  * and nodes rewritten from them. Where lowering runs over `@marko/compiler`'s
  * own parse (core's `lower.test.ts` `lowerSource` and
  * `@mxlang/parse-differential`'s `today-lower.ts`), the nodes come from
- * Marko's parser, and the same generator prints them. Core prints them with its own Babel's
- * generator (`coreBabel()` in `babel.ts`), which is stock `@babel/generator`.
- * That generator agrees with the fork's AST because the fork parses as npm
+ * Marko's parser. Core prints both kinds with its own Babel's generator
+ * (`coreBabel()` in `babel.ts`), which is stock `@babel/generator`. That
+ * generator agrees with the fork's AST because the fork parses as npm
  * `@babel/parser` does. `babel.ts`'s header says why this replaced Marko's
  * bundled Babel.
  */

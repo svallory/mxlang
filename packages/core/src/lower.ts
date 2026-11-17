@@ -6330,16 +6330,6 @@ function authoredChildTree(
 }
 
 /**
- * Lowers one registered custom tag call and splices its ordinary IR roots.
- *
- * `content` is gated on `hasContent` for an ordinary (user-registered) tag.
- * Whitespace the front end kept (after Marko's whitespace rule) is content,
- * not layout; only comments
- * and empty text mean "no children supplied". A core-owned
- * built-in like `<try>` is a structural pass-through wrapper, so `isBuiltin`
- * still bypasses the gate and always lowers the block, like `lowerDelegatedTag`.
- */
-/**
  * A tag whose contract registration deferred (a dialect tag file) is read on
  * its call: a failure to read or check it is raised here, at this call, so
  * every call reports it where it is written and a file that never calls the
@@ -6431,6 +6421,16 @@ function reportDeferredWarnings(ctx: Ctx, definition: CustomTag): void {
   for (const warning of warnings) warn(ctx, warning);
 }
 
+/**
+ * Lowers one registered custom tag call and splices its ordinary IR roots.
+ *
+ * `content` is gated on `hasContent` for an ordinary (user-registered) tag.
+ * Whitespace the front end kept (after Marko's whitespace rule) is content,
+ * not layout; only comments and empty text mean "no children supplied". A
+ * core-owned built-in like `<try>` is a structural pass-through wrapper, so
+ * `isBuiltin` still bypasses the gate and always lowers the block, like
+ * `lowerDelegatedTag`.
+ */
 function lowerCustomTag(
   ctx: Ctx,
   node: Node,
