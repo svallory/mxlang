@@ -13,7 +13,11 @@ import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { bakedPathsIn } from "./baked-paths.ts";
-import { forkCarriers, NOTICES_FILE } from "./third-party-notices.ts";
+import {
+  inlinedThirdParty,
+  NOTICES_FILE,
+  thirdPartyCarriers,
+} from "./third-party-notices.ts";
 
 export const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -370,27 +374,59 @@ export function babelFlagReads(dir: string, packed: string[]): string[] {
 }
 
 /**
- * Licence-notice problems of a tarball: a packed JS file that inlines MX's
- * Babel fork with no `THIRD-PARTY-NOTICES.md` packed in its own dir, and a
- * packed notice with no carrier beside it (a stale notice). `packed` is
- * relative to `dir`.
+ * Licence-notice problems of a tarball, `packed` relative to `dir` (where the
+ * package builds, so Bun's module comments resolve against it): a packed JS
+ * file that inlines third-party code with no `THIRD-PARTY-NOTICES.md` packed
+ * in its own dir, a notice missing a section for something a JS file beside
+ * it inlines, a section nothing beside it inlines, and a notice with no
+ * carrier beside it. A JS file covered by its own `<stem>.NOTICES.md` is not
+ * checked (`thirdPartyCarriers`). Throws when a module comment does not
+ * resolve.
  */
-export function forkNoticeProblems(
+export function noticeProblems(
   dir: string,
   packed: readonly string[],
+  root: string = repoRoot,
 ): string[] {
-  const carriers = forkCarriers(dir, packed);
+  const carriers = thirdPartyCarriers(dir, packed, dir, root);
   const noticeOf = (f: string) => posix.join(posix.dirname(f), NOTICES_FILE);
-  const missing = carriers
+  const problems = carriers
     .filter((c) => !packed.includes(noticeOf(c)))
     .map(
-      (c) => `${c}: carries the Babel fork but ${noticeOf(c)} is not packed`,
+      (c) => `${c}: inlines third-party code but ${noticeOf(c)} is not packed`,
     );
-  const stale = packed
-    .filter((f) => posix.basename(f) === NOTICES_FILE)
-    .filter((n) => !carriers.some((c) => noticeOf(c) === n))
-    .map((n) => `${n}: packed but no JS beside it carries the Babel fork`);
-  return [...missing, ...stale];
+  for (const notice of packed.filter(
+    (f) => posix.basename(f) === NOTICES_FILE,
+  )) {
+    const beside = carriers.filter((c) => noticeOf(c) === notice);
+    if (beside.length === 0) {
+      problems.push(
+        `${notice}: packed but no JS beside it inlines third-party code`,
+      );
+      continue;
+    }
+    const sections = readFileSync(join(dir, notice), "utf8")
+      .split("\n")
+      .filter((line) => line.startsWith("## "))
+      .map((line) => line.slice(3));
+    const inlined = new Set<string>();
+    for (const c of beside) {
+      for (const { heading } of inlinedThirdParty(join(dir, c), dir, root)) {
+        if (!inlined.has(heading) && !sections.includes(heading)) {
+          problems.push(
+            `${notice}: no section for ${heading}, which ${c} inlines`,
+          );
+        }
+        inlined.add(heading);
+      }
+    }
+    for (const section of sections.filter((s) => !inlined.has(s))) {
+      problems.push(
+        `${notice}: section ${section} is inlined by no JS beside it`,
+      );
+    }
+  }
+  return problems;
 }
 
 /** Every string a `main`/`types`/`bin`/`exports` field points at, as a tarball path. */

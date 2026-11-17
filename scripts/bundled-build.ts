@@ -79,8 +79,10 @@ export async function bundledBuild({
     throw new Error(`the bundled build of ${packageDir} failed`);
   }
   copyCoreFrontend(out);
-  // The licence notice of the Babel fork, beside whichever outputs inline it.
-  writeThirdPartyNotices(out, { required: false });
+  // The licence notice of the third-party code the outputs inline. Bun's
+  // module comments are relative to the directory it ran in, which is not
+  // `packageDir` for the language server's bundle (built from the VSIX's dir).
+  writeThirdPartyNotices(out, { required: false, baseDir: process.cwd() });
   assertRelocatable(
     readdirSync(out)
       .filter((f) => f.endsWith(".cjs"))

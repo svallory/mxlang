@@ -6,6 +6,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -17,9 +18,9 @@ import {
   declaredNames,
   entryTargets,
   escapesRoot,
-  forkNoticeProblems,
   isBuiltin,
   moduleSpecifiers,
+  noticeProblems,
   PACKED_PACKAGES,
   packageNameOf,
   packedFiles,
@@ -34,8 +35,9 @@ import {
 } from "./pack-hygiene.ts";
 import {
   BABEL_FORK_MARKER,
-  forkCarriers,
+  inlinedThirdParty,
   NOTICES_FILE,
+  thirdPartyCarriers,
   writeThirdPartyNotices,
 } from "./third-party-notices.ts";
 
@@ -224,34 +226,38 @@ for (const p of PACKED_PACKAGES) {
       expect(babelFlagReads(dir, packed)).toEqual([]);
     });
 
-    it("packs THIRD-PARTY-NOTICES.md beside every file that bundles the Babel fork", () => {
-      expect(forkNoticeProblems(dir, packed)).toEqual([]);
+    it("packs a THIRD-PARTY-NOTICES.md covering everything each JS file inlines", () => {
+      expect(noticeProblems(dir, packed)).toEqual([]);
     });
 
-    const carriers = forkCarriers(dir, packed);
-    if (carriers.length > 0) {
-      it("names every fork carrier and the fork's upstream tag in each packed notice", () => {
-        const tag = /^- Tag: `(v[^`]+)`/m.exec(
-          readFileSync(join(repoRoot, "packages/babel/UPSTREAM.md"), "utf8"),
-        )?.[1];
-        expect(tag).toMatch(/^v\d/);
-        const notices = packed.filter(
-          (f) => posix.basename(f) === NOTICES_FILE,
+    it("names exactly its dir's carriers in each packed notice, and the fork's upstream tag beside a fork carrier", () => {
+      const carriers = thirdPartyCarriers(dir, packed, dir);
+      const tag = /^- Tag: `(v[^`]+)`/m.exec(
+        readFileSync(join(repoRoot, "packages/babel/UPSTREAM.md"), "utf8"),
+      )?.[1];
+      expect(tag).toMatch(/^v\d/);
+      const forkHeading = `@babel/parser ${tag?.slice(1)} (vendored as \`@mxlang/babel\`)`;
+      for (const notice of packed.filter(
+        (f) => posix.basename(f) === NOTICES_FILE,
+      )) {
+        const here = carriers.filter(
+          (c) => posix.dirname(c) === posix.dirname(notice),
         );
-        expect(notices.length).toBeGreaterThan(0);
-        for (const notice of notices) {
-          const here = carriers
-            .filter((c) => posix.dirname(c) === posix.dirname(notice))
-            .map((c) => posix.basename(c));
-          const text = readFileSync(join(dir, notice), "utf8");
-          expect(text.split("\n")[0]).toBe(
-            `# Third-party code in ${here.join(", ")}`,
-          );
-          expect(text).toContain(`@babel/parser ${tag?.slice(1)}`);
+        const text = readFileSync(join(dir, notice), "utf8");
+        expect(text.split("\n")[0]).toBe(
+          `# Third-party code in ${here.map((c) => posix.basename(c)).join(", ")}`,
+        );
+        const forkHere = here.some((c) =>
+          inlinedThirdParty(join(dir, c), dir).some(
+            (e) => e.heading === forkHeading,
+          ),
+        );
+        if (forkHere) {
+          expect(text).toContain(`## ${forkHeading}`);
           expect(text).toContain(`tag \`${tag}\``);
         }
-      });
-    }
+      }
+    });
 
     it("packs every main/types/bin/exports target, none into src", () => {
       const targets = entryTargets(pkg);
@@ -457,97 +463,234 @@ describe("babelFlagReads", () => {
   });
 });
 
-describe("Babel fork notices", () => {
-  const scratch = mkdtempSync(join(tmpdir(), "fork-notices-"));
+describe("third-party notices", () => {
+  const scratch = mkdtempSync(join(tmpdir(), "third-party-notices-"));
   afterAll(() => rmSync(scratch, { recursive: true, force: true }));
   const marked = `class P { ${BABEL_FORK_MARKER}(startLoc) {} }`;
-  /** A package dir whose `dist/` holds `files` (name -> text). */
-  const plant = (files: Record<string, string>) => {
-    const dir = mkdtempSync(join(scratch, "pkg-"));
-    mkdirSync(join(dir, "dist"));
-    for (const [name, text] of Object.entries(files)) {
-      writeFileSync(join(dir, "dist", name), text);
+  const write = (at: string, text: string) => {
+    mkdirSync(join(at, ".."), { recursive: true });
+    writeFileSync(at, text);
+  };
+  /** A scratch repository: a root `LICENSE`, two npm packages, workspace dirs. */
+  const repo = mkdtempSync(join(scratch, "repo-"));
+  const rootLicence = "MX licence\n";
+  write(join(repo, "LICENSE"), rootLicence);
+  const store = join(repo, "node_modules/.bun");
+  write(
+    join(store, "foo@1.2.3/node_modules/foo/package.json"),
+    '{ "name": "foo", "version": "1.2.3" }',
+  );
+  write(join(store, "foo@1.2.3/node_modules/foo/LICENSE-MIT.txt"), "foo MIT\n");
+  write(join(store, "foo@1.2.3/node_modules/foo/README.md"), "not a licence");
+  write(join(store, "foo@1.2.3/node_modules/foo/lib/index.js"), "");
+  write(
+    join(store, "@s+bar@2.0.0/node_modules/@s/bar/package.json"),
+    '{ "name": "@s/bar", "version": "2.0.0" }',
+  );
+  write(join(store, "@s+bar@2.0.0/node_modules/@s/bar/LICENSE"), "bar ISC\n");
+  write(join(store, "@s+bar@2.0.0/node_modules/@s/bar/index.js"), "");
+  // Another package's built dist, one level deeper than the carriers.
+  write(join(repo, "packages/group/dep/package.json"), "{}");
+  write(
+    join(repo, "packages/group/dep/dist/index.js"),
+    "// ../../../node_modules/.bun/foo@1.2.3/node_modules/foo/lib/index.js\n",
+  );
+  // MX's own code (a root-identical licence) and vendored code beside it.
+  write(join(repo, "packages/lib/package.json"), "{}");
+  write(join(repo, "packages/lib/LICENSE"), rootLicence);
+  write(join(repo, "packages/lib/src/own.ts"), "");
+  write(join(repo, "packages/lib/vendor/LICENSE"), "vendor BSD\n");
+  write(join(repo, "packages/lib/vendor/x.ts"), "");
+
+  const FOO =
+    "// ../../node_modules/.bun/foo@1.2.3/node_modules/foo/lib/index.js";
+  const BAR =
+    "// ../../node_modules/.bun/@s+bar@2.0.0/node_modules/@s/bar/index.js";
+  const OWN = "// ../lib/src/own.ts";
+  const VENDOR = "// ../lib/vendor/x.ts";
+  const MISSING = "// ../missing/x.js";
+  /** A package dir `packages/<name>` whose `dist/` holds `files` (name -> lines). */
+  const plant = (files: Record<string, string[]>) => {
+    const dir = mkdtempSync(join(repo, "packages/pkg-"));
+    write(join(dir, "package.json"), "{}");
+    for (const [name, lines] of Object.entries(files)) {
+      write(join(dir, "dist", name), `${lines.join("\n")}\n`);
     }
     return dir;
   };
-  const carrierFiles = {
-    "a.js": marked,
-    "b.cjs": "module.exports = 1;",
-    "c.d.ts": `declare function ${BABEL_FORK_MARKER}(): void;`,
-  };
-  const cleanFiles = {
-    "b.cjs": "module.exports = 1;",
-    "c.d.ts": `declare function ${BABEL_FORK_MARKER}(): void;`,
-  };
+  const NOTICE = "dist/THIRD-PARTY-NOTICES.md";
+  const fromBabel = createRequire(
+    join(repoRoot, "packages/babel/package.json"),
+  );
+  const versionOf = (name: string) =>
+    (fromBabel(`${name}/package.json`) as { version: string }).version;
+  const tag = /^- Tag: `(v[^`]+)`/m.exec(
+    readFileSync(join(repoRoot, "packages/babel/UPSTREAM.md"), "utf8"),
+  )?.[1];
 
-  it("forkNoticeProblems flags a carrier whose notice is not packed", () => {
-    const dir = plant(carrierFiles);
-    expect(
-      forkNoticeProblems(dir, ["dist/a.js", "dist/b.cjs", "dist/c.d.ts"]),
-    ).toEqual([
-      "dist/a.js: carries the Babel fork but dist/THIRD-PARTY-NOTICES.md is not packed",
+  it("maps npm module comments to `name version` and the package's licen[cs]e file, scoped names included", () => {
+    const dir = plant({ "a.js": [FOO, BAR, FOO, "var a = 1;"] });
+    expect(inlinedThirdParty(join(dir, "dist/a.js"), dir, repo)).toEqual([
+      { heading: "@s/bar 2.0.0", text: "bar ISC" },
+      { heading: "foo 1.2.3", text: "foo MIT" },
     ]);
   });
 
-  it("forkNoticeProblems passes a carrier with its notice", () => {
-    const dir = plant({ ...carrierFiles, "THIRD-PARTY-NOTICES.md": "x" });
-    expect(
-      forkNoticeProblems(dir, [
-        "dist/a.js",
-        "dist/b.cjs",
-        "dist/c.d.ts",
-        "dist/THIRD-PARTY-NOTICES.md",
-      ]),
-    ).toEqual([]);
-  });
-
-  it("forkNoticeProblems flags a notice with no carrier and ignores a marked .d.ts", () => {
-    const dir = plant({ ...cleanFiles, "THIRD-PARTY-NOTICES.md": "x" });
-    expect(
-      forkNoticeProblems(dir, [
-        "dist/b.cjs",
-        "dist/c.d.ts",
-        "dist/THIRD-PARTY-NOTICES.md",
-      ]),
-    ).toEqual([
-      "dist/THIRD-PARTY-NOTICES.md: packed but no JS beside it carries the Babel fork",
+  it("follows a comment naming another package's dist/ file, resolved against that package's dir", () => {
+    const dir = plant({ "a.js": ["// ../group/dep/dist/index.js"] });
+    expect(inlinedThirdParty(join(dir, "dist/a.js"), dir, repo)).toEqual([
+      { heading: "foo 1.2.3", text: "foo MIT" },
     ]);
   });
 
-  it("forkNoticeProblems passes a clean dir with no notice", () => {
-    const dir = plant(cleanFiles);
-    expect(forkNoticeProblems(dir, ["dist/b.cjs", "dist/c.d.ts"])).toEqual([]);
+  it("gives vendored workspace code under a foreign licence an entry, and MX's own code none", () => {
+    const dir = plant({ "a.js": [OWN, VENDOR] });
+    expect(inlinedThirdParty(join(dir, "dist/a.js"), dir, repo)).toEqual([
+      { heading: "Vendored code in `packages/lib/vendor`", text: "vendor BSD" },
+    ]);
+    const own = plant({ "a.js": [OWN] });
+    expect(inlinedThirdParty(join(own, "dist/a.js"), own, repo)).toEqual([]);
   });
 
-  it("writeThirdPartyNotices throws naming the dir when required and nothing carries the fork", () => {
-    const dist = join(plant(cleanFiles), "dist");
-    expect(() => writeThirdPartyNotices(dist, { required: true })).toThrow(
-      `no JS file in ${dist} carries the Babel fork`,
+  it("throws naming the file and the path when a module comment does not resolve", () => {
+    const dir = plant({ "a.js": [FOO, MISSING] });
+    const file = join(dir, "dist/a.js");
+    expect(() => inlinedThirdParty(file, dir, repo)).toThrow(
+      `${file}: module comment ../missing/x.js does not resolve from ${dir}`,
     );
-    expect(existsSync(join(dist, "THIRD-PARTY-NOTICES.md"))).toBe(false);
   });
 
-  it("writeThirdPartyNotices writes nothing and returns [] when not required", () => {
-    const dist = join(plant(cleanFiles), "dist");
-    expect(writeThirdPartyNotices(dist, { required: false })).toEqual([]);
-    expect(existsSync(join(dist, "THIRD-PARTY-NOTICES.md"))).toBe(false);
-  });
-
-  it("writeThirdPartyNotices writes a heading listing exactly the carriers", () => {
-    const dist = join(plant({ ...carrierFiles, "d.mjs": marked }), "dist");
-    expect(writeThirdPartyNotices(dist, { required: true })).toEqual([
+  it("thirdPartyCarriers skips a JS file covered by its own <stem>.NOTICES.md, unscanned", () => {
+    const dir = plant({
+      "front.cjs": [MISSING],
+      "front.NOTICES.md": ["# front"],
+      "a.js": [FOO],
+      "b.cjs": ["module.exports = 1;"],
+    });
+    const files = ["front.cjs", "front.NOTICES.md", "a.js", "b.cjs"];
+    expect(thirdPartyCarriers(join(dir, "dist"), files, dir, repo)).toEqual([
       "a.js",
-      "d.mjs",
     ]);
-    const lines = readFileSync(
-      join(dist, "THIRD-PARTY-NOTICES.md"),
-      "utf8",
-    ).split("\n");
-    expect(lines.slice(0, 3)).toEqual([
-      "# Third-party code in a.js, d.mjs",
-      "",
-      "`a.js`, `d.mjs` bundle the code below. Each is distributed under its own licence.",
-    ]);
+  });
+
+  describe("noticeProblems", () => {
+    const carrier = { "a.js": [FOO, BAR], "b.cjs": [OWN] };
+    const clean = {
+      "b.cjs": [OWN, "module.exports = 1;"],
+      "c.d.ts": [FOO, `declare function ${BABEL_FORK_MARKER}(): void;`],
+    };
+    const packedOf = (files: object) =>
+      Object.keys(files).map((f) => `dist/${f}`);
+
+    it("flags a carrier whose notice is not packed", () => {
+      const dir = plant(carrier);
+      expect(noticeProblems(dir, packedOf(carrier), repo)).toEqual([
+        "dist/a.js: inlines third-party code but dist/THIRD-PARTY-NOTICES.md is not packed",
+      ]);
+    });
+
+    it("flags a section the notice lacks and one nothing beside it inlines", () => {
+      const lacking = {
+        ...carrier,
+        "THIRD-PARTY-NOTICES.md": ["# x", "## @s/bar 2.0.0", "bar ISC"],
+      };
+      const dir = plant(lacking);
+      expect(noticeProblems(dir, packedOf(lacking), repo)).toEqual([
+        `${NOTICE}: no section for foo 1.2.3, which dist/a.js inlines`,
+      ]);
+      const extra = {
+        ...carrier,
+        "THIRD-PARTY-NOTICES.md": [
+          "## @s/bar 2.0.0",
+          "## foo 1.2.3",
+          "## baz 0.1.0",
+        ],
+      };
+      const stale = plant(extra);
+      expect(noticeProblems(stale, packedOf(extra), repo)).toEqual([
+        `${NOTICE}: section baz 0.1.0 is inlined by no JS beside it`,
+      ]);
+    });
+
+    it("flags a notice with no carrier beside it, ignoring a .d.ts", () => {
+      const files = { ...clean, "THIRD-PARTY-NOTICES.md": ["## foo 1.2.3"] };
+      const dir = plant(files);
+      expect(noticeProblems(dir, packedOf(files), repo)).toEqual([
+        `${NOTICE}: packed but no JS beside it inlines third-party code`,
+      ]);
+    });
+
+    it("passes a matching notice and a clean dir with none", () => {
+      const files = {
+        ...carrier,
+        "THIRD-PARTY-NOTICES.md": ["## @s/bar 2.0.0", "", "## foo 1.2.3"],
+      };
+      const dir = plant(files);
+      expect(noticeProblems(dir, packedOf(files), repo)).toEqual([]);
+      const none = plant(clean);
+      expect(noticeProblems(none, packedOf(clean), repo)).toEqual([]);
+    });
+  });
+
+  describe("writeThirdPartyNotices", () => {
+    const clean = { "b.cjs": [OWN, "module.exports = 1;"] };
+
+    it("throws naming the dir when required and nothing is inlined", () => {
+      const dir = plant(clean);
+      const dist = join(dir, "dist");
+      expect(() =>
+        writeThirdPartyNotices(dist, {
+          required: true,
+          baseDir: dir,
+          repoRoot: repo,
+        }),
+      ).toThrow(`no JS file in ${dist} inlines third-party code`);
+      expect(existsSync(join(dist, NOTICES_FILE))).toBe(false);
+    });
+
+    it("writes nothing and returns [] when not required", () => {
+      const dir = plant(clean);
+      const dist = join(dir, "dist");
+      expect(
+        writeThirdPartyNotices(dist, {
+          required: false,
+          baseDir: dir,
+          repoRoot: repo,
+        }),
+      ).toEqual([]);
+      expect(existsSync(join(dist, NOTICES_FILE))).toBe(false);
+    });
+
+    it("writes the carriers' heading, then the fork, vendored and npm sections", () => {
+      const dir = plant({
+        ...clean,
+        "a.js": [FOO, VENDOR, OWN],
+        "d.mjs": [marked, BAR],
+      });
+      const dist = join(dir, "dist");
+      expect(
+        writeThirdPartyNotices(dist, {
+          required: true,
+          baseDir: dir,
+          repoRoot: repo,
+        }),
+      ).toEqual(["a.js", "d.mjs"]);
+      const lines = readFileSync(join(dist, NOTICES_FILE), "utf8").split("\n");
+      expect(lines.slice(0, 3)).toEqual([
+        "# Third-party code in a.js, d.mjs",
+        "",
+        "`a.js`, `d.mjs` bundle the code below. Each is distributed under its own licence.",
+      ]);
+      expect(lines.filter((l) => l.startsWith("## "))).toEqual([
+        `## @babel/parser ${tag?.slice(1)} (vendored as \`@mxlang/babel\`)`,
+        "## Vendored code in `packages/lib/vendor`",
+        `## @babel/helper-validator-identifier ${versionOf("@babel/helper-validator-identifier")}`,
+        "## @s/bar 2.0.0",
+        `## charcodes ${versionOf("charcodes")}`,
+        "## foo 1.2.3",
+      ]);
+      expect(lines.slice(-4)).toEqual(["## foo 1.2.3", "", "foo MIT", ""]);
+    });
   });
 });
 
