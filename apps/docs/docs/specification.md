@@ -738,14 +738,18 @@ A concise line starting with `/` that is not `//` or `/*` is likewise an error:
 
 **Corrected 2026-09-17 (core PR #103, main `50877ea8`), superseding the rule
 this section stated before.** In concise mode a bare `${expr}` on its own line
-parses as a **`MarkoTag` whose `name` is the expression**, with no attributes
-and no body — the grammar has no other shape for it. Real Marko does not treat
-that as a text placeholder: a bare `${expr}` line and the tagged `<${expr}
-.../>` form parse to the identical node and are **the same dynamic-tag
-construct** (§11/§7). Marko's own fixture
-(`packages/targets/html/fixtures-marko/error-dynamic-tag-name/`) proves it: a
-bare `${tagName}` at column 0 fails at render with "Invalid tag name" — it
-compiled to a dynamic tag, not a placeholder.
+parses as a **tag whose name is the expression**, with no attributes and no
+body — the grammar has no other shape for it, as in Marko. In the MX AST that
+is an `MxTag` whose `MxTagName` is kind `dynamic` (ast.md §3.3). Real Marko
+does not treat that as a text placeholder: in Marko a bare `${expr}` line and
+the tagged `<${expr} .../>` form parse to the identical node, in MX both are a
+dynamic-name `MxTag`, and they are **the same dynamic-tag construct**
+(§11/§7). Marko's own fixture `error-dynamic-tag-name` proves it: a bare
+`${tagName}` at column 0 fails at render with "Invalid tag name" — it compiled
+to a dynamic tag, not a placeholder. The in-repo stock proof is
+`packages/targets/html/fixtures-marko/dynamic-tag-bare/`: `${input.tag}` with
+`tag: "div"` renders `<div></div>` under stock Marko (`oracle:marko`), an
+element, not text.
 
 Both shapes now lower alike (`lowerTag`: a `DelegatedTag` for a host
 claiming `DYNAMIC_TAG` with `shape` `"bare"`/`"tagged"`, or, unclaimed, a
@@ -758,9 +762,9 @@ claiming `DYNAMIC_TAG` with `shape` `"bare"`/`"tagged"`, or, unclaimed, a
   for either shape — no compile error, no silent `Interpolation`.
 
 Text on its own line needs the escape hatch, `-- ${expr}`. A placeholder
-inside an HTML-syntax body (`<div>${expr}</div>`) is unrelated: it parses as a
-real `MarkoPlaceholder`, never a `MarkoTag`, and never reaches this rule at
-all — `${expr}` there is always an ordinary interpolation.
+inside an HTML-syntax body (`<div>${expr}</div>`) is unrelated: it parses as
+an `MxPlaceholder`, never a tag, and never reaches this rule at all —
+`${expr}` there is always an ordinary interpolation.
 
 The superseded rule (MX 1.0 through 2026-09-17) treated an unclaimed bare
 shape as a silent `Interpolation` — an undocumented divergence from Marko with

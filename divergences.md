@@ -184,10 +184,12 @@ lower to an escaped interpolation whenever no host claimed `DYNAMIC_TAG` —
 treating Marko's placeholder-shaped `MarkoTag` as though it always meant a
 text placeholder. Real Marko does not: Marko's own fixture
 `error-dynamic-tag-name`
-(`packages/targets/html/fixtures-marko/error-dynamic-tag-name/`,
-`static const tagName = "hello world"` then `${tagName}` at column 0) fails at
+(`static const tagName = "hello world"` then `${tagName}` at column 0) fails at
 render with `"Invalid tag name"`, because it compiled to a dynamic tag, not a
-placeholder. A bare `${expr}` line and `<${expr}/>` parse to the identical
+placeholder. The in-repo stock fixture
+`packages/targets/html/fixtures-marko/dynamic-tag-bare/` shows the same fact:
+`${input.tag}` with `tag: "div"` renders `<div></div>` under stock Marko
+(`oracle:marko`). A bare `${expr}` line and `<${expr}/>` parse to the identical
 Marko node (see the "four Marko facts" in `AGENTS.md`); MX 1.0's bare-is-text
 special case was an undocumented divergence from that, never a recorded one.
 Fixed: `@mxlang/core`'s `lowerTag` now treats both shapes as the dynamic-tag
