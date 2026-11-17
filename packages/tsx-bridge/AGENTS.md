@@ -21,7 +21,7 @@ A host claims the **lowering** of each region through the `mxRegionCompile` pars
 
 Two syntax decisions are settled and encoded in `@mxlang/host-solid`'s lowering (`packages/hosts/solid/README.md`'s table is the authoritative version; this is the summary):
 
-- **Whitespace follows Marko, not JSX.** A whitespace-only text run containing a newline is dropped entirely, so indented markup renders nothing between children; a whitespace-only run without a newline collapses to one space. `${" "}` is the escape hatch. Comments are dropped from the output and do not count as content when trimming. This is Marko's own `onText` rule, the same one every host relies on — see the four Marko facts below.
+- **Whitespace follows Marko, not JSX.** A whitespace-only text run containing a newline is dropped entirely, so indented markup renders nothing between children; a whitespace-only run without a newline collapses to one space. `${" "}` is the escape hatch. Comments are dropped from the output and do not count as content when trimming. The rule is Marko's, applied once by the MX front end when it builds `MxText` (`apps/docs/docs/architecture/ast.md` §3.8), and every host relies on it — see the four Marko facts below.
 - **Void elements need no slash.** `<input value=x>` parses. The set (`area base br col embed hr img input link meta param source track wbr`) is declared to htmljs-parser as `TagType.void`; a void tag written with a closing tag is a parse error.
 - **Shorthand `class` merges with a string or an object; anything else is a parse error.** Shorthand plus a *string* `class="x"` merges to `class="card x"` (shorthand first). Shorthand plus an **object literal** merges to Solid 2's array form, `class={["card", {...}]}`, the string entry always-on and the object toggling; a static `class="x"` present as well folds into that string entry (`class={["card x", {...}]}`) rather than being emitted as a second `class` attribute. Shorthand plus any *other* dynamic `class=` expression (an identifier, a call, a ternary) is a parse error. `#id` shorthand combined with an explicit `id=` is a parse error. `style=` only accepts an object-literal value (`style={color: c()}` → `style={{color: c()}}`); any other `style=` expression is a parse error for v1.
 - **Tag params and attribute tags are generic, not control-tag-only**,
@@ -91,9 +91,11 @@ covered by the `.marko` alias in the first place.
   only template extension or by the dialect's retirement.
 - `compile(source, filename)` in `@mxlang/target-html` — a whole-file MX
   template (`.mx`, stock Marko syntax with no dialect layered on top).
-  `@marko/compiler` parses, validates and supplies the tag registry; the
-  package supplies only a translator (`packages/targets/html/src/translate.ts`)
-  and its own taglib (`packages/core/src/taglib/core-tags.json`, exported as `CORE_TAGLIB`).
+  `@mxlang/core`'s `compileSource` parses it with the MX front end
+  (`@mxlang/parser/frontend`), and core's tag table supplies the tag
+  registry from the translator's taglibs (`ast.md` §1.4); the package
+  supplies the policy (`packages/targets/html/src/translate.ts`) and its own
+  taglib (`packages/core/src/taglib/core-tags.json`, exported as `CORE_TAGLIB`).
   `@mxlang/tsx-bridge` is not on this path at all. `compile()`/`compileFile()`
   themselves do not gate on the filename extension (it is inert in
   `@mxlang/core`'s `compileSource` too — the extension check lives at the
@@ -101,41 +103,48 @@ covered by the `.marko` alias in the first place.
   `@mxlang/vite-plugin`'s `mx()` both accept only `.mx`, excluding
   `.solid.mx`.
 
-Four Marko facts that are easy to get wrong (all measured against
-`@marko/compiler` 5.42.5, all cost real debugging time):
+Four Marko facts that are easy to get wrong (Marko's rules, measured against
+`@marko/compiler` 5.42.5, which the MX front end reproduces; all cost real
+debugging time):
 
-- **Marko's `onText` already implements the line-based whitespace rule.** `<p>\n  a\n</p>` gives
-  `MarkoText "a"` — a whitespace-only run containing a newline is dropped —
-  and `a   b` gives `"a b"`. The string translator therefore does **not**
-  re-normalize, and does not call `normalizeText()`. Do not add a second
-  normalization pass on that path; it would double-collapse.
-- **`import` / `static` / `export` parse as *tags*, not statements**, whose
-  attributes are the remaining words. To recover the statement text, slice by
-  **`loc` line/column**: `start` and `end` are **`undefined`** on these nodes.
-  (An earlier version of this file said "the tag's range is the statement's
-  source span" — true of `loc`, not of `start`/`end`.) Import binding names
-  are then re-parsed with `parseBabel`, never regex-scraped.
-- **A bare top-level `${expr}` line is a `MarkoTag` whose `name` is the
-  expression**, not a `MarkoPlaceholder` — concise mode has no other shape for
-  it, and it is the dynamic-tag construct, the same as the tagged
+- **Text arrives normalized, by Marko's line-based whitespace rule.** Marko's
+  `onText` turns `<p>\n  a\n</p>` into the text `"a"` — a whitespace-only run
+  containing a newline is dropped — and `a   b` into `"a b"`. The MX front end
+  applies the same rule once, so `MxText.value` arrives normalized
+  (`apps/docs/docs/architecture/ast.md` §3.8) and lowering copies it as is.
+  Nothing re-normalizes it: do not add a second normalization pass; it would
+  double-collapse.
+- **`import` / `static` / `export` arrive as `MxModuleStatement` nodes**, with
+  their keyword, their parsed statements and their offsets (`ast.md` §3.10),
+  because every MX parse supplies the statement keywords (`ast.md` §1.4).
+  Marko's parser, without that set, reads them as *tags* whose attributes are
+  the remaining words. Import binding names come from the Babel
+  `ImportDeclaration` the front end parsed into the statement
+  (`importFactsOf` in `packages/core/src/lower.ts`), never regex-scraped.
+- **A bare top-level `${expr}` line is a tag whose name is the expression**
+  (in the MX AST an `MxTag` whose `MxTagName` is kind `dynamic`, `ast.md`
+  §3.3), not a placeholder — the concise syntax, as in Marko, has no other
+  shape for it, and it is the dynamic-tag construct, the same as the tagged
   `<${expr} .../>` form: `@mxlang/core`'s `lowerTag` routes both shapes to a
   claiming host's `DelegatedTag` (`shape` "bare"/"tagged"), or, when no host
   claims `DYNAMIC_TAG`, to a `Component` with a dynamic target. Marko's own
-  fixture `error-dynamic-tag-name`
-  (`packages/targets/html/fixtures-marko/error-dynamic-tag-name/`) is the
-  proof: `static const tagName = "hello world"` then `${tagName}` at column 0
-  fails at render with "Invalid tag name" — it compiled to a dynamic tag, not
-  a placeholder. Text on its own line needs the escape hatch, `-- ${x}`. A
-  placeholder inside an HTML-syntax body (`<div>${x}</div>`) is unrelated: it
-  parses as a real `MarkoPlaceholder`, never a `MarkoTag`, and never reaches
-  `lowerTag` at all. See `divergences.md`'s "Fixed: undocumented divergence
+  fixture `error-dynamic-tag-name` is the proof: `static const tagName =
+  "hello world"` then `${tagName}` at column 0 fails at render with "Invalid
+  tag name" — it compiled to a dynamic tag, not a placeholder. Text on its
+  own line needs the escape hatch, `-- ${x}`. A placeholder inside an
+  HTML-syntax body (`<div>${x}</div>`) is unrelated: it parses as a real
+  placeholder (`MxPlaceholder`), never a tag, and never reaches `lowerTag` at
+  all. See `divergences.md`'s "Fixed: undocumented divergence
   in the bare `${expr}` line" for the history — MX 1.0 used to treat every
   unclaimed bare shape as a silent interpolation, which was never a
   documented divergence from Marko.
-- **`<!doctype html>` arrives as a `MarkoDocumentType` node** whose `value` is
-  `doctype html` (delimiters stripped), so it is re-emitted as `<!${value}>`.
-  Marko strips comment delimiters too, which is why an HTML comment and a `//`
-  line comment are told apart by re-reading the source at the node's `loc`.
+- **`<!doctype html>` arrives as an `MxDoctype` node** whose `value` is
+  `doctype html` (delimiters stripped, as Marko strips them), so it is
+  re-emitted as `<!${value}>`. Marko strips comment delimiters too, so an HTML
+  comment and a `//` line comment have the same `value`; the front end
+  records which one it read in `MxComment.kind` (`ast.md` §3.11), and
+  lowering reads that instead of re-reading the source (`lower.ts`'s
+  `MxComment` case).
 
 `@mxlang/target-html`'s translator (`translate.ts`'s dispatch) decides
 component-vs-HTML dispatch by **what the tag resolves to, not by case alone**:

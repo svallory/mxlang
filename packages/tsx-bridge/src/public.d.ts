@@ -213,8 +213,9 @@ declare module "@mxlang/tsx-bridge" {
    * Parses a region file (TypeScript with MX regions, `.<host>.mx`) into a
    * Babel `File` of standard node types.
    *
-   * Whole-file `.mx` templates are not parsed here: `@mxlang/target-html`
-   * drives `@marko/compiler` with its own translator instead (ADR 0001).
+   * Whole-file `.mx` templates are not parsed here: `@mxlang/core`'s
+   * `compileSource` parses them with the MX front end
+   * (`@mxlang/parser/frontend`).
    */
   export function parse(
     source: string,

@@ -2,7 +2,7 @@
  * The vanilla HTML host's string emitter, over `@mxlang/core`'s IR.
  *
  * The core lowers a template to an `Ir`; this file turns that tree into the
- * emitted module's lines. Nothing here walks a Marko node: every decision was
+ * emitted module's lines. Nothing here walks an AST node: every decision was
  * already made by `lower()`, and what arrives is kinds, printed expressions
  * and positions.
  *
@@ -1218,8 +1218,9 @@ export function createEmitter(
     state,
 
     text(node) {
-      // Marko's own `onText` dropped newline-bearing whitespace runs and
-      // collapsed the rest before the lowerer saw them.
+      // The front end normalized the text by Marko's whitespace rule,
+      // dropping newline-bearing whitespace runs and collapsing the rest,
+      // before the lowerer saw it.
       literal(node.value);
       // An inert tag's default value renders nothing; the projection still
       // evaluates it, so a type error in it is reported at the authored text.
@@ -1705,7 +1706,7 @@ export function createEmitter(
    * The tags this host claims for itself, each with its parts already
    * resolved.
    *
-   * `data` is what `resolveDelegatedTag` decided while the Marko node was still in
+   * `data` is what `resolveDelegatedTag` decided while the authored node was still in
    * hand, so nothing here re-inspects one.
    */
   function emitDelegatedTag(tag: DelegatedTag): void {
@@ -1951,7 +1952,7 @@ export function createEmitter(
       case "dynamic": {
         // The children are the ones the **core** already resolved into
         // `tag.children`. Re-resolving them in `resolveDelegatedTag` (the shape
-        // this replaced) walked the same Marko nodes a second time, which
+        // this replaced) walked the same nodes a second time, which
         // replayed every lowerer side effect — hoists and binding
         // registrations — and made nested dynamic tags lower exponentially.
         const content: Block | null =

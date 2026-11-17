@@ -15,15 +15,15 @@ It contains:
   `0`, every other falsy value (`false`, `NaN`, `0n`, `""`) as nothing, as
   Marko 6.4.4's `_escape`/`_unescaped` do. `escape` itself also serves
   attribute values, which follow Marko's other rule, so it stays unchanged.
-- `compile(source, filename, options?)` -> `{ code, map }`, driving the
-  translator under `@marko/compiler`. `options.strict` swaps in `strictPolicy`
-  (see the translator section below). The map is currently an identity
-  placeholder: the translator builds text directly rather than printing an
-  AST. Marko's nodes do carry real `loc`, so genuine mappings are now
-  possible — a separate task.
+- `compile(source, filename, options?)` -> `{ code, map }`, compiling through
+  `@mxlang/core`'s `compileSource`. `options.strict` swaps in `strictPolicy`
+  (see the translator section below). The map is currently a placeholder with
+  empty `mappings`: the translator builds text directly rather than printing
+  an AST. MX AST nodes carry file offsets, so genuine mappings are possible —
+  a separate task.
 - `TranslateError` — a construct that parses as Marko but has no string
-  lowering, carrying `line`/`column` rather than byte offsets, because that is
-  what Marko's nodes have.
+  lowering, carrying `line`/`column`, plus file-offset `spans` where its
+  raiser gives them.
 
 Emitted module shape (the Marko render model): one runtime
 import (`escape`, `createOut`, `createBufferedOut` only when a `<try>` uses it,
@@ -48,8 +48,8 @@ a test fixture that nests its own `package.json` must make `@mxlang/target-html`
 resolvable (see `linkRuntime` in `bun.test.ts`).
 
 Whitespace on **every** host, Solid included, is the line-based whitespace rule
-applied once, by Marko's own `onText` before `@mxlang/core`'s resolver ever
-sees a `MarkoText` node (see the four Marko facts in `packages/tsx-bridge/AGENTS.md`) — there is no
+applied once, by the MX front end, before `@mxlang/core`'s lowering ever
+sees an `MxText` node (see the four Marko facts in `packages/tsx-bridge/AGENTS.md`) — there is no
 separate Solid-specific whitespace pass to keep in sync; a second
 implementation on any host's path would collapse whitespace twice.
 
@@ -60,15 +60,17 @@ Goldens live at `packages/targets/html/fixtures-marko/<name>/` with
 
 ## `@mxlang/target-html`: the vanilla html target on `@mxlang/core`
 
-`packages/targets/html` (`@mxlang/target-html`) compiles an
-**ordinary Marko template** to a runtime-free `(input) => string` module. Not
-a dialect: tag discovery through taglibs and `tags/` directories, Marko's own
-HTML/SVG/MathML element registry, Marko's attribute-tag and component
-conventions. The seam is `config.translator` — package-name discovery is a
-dead end, since 5.42.5 scans only `@marko/runtime-*`.
+`packages/targets/html` (`@mxlang/target-html`) compiles an `.mx` template
+in **ordinary Marko syntax** (not a `.marko` file) to a runtime-free
+`(input) => string` module. Not a dialect: elements come from
+`@mxlang/web-elements` (whose lists equal Marko's HTML/SVG/MathML taglibs),
+tags from imports, `<define>` and core's own `tags/` scan (`getCustomTags`),
+and attribute tags and components follow Marko's conventions. The seam is the
+translator core builds from the package's taglib and policy; `compileSource`
+runs its `Program.exit` itself.
 
 The generic half now lives in `packages/core` (`@mxlang/core`) — see
-"`@mxlang/core`: the Marko-node consumer" in `packages/core/AGENTS.md`.
+"`@mxlang/core`: the MX AST consumer" in `packages/core/AGENTS.md`.
 `packages/targets/html` keeps
 `translate.ts` (the policy rows, `strictPolicy`), `bun.ts`, `types/`,
 `example.ts`, the taglib and the fixtures; its `index.ts` is a thin wrapper
@@ -300,7 +302,10 @@ configuration), and `<script>` is the one inert tag taking a body (raw text).
 
 Some constructs need no row at all, because Marko's own parser rejects them
 before a translator runs — do not add code for these, and do not read their
-absence as tolerance: `key=` on an element, and `$!{…}` in an attribute value.
+absence as tolerance: `key=` on an element. `$!{…}` in an attribute value
+needs no row either: the MX front end refuses it before lowering runs
+(`MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE`,
+`packages/parser/src/frontend/parse.ts`).
 
 `class:foo`/`style:foo` are a separate category: **not Marko syntax**, rather
 than something this target cannot express. Marko has no such modifier and says

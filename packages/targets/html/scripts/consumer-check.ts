@@ -98,7 +98,7 @@ console.log("[consumer-check] packing tarball...");
 const tarballPath = packTarball(pkgDir);
 console.log(`[consumer-check] packed: ${tarballPath}`);
 
-// `@mxlang/core` (the Marko-node consumer, `translate.ts`'s import source)
+// `@mxlang/core` (the MX AST consumer, `translate.ts`'s import source)
 // is a real runtime dependency, not a devDependency, but it is `private:
 // true` and not on the npm registry — a plain `bun add` of the translator
 // tarball 404s resolving it. Packing and installing it too proves this

@@ -1,8 +1,8 @@
 /**
- * `@mxlang/target-html`'s dialect policy: stock `.marko`, expressions-only.
+ * `@mxlang/target-html`'s policy: `.mx` templates in stock Marko's syntax,
+ * expressions only.
  *
- * The lowering core is shared with `@mxlang/target-html`
- * (`@mxlang/target-html`'s `core.ts`); this file supplies only what differs, and
+ * The lowering is `@mxlang/core`'s; this file supplies only what differs, and
  * every difference is a property of *stock Marko's conventions* rather than a
  * preference:
  *
@@ -13,12 +13,14 @@
  *   render, not assumed. `@mxlang/target-html` passes callable function props
  *   instead (S3); a translator that confused the two would compile happily
  *   and render the wrong markup.
- * - **Components are discovered**, through Marko's taglib lookup: an
- *   `import`, or a `tags/` directory beside the template. No explicit import
- *   is required, because requiring one is MX's convention and not Marko's.
- * - **Elements come from Marko's registry**, so a tag Marko adds or removes
- *   reaches this translator on a pin bump rather than through a hand-edited
- *   set — ADR 0001's entire point.
+ * - **Components are discovered**: an `import`, a `<define>`, or a file in a
+ *   `tags/` directory beside the template, found by core's own scan
+ *   (`getCustomTags`). No explicit import is required, because requiring one
+ *   is MX's convention and not Marko's.
+ * - **Elements come from `@mxlang/web-elements`** (`WEB_ELEMENTS`). Its lists
+ *   equal Marko's taglibs, and `packages/stock-marko/src/web-elements.test.ts`
+ *   pins them, so a Marko bump that adds or drops an element fails there
+ *   instead of changing what an element is.
  *
  * The disposition table below is the interesting part. The test
  * for each construct is not "can this code lower it" but "does this target
@@ -1155,7 +1157,7 @@ export const DYNAMIC = DYNAMIC_TAG;
 /**
  * What `resolveDelegatedTag` decides about a tag this host claims, for its emitter.
  *
- * Recorded while the Marko node is still in hand (the `data` slot),
+ * Recorded while the authored node is still in hand (the `data` slot),
  * so the emitter never re-inspects one to recover a decision the resolver
  * already made.
  */
@@ -1241,7 +1243,7 @@ function resolveDelegatedTag(
   if (name === DYNAMIC_TAG) {
     // Only the target expression is decided here. The children are *not*
     // resolved again: the core has already resolved them into the
-    // `DelegatedTag`'s own `children`, and walking the same Marko nodes a second
+    // `DelegatedTag`'s own `children`, and walking the same AST nodes a second
     // time replays every resolver side effect (hoists, binding
     // registrations) and makes nested dynamic tags resolve exponentially.
     // The emitter builds the `content` block from `tag.children`.
@@ -1806,7 +1808,7 @@ export const MX_COMPONENT = Symbol.for("mx.component");
  * its own components. Fail loud at the seam that broke.
  *
  * A plain `Error`, not a `TranslateError`: this runs over emitted text, not
- * over a Marko node, so there is no source line or column to carry and
+ * over an AST node, so there is no source line or column to carry and
  * inventing one would point the reader at innocent template code.
  *
  * The real fix is to stop matching text at all — load the emitted module and

@@ -3,7 +3,7 @@
  *
  * A `.mx` template becomes a pure `(input) => string` function: no runtime
  * beyond the `escape` helper, no framework. Everything generic —
- * the Marko-node consumer, the `config.translator` seam, the emit model —
+ * the MX AST consumer, the translator seam, the emit model —
  * lives in `@mxlang/core`; this package supplies the *policy* (`translate.ts`)
  * and the integrations (the Bun loader, the `escape` runtime, the taglib).
  *
