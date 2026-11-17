@@ -14,7 +14,13 @@ tasks:
   test:
     command: "vitest"
     args: ["run", "--root", "../..", "--project", "@mxlang/core*"]
+    # `src/babel.ts` imports `@mxlang/parser/frontend/babel`, i.e. the
+    # parser's `dist/babel.js`: build it first so tests never read a stale one.
+    deps: ["parser:build"]
     inputs:
       - "src/**/*"
+      - "/packages/parser/src/**/*"
+      - "/packages/parser/package.json"
+      - "/packages/babel/src/**/*"
       - "/vitest.config.ts"
       - "/scripts/vitest-lanes.ts"
