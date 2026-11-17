@@ -131,10 +131,10 @@ describe("mx-helpers on Bun (virtual-module require path)", () => {
     }
   });
 
-  // Bun 1.3.14 (the CI pin) cannot resolve a `data:` URL past ~1.5 KB:
+  // Bun 1.3.14 cannot resolve a `data:` URL past ~1.5 KB:
   // `NameTooLong while resolving package 'data:text/typescript;base64,…'`.
-  // Bun 1.4.2 has no such limit, so these only go red on the pinned Bun — run
-  // them with `~/.proto/tools/bun/1.3.14/bun` to see the regression.
+  // Bun 1.4.2 has no such limit, so these only go red on a Bun before 1.4
+  // (1.3.14 measured) — run them under a Bun 1.3.x to see the regression.
   it("evaluates a template whose emitted module is far past any data: URL limit", () => {
     const big = "lorem ipsum dolor sit amet ".repeat(400);
     const render = mx<{ n: number }>(`<p>${big}\${input.n}</p>`);

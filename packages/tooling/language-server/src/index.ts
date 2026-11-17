@@ -3,7 +3,7 @@
  * See `README.md` for what it does and does not do.
  */
 
-// Bun 1.3.14 (the build pin) drops the bindings of a re-export-only entry
+// Bun 1.3.14 drops the bindings of a re-export-only entry
 // when the bundled lazy descriptor graph is reachable: dist/index.js shrinks
 // to a 69-byte export barrel whose named exports have no definitions, so Node
 // ESM rejects it before loading the server. Explicit exported value bindings

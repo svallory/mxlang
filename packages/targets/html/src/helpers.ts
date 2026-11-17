@@ -22,7 +22,7 @@
  * - **Bun**: a `Bun.plugin` virtual module (`build.module(name, …)`) under
  *   the same private `mx-virtual:` scheme Node uses, evaluated with a
  *   synchronous `require()` and Bun's own real TypeScript stripping. Not a
- *   `data:` URL: Bun 1.3.14 (the CI pin) fails `require("data:…")` with
+ *   `data:` URL: Bun 1.3.14 fails `require("data:…")` with
  *   `NameTooLong while resolving package 'data:text/typescript;base64,…'`
  *   once the URL passes ~1.5 KB, and a nested tag's `data:` URL is embedded
  *   base64-in-base64 in its importer, so any page that calls a tag crosses

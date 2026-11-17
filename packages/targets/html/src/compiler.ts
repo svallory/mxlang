@@ -10,8 +10,8 @@
  *
  * Revision BUG 1 (rev-245 §1): when the descriptor reached the compile entry
  * through `require("./index.ts")` and the index imported the descriptor back,
- * Bun's multi-entry build silently dropped `dist/index.js` with exit 0 on the
- * pinned Bun 1.3.14. The acyclic graph is what makes the bundler keep every
+ * Bun's multi-entry build silently dropped `dist/index.js` with exit 0 on
+ * Bun 1.3.14. The acyclic graph is what makes the bundler keep every
  * entry (`packages/target-registry/src/bundle-smoke.test.ts` pins it).
  */
 

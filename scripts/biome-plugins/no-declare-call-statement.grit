@@ -1,4 +1,4 @@
-// Bun 1.3.14 (the CI pin) erases every expression statement whose first token
+// Bun before 1.4.2 (measured on 1.3.14) erases every expression statement whose first token
 // is `declare` (`declare(x);`, `declare?.(x);`, `declare.call(null, x);`,
 // `declare(x) + 1;`, ...) as an ambient declaration, under `bun run`,
 // `bun test` and `bun build`. Without a semicolon it also erases the statement
