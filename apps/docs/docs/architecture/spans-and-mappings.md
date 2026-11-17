@@ -9,9 +9,9 @@ When the core lowers structural tags (e.g. `<if>`, `<for>`) to a host's represen
 
 ## Position Mapping
 
-The core consumes Marko's AST through `@marko/compiler` and records source spans for elements, tags, attributes, and expressions. When resolving that AST into the IR and emitting through a host emitter, those spans are preserved and turned into mappings.
+The core parses the source with MX's front end (`@mxlang/parser`), whose nodes carry file offsets, and records source spans for elements, tags, attributes, and expressions. Lowering that AST into the IR and emitting through a host emitter keeps those spans and turns them into mappings.
 
-- **Expressions:** an expression is **sliced from the original source text** rather than printed back from a parsed node. That is deliberate, and it is what keeps TypeScript syntax intact: Marko's parser drops type arguments from the AST, so a regenerated node would be missing them, while the original text retains exactly what the author wrote. `${pick<string>("lo")}` emits `pick<string>("lo")`, type argument and all.
+- **Expressions:** an expression is **sliced from the original source text** rather than printed back from a parsed node. That is deliberate, and it is what keeps TypeScript syntax intact: for a build, the core strips TypeScript from every parsed expression before lowering (the `stripTypes` option), so a node printed back would be missing its type arguments, while the source text keeps exactly what the author wrote. `${pick<string>("lo")}` emits `pick<string>("lo")`, type argument and all.
 - **Component tags and attributes:** the spans for a component's tag name, each attribute name, and each `<@name>` attribute tag are recorded, so passing a wrong prop to an imported `.mx` component reports the error *at that attribute* rather than at the opening tag or the whole call.
 - **Hoisted blocks:** `static` blocks, `import`s, `export`s and `export interface Input` map as one span covering the statement's own source range, so a diagnostic inside one lands within the author's own line.
 

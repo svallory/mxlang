@@ -218,24 +218,21 @@ Babel node's positions are file-relative: params as `(${str})=>{}` with offset 1
 `(${str}\n)=>{}` (966), type arguments as `_<${str}>` (978), type parameters as
 `<${str}>()=>{}` (983).
 
-### 1.4 How MX gets a Marko tree today
+### 1.4 How MX parses today
 
-Two entry points, both through `compileSync`:
+Two entry points, `compileSource` (`packages/core/src/compile.ts`) and
+`parseFragment` (`packages/core/src/fragment.ts`), both call `parseMx`
+(`packages/core/src/mx-parse.ts`). `parseMx` runs `parse` from
+`@mxlang/parser/frontend` with a `tagShape` callback and the statement
+keywords read from core's tag table (`tag-table.ts`). That table is built from
+the taglibs of the host's translator (`compile.ts` `translatorClaiming`, which
+`createTranslator` wraps) or of the parse-only translator (`fragment.ts`
+`parseOnlyTranslator`). The result is an `MxDocument` (§3.1); `@marko/compiler`
+does not parse. `compileSource` then runs `lower()` by calling the
+translator's `Program.exit` itself with the document's body.
 
-- `parseFragment` (`packages/core/src/fragment.ts`) with
-  `PARSE_ONLY_TRANSLATOR` (`fragment.ts`): **no core taglib**. Probe:
-  `import x from "./y"` parses as a `MarkoTag` named `import` with attributes
-  `x`, `from` and `"./y"`; `class { x = 1 }` as a tag `class` with one
-  attribute named `{ x = 1 }`.
-- `compileSource` (`packages/core/src/compile.ts`) with the host's
-  translator (`compile.ts` `createTranslator`), which registers MX's core taglib
-  (`packages/core/src/taglib/core-tags.json`; `statement: true,
-  rawOpenTag: true` for `import`, `static`, `export`, `client`, `server`,
-  `class` at lines 75-90; `controlFlow: true` for `if`, `else`, `else-if`,
-  `for` at 4-16). Probe `core.ts`: the same statement then parses as a
-  `MarkoTag` named `import` with no attributes and `rawValue: "import x from
-  \"./y\""`. `lower()` runs in the translator's `Program.exit`
-  (`compile.ts` `createTranslator`).
+Marko's own parser, without MX's core taglib, reads `import x from "./y"` as a
+`MarkoTag` named `import` with attributes `x`, `from` and `"./y"`.
 
 ## 2. Accommodations removed
 
@@ -256,7 +253,7 @@ the row says "not stated".
 | A9 | `MarkoClass` (`[C]babel.js:8152-8161`), a `Class`-aliased node. | Marko 5's class components. | MX has no class components; `class` is not a statement MX accepts (`lower.ts` `lowerStatement` rejects anything but `import`/`static`/`export`). | No node. `class { }` at the top level is an `MxModuleStatement { keyword: "class" }` that lowering rejects (§3.10), so the error keeps its position. |
 | A10 | `MarkoParseError` is an `Expression` and `Statement` alias (`[C]babel.js:8070-8074`) put in place of the failed expression; `onError` from the template parser **throws** (`[C]chunk-src.js:5975-5984`). Two error channels, neither carries a code. | Lets the translator keep going until it reaches the bad expression, then throw. | MX requires structured errors from its parser. MX needs every error as data: a code, a range, a message. Several template errors per parse would need parser recovery, which is ruled out for now (Q20). | `MxParseError { code, origin, message, start, end }` in `MxDocument.errors`, and an `error` field on the expression container that failed (§3.13, §4). Expression and front-end errors no longer throw; a template-parser error still ends the parse (htmljs `emitError`), but the tree built so far is kept (§3.13); `compileSource` lowers no document with errors and reports them all (§3.13). |
 | A11 | Tag params and tag type parameters are stored on **`MarkoTagBody`** (`[C]chunk-src.js:6059`, `:6102`), not on the tag. | `MarkoTagBody` is the Babel scope that binds them (A1). | The params belong to the tag head the author wrote; scope is a lowering concern. | `MxTag.params`, `MxTag.typeParams` (§3.2). The body is a plain child list. |
-| A12 | Positions: Marko nodes get `start`/`end` and a `loc` without `index` (`withLoc`, `[C]chunk-src.js:5909-5914`), then lose `start`/`end` in the clone (`[C]chunk-src.js:6710`, `[C]babel.js:13217-13241`); Babel nodes keep `loc.index`. Position objects are shared between nodes (`packages/core/AGENTS.md`, `parseFragment` bullet). `Program.end` is `code.length - 1` (`[C]chunk-src.js:6241`). | Babel's `File`/`loc` model; the clone is how the compiler hands the tree to Babel. | One numeric span on every node, file-relative, in UTF-16 units, with line/column computed on demand (§5). | `start`/`end` on every MX node; no `loc` stored (§5). |
+| A12 | Positions: Marko nodes get `start`/`end` and a `loc` without `index` (`withLoc`, `[C]chunk-src.js:5909-5914`), then lose `start`/`end` in the clone (`[C]chunk-src.js:6710`, `[C]babel.js:13217-13241`); Babel nodes keep `loc.index`. Position objects are shared between nodes. `Program.end` is `code.length - 1` (`[C]chunk-src.js:6241`). | Babel's `File`/`loc` model; the clone is how the compiler hands the tree to Babel. | One numeric span on every node, file-relative, in UTF-16 units, with line/column computed on demand (§5). | `start`/`end` on every MX node; no `loc` stored (§5). |
 | A13 | Text is whitespace-normalized in the front end, with neighbour lookahead (`[C]chunk-src.js:5985-6037`); the node's `loc` is moved to the trimmed text. | Marko's HTML output rules. | MX needs both: the normalized value the IR's `Text.value` carries, and the authored span (`ir.ts` `ComponentTarget`). | `MxText { value, raw }` plus span (§3.8, §8 D6). |
 | A14 | Open-tag comments become Babel comments attached to the next attribute, the last attribute, or the tag (`[C]chunk-src.js:5941-5948`). | Babel's comment attachment model. | A comment is source; tools need it where it was written. | `MxComment` items in `MxTag.attributes` order (§3.11). |
 | A15 | The tag's parse mode (text, void, statement, preserve-whitespace) comes from a taglib lookup at name time (`[C]chunk-src.js:6080-6086`), fed by Marko's built-in element taglibs (`marko-html.json` at `[C]chunk-src.js:3057`, SVG at `:5348`, MathML at `:5175`), MX's `core-tags.json`, and custom tags' `text`/`preserveWhitespace` (`core/src/custom-tags.ts` `customTagTaglib`). | Marko's taglibs. | The parse mode is still name-dependent. MX needs it as an explicit input to the front end, not a taglib. | A `tagShape(name)` callback on the front end, and `MxTag.bodyMode` recording what was answered (§3.12; the full input list is §7.1). |
@@ -746,19 +743,15 @@ Today, by target:
 
 | Targets | Statement set at parse time | Declared by |
 |---|---|---|
-| html | the six | `targets/html/src/compiler.ts` `host` registers `CORE_TAGLIB` (`core-tags.json`, `<import>` through `<class>`, `parseOptions.statement`) |
-| `lowerSource` with no `tagRules` (strict) or `tagRules: "html"` | the six | `core/src/tag-presets.ts` (`tagRulesPreset`: core's whole taglib) |
-| `lowerSource` with `tagRules: "none"` | `import`, `static`, `export` | `core/src/tag-presets.ts` (`tagRulesPreset`, `taglibsOfRules`: `"<import>"`, `"<static>"`, `"<export>"` entries) |
-| Preact, React, Hono (`hosts/preact/src/compile.ts`, no taglibs), Angular (`hosts/angular/src/index.ts` and `tag-module.ts`, no `taglibs`), and every `parseFragment` caller (Solid, Astro, the regions; `fragment.ts` `PARSE_ONLY_TRANSLATOR`, custom tags only) | none | — |
+| html | the six | `targets/html/src/compiler.ts` `host` (line 49) registers `CORE_TAGLIB` (`core-tags.json`, `<import>` through `<class>`, `parseOptions.statement`); `core/src/compile.ts` `translatorClaiming` then adds no second copy |
+| every other `compileSource` host (Preact, React, Hono, Angular) | the six | `core/src/compile.ts` `translatorClaiming`: core's statement taglib (`core-taglib.ts` `STATEMENT_TAGLIB`) on every compile, unless the host says `statementTags: false` |
+| every `parseFragment` caller (Solid, Astro, the Preact and Angular regions, the TS plugin) | the six | `core/src/fragment.ts` `STATEMENT_ENTRY` in `PARSE_ONLY_TRANSLATOR` and `parseOnlyTranslator` |
+| `lowerSource` with no `tagRules` (strict) or `tagRules: "html"` | the six | `core/src/ir-entry/index.ts` `presetOf` (default `"html"`); `core/src/tag-presets.ts` `tagsOf` (`html`: core's whole taglib) |
+| `lowerSource` with `tagRules: "markup"` | the six | `core/src/tag-presets.ts` `tagsOf` (`markup`: every core entry with `parseOptions.statement`) |
+| `lowerSource` with `tagRules: "none"` | `import`, `static`, `export` | `core/src/tag-presets.ts` `tagsOf` (`none`: `MODULE_STATEMENTS`) |
 
-On the last row a statement line parses as a tag with attributes (probe:
-`static const a = 1` is the tag `static` with attributes `const`, `a`), and
-lowering recovers `Static`/`Import`/`Export` by name (`lowerAuthoredTag`'s
-switch) and by slicing the source (`lowerStatement`). This is an accident,
-not a rule: MX1 TODO
-`statement-tags-not-declared-on-five-hosts` makes
-those hosts pass the core set before the port, with the moved goldens listed
-in that change, so the port carries nothing.
+A dialect's files and fragments parse under its own tag rules preset
+(`compile.ts` `compileSource`, `fragment.ts`), so they get that preset's row.
 
 `MxScriptlet` — `$ stmt` and `$ { block }`.
 
@@ -1846,7 +1839,9 @@ is an empty modifier with a zero-width span.
 **D5. Spans only, no stored `loc`.** Alternative: Babel-style `loc` on every
 node. Chosen because offsets are what the IR, Volar and LSP consume, line and
 column are cheap from one index, and shared position objects were a measured
-bug source (`packages/core/AGENTS.md`, `parseFragment` bullet).
+bug source: Marko's tree shared position objects between nodes, and the
+fragment walk core used before the MX front end had to dedupe them, or a
+second visit landed a position at base + base.
 
 **D6. `MxText` carries both normalized `value` and `raw`.** Alternative: raw
 only, normalize in lowering. Chosen because normalization needs neighbour
