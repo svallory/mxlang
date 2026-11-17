@@ -66,11 +66,12 @@ match against the exported constant rather than retyping it. A bare
 `${expr}` placeholder and `<${expr}/>` lower to the identical node (no
 attrs, no body), so `isDelegatedTag`'s third argument carries `"bare"` or
 `"tagged"` — `"bare"` only for the no-attrs-no-body shape, `"tagged"`
-otherwise — letting a host opt out of claiming the bare shape and leave it to
-the `Interpolation` fallback. The argument is passed only alongside
-`DYNAMIC_TAG`; every other tag name gets `undefined`. An `isDelegatedTag` that
-ignores the third argument keeps claiming both shapes, which is every
-current host's behavior — the parameter is opt-in, not a required change.
+otherwise — letting a host opt out of claiming the bare shape, which then
+lowers like any unclaimed dynamic tag, to a `Component` with a dynamic target.
+The argument is passed only alongside `DYNAMIC_TAG`; every other tag name gets
+`undefined`. An `isDelegatedTag` that ignores the third argument keeps claiming
+both shapes, which is every current host's behavior — the parameter is opt-in,
+not a required change.
 
 ## The three stateful-tag hooks
 

@@ -191,7 +191,9 @@ export interface HostDeclarations {
    * `DYNAMIC_TAG`; omitted for every other name. A host that ignores the
    * third argument keeps claiming both shapes, which is every existing
    * host's behaviour — the parameter only lets a *new* host opt out of the
-   * bare shape and leave it to the `Interpolation` fallback.
+   * bare shape. An unclaimed shape, bare or tagged, lowers to a `Component`
+   * with a dynamic target, resolved at run time (`lowerAuthoredTag` in
+   * `lower.ts`).
    */
   isDelegatedTag?(name: string, ctx: Ctx, shape?: "bare" | "tagged"): boolean;
   /**
