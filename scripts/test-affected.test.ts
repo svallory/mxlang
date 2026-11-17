@@ -1027,7 +1027,13 @@ function evaluatePath(
       return { kind: "path", path: posix.join(dir, rel.text) };
     }
     if (rel.kind === "template") {
-      return asPath({ kind: "template", head: posix.join(dir, rel.head) });
+      // As URL resolution does: the head's partial last segment names no
+      // directory, so the prefix is the directory that holds it (an empty
+      // head or `./` gives b's directory).
+      return {
+        kind: "prefix",
+        dir: posix.dirname(posix.join(dir, `${rel.head}x`)),
+      };
     }
     return { kind: "prefix", dir: bare(dir) };
   }
@@ -1319,6 +1325,7 @@ describe("SOURCE_TEXT_READERS guard", () => {
       [
         `${dir}/walk.test.ts`,
         [
+          "export {};",
           "const here = import.meta.dirname;",
           "function walk(dir: string) {",
           "  for (const name of readdirSync(dir)) {",
@@ -1331,6 +1338,7 @@ describe("SOURCE_TEXT_READERS guard", () => {
       [
         `${dir}/fixture.test.ts`,
         [
+          "export {};",
           "const here = import.meta.dirname;",
           'readFileSync(join(here, "fixtures", "a.ts"), "utf8");',
         ].join("\n"),
@@ -1338,6 +1346,7 @@ describe("SOURCE_TEXT_READERS guard", () => {
       [
         `${dir}/json.test.ts`,
         [
+          "export {};",
           "const here = import.meta.dirname;",
           'readFileSync(join(here, "../package.json"), "utf8");',
         ].join("\n"),
@@ -1349,6 +1358,14 @@ describe("SOURCE_TEXT_READERS guard", () => {
           'writeFileSync(join(tmp, "index.ts"), "export {};");',
           'readFileSync(join(tmp, "index.ts"), "utf8");',
         ].join("\n"),
+      ],
+      [
+        `${dir}/urlname.test.ts`,
+        "function read(name: string) { return readFileSync(new URL(`${name}.ts`, import.meta.url)); }",
+      ],
+      [
+        `${dir}/urldocs.test.ts`,
+        "function read(p: string) { return readFileSync(new URL(`../../../apps/docs/docs/${p}`, import.meta.url)); }",
       ],
       [`${dir}/import.test.ts`, 'import { a } from "./a.ts";'],
       [
@@ -1382,6 +1399,11 @@ describe("SOURCE_TEXT_READERS guard", () => {
         "packages/x/src/url.test.ts",
         "packages/x/src/a.ts",
         ["packages/x/src/a.ts"],
+      ],
+      [
+        "packages/x/src/urlname.test.ts",
+        "packages/x/src/",
+        ["packages/x/src/a.ts", "packages/x/src/b/c.ts"],
       ],
       [
         "packages/x/src/walk.test.ts",
