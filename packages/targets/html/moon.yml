@@ -24,24 +24,21 @@ tasks:
       - "/vitest.config.ts"
       - "vitest.config.ts"
 
+  # Delegates to package.json's test:bun (the tsconfig override and all five
+  # `*.bun.test.ts` files) so the two cannot drift.
   test-bun:
     command: "bun"
-    args:
-      [
-        "--tsconfig-override=../../../tsconfig.base.json",
-        "test",
-        "src/bun.test.ts",
-        "src/contracts.bun.test.ts",
-      ]
-    # reads @mxlang/core's dist (`src/bun.ts`), and its own: the emitted
-    # modules import `@mxlang/target-html` by bare specifier
+    args: ["run", "test:bun"]
+    # reads @mxlang/core's dist (`src/bun.ts`, `src/example.ts`), and its own:
+    # the emitted modules import `@mxlang/target-html` by bare specifier
     deps: ["core:build", "html:build"]
     inputs:
-      - "src/bun.ts"
-      - "src/bun.test.ts"
-      - "src/contracts.bun.test.ts"
-      - "src/index.ts"
-      - "fixtures-marko/attributes/**/*"
+      - "src/**/*"
+      - "fixtures-marko/**/*"
+      # `src/example.bun.test.ts` reads the README's example.
+      - "README.md"
+      - "package.json"
+      - "/tsconfig.base.json"
 
   # Delegates to package.json's build (`rm -rf dist`, the bundle and its
   # declaration emit) so the two cannot drift.
