@@ -1,0 +1,19 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "typescript"
+
+tasks:
+  # Checks the patch against the installed htmljs-parser. Nothing typechecks
+  # this directory, so it has no typecheck task.
+  test:
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "patches"]
+    options:
+      runFromWorkspaceRoot: true
+    inputs:
+      - "**/*"
+      # htmljs-parser.test.ts imports packages/parser/src/template/*.
+      - "/packages/parser/src/**/*"
+      - "/vitest.config.ts"
+      - "/bun.lock"

@@ -1,0 +1,26 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "typescript"
+
+tasks:
+  # No package.json, so no typecheck script: the root typecheck loop's fallback.
+  typecheck:
+    command: "bun"
+    args: ["x", "tsc", "--noEmit"]
+    inputs:
+      - "**/*.ts"
+      - "tsconfig.json"
+
+  test:
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "scripts"]
+    options:
+      runFromWorkspaceRoot: true
+      # The tests read the whole workspace layout (package manifests, the
+      # lockfile, other packages' files), which no input list covers, so a
+      # cached pass could be stale.
+      cache: false
+    # reads every packed dist (`pack-hygiene.test.ts`); these three builds'
+    # chains cover the other seven
+    deps: ["tsc:build", "language-server:build", "vite-plugin:build"]

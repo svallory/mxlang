@@ -1,0 +1,59 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "typescript"
+
+tasks:
+  typecheck:
+    command: "bun"
+    args: ["run", "typecheck"]
+    inputs:
+      - "src/**/*"
+      - "/test-fixtures/**/*"
+      - "tsconfig.json"
+
+  test:
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/language-server"]
+    options:
+      runFromWorkspaceRoot: true
+    # reads @mxlang/core's and @mxlang/tsx-bridge's dists (`src/diagnose.ts`),
+    # html's and angular's through the registry, and its own
+    # (`src/dist-build.test.ts` and the `dist/bin.js` readers)
+    deps:
+      [
+        "core:build",
+        "tsx-bridge:build",
+        "html:build",
+        "angular:build",
+        "language-server:build",
+      ]
+    inputs:
+      - "src/**/*"
+      # The tests import the shared fake target packages (see tsconfig.json).
+      - "/test-fixtures/**/*"
+      - "/vitest.config.ts"
+      - "vitest.config.ts"
+
+  # Delegates to package.json's build (`rm -rf dist`, the two bundles, the
+  # notices and the declaration emit) so the two cannot drift.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    # reads @mxlang/core's and @mxlang/tsx-bridge's dists (external), and
+    # html's and angular's (bundled through the registry)
+    deps: ["core:build", "tsx-bridge:build", "html:build", "angular:build"]
+    inputs:
+      - "src/**/*"
+      # The bundle inlines the registry, every host's src and the Babel fork.
+      - "/packages/target-registry/src/**/*"
+      - "/packages/hosts/*/src/**/*"
+      - "/packages/babel/src/**/*"
+      - "/scripts/third-party-notices.ts"
+      - "/packages/babel/LICENSE"
+      - "/packages/babel/UPSTREAM.md"
+      - "tsconfig.json"
+      - "tsconfig.build.json"
+      - "package.json"
+    outputs:
+      - "dist"

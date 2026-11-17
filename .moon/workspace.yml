@@ -12,6 +12,8 @@ projects:
   - "packages/stock-marko"
   - "packages/target-registry"
   - "packages/parse-differential"
+  - "scripts"
+  - "patches"
   - "packages/hosts/*"
   - "packages/targets/*"
   - "packages/tooling/*"

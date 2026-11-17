@@ -1,0 +1,44 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "typescript"
+
+tasks:
+  typecheck:
+    command: "bun"
+    args: ["run", "typecheck"]
+    inputs:
+      - "src/**/*"
+      - "tsconfig.json"
+      - "tsconfig.typecheck.json"
+      - "/packages/core/src/**/*"
+      - "/packages/hosts/angular/src/**/*"
+      - "/packages/tsx-bridge/src/public.d.ts"
+
+  test:
+    command: "bun"
+    args: ["x", "vitest", "run", "--project", "@mxlang/angular-checker"]
+    options:
+      runFromWorkspaceRoot: true
+    # reads @mxlang/host-angular's dist (`src/checker.ts`), and its own
+    # (`src/dist.test.ts`)
+    deps: ["angular:build", "angular-checker:build"]
+    inputs:
+      - "src/**/*"
+      - "/vitest.config.ts"
+      - "vitest.config.ts"
+
+  # Delegates to package.json's build (`rm -rf dist`, the bundle and its
+  # declaration emit) so the two cannot drift.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    # reads @mxlang/host-angular's dist (external; the declarations type against it)
+    deps: ["angular:build"]
+    inputs:
+      - "src/**/*"
+      - "tsconfig.json"
+      - "tsconfig.build.json"
+      - "package.json"
+    outputs:
+      - "dist"
