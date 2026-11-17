@@ -11,6 +11,7 @@ import {
   commentOnlySplit,
   DOC_READERS,
   FIXTURE_CONSUMERS,
+  FIXTURE_DIR,
   fixtureConsumers,
   hasVitestTests,
   isProjectDoc,
@@ -1068,21 +1069,20 @@ function evaluatePath(
 }
 
 /**
- * The source-text reads of each test in `sources` (repo-relative path to
- * text), against `targets` (the sources a comment-only edit can leave out),
- * deduped per test and sorted. One program over every file; `noResolve`, so
- * an imported binding is unknown.
+ * The reads of `targets` by each test in `sources` (repo-relative path to
+ * text), deduped per test and sorted. One program over every file;
+ * `noResolve`, so an imported binding is unknown. With `imports`, a relative
+ * static or dynamic import or `export ... from` specifier is a read too (the
+ * fixture guard; for sources, imports are the import graph's job).
  */
 function scanSourceReads(
   sources: ReadonlyMap<string, string>,
   targets: ReadonlySet<string>,
+  { imports }: { imports: boolean } = { imports: false },
 ): SourceRead[] {
   const files = [...sources.keys()].sort();
   const sorted = [...targets].sort();
-  const under = (dir: string) =>
-    dir.split("/").includes("src")
-      ? sorted.filter((t) => t.startsWith(`${dir}/`))
-      : [];
+  const under = (dir: string) => sorted.filter((t) => t.startsWith(`${dir}/`));
   const relName = (name: string) =>
     name.startsWith("/") ? name.slice(1) : name;
   const host: ts.CompilerHost = {
@@ -1129,6 +1129,13 @@ function scanSourceReads(
         kind: "path",
         path: posix.join(ctx.dir, specifier.slice(0, -"?raw".length)),
       });
+    /** A module specifier: `?raw` always reads; a relative one with `imports`. */
+    const specifier = (text: string) => {
+      if (text.endsWith("?raw")) raw(text);
+      else if (imports && text.startsWith(".")) {
+        record({ kind: "path", path: posix.join(ctx.dir, text) });
+      }
+    };
     let unknownRead = false;
     let walks = false;
     let tsLiteral = false;
@@ -1141,10 +1148,17 @@ function scanSourceReads(
         if (/\.tsx?$/.test(node.text)) tsLiteral = true;
       } else if (
         ts.isImportDeclaration(node) &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        node.moduleSpecifier.text.endsWith("?raw")
+        ts.isStringLiteral(node.moduleSpecifier)
       ) {
-        raw(node.moduleSpecifier.text);
+        specifier(node.moduleSpecifier.text);
+      } else if (
+        imports &&
+        ts.isExportDeclaration(node) &&
+        node.moduleSpecifier !== undefined &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        !node.moduleSpecifier.text.endsWith("?raw")
+      ) {
+        specifier(node.moduleSpecifier.text);
       } else if (
         ts.isVariableDeclaration(node) &&
         ts.isIdentifier(node.name) &&
@@ -1157,12 +1171,8 @@ function scanSourceReads(
         const first = node.arguments[0];
         const name = lastName(callee);
         if (callee.kind === ts.SyntaxKind.ImportKeyword) {
-          if (
-            first !== undefined &&
-            ts.isStringLiteralLike(first) &&
-            first.text.endsWith("?raw")
-          ) {
-            raw(first.text);
+          if (first !== undefined && ts.isStringLiteralLike(first)) {
+            specifier(first.text);
           }
         } else if (name !== undefined && WALK_CALLS.has(name)) {
           walks = true;
@@ -1198,11 +1208,11 @@ function scanSourceReads(
   );
 }
 
+/** A table of path rows and the tests that read what they match. */
+type ReaderRows = readonly { path: RegExp; consumers: readonly string[] }[];
+
 /** Whether a row lists the read's test and matches a file the read reaches. */
-function coveredRead(
-  read: SourceRead,
-  rows: typeof SOURCE_TEXT_READERS,
-): boolean {
+function coveredRead(read: SourceRead, rows: ReaderRows): boolean {
   return rows.some(
     (row) =>
       row.consumers.includes(read.test) &&
@@ -1210,18 +1220,51 @@ function coveredRead(
   );
 }
 
-/** One sorted, deduped message per read neither covered by `rows` nor exempt. */
+/** One sorted, deduped message per read neither covered by `rows` (named `table`) nor exempt. */
 function uncovered(
   reads: readonly SourceRead[],
-  rows: typeof SOURCE_TEXT_READERS,
+  rows: ReaderRows,
   exempt: readonly { test: string }[],
+  table: string,
 ): string[] {
   const messages = reads
     .filter(
       (r) => !exempt.some((e) => e.test === r.test) && !coveredRead(r, rows),
     )
-    .map((r) => `${r.test} reads ${r.path} with no SOURCE_TEXT_READERS row`);
+    .map((r) => `${r.test} reads ${r.path} with no ${table} row`);
   return [...new Set(messages)].sort();
+}
+
+/** The reads whose test is in a vitest project, narrowed to the files that project does not own. */
+function crossProject(
+  reads: readonly SourceRead[],
+  projectOf: (file: string) => string | undefined,
+  ownersOf: (file: string) => readonly string[],
+): SourceRead[] {
+  return reads.flatMap((read) => {
+    const project = projectOf(read.test);
+    if (project === undefined) return [];
+    const files = read.files.filter((f) => !ownersOf(f).includes(project));
+    return files.length > 0 ? [{ ...read, files }] : [];
+  });
+}
+
+/** The source guard's targets: what `commentOnlySplit` can leave out, minus vitest test files. */
+function sourceTargets(listed: readonly string[]): string[] {
+  return listed.filter(
+    (f) => isRelatedSource(f) && !isWide(f) && !VITEST_TEST_FILE.test(f),
+  );
+}
+
+/** The fixture guard's targets: files under a fixtures-style dir, `.mx` files and files a row matches. */
+function fixtureTargets(listed: readonly string[]): string[] {
+  return listed.filter(
+    (f) =>
+      !VITEST_TEST_FILE.test(f) &&
+      (FIXTURE_DIR.test(f) ||
+        f.endsWith(".mx") ||
+        FIXTURE_CONSUMERS.some((row) => row.path.test(f))),
+  );
 }
 
 /** Detected readers whose result cannot change on a comment-only edit. */
@@ -1236,45 +1279,73 @@ const EXEMPT: readonly { test: string; reason: string }[] = [
     test: "packages/tooling/tsc/src/host-dispatch-golden.test.ts",
     reason: "reads only fixture .mx files",
   },
+  // Reads only the corpus `.txt` files (`.filter((f) => f.endsWith(".txt"))`), not the corpus scripts.
+  {
+    test: "packages/core/src/ir-entry/conformance.test.ts",
+    reason: "reads only the corpus .txt files",
+  },
+  // Parses export names and import specifiers with TypeScript; its one text match reads the built dist .d.ts.
+  {
+    test: "packages/tsx-bridge/src/pack-contents.test.ts",
+    reason: "parses sources with TypeScript; text match on dist",
+  },
 ];
 
+/** Detected cross-project readers that read no fixture. */
+const FIXTURE_EXEMPT: readonly { test: string; reason: string }[] = [
+  // Their walk skips `fixtures` directories (`if (name !== "fixtures") walk(path)`) and reads only `.ts`.
+  {
+    test: "packages/tooling/language-server/src/bundled-deps.test.ts",
+    reason: "walk skips fixtures directories",
+  },
+  {
+    test: "packages/tooling/typescript-plugin/src/bundled-deps.test.ts",
+    reason: "walk skips fixtures directories",
+  },
+];
+
+const ROOT = resolve(import.meta.dirname, "..");
+let repoFiles: { listed: string[]; tests: Map<string, string> } | undefined;
+/**
+ * The repository: git's file list (sorted) and the text of every vitest test
+ * file that may read a file (the prefilter); computed once for both guards.
+ */
+const scanInputs = () => {
+  if (repoFiles !== undefined) return repoFiles;
+  const out = spawnSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard"],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
+  );
+  if (out.status !== 0) throw new Error(out.stderr);
+  const listed = [...new Set(out.stdout.split("\n").filter(Boolean))]
+    .filter((f) => existsSync(resolve(ROOT, f)))
+    .sort();
+  const tests = new Map<string, string>();
+  for (const f of listed.filter((f) => VITEST_TEST_FILE.test(f))) {
+    const text = readFileSync(resolve(ROOT, f), "utf8");
+    if (/readFileSync|readFile\b|Bun\.file|\?raw|["'`]\.\.\//.test(text)) {
+      tests.set(f, text);
+    }
+  }
+  repoFiles = { listed, tests };
+  return repoFiles;
+};
+
 describe("SOURCE_TEXT_READERS guard", () => {
-  const ROOT = resolve(import.meta.dirname, "..");
   let repoReads: SourceRead[] | undefined;
-  /** The repository's reads: git's file list, sorted; computed once. */
+  /** The repository's source reads; computed once. */
   const scanRepo = (): SourceRead[] => {
     if (repoReads !== undefined) return repoReads;
-    const listed = spawnSync(
-      "git",
-      ["ls-files", "--cached", "--others", "--exclude-standard"],
-      { cwd: ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
-    );
-    if (listed.status !== 0) throw new Error(listed.stderr);
-    const all = [...new Set(listed.stdout.split("\n").filter(Boolean))]
-      .filter((f) => existsSync(resolve(ROOT, f)))
-      .sort();
-    const sources = new Map<string, string>();
-    for (const f of all.filter((f) => VITEST_TEST_FILE.test(f))) {
-      const text = readFileSync(resolve(ROOT, f), "utf8");
-      if (/readFileSync|readFile\b|Bun\.file|\?raw/.test(text)) {
-        sources.set(f, text);
-      }
-    }
-    const targets = new Set(
-      all.filter(
-        (f) =>
-          /\.tsx?$/.test(f) &&
-          f.split("/").includes("src") &&
-          !/\.(?:test|spec)\.|\.d\.ts$/.test(f) &&
-          isRelatedSource(f),
-      ),
-    );
-    repoReads = scanSourceReads(sources, targets);
+    const { listed, tests } = scanInputs();
+    repoReads = scanSourceReads(tests, new Set(sourceTargets(listed)));
     return repoReads;
   };
 
   it("every detected reader of a source's text has a row or an exemption", () => {
-    expect(uncovered(scanRepo(), SOURCE_TEXT_READERS, EXEMPT)).toEqual([]);
+    expect(
+      uncovered(scanRepo(), SOURCE_TEXT_READERS, EXEMPT, "SOURCE_TEXT_READERS"),
+    ).toEqual([]);
   });
 
   it("catches #823's miss: the vocabulary guard without its core-row entry", () => {
@@ -1283,8 +1354,19 @@ describe("SOURCE_TEXT_READERS guard", () => {
       ...row,
       consumers: row.consumers.filter((c) => c !== guard),
     }));
-    expect(uncovered(scanRepo(), rows, EXEMPT)).toEqual([
+    expect(uncovered(scanRepo(), rows, EXEMPT, "SOURCE_TEXT_READERS")).toEqual([
       "packages/core/src/message-vocabulary-guard.test.ts reads packages/core/src/ with no SOURCE_TEXT_READERS row",
+    ]);
+  });
+
+  it("catches a reader outside src/: the angular example without its row", () => {
+    const reader = "packages/hosts/angular/test/example-app.test.ts";
+    const rows = SOURCE_TEXT_READERS.map((row) => ({
+      ...row,
+      consumers: row.consumers.filter((c) => c !== reader),
+    }));
+    expect(uncovered(scanRepo(), rows, EXEMPT, "SOURCE_TEXT_READERS")).toEqual([
+      "packages/hosts/angular/test/example-app.test.ts reads examples/angular-app/ with no SOURCE_TEXT_READERS row",
     ]);
   });
 
@@ -1306,6 +1388,29 @@ describe("SOURCE_TEXT_READERS guard", () => {
     ).toEqual([]);
   });
 
+  it("targets what a comment-only edit can leave out, and fixtures", () => {
+    const listed = [
+      "packages/x/src/a.ts",
+      "packages/x/src/types.d.ts",
+      "packages/x/scripts/gen.mjs",
+      "packages/x/src/a.test.ts",
+      "scripts/vitest-lanes.ts",
+      "packages/x/src/fixtures/f.ts",
+      "packages/x/src/page.mx",
+      "packages/editors/tree-sitter-mx/test/corpus/a.txt",
+    ];
+    expect(sourceTargets(listed)).toEqual([
+      "packages/x/src/a.ts",
+      "packages/x/src/types.d.ts",
+      "packages/x/scripts/gen.mjs",
+    ]);
+    expect(fixtureTargets(listed)).toEqual([
+      "packages/x/src/fixtures/f.ts",
+      "packages/x/src/page.mx",
+      "packages/editors/tree-sitter-mx/test/corpus/a.txt",
+    ]);
+  });
+
   it("detects the path forms tests use, and only reads of targets", () => {
     const dir = "packages/x/src";
     const sources = new Map<string, string>([
@@ -1316,6 +1421,7 @@ describe("SOURCE_TEXT_READERS guard", () => {
       [
         `${dir}/named.test.ts`,
         [
+          "export {};",
           "const SRC = import.meta.dirname;",
           'function read(name: string) { return readFileSync(join(SRC, name), "utf8"); }',
         ].join("\n"),
@@ -1354,6 +1460,7 @@ describe("SOURCE_TEXT_READERS guard", () => {
       [
         `${dir}/temp.test.ts`,
         [
+          "export {};",
           'const tmp = mkdtempSync(join(tmpdir(), "x-"));',
           'writeFileSync(join(tmp, "index.ts"), "export {};");',
           'readFileSync(join(tmp, "index.ts"), "utf8");',
@@ -1361,13 +1468,35 @@ describe("SOURCE_TEXT_READERS guard", () => {
       ],
       [
         `${dir}/urlname.test.ts`,
-        "function read(name: string) { return readFileSync(new URL(`${name}.ts`, import.meta.url)); }",
+        [
+          "export {};",
+          "function read(name: string) { return readFileSync(new URL(`${name}.ts`, import.meta.url)); }",
+        ].join("\n"),
       ],
       [
         `${dir}/urldocs.test.ts`,
-        "function read(p: string) { return readFileSync(new URL(`../../../apps/docs/docs/${p}`, import.meta.url)); }",
+        [
+          "export {};",
+          "function read(p: string) { return readFileSync(new URL(`../../../apps/docs/docs/${p}`, import.meta.url)); }",
+        ].join("\n"),
       ],
       [`${dir}/import.test.ts`, 'import { a } from "./a.ts";'],
+      [
+        `${dir}/outside.test.ts`,
+        'readFileSync(join(import.meta.dirname, "../scripts/gen.mjs"));',
+      ],
+      [
+        `${dir}/dts.test.ts`,
+        'readFileSync(new URL("./types.d.ts", import.meta.url));',
+      ],
+      [
+        `${dir}/up.test.ts`,
+        [
+          "export {};",
+          'const up = join(import.meta.dirname, "..");',
+          'function read(n: string) { return readFileSync(join(up, "scripts", n)); }',
+        ].join("\n"),
+      ],
       [
         `${dir}/imported.test.ts`,
         [
@@ -1376,7 +1505,12 @@ describe("SOURCE_TEXT_READERS guard", () => {
         ].join("\n"),
       ],
     ]);
-    const targets = new Set([`${dir}/a.ts`, `${dir}/b/c.ts`]);
+    const targets = new Set([
+      `${dir}/a.ts`,
+      `${dir}/b/c.ts`,
+      `${dir}/types.d.ts`,
+      "packages/x/scripts/gen.mjs",
+    ]);
     expect(
       scanSourceReads(sources, targets).map((r) => [r.test, r.path, r.files]),
     ).toEqual([
@@ -1386,14 +1520,33 @@ describe("SOURCE_TEXT_READERS guard", () => {
         ["packages/x/src/a.ts"],
       ],
       [
+        "packages/x/src/dts.test.ts",
+        "packages/x/src/types.d.ts",
+        ["packages/x/src/types.d.ts"],
+      ],
+      [
         "packages/x/src/named.test.ts",
         "packages/x/src/",
-        ["packages/x/src/a.ts", "packages/x/src/b/c.ts"],
+        [
+          "packages/x/src/a.ts",
+          "packages/x/src/b/c.ts",
+          "packages/x/src/types.d.ts",
+        ],
+      ],
+      [
+        "packages/x/src/outside.test.ts",
+        "packages/x/scripts/gen.mjs",
+        ["packages/x/scripts/gen.mjs"],
       ],
       [
         "packages/x/src/raw.test.ts",
         "packages/x/src/a.ts",
         ["packages/x/src/a.ts"],
+      ],
+      [
+        "packages/x/src/up.test.ts",
+        "packages/x/scripts/",
+        ["packages/x/scripts/gen.mjs"],
       ],
       [
         "packages/x/src/url.test.ts",
@@ -1403,13 +1556,170 @@ describe("SOURCE_TEXT_READERS guard", () => {
       [
         "packages/x/src/urlname.test.ts",
         "packages/x/src/",
-        ["packages/x/src/a.ts", "packages/x/src/b/c.ts"],
+        [
+          "packages/x/src/a.ts",
+          "packages/x/src/b/c.ts",
+          "packages/x/src/types.d.ts",
+        ],
       ],
       [
         "packages/x/src/walk.test.ts",
         "packages/x/src/",
-        ["packages/x/src/a.ts", "packages/x/src/b/c.ts"],
+        [
+          "packages/x/src/a.ts",
+          "packages/x/src/b/c.ts",
+          "packages/x/src/types.d.ts",
+        ],
       ],
     ]);
+  });
+});
+
+describe("FIXTURE_CONSUMERS guard", () => {
+  let repoReads: SourceRead[] | undefined;
+  /** The repository's cross-project fixture reads; computed once. */
+  const scanRepo = (): SourceRead[] => {
+    if (repoReads !== undefined) return repoReads;
+    const { listed, tests } = scanInputs();
+    const dirs = projectDirs();
+    const owners = new Map<string, string[]>();
+    const ownersOf = (f: string) => {
+      const known = owners.get(f);
+      if (known !== undefined) return known;
+      const ps = projectsFor(f, dirs);
+      owners.set(f, ps);
+      return ps;
+    };
+    repoReads = crossProject(
+      scanSourceReads(tests, new Set(fixtureTargets(listed)), {
+        imports: true,
+      }),
+      (f) => projectFor(f, dirs),
+      ownersOf,
+    );
+    return repoReads;
+  };
+
+  it("every detected cross-project fixture reader has a row or an exemption", () => {
+    expect(
+      uncovered(
+        scanRepo(),
+        FIXTURE_CONSUMERS,
+        FIXTURE_EXEMPT,
+        "FIXTURE_CONSUMERS",
+      ),
+    ).toEqual([]);
+  });
+
+  it("catches the angular mapping invariant without its oracle-fixture row", () => {
+    const reader =
+      "packages/hosts/angular/test/ng-mx-mapping-invariant.test.ts";
+    const rows = FIXTURE_CONSUMERS.map((row) => ({
+      ...row,
+      consumers: row.consumers.filter((c) => c !== reader),
+    }));
+    expect(
+      uncovered(scanRepo(), rows, FIXTURE_EXEMPT, "FIXTURE_CONSUMERS"),
+    ).toEqual([
+      "packages/hosts/angular/test/ng-mx-mapping-invariant.test.ts reads packages/oracle/fixtures/angular/ with no FIXTURE_CONSUMERS row",
+    ]);
+  });
+
+  it("every exemption is detected and covered by no row", () => {
+    const reads = scanRepo();
+    expect(
+      FIXTURE_EXEMPT.filter((e) => !reads.some((r) => r.test === e.test)).map(
+        (e) => e.test,
+      ),
+    ).toEqual([]);
+    expect(
+      reads
+        .filter(
+          (r) =>
+            FIXTURE_EXEMPT.some((e) => e.test === r.test) &&
+            coveredRead(r, FIXTURE_CONSUMERS),
+        )
+        .map((r) => r.test),
+    ).toEqual([]);
+  });
+
+  it("counts relative imports as reads, and only reads of another project", () => {
+    const dir = "packages/b/src";
+    const importForms: [string, string][] = [
+      [
+        `${dir}/json.test.ts`,
+        'import cases from "../../../test-fixtures/ws/cases.json";',
+      ],
+      [
+        `${dir}/dynamic.test.ts`,
+        [
+          "export {};",
+          'const m = () => import("../../a/src/fixtures/probe.ts");',
+        ].join("\n"),
+      ],
+      [
+        `${dir}/reexport.test.ts`,
+        'export { x } from "../../a/src/fixtures/probe.ts";',
+      ],
+    ];
+    const sources = new Map<string, string>([
+      ...importForms,
+      [
+        `${dir}/dir.test.ts`,
+        [
+          "export {};",
+          'function read(name: string) { return readFileSync(join(import.meta.dirname, "../../a/src/fixtures", name)); }',
+        ].join("\n"),
+      ],
+      [
+        `${dir}/own.test.ts`,
+        'readFileSync(join(import.meta.dirname, "fixtures/own.mx"));',
+      ],
+      [`${dir}/source.test.ts`, 'import { f } from "../../a/src/index.ts";'],
+    ]);
+    const targets = new Set([
+      "test-fixtures/ws/cases.json",
+      "packages/a/src/fixtures/probe.ts",
+      "packages/b/src/fixtures/own.mx",
+    ]);
+    const projectOf = (f: string) =>
+      f.startsWith("packages/a/")
+        ? "a"
+        : f.startsWith("packages/b/")
+          ? "b"
+          : undefined;
+    const ownersOf = (f: string) => {
+      const p = projectOf(f);
+      return p === undefined ? [] : [p];
+    };
+    expect(
+      crossProject(
+        scanSourceReads(sources, targets, { imports: true }),
+        projectOf,
+        ownersOf,
+      ).map((r) => [r.test, r.path, r.files]),
+    ).toEqual([
+      [
+        "packages/b/src/dir.test.ts",
+        "packages/a/src/fixtures/",
+        ["packages/a/src/fixtures/probe.ts"],
+      ],
+      [
+        "packages/b/src/dynamic.test.ts",
+        "packages/a/src/fixtures/probe.ts",
+        ["packages/a/src/fixtures/probe.ts"],
+      ],
+      [
+        "packages/b/src/json.test.ts",
+        "test-fixtures/ws/cases.json",
+        ["test-fixtures/ws/cases.json"],
+      ],
+      [
+        "packages/b/src/reexport.test.ts",
+        "packages/a/src/fixtures/probe.ts",
+        ["packages/a/src/fixtures/probe.ts"],
+      ],
+    ]);
+    expect(scanSourceReads(new Map(importForms), targets)).toEqual([]);
   });
 });

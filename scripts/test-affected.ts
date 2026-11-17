@@ -149,8 +149,12 @@ export function parserBuildNeeded(changed: readonly string[]): boolean {
  * `projectsFor` maps a changed fixture only to the project that owns it, so
  * without this table a change here would skip (or, for a directory in no
  * project, never run) the tests that read it. Each row lists every consumer
- * test file a `git grep` for paths into that directory found; a path built at
- * run time is not detected, so a new reader adds its row by hand.
+ * test file a `git grep` for paths into that directory found. The
+ * "FIXTURE_CONSUMERS guard" in `scripts/test-affected.test.ts` fails when a
+ * test it detects reading another project's fixture has no row; it cannot see
+ * a path built in another module, passed through a function parameter of an
+ * imported helper, or written root-relative inside a string, so such a reader
+ * adds its row by hand.
  */
 export const FIXTURE_CONSUMERS: readonly {
   path: RegExp;
@@ -164,6 +168,20 @@ export const FIXTURE_CONSUMERS: readonly {
     path: /^packages\/tooling\/tsc\/src\/fixtures\/host-dispatch\/alias-html\//,
     consumers: [
       "packages/tooling/typescript-plugin/src/tsconfig-paths-callee.test.ts",
+    ],
+  },
+  {
+    path: /^packages\/tooling\/tsc\/src\/fixtures\/host-dispatch\/astro-mx\//,
+    consumers: [
+      "packages/tooling/typescript-plugin/src/amx-custom-tag-tsx.test.ts",
+    ],
+  },
+  {
+    path: /^packages\/tooling\/tsc\/src\/fixtures\/ng-diag-tag-import\//,
+    consumers: [
+      "packages/tooling/typescript-plugin/src/index.test.ts",
+      "packages/tooling/typescript-plugin/src/target-dispatch.test.ts",
+      "packages/tooling/typescript-plugin/src/tsserver-load.test.ts",
     ],
   },
   {
@@ -182,6 +200,14 @@ export const FIXTURE_CONSUMERS: readonly {
   {
     path: /^packages\/core\/src\/fixtures\/syntax\/member-fixture\.ts$/,
     consumers: ["packages/targets/html/src/member-syntax.test.ts"],
+  },
+  {
+    path: /^examples\/angular-app\//,
+    consumers: ["packages/hosts/angular/test/example-app.test.ts"],
+  },
+  {
+    path: /^examples\/astro-static\/src\/components\//,
+    consumers: ["packages/tooling/typescript-plugin/src/index.test.ts"],
   },
   {
     path: /^fixtures\//,
@@ -350,7 +376,7 @@ export function projectDirs(base = root): string[] {
 }
 
 /** A file under a fixtures-style directory: tests read it through `fs`, never an import. */
-const FIXTURE_DIR = /(?:^|\/)(?:fixtures[^/]*|test-fixtures)\//;
+export const FIXTURE_DIR = /(?:^|\/)(?:fixtures[^/]*|test-fixtures)\//;
 
 const SOURCE_EXT = /\.[cm]?[jt]sx?$/;
 
@@ -591,7 +617,8 @@ export function commentOnly(
  * consumer test file a `git grep` for test files that read a `.ts` under some
  * `src/`, or scan a `src` directory's `.ts` files, found. The
  * "SOURCE_TEXT_READERS guard" in `scripts/test-affected.test.ts` fails when a
- * test it detects reading a `src/` source has no row; it cannot see a path
+ * test it detects reading a source a comment-only edit can leave out has no
+ * row; it cannot see a path
  * built in another module or passed through a function parameter of an
  * imported helper, so such a reader adds its row by hand.
  */
@@ -634,6 +661,10 @@ export const SOURCE_TEXT_READERS: readonly {
       "packages/editors/vscode/scripts/bundled-entries.test.ts",
       "packages/editors/vscode/src/manifest.test.ts",
     ],
+  },
+  {
+    path: /^examples\/angular-app\//,
+    consumers: ["packages/hosts/angular/test/example-app.test.ts"],
   },
 ];
 
