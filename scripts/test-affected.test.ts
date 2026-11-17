@@ -1,5 +1,7 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { posix, resolve } from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { configDefaults } from "vitest/config";
 import { createVitest } from "vitest/node";
@@ -879,5 +881,513 @@ describe("commentOnlySplit", () => {
         "packages/core/src/ir-entry/partial.test.ts",
       ],
     });
+  });
+});
+
+/*
+ * The SOURCE_TEXT_READERS guard: finds the test files that read a package
+ * source's text and checks each has a row. TypeScript parses the tests and its
+ * checker resolves identifiers; `evaluatePath` turns the path expressions the
+ * tests use into a repo-relative path, a directory prefix with an unknown
+ * tail, or unknown.
+ */
+
+/** A value the path evaluator gives an expression. */
+type PathValue =
+  | { kind: "string"; text: string }
+  | { kind: "template"; head: string }
+  | { kind: "path"; path: string }
+  | { kind: "prefix"; dir: string }
+  | { kind: "unknown" };
+
+/** A test file reading a target (`path`) or a directory of targets (`path` ends `/`). */
+interface SourceRead {
+  test: string;
+  path: string;
+  /** The targets the read can reach: the file, or every target under the directory. */
+  files: readonly string[];
+}
+
+const UNKNOWN: PathValue = { kind: "unknown" };
+const PATH_QUALIFIERS = new Set(["path", "posix", "url"]);
+const WALK_CALLS = new Set(["readdirSync", "readdir", "globSync", "glob"]);
+const READ_CALLS = new Set(["readFileSync", "readFile"]);
+
+/** `p` without a trailing slash (`.` and `/` stay). */
+function bare(p: string): string {
+  return p.length > 1 && p.endsWith("/") ? p.slice(0, -1) : p;
+}
+
+/** A string used as a path is relative to the repository root (vitest's cwd). */
+function asPath(v: PathValue): PathValue {
+  if (v.kind === "string")
+    return { kind: "path", path: posix.normalize(v.text) };
+  if (v.kind === "template") {
+    const head = posix.normalize(v.head || ".");
+    return {
+      kind: "prefix",
+      dir: head.endsWith("/") ? bare(head) : posix.dirname(head),
+    };
+  }
+  return v;
+}
+
+/** The called name of `callee` when bare or qualified by `path.`, `posix.` or `url.`. */
+function pathCallName(callee: ts.Expression): string | undefined {
+  if (ts.isIdentifier(callee)) return callee.text;
+  if (!ts.isPropertyAccessExpression(callee)) return undefined;
+  const obj = callee.expression;
+  const qualified =
+    (ts.isIdentifier(obj) && PATH_QUALIFIERS.has(obj.text)) ||
+    (ts.isPropertyAccessExpression(obj) && obj.name.text === "posix");
+  return qualified ? callee.name.text : undefined;
+}
+
+/** The name a call's callee ends in: `f` for `f(...)` and `x.y.f(...)`. */
+function lastName(callee: ts.Expression): string | undefined {
+  if (ts.isIdentifier(callee)) return callee.text;
+  if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
+  return undefined;
+}
+
+interface EvalContext {
+  checker: ts.TypeChecker;
+  /** The test file and its directory, repo-relative. */
+  file: string;
+  dir: string;
+}
+
+function evaluatePath(
+  node: ts.Expression,
+  ctx: EvalContext,
+  seen: Set<ts.Node>,
+): PathValue {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return evaluatePath(node.expression, ctx, seen);
+  }
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return { kind: "string", text: node.text };
+  }
+  if (ts.isTemplateExpression(node)) {
+    return { kind: "template", head: node.head.text };
+  }
+  if (ts.isIdentifier(node)) {
+    if (node.text === "__dirname") return { kind: "path", path: ctx.dir };
+    const decl = ctx.checker.getSymbolAtLocation(node)?.valueDeclaration;
+    if (
+      decl === undefined ||
+      !ts.isVariableDeclaration(decl) ||
+      !ts.isIdentifier(decl.name) ||
+      decl.initializer === undefined ||
+      !(ts.getCombinedNodeFlags(decl) & ts.NodeFlags.Const) ||
+      seen.has(decl)
+    ) {
+      return UNKNOWN;
+    }
+    seen.add(decl);
+    const value = evaluatePath(decl.initializer, ctx, seen);
+    seen.delete(decl);
+    return value;
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    const name = node.name.text;
+    if (
+      ts.isMetaProperty(node.expression) &&
+      node.expression.keywordToken === ts.SyntaxKind.ImportKeyword
+    ) {
+      if (name === "dirname") return { kind: "path", path: ctx.dir };
+      if (name === "url") return { kind: "path", path: ctx.file };
+      return UNKNOWN;
+    }
+    if (name === "pathname" || name === "href") {
+      return evaluatePath(node.expression, ctx, seen);
+    }
+    return UNKNOWN;
+  }
+  if (ts.isNewExpression(node)) {
+    const [href, baseArg, ...extra] = node.arguments ?? [];
+    if (
+      !ts.isIdentifier(node.expression) ||
+      node.expression.text !== "URL" ||
+      href === undefined ||
+      baseArg === undefined ||
+      extra.length > 0
+    ) {
+      return UNKNOWN;
+    }
+    const base = asPath(evaluatePath(baseArg, ctx, seen));
+    if (base.kind !== "path") return UNKNOWN;
+    const dir = base.path.endsWith("/") ? base.path : posix.dirname(base.path);
+    const rel = evaluatePath(href, ctx, seen);
+    if (rel.kind === "string") {
+      return { kind: "path", path: posix.join(dir, rel.text) };
+    }
+    if (rel.kind === "template") {
+      return asPath({ kind: "template", head: posix.join(dir, rel.head) });
+    }
+    return { kind: "prefix", dir: bare(dir) };
+  }
+  if (ts.isCallExpression(node)) {
+    const name = pathCallName(node.expression);
+    const [first, ...rest] = node.arguments;
+    if (first === undefined) return UNKNOWN;
+    if (name === "fileURLToPath" || name === "String") {
+      return evaluatePath(first, ctx, seen);
+    }
+    if (name === "dirname") {
+      const v = asPath(evaluatePath(first, ctx, seen));
+      if (v.kind === "path") {
+        return { kind: "path", path: posix.dirname(bare(v.path)) };
+      }
+      return v.kind === "prefix" ? v : UNKNOWN;
+    }
+    if (name === "join" || name === "resolve") {
+      let acc = asPath(evaluatePath(first, ctx, seen));
+      for (const arg of rest) {
+        if (acc.kind !== "path") break;
+        const v = evaluatePath(arg, ctx, seen);
+        acc =
+          v.kind === "string"
+            ? { kind: "path", path: posix.join(acc.path, v.text) }
+            : { kind: "prefix", dir: bare(acc.path) };
+      }
+      return acc.kind === "path" || acc.kind === "prefix" ? acc : UNKNOWN;
+    }
+  }
+  return UNKNOWN;
+}
+
+/**
+ * The source-text reads of each test in `sources` (repo-relative path to
+ * text), against `targets` (the sources a comment-only edit can leave out),
+ * deduped per test and sorted. One program over every file; `noResolve`, so
+ * an imported binding is unknown.
+ */
+function scanSourceReads(
+  sources: ReadonlyMap<string, string>,
+  targets: ReadonlySet<string>,
+): SourceRead[] {
+  const files = [...sources.keys()].sort();
+  const sorted = [...targets].sort();
+  const under = (dir: string) =>
+    dir.split("/").includes("src")
+      ? sorted.filter((t) => t.startsWith(`${dir}/`))
+      : [];
+  const relName = (name: string) =>
+    name.startsWith("/") ? name.slice(1) : name;
+  const host: ts.CompilerHost = {
+    getSourceFile: (name, language) => {
+      const text = sources.get(relName(name));
+      return text === undefined
+        ? undefined
+        : ts.createSourceFile(name, text, language, true);
+    },
+    getDefaultLibFileName: () => "/lib.d.ts",
+    writeFile: () => {},
+    getCurrentDirectory: () => "/",
+    getCanonicalFileName: (name) => name,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => "\n",
+    fileExists: (name) => sources.has(relName(name)),
+    readFile: (name) => sources.get(relName(name)),
+  };
+  const program = ts.createProgram(
+    files.map((f) => `/${f}`),
+    { noResolve: true, noLib: true, allowJs: true, types: [], noEmit: true },
+    host,
+  );
+  const checker = program.getTypeChecker();
+  const reads = new Map<string, SourceRead>();
+  for (const file of files) {
+    const sf = program.getSourceFile(`/${file}`);
+    if (sf === undefined) continue;
+    const ctx: EvalContext = { checker, file, dir: posix.dirname(file) };
+    const add = (path: string, reached: readonly string[]) => {
+      reads.set(`${file}\0${path}`, { test: file, path, files: reached });
+    };
+    const record = (value: PathValue) => {
+      if (value.kind === "path" && targets.has(bare(value.path))) {
+        add(bare(value.path), [bare(value.path)]);
+      } else if (value.kind === "prefix") {
+        const reached = under(value.dir);
+        if (reached.length > 0) add(`${value.dir}/`, reached);
+      }
+      return value.kind === "unknown";
+    };
+    const raw = (specifier: string) =>
+      record({
+        kind: "path",
+        path: posix.join(ctx.dir, specifier.slice(0, -"?raw".length)),
+      });
+    let unknownRead = false;
+    let walks = false;
+    let tsLiteral = false;
+    const consts: ts.Expression[] = [];
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isStringLiteral(node) ||
+        ts.isNoSubstitutionTemplateLiteral(node)
+      ) {
+        if (/\.tsx?$/.test(node.text)) tsLiteral = true;
+      } else if (
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text.endsWith("?raw")
+      ) {
+        raw(node.moduleSpecifier.text);
+      } else if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined &&
+        ts.getCombinedNodeFlags(node) & ts.NodeFlags.Const
+      ) {
+        consts.push(node.initializer);
+      } else if (ts.isCallExpression(node)) {
+        const callee = node.expression;
+        const first = node.arguments[0];
+        const name = lastName(callee);
+        if (callee.kind === ts.SyntaxKind.ImportKeyword) {
+          if (
+            first !== undefined &&
+            ts.isStringLiteralLike(first) &&
+            first.text.endsWith("?raw")
+          ) {
+            raw(first.text);
+          }
+        } else if (name !== undefined && WALK_CALLS.has(name)) {
+          walks = true;
+        } else if (
+          first !== undefined &&
+          ((name !== undefined && READ_CALLS.has(name)) ||
+            (ts.isPropertyAccessExpression(callee) &&
+              ts.isIdentifier(callee.expression) &&
+              callee.expression.text === "Bun" &&
+              name === "file"))
+        ) {
+          if (record(asPath(evaluatePath(first, ctx, new Set())))) {
+            unknownRead = true;
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    if (unknownRead && walks && tsLiteral) {
+      for (const init of consts) {
+        const value = asPath(evaluatePath(init, ctx, new Set()));
+        if (value.kind !== "path") continue;
+        const dir = bare(value.path);
+        const reached = under(dir);
+        if (reached.length > 0) add(`${dir}/`, reached);
+      }
+    }
+  }
+  const key = (r: SourceRead) => `${r.test}\0${r.path}`;
+  return [...reads.values()].sort((a, b) =>
+    key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0,
+  );
+}
+
+/** Whether a row lists the read's test and matches a file the read reaches. */
+function coveredRead(
+  read: SourceRead,
+  rows: typeof SOURCE_TEXT_READERS,
+): boolean {
+  return rows.some(
+    (row) =>
+      row.consumers.includes(read.test) &&
+      read.files.some((f) => row.path.test(f)),
+  );
+}
+
+/** One sorted, deduped message per read neither covered by `rows` nor exempt. */
+function uncovered(
+  reads: readonly SourceRead[],
+  rows: typeof SOURCE_TEXT_READERS,
+  exempt: readonly { test: string }[],
+): string[] {
+  const messages = reads
+    .filter(
+      (r) => !exempt.some((e) => e.test === r.test) && !coveredRead(r, rows),
+    )
+    .map((r) => `${r.test} reads ${r.path} with no SOURCE_TEXT_READERS row`);
+  return [...new Set(messages)].sort();
+}
+
+/** Detected readers whose result cannot change on a comment-only edit. */
+const EXEMPT: readonly { test: string; reason: string }[] = [
+  // Hashes declarations printed with `removeComments: true`: comments never reach the hash.
+  {
+    test: "packages/core/src/ir-entry/ir-version.test.ts",
+    reason: "hashes declarations printed without comments",
+  },
+  // Its `here` walk reads only the .mx files under src/fixtures/host-dispatch, no source.
+  {
+    test: "packages/tooling/tsc/src/host-dispatch-golden.test.ts",
+    reason: "reads only fixture .mx files",
+  },
+];
+
+describe("SOURCE_TEXT_READERS guard", () => {
+  const ROOT = resolve(import.meta.dirname, "..");
+  let repoReads: SourceRead[] | undefined;
+  /** The repository's reads: git's file list, sorted; computed once. */
+  const scanRepo = (): SourceRead[] => {
+    if (repoReads !== undefined) return repoReads;
+    const listed = spawnSync(
+      "git",
+      ["ls-files", "--cached", "--others", "--exclude-standard"],
+      { cwd: ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
+    );
+    if (listed.status !== 0) throw new Error(listed.stderr);
+    const all = [...new Set(listed.stdout.split("\n").filter(Boolean))]
+      .filter((f) => existsSync(resolve(ROOT, f)))
+      .sort();
+    const sources = new Map<string, string>();
+    for (const f of all.filter((f) => VITEST_TEST_FILE.test(f))) {
+      const text = readFileSync(resolve(ROOT, f), "utf8");
+      if (/readFileSync|readFile\b|Bun\.file|\?raw/.test(text)) {
+        sources.set(f, text);
+      }
+    }
+    const targets = new Set(
+      all.filter(
+        (f) =>
+          /\.tsx?$/.test(f) &&
+          f.split("/").includes("src") &&
+          !/\.(?:test|spec)\.|\.d\.ts$/.test(f) &&
+          isRelatedSource(f),
+      ),
+    );
+    repoReads = scanSourceReads(sources, targets);
+    return repoReads;
+  };
+
+  it("every detected reader of a source's text has a row or an exemption", () => {
+    expect(uncovered(scanRepo(), SOURCE_TEXT_READERS, EXEMPT)).toEqual([]);
+  });
+
+  it("catches #823's miss: the vocabulary guard without its core-row entry", () => {
+    const guard = "packages/core/src/message-vocabulary-guard.test.ts";
+    const rows = SOURCE_TEXT_READERS.map((row) => ({
+      ...row,
+      consumers: row.consumers.filter((c) => c !== guard),
+    }));
+    expect(uncovered(scanRepo(), rows, EXEMPT)).toEqual([
+      "packages/core/src/message-vocabulary-guard.test.ts reads packages/core/src/ with no SOURCE_TEXT_READERS row",
+    ]);
+  });
+
+  it("every exemption is detected and covered by no row", () => {
+    const reads = scanRepo();
+    expect(
+      EXEMPT.filter((e) => !reads.some((r) => r.test === e.test)).map(
+        (e) => e.test,
+      ),
+    ).toEqual([]);
+    expect(
+      reads
+        .filter(
+          (r) =>
+            EXEMPT.some((e) => e.test === r.test) &&
+            coveredRead(r, SOURCE_TEXT_READERS),
+        )
+        .map((r) => r.test),
+    ).toEqual([]);
+  });
+
+  it("detects the path forms tests use, and only reads of targets", () => {
+    const dir = "packages/x/src";
+    const sources = new Map<string, string>([
+      [
+        `${dir}/url.test.ts`,
+        `readFileSync(new URL("./a.ts", import.meta.url), "utf8");`,
+      ],
+      [
+        `${dir}/named.test.ts`,
+        [
+          "const SRC = import.meta.dirname;",
+          'function read(name: string) { return readFileSync(join(SRC, name), "utf8"); }',
+        ].join("\n"),
+      ],
+      [`${dir}/raw.test.ts`, 'import t from "./a.ts?raw";'],
+      [`${dir}/bun.test.ts`, 'Bun.file(join(import.meta.dirname, "a.ts"));'],
+      [
+        `${dir}/walk.test.ts`,
+        [
+          "const here = import.meta.dirname;",
+          "function walk(dir: string) {",
+          "  for (const name of readdirSync(dir)) {",
+          '    if (name.endsWith(".ts")) readFileSync(join(dir, name), "utf8");',
+          "  }",
+          "}",
+          "walk(here);",
+        ].join("\n"),
+      ],
+      [
+        `${dir}/fixture.test.ts`,
+        [
+          "const here = import.meta.dirname;",
+          'readFileSync(join(here, "fixtures", "a.ts"), "utf8");',
+        ].join("\n"),
+      ],
+      [
+        `${dir}/json.test.ts`,
+        [
+          "const here = import.meta.dirname;",
+          'readFileSync(join(here, "../package.json"), "utf8");',
+        ].join("\n"),
+      ],
+      [
+        `${dir}/temp.test.ts`,
+        [
+          'const tmp = mkdtempSync(join(tmpdir(), "x-"));',
+          'writeFileSync(join(tmp, "index.ts"), "export {};");',
+          'readFileSync(join(tmp, "index.ts"), "utf8");',
+        ].join("\n"),
+      ],
+      [`${dir}/import.test.ts`, 'import { a } from "./a.ts";'],
+      [
+        `${dir}/imported.test.ts`,
+        [
+          'import { imported } from "./paths.ts";',
+          'readFileSync(join(imported, "a.ts"), "utf8");',
+        ].join("\n"),
+      ],
+    ]);
+    const targets = new Set([`${dir}/a.ts`, `${dir}/b/c.ts`]);
+    expect(
+      scanSourceReads(sources, targets).map((r) => [r.test, r.path, r.files]),
+    ).toEqual([
+      [
+        "packages/x/src/bun.test.ts",
+        "packages/x/src/a.ts",
+        ["packages/x/src/a.ts"],
+      ],
+      [
+        "packages/x/src/named.test.ts",
+        "packages/x/src/",
+        ["packages/x/src/a.ts", "packages/x/src/b/c.ts"],
+      ],
+      [
+        "packages/x/src/raw.test.ts",
+        "packages/x/src/a.ts",
+        ["packages/x/src/a.ts"],
+      ],
+      [
+        "packages/x/src/url.test.ts",
+        "packages/x/src/a.ts",
+        ["packages/x/src/a.ts"],
+      ],
+      [
+        "packages/x/src/walk.test.ts",
+        "packages/x/src/",
+        ["packages/x/src/a.ts", "packages/x/src/b/c.ts"],
+      ],
+    ]);
   });
 });

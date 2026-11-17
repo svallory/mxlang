@@ -589,8 +589,11 @@ export function commentOnly(
  * Tests that read a source file's text (comments included), so a
  * comment-only edit to it can change their result. Each row lists every
  * consumer test file a `git grep` for test files that read a `.ts` under some
- * `src/`, or scan a `src` directory's `.ts` files, found; a path built at run
- * time is not detected, so a new reader adds its row by hand.
+ * `src/`, or scan a `src` directory's `.ts` files, found. The
+ * "SOURCE_TEXT_READERS guard" in `scripts/test-affected.test.ts` fails when a
+ * test it detects reading a `src/` source has no row; it cannot see a path
+ * built in another module or passed through a function parameter of an
+ * imported helper, so such a reader adds its row by hand.
  */
 export const SOURCE_TEXT_READERS: readonly {
   path: RegExp;
