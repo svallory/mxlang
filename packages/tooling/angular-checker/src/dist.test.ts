@@ -18,11 +18,15 @@ describe("published package shape", () => {
   });
 
   it("builds a dist entry that actually defines its exports", () => {
-    // Only meaningful once `bun run build` has run (it has, in `bun run
-    // verify`, which builds before it tests). Skipped rather than failed in a
-    // bare `vitest run` of this package alone.
+    // Reads the built dist, so it needs a build first: `bun run verify`, CI
+    // and `moon run angular-checker:test` all build before they test. A bare
+    // `vitest run` without a dist fails here rather than passing with no
+    // assertions.
     const entry = path.join(PACKAGE_DIR, "dist", "index.js");
-    if (!existsSync(entry)) return;
+    expect(
+      existsSync(entry),
+      "packages/tooling/angular-checker/dist/index.js is missing: run `bun run build` first (moon run angular-checker:test builds it)",
+    ).toBe(true);
 
     const code = readFileSync(entry, "utf8");
     // A tree-shaken shell is just an `export { ... };` statement and nothing

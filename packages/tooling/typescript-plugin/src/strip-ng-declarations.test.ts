@@ -200,7 +200,10 @@ describe("strip-ng-declarations guard", () => {
 
   it("the built dist passes the guard (references nothing stripped)", () => {
     const dist = path.resolve(import.meta.dirname, "../dist");
-    if (!existsSync(path.join(dist, "index.cjs"))) return; // build not run
+    expect(
+      existsSync(path.join(dist, "index.cjs")),
+      "packages/tooling/typescript-plugin/dist/index.cjs is missing: run `bun run build` first (moon run typescript-plugin:test builds it)",
+    ).toBe(true);
     const copy = path.join(scratch, "built-dist");
     execFileSync("cp", ["-R", dist, copy]);
     expect(strip(copy)).toBe(0);
