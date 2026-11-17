@@ -58,3 +58,18 @@ tasks:
       - "/tsconfig.base.json"
     outputs:
       - "dist"
+
+  # Delegates to package.json's test:bun (the tsconfig override and
+  # `src/mx/region-compile.bun.test.ts`) so the two cannot drift.
+  test-bun:
+    command: "bun"
+    args: ["run", "test:bun"]
+    # reads @mxlang/core's dist (`src/index.ts`, which the test imports)
+    deps: ["core:build"]
+    inputs:
+      - "src/**/*"
+      - "/packages/babel/src/**/*"
+      - "package.json"
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/bun.lock"

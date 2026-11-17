@@ -34,3 +34,20 @@ tasks:
       - "tsconfig.json"
       - "/tsconfig.base.json"
       - "/bun.lock"
+
+  # Delegates to package.json's test:bun (the tsconfig override and
+  # `src/bun.test.ts`) so the two cannot drift.
+  test-bun:
+    command: "bun"
+    args: ["run", "test:bun"]
+    # reads @mxlang/core's dist (`src/bun.test.ts`) and @mxlang/tsx-bridge's
+    # (through @mxlang/host-preact's `src/callee-reader.ts`)
+    deps: ["core:build", "tsx-bridge:build"]
+    inputs:
+      - "src/**/*"
+      # `src/bun.ts` imports @mxlang/host-preact, whose `main` is its src.
+      - "/packages/hosts/preact/src/**/*"
+      - "package.json"
+      - "tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/bun.lock"

@@ -50,6 +50,8 @@ tasks:
       - "README.md"
       - "package.json"
       - "/tsconfig.base.json"
+      # bun test transforms with the locked npm code
+      - "/bun.lock"
 
   # Delegates to package.json's build (`rm -rf dist`, the bundle and its
   # declaration emit) so the two cannot drift.
