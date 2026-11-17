@@ -1,6 +1,7 @@
-import { mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { expect } from "vitest";
 
 export const PACKAGE_DIR = path.resolve(import.meta.dirname, "../..");
 
@@ -15,4 +16,15 @@ export function makePluginInstall(): string {
   mkdirSync(scope, { recursive: true });
   symlinkSync(PACKAGE_DIR, path.join(scope, "typescript-plugin"), "dir");
   return root;
+}
+
+/**
+ * Fails, rather than skips, a test that reads this package's built `dist/<file>`
+ * when no build has run: the first statement of every such test.
+ */
+export function requireDist(file: string): void {
+  expect(
+    existsSync(path.join(PACKAGE_DIR, "dist", file)),
+    `packages/tooling/typescript-plugin/dist/${file} is missing: run \`bun run build\` first (moon run typescript-plugin:test builds it)`,
+  ).toBe(true);
 }

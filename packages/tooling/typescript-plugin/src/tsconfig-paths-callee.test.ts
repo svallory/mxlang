@@ -1,6 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -15,7 +14,7 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 import { afterAll, describe, expect, it } from "vitest";
 import { createAmxLanguagePlugin } from "./amx-language.ts";
-import { makePluginInstall } from "./fixtures/plugin-install.ts";
+import { makePluginInstall, requireDist } from "./fixtures/plugin-install.ts";
 import { createPluginService } from "./fixtures/plugin-service.ts";
 import {
   createNgMxLanguagePlugin,
@@ -35,7 +34,6 @@ import { createTsconfigPathsResolver } from "./tsconfig-paths.ts";
  * behaviour there).
  */
 
-const built = existsSync(join(import.meta.dirname, "../dist/index.cjs"));
 const TSSERVER = createRequire(import.meta.url).resolve(
   "typescript/lib/tsserver.js",
 );
@@ -395,202 +393,193 @@ function startTsserver(args: string[], cwd: string) {
 
 // The tsserver leg needs the built plugin (`dist/index.cjs`), which is what a
 // real editor loads.
-describe.skipIf(!built)(
-  "a real tsserver resolves an aliased .mx callee import",
-  () => {
-    const root = built ? makePluginInstall() : "";
-    afterAll(() => {
-      if (root) rmSync(root, { recursive: true, force: true });
-    });
+describe("a real tsserver resolves an aliased .mx callee import", () => {
+  const root = makePluginInstall();
+  afterAll(() => {
+    if (root) rmSync(root, { recursive: true, force: true });
+  });
 
-    it.each([
-      { specifier: "~/Card.mx", change: "create-after-miss" },
-      { specifier: "~/Card", change: "create-after-miss" },
-      { specifier: "~/Card.mx", change: "move-after-hit" },
-      { specifier: "~/Card", change: "move-after-hit" },
-    ])(
-      "refreshes $specifier after $change in the same server",
-      async ({ specifier, change }) => {
-        const project = scratch({ "~/*": ["src/*", "lib/*"] }, root);
-        const { dir } = project;
-        const configFile = join(dir, "tsconfig.json");
-        const config = JSON.parse(readFileSync(configFile, "utf8"));
-        Object.assign(config.compilerOptions.paths, targetHtmlEntry(dir));
-        writeFileSync(configFile, JSON.stringify(config));
-        const callee = join(dir, "src/Card.mx");
-        const source = readFileSync(callee, "utf8");
-        if (change === "create-after-miss") rmSync(callee);
-        mkdirSync(join(dir, "lib"));
-        const text = `import Card from "${specifier}"\n\n<Card><@tab/></Card>\n`;
-        const page = project.page(text);
-        const server = startTsserver(
-          [
-            "--pluginProbeLocations",
-            root,
-            "--disableAutomaticTypingAcquisition",
+  it.each([
+    { specifier: "~/Card.mx", change: "create-after-miss" },
+    { specifier: "~/Card", change: "create-after-miss" },
+    { specifier: "~/Card.mx", change: "move-after-hit" },
+    { specifier: "~/Card", change: "move-after-hit" },
+  ])(
+    "refreshes $specifier after $change in the same server",
+    async ({ specifier, change }) => {
+      requireDist("index.cjs");
+      const project = scratch({ "~/*": ["src/*", "lib/*"] }, root);
+      const { dir } = project;
+      const configFile = join(dir, "tsconfig.json");
+      const config = JSON.parse(readFileSync(configFile, "utf8"));
+      Object.assign(config.compilerOptions.paths, targetHtmlEntry(dir));
+      writeFileSync(configFile, JSON.stringify(config));
+      const callee = join(dir, "src/Card.mx");
+      const source = readFileSync(callee, "utf8");
+      if (change === "create-after-miss") rmSync(callee);
+      mkdirSync(join(dir, "lib"));
+      const text = `import Card from "${specifier}"\n\n<Card><@tab/></Card>\n`;
+      const page = project.page(text);
+      const server = startTsserver(
+        ["--pluginProbeLocations", root, "--disableAutomaticTypingAcquisition"],
+        dir,
+      );
+      const diagnostics = async () => [
+        ...((await server.request("semanticDiagnosticsSync", {
+          file: page,
+        })) as { code: number | string }[]),
+        ...((await server.request("syntacticDiagnosticsSync", {
+          file: page,
+        })) as { code: number | string }[]),
+      ];
+      try {
+        await server.request("configure", {
+          extraFileExtensions: [
+            { extension: ".mx", isMixedContent: false, scriptKind: 7 },
           ],
-          dir,
+        });
+        await server.request("open", { file: page, fileContent: text });
+        const before = await diagnostics();
+        // Unresolved, TS cannot find the module; resolved, the callee's
+        // Input types the call and `tab` is not one of its props.
+        expect(before.map((d) => d.code)).toContain(
+          change === "create-after-miss" ? 2307 : 2353,
         );
-        const diagnostics = async () => [
-          ...((await server.request("semanticDiagnosticsSync", {
-            file: page,
-          })) as { code: number | string }[]),
-          ...((await server.request("syntacticDiagnosticsSync", {
-            file: page,
-          })) as { code: number | string }[]),
-        ];
-        try {
-          await server.request("configure", {
-            extraFileExtensions: [
-              { extension: ".mx", isMixedContent: false, scriptKind: 7 },
-            ],
-          });
-          await server.request("open", { file: page, fileContent: text });
-          const before = await diagnostics();
-          // Unresolved, TS cannot find the module; resolved, the callee's
-          // Input types the call and `tab` is not one of its props.
-          expect(before.map((d) => d.code)).toContain(
-            change === "create-after-miss" ? 2307 : 2353,
-          );
-          if (change === "create-after-miss") writeFileSync(callee, source);
-          else renameSync(callee, join(dir, "lib/Card.mx"));
-          // No config reload or server restart: a caller edit must re-resolve
-          // even though getCompilationSettings still returns the same object.
-          await server.request("close", { file: page });
-          project.page(`${text}\n`);
-          await server.request("open", {
-            file: page,
-            fileContent: `${text}\n`,
-          });
-          const after = await diagnostics();
-          expect(after.map((d) => d.code)).toContain(2353);
-          expect(after.map((d) => d.code)).not.toContain(2307);
-        } finally {
-          server.kill();
-          rmSync(dir, { recursive: true, force: true });
-        }
-      },
-      50_000,
-    );
+        if (change === "create-after-miss") writeFileSync(callee, source);
+        else renameSync(callee, join(dir, "lib/Card.mx"));
+        // No config reload or server restart: a caller edit must re-resolve
+        // even though getCompilationSettings still returns the same object.
+        await server.request("close", { file: page });
+        project.page(`${text}\n`);
+        await server.request("open", {
+          file: page,
+          fileContent: `${text}\n`,
+        });
+        const after = await diagnostics();
+        expect(after.map((d) => d.code)).toContain(2353);
+        expect(after.map((d) => d.code)).not.toContain(2307);
+      } finally {
+        server.kill();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    50_000,
+  );
 
-    it.each([
-      { specifier: "~/Card.mx", paths: { "~/*": ["src/*"] }, inherited: false },
-      { specifier: "~/Card", paths: { "~/*": ["src/*"] }, inherited: false },
-      { specifier: "card", paths: { card: ["src/Card.mx"] }, inherited: false },
-      { specifier: "src/Card.mx", paths: {}, inherited: false },
-      { specifier: "~/Card.mx", paths: { "~/*": ["src/*"] }, inherited: true },
-    ])(
-      "reads $specifier (inherited: $inherited) in the real plugin",
-      async ({ specifier, paths, inherited }) => {
-        // The scratch project lives inside the plugin install's node_modules
-        // scope so `@mxlang/typescript-plugin` resolves by name.
-        const dir = mkdtempSync(join(root, "project-"));
-        const project: Scratch = {
-          dir,
-          page: (source: string) => {
-            const file = join(dir, "page.mx");
-            writeFileSync(file, source);
-            return file;
+  it.each([
+    { specifier: "~/Card.mx", paths: { "~/*": ["src/*"] }, inherited: false },
+    { specifier: "~/Card", paths: { "~/*": ["src/*"] }, inherited: false },
+    { specifier: "card", paths: { card: ["src/Card.mx"] }, inherited: false },
+    { specifier: "src/Card.mx", paths: {}, inherited: false },
+    { specifier: "~/Card.mx", paths: { "~/*": ["src/*"] }, inherited: true },
+  ])(
+    "reads $specifier (inherited: $inherited) in the real plugin",
+    async ({ specifier, paths, inherited }) => {
+      requireDist("index.cjs");
+      // The scratch project lives inside the plugin install's node_modules
+      // scope so `@mxlang/typescript-plugin` resolves by name.
+      const dir = mkdtempSync(join(root, "project-"));
+      const project: Scratch = {
+        dir,
+        page: (source: string) => {
+          const file = join(dir, "page.mx");
+          writeFileSync(file, source);
+          return file;
+        },
+      };
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({ mx: { host: "html" } }),
+      );
+      writeFileSync(
+        join(dir, "src/Card.mx"),
+        "export interface Input { a?: string }\n\n<div/>\n",
+      );
+      writeFileSync(
+        join(dir, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            noEmit: true,
+            skipLibCheck: true,
+            target: "ESNext",
+            module: "ESNext",
+            moduleResolution: "bundler",
+            jsx: "preserve",
+            types: [],
+            allowImportingTsExtensions: true,
+            ignoreDeprecations: "6.0",
+            baseUrl: ".",
+            paths: {
+              ...paths,
+              ...targetHtmlEntry(dir),
+            },
+            plugins: [{ name: "@mxlang/typescript-plugin" }],
           },
-        };
-        mkdirSync(join(dir, "src"), { recursive: true });
+          files: ["page.mx", "src/Card.mx"],
+        }),
+      );
+      if (inherited) {
         writeFileSync(
-          join(dir, "package.json"),
-          JSON.stringify({ mx: { host: "html" } }),
-        );
-        writeFileSync(
-          join(dir, "src/Card.mx"),
-          "export interface Input { a?: string }\n\n<div/>\n",
+          join(dir, "base.json"),
+          readFileSync(join(dir, "tsconfig.json")),
         );
         writeFileSync(
           join(dir, "tsconfig.json"),
-          JSON.stringify({
-            compilerOptions: {
-              strict: true,
-              noEmit: true,
-              skipLibCheck: true,
-              target: "ESNext",
-              module: "ESNext",
-              moduleResolution: "bundler",
-              jsx: "preserve",
-              types: [],
-              allowImportingTsExtensions: true,
-              ignoreDeprecations: "6.0",
-              baseUrl: ".",
-              paths: {
-                ...paths,
-                ...targetHtmlEntry(dir),
-              },
-              plugins: [{ name: "@mxlang/typescript-plugin" }],
-            },
-            files: ["page.mx", "src/Card.mx"],
-          }),
+          JSON.stringify({ extends: "./base.json" }),
         );
-        if (inherited) {
-          writeFileSync(
-            join(dir, "base.json"),
-            readFileSync(join(dir, "tsconfig.json")),
-          );
-          writeFileSync(
-            join(dir, "tsconfig.json"),
-            JSON.stringify({ extends: "./base.json" }),
-          );
-        }
-        const page = project.page(
-          `import Card from "${specifier}"\n\n<Card><@tab/></Card>\n`,
-        );
-        const server = startTsserver(
-          [
-            "--pluginProbeLocations",
-            root,
-            "--disableAutomaticTypingAcquisition",
+      }
+      const page = project.page(
+        `import Card from "${specifier}"\n\n<Card><@tab/></Card>\n`,
+      );
+      const server = startTsserver(
+        ["--pluginProbeLocations", root, "--disableAutomaticTypingAcquisition"],
+        dir,
+      );
+      try {
+        await server.request("configure", {
+          extraFileExtensions: [
+            { extension: ".mx", isMixedContent: false, scriptKind: 7 },
           ],
-          dir,
-        );
-        try {
-          await server.request("configure", {
-            extraFileExtensions: [
-              { extension: ".mx", isMixedContent: false, scriptKind: 7 },
-            ],
-          });
-          await server.request("open", {
+        });
+        await server.request("open", {
+          file: page,
+          fileContent: readFileSync(page, "utf8"),
+        });
+        const diagnostics = [
+          ...((await server.request("semanticDiagnosticsSync", {
             file: page,
-            fileContent: readFileSync(page, "utf8"),
-          });
-          const diagnostics = [
-            ...((await server.request("semanticDiagnosticsSync", {
-              file: page,
-            })) as {
-              code: number | string;
-              text: string;
-            }[]),
-            ...((await server.request("syntacticDiagnosticsSync", {
-              file: page,
-            })) as {
-              code: number | string;
-              text: string;
-            }[]),
-          ];
-          // A positive assertion proves the plugin is loaded and the aliased
-          // callee resolved: its Input types the call, which has no `tab`.
-          expect(diagnostics.some((d) => d.code === 2353)).toBe(true);
-          expect(diagnostics.filter((d) => d.code === 2307)).toEqual([]);
-          await server.request("close", { file: page });
-          project.page(`import Card from "${specifier}"\n\n<Card a=123/>\n`);
-          await server.request("open", {
+          })) as {
+            code: number | string;
+            text: string;
+          }[]),
+          ...((await server.request("syntacticDiagnosticsSync", {
             file: page,
-            fileContent: readFileSync(page, "utf8"),
-          });
-          const typed = (await server.request("semanticDiagnosticsSync", {
-            file: page,
-          })) as { code: number | string; text: string }[];
-          expect(typed.filter((d) => d.code === 2307)).toEqual([]);
-          expect(typed.some((d) => d.code === 2322)).toBe(true);
-        } finally {
-          server.kill();
-        }
-      },
-      50_000,
-    );
-  },
-);
+          })) as {
+            code: number | string;
+            text: string;
+          }[]),
+        ];
+        // A positive assertion proves the plugin is loaded and the aliased
+        // callee resolved: its Input types the call, which has no `tab`.
+        expect(diagnostics.some((d) => d.code === 2353)).toBe(true);
+        expect(diagnostics.filter((d) => d.code === 2307)).toEqual([]);
+        await server.request("close", { file: page });
+        project.page(`import Card from "${specifier}"\n\n<Card a=123/>\n`);
+        await server.request("open", {
+          file: page,
+          fileContent: readFileSync(page, "utf8"),
+        });
+        const typed = (await server.request("semanticDiagnosticsSync", {
+          file: page,
+        })) as { code: number | string; text: string }[];
+        expect(typed.filter((d) => d.code === 2307)).toEqual([]);
+        expect(typed.some((d) => d.code === 2322)).toBe(true);
+      } finally {
+        server.kill();
+      }
+    },
+    50_000,
+  );
+});

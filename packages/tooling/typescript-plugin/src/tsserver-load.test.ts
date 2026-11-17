@@ -17,11 +17,8 @@ import {
   fakeProject,
   specifier,
 } from "../../../../test-fixtures/third-party-targets/support.ts";
-import { makePluginInstall } from "./fixtures/plugin-install.ts";
+import { makePluginInstall, requireDist } from "./fixtures/plugin-install.ts";
 
-const built = existsSync(
-  path.resolve(import.meta.dirname, "../dist/index.cjs"),
-);
 const TSSERVER = createRequire(import.meta.url).resolve(
   "typescript/lib/tsserver.js",
 );
@@ -270,13 +267,14 @@ async function expectPluginLoaded(
 // The plugin-load path tsserver runs (`sys.require` -> `enableProxy`) is the
 // only thing that can tell a factory export from an object export, so this
 // drives one real tsserver instead of mirroring its check.
-describe.skipIf(!built)("tsserver loads the built plugin", () => {
-  const root = built ? makePluginInstall() : "";
+describe("tsserver loads the built plugin", () => {
+  const root = makePluginInstall();
   afterAll(() => {
     if (root) rmSync(root, { recursive: true, force: true });
   });
 
   it("loads the plugin instead of skipping it", async () => {
+    requireDist("index.cjs");
     await expectPluginLoaded(
       root,
       ["--pluginProbeLocations", root],
@@ -289,8 +287,9 @@ describe.skipIf(!built)("tsserver loads the built plugin", () => {
 // The protocol round trip of a quick fix: `getCodeFixes` reaches the plugin's
 // `getCodeFixesAtPosition`, and the fix comes back in tsserver's own shape
 // (1-based line/offset), applicable to the `.mx` file.
-describe.skipIf(!built)("an MX quick fix through a real tsserver", () => {
+describe("an MX quick fix through a real tsserver", () => {
   it("answers getCodeFixes with the `<effect>` rename", async () => {
+    requireDist("index.cjs");
     const root = realpathSync(makePluginInstall());
     let server: ReturnType<typeof startTsserver> | undefined;
     try {
@@ -371,8 +370,9 @@ describe.skipIf(!built)("an MX quick fix through a real tsserver", () => {
   }, 50_000);
 });
 
-describe.skipIf(!built)("Angular tag calls through a real tsserver", () => {
+describe("Angular tag calls through a real tsserver", () => {
   it("keeps authored template diagnostics without a static imports error", async () => {
+    requireDist("index.cjs");
     const root = realpathSync(makePluginInstall());
     let server: ReturnType<typeof startTsserver> | undefined;
     try {
@@ -492,17 +492,93 @@ describe.skipIf(!built)("Angular tag calls through a real tsserver", () => {
   }, 90_000);
 });
 
-describe.skipIf(!built)(
-  "a misbehaving ambientTypes host through a real tsserver",
-  () => {
-    it("reports TS80004 on the project and keeps type-checking", async () => {
+describe("a misbehaving ambientTypes host through a real tsserver", () => {
+  it("reports TS80004 on the project and keeps type-checking", async () => {
+    requireDist("index.cjs");
+    const root = realpathSync(makePluginInstall());
+    let server: ReturnType<typeof startTsserver> | undefined;
+    try {
+      const project = fakeProject({
+        root,
+        mx: { target: specifier("ambient-types-throws") },
+        install: ["ambient-types-throws"],
+        files: {
+          "tsconfig.json": JSON.stringify({
+            compilerOptions: {
+              strict: true,
+              module: "esnext",
+              target: "es2022",
+              types: [],
+              plugins: [{ name: "@mxlang/typescript-plugin" }],
+            },
+            files: ["index.ts"],
+          }),
+          "index.ts": "export const answer: number = 'forty-two';\n",
+        },
+      });
+      const file = project.path("index.ts");
+      const log = project.path("tsserver.log");
+      server = startTsserver(
+        [
+          "--pluginProbeLocations",
+          root,
+          "--logFile",
+          log,
+          "--disableAutomaticTypingAcquisition",
+        ],
+        root,
+        log,
+      );
+      await server.request("open", { file });
+
+      // The host's throw did not stop the plugin: the file's own error stands.
+      const semantic = (await server.request("semanticDiagnosticsSync", {
+        file,
+      })) as { code: number }[];
+      expect(semantic.map((d) => d.code)).toEqual([2322]);
+      // What the editor shows on the tsconfig (`configFileDiag` is built from
+      // the same `getCompilerOptionsDiagnostics`).
+      const projectDiagnostics = (await server.request(
+        "compilerOptionsDiagnostics-full",
+        {
+          projectFileName: project.path("tsconfig.json"),
+        },
+      )) as {
+        code: number;
+        category: string;
+        source?: string;
+        message: string;
+      }[];
+      expect(projectDiagnostics.filter((d) => d.code === 80004)).toEqual([
+        expect.objectContaining({
+          category: "error",
+          source: "mxlang",
+          message:
+            "host @fake/mx-ambient-types-throws: ambientTypes threw: cannot find astro install",
+        }),
+      ]);
+    } finally {
+      server?.kill();
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 50_000);
+
+  // `[resolve(<a file the package lacks>)]` is `[undefined]`: an entry tsc
+  // cannot take as a root file, which used to crash the language service.
+  it.each([
+    ["undefined-entry", "undefined"],
+    ["number-entry", "number 42"],
+  ])(
+    "reports a non-path entry (%s) as TS80004 and keeps type-checking",
+    async (mode, entry) => {
+      requireDist("index.cjs");
       const root = realpathSync(makePluginInstall());
       let server: ReturnType<typeof startTsserver> | undefined;
       try {
         const project = fakeProject({
           root,
-          mx: { target: specifier("ambient-types-throws") },
-          install: ["ambient-types-throws"],
+          mx: { target: specifier("ambient-types-misbehaves") },
+          install: ["ambient-types-misbehaves"],
           files: {
             "tsconfig.json": JSON.stringify({
               compilerOptions: {
@@ -512,9 +588,10 @@ describe.skipIf(!built)(
                 types: [],
                 plugins: [{ name: "@mxlang/typescript-plugin" }],
               },
-              files: ["index.ts"],
+              files: ["index.ts", `${mode}.ts`],
             }),
             "index.ts": "export const answer: number = 'forty-two';\n",
+            [`${mode}.ts`]: "export {};\n",
           },
         });
         const file = project.path("index.ts");
@@ -532,13 +609,10 @@ describe.skipIf(!built)(
         );
         await server.request("open", { file });
 
-        // The host's throw did not stop the plugin: the file's own error stands.
         const semantic = (await server.request("semanticDiagnosticsSync", {
           file,
         })) as { code: number }[];
         expect(semantic.map((d) => d.code)).toEqual([2322]);
-        // What the editor shows on the tsconfig (`configFileDiag` is built from
-        // the same `getCompilerOptionsDiagnostics`).
         const projectDiagnostics = (await server.request(
           "compilerOptionsDiagnostics-full",
           {
@@ -554,92 +628,17 @@ describe.skipIf(!built)(
           expect.objectContaining({
             category: "error",
             source: "mxlang",
-            message:
-              "host @fake/mx-ambient-types-throws: ambientTypes threw: cannot find astro install",
+            message: `host @fake/mx-ambient-types-misbehaves: ambientTypes returned a non-path entry (${entry}), expected an iterable of files`,
           }),
         ]);
       } finally {
         server?.kill();
         rmSync(root, { recursive: true, force: true });
       }
-    }, 50_000);
-
-    // `[resolve(<a file the package lacks>)]` is `[undefined]`: an entry tsc
-    // cannot take as a root file, which used to crash the language service.
-    it.each([
-      ["undefined-entry", "undefined"],
-      ["number-entry", "number 42"],
-    ])(
-      "reports a non-path entry (%s) as TS80004 and keeps type-checking",
-      async (mode, entry) => {
-        const root = realpathSync(makePluginInstall());
-        let server: ReturnType<typeof startTsserver> | undefined;
-        try {
-          const project = fakeProject({
-            root,
-            mx: { target: specifier("ambient-types-misbehaves") },
-            install: ["ambient-types-misbehaves"],
-            files: {
-              "tsconfig.json": JSON.stringify({
-                compilerOptions: {
-                  strict: true,
-                  module: "esnext",
-                  target: "es2022",
-                  types: [],
-                  plugins: [{ name: "@mxlang/typescript-plugin" }],
-                },
-                files: ["index.ts", `${mode}.ts`],
-              }),
-              "index.ts": "export const answer: number = 'forty-two';\n",
-              [`${mode}.ts`]: "export {};\n",
-            },
-          });
-          const file = project.path("index.ts");
-          const log = project.path("tsserver.log");
-          server = startTsserver(
-            [
-              "--pluginProbeLocations",
-              root,
-              "--logFile",
-              log,
-              "--disableAutomaticTypingAcquisition",
-            ],
-            root,
-            log,
-          );
-          await server.request("open", { file });
-
-          const semantic = (await server.request("semanticDiagnosticsSync", {
-            file,
-          })) as { code: number }[];
-          expect(semantic.map((d) => d.code)).toEqual([2322]);
-          const projectDiagnostics = (await server.request(
-            "compilerOptionsDiagnostics-full",
-            {
-              projectFileName: project.path("tsconfig.json"),
-            },
-          )) as {
-            code: number;
-            category: string;
-            source?: string;
-            message: string;
-          }[];
-          expect(projectDiagnostics.filter((d) => d.code === 80004)).toEqual([
-            expect.objectContaining({
-              category: "error",
-              source: "mxlang",
-              message: `host @fake/mx-ambient-types-misbehaves: ambientTypes returned a non-path entry (${entry}), expected an iterable of files`,
-            }),
-          ]);
-        } finally {
-          server?.kill();
-          rmSync(root, { recursive: true, force: true });
-        }
-      },
-      50_000,
-    );
-  },
-);
+    },
+    50_000,
+  );
+});
 
 // The same load, against the plugin an installed VS Code extension ships:
 // `MX_VSIX_EXTENSION_DIR` is the unpacked VSIX's `extension/` directory

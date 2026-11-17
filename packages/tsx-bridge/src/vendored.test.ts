@@ -482,27 +482,23 @@ describe("vendored @babel/parser equivalence under the option sets the hosts and
 });
 
 describe("built dist/index.js equivalence", () => {
-  const distExists = existsSync(distEntry);
-
   // This test parses every fixture file with both parsers (~1 s idle, >5 s
   // under machine load). 4x the idle time = 4 s, still short of the 5000 ms
   // default, but peak load pushes it over; 4x the worst measured time (5 s)
   // is 20 s. Scoped to this test rather than raised globally.
-  it.skipIf(!distExists)(
-    distExists
-      ? "produces an identical AST to node_modules/@babel/parser for every case"
-      : "skipped: dist/index.js not found — run `bun run build` in packages/tsx-bridge first",
-    async () => {
-      // `parse` is the MX entry point; the vendored @babel/parser surface is
-      // exported as `parseBabel`, and that is what must stay equivalent to npm.
-      const { parseBabel: parseDist } = await import(distEntry);
+  it("produces an identical AST to node_modules/@babel/parser for every case", async () => {
+    expect(
+      existsSync(distEntry),
+      "packages/tsx-bridge/dist/index.js is missing: run `bun run build` first (moon run tsx-bridge:test builds it)",
+    ).toBe(true);
+    // `parse` is the MX entry point; the vendored @babel/parser surface is
+    // exported as `parseBabel`, and that is what must stay equivalent to npm.
+    const { parseBabel: parseDist } = await import(distEntry);
 
-      for (const { source } of cases) {
-        const distAst = parseDist(source, parserOptions);
-        const npmAst = parseNpm(source, parserOptions);
-        expect(distAst).toEqual(npmAst);
-      }
-    },
-    20_000,
-  );
+    for (const { source } of cases) {
+      const distAst = parseDist(source, parserOptions);
+      const npmAst = parseNpm(source, parserOptions);
+      expect(distAst).toEqual(npmAst);
+    }
+  }, 20_000);
 });

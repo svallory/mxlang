@@ -1,17 +1,15 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createCheckerWorker } from "@mxlang/angular-checker";
 import { describe, expect, it } from "vitest";
+import { requireDist } from "./fixtures/plugin-install.ts";
 
 const DIST = path.resolve(import.meta.dirname, "../dist");
 const PROJECT = path.resolve(import.meta.dirname, "../fixtures/ng-project");
 
-// Only meaningful once `bun run build` has run (`bun run verify` builds before
-// it tests); skipped rather than failed in a bare `vitest run` of this package.
-const built = existsSync(path.join(DIST, "ng-worker.cjs"));
-
-describe.skipIf(!built)("the built ng-worker bundle", () => {
+describe("the built ng-worker bundle", () => {
   it("does not bundle @angular/compiler-cli", () => {
+    requireDist("ng-worker.cjs");
     const code = readFileSync(path.join(DIST, "ng-worker.cjs"), "utf8");
     // Resolved at run time from the user's project (createRequire), never inlined.
     expect(code).not.toMatch(/require\(["']@angular\/compiler-cli["']\)/);
@@ -25,6 +23,7 @@ describe.skipIf(!built)("the built ng-worker bundle", () => {
   });
 
   it("never imports typescript from its own location", () => {
+    requireDist("ng-worker.cjs");
     // The forked worker gets no `ts` from tsserver and the VSIX ships none, so
     // a bare `require("typescript")` would crash it on start. TypeScript must
     // come from the project, via the checker's createRequire.
@@ -34,11 +33,13 @@ describe.skipIf(!built)("the built ng-worker bundle", () => {
   });
 
   it("the plugin bundle does not inline it either", () => {
+    requireDist("index.cjs");
     const code = readFileSync(path.join(DIST, "index.cjs"), "utf8");
     expect(code).not.toContain("class NgtscProgram");
   });
 
   it("runs as a forked worker and reports a template error", async () => {
+    requireDist("ng-worker.cjs");
     const worker = createCheckerWorker({
       projectDir: PROJECT,
       workerPath: path.join(DIST, "ng-worker.cjs"),

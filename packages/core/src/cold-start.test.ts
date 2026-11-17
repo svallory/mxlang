@@ -10,8 +10,9 @@
  * - **The built `dist`** (what a registry install loads) under Node: a child
  *   process preloaded with a `Module._load` hook imports `dist/index.js`,
  *   lowers a plain file, and the test reads the hook's log. Lazy loading must
- *   survive bundling, so the dist is the artifact that matters; the test
- *   skips (visibly) when no dist has been built yet.
+ *   survive bundling, so the dist is the artifact that matters; with no
+ *   dist built yet, each of these tests fails with a "run `bun run build`
+ *   first" message rather than skipping.
  * - **The sources**: no `src` module may statically import (as a value) any
  *   of the lazy dependencies, which is what keeps a rebuild lazy too —
  *   `import type` is fine, and `marko-frontend.ts` requires its pieces by
@@ -149,48 +150,51 @@ function staticImportsOfDist(): string[] {
 }
 
 describe("cold start: the built dist loads the heavy dependencies lazily", () => {
-  it.skipIf(!existsSync(dist))(
-    "importing core loads no Babel package and no cosmiconfig",
-    () => {
-      // Static ESM imports bypass `Module._load`, so the dist's own import
-      // lines are checked directly: every external import is a failure.
-      expect(staticImportsOfDist()).toEqual([]);
-      // And nothing may be required on import alone.
-      for (const request of probe(dist, "import")) {
-        expect(
-          request.startsWith("@babel/") || request === "cosmiconfig",
-          `${request} loaded on import`,
-        ).toBe(false);
-      }
-    },
-  );
+  it("importing core loads no Babel package and no cosmiconfig", () => {
+    expect(
+      existsSync(dist),
+      "packages/core/dist/index.js is missing: run `bun run build` first (moon run core:test builds it)",
+    ).toBe(true);
+    // Static ESM imports bypass `Module._load`, so the dist's own import
+    // lines are checked directly: every external import is a failure.
+    expect(staticImportsOfDist()).toEqual([]);
+    // And nothing may be required on import alone.
+    for (const request of probe(dist, "import")) {
+      expect(
+        request.startsWith("@babel/") || request === "cosmiconfig",
+        `${request} loaded on import`,
+      ).toBe(false);
+    }
+  });
 
-  it.skipIf(!existsSync(dist))(
-    "lowering a plain file still loads no cosmiconfig",
-    () => {
-      const requests = probe(dist, "plain");
-      // `@babel/core` (traverse/types) and the TS strip plugin are the
-      // lowering path's own cost — the strip runs for every payload,
-      // TypeScript or not (it is not a no-op on TS-free programs). Core
-      // parses with MX's fork, bundled into its dist, so core itself requires
-      // no `@babel/parser`; `@babel/core` may still load it, so its absence
-      // is not asserted.
-      // cosmiconfig is only a config read's cost, and a plain file reads none.
-      expect(requests).toContain("@babel/core");
-      expect(requests.filter((r) => r === "cosmiconfig")).toEqual([]);
-    },
-  );
+  it("lowering a plain file still loads no cosmiconfig", () => {
+    expect(
+      existsSync(dist),
+      "packages/core/dist/index.js is missing: run `bun run build` first (moon run core:test builds it)",
+    ).toBe(true);
+    const requests = probe(dist, "plain");
+    // `@babel/core` (traverse/types) and the TS strip plugin are the
+    // lowering path's own cost — the strip runs for every payload,
+    // TypeScript or not (it is not a no-op on TS-free programs). Core
+    // parses with MX's fork, bundled into its dist, so core itself requires
+    // no `@babel/parser`; `@babel/core` may still load it, so its absence
+    // is not asserted.
+    // cosmiconfig is only a config read's cost, and a plain file reads none.
+    expect(requests).toContain("@babel/core");
+    expect(requests.filter((r) => r === "cosmiconfig")).toEqual([]);
+  });
 
-  it.skipIf(!existsSync(dist))(
-    "lowering under a dialect loads no marko-frontend bundle",
-    () => {
-      // Validating a dialect's syntax table uses the template parser the
-      // dist already inlines (`mxTemplateParser`); loading the whole
-      // `marko-frontend.cjs` for it was ~50 ms of a dialect's first call.
-      const requests = probe(dist, "dialect");
-      expect(requests.filter((r) => r.includes("marko-frontend"))).toEqual([]);
-    },
-  );
+  it("lowering under a dialect loads no marko-frontend bundle", () => {
+    expect(
+      existsSync(dist),
+      "packages/core/dist/index.js is missing: run `bun run build` first (moon run core:test builds it)",
+    ).toBe(true);
+    // Validating a dialect's syntax table uses the template parser the
+    // dist already inlines (`mxTemplateParser`); loading the whole
+    // `marko-frontend.cjs` for it was ~50 ms of a dialect's first call.
+    const requests = probe(dist, "dialect");
+    expect(requests.filter((r) => r.includes("marko-frontend"))).toEqual([]);
+  });
 });
 
 describe("cold start: no source module statically imports a lazy dependency", () => {

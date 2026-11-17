@@ -1,23 +1,19 @@
-import { existsSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import ts from "typescript";
 import { afterAll, describe, expect, it } from "vitest";
-import { makePluginInstall } from "./fixtures/plugin-install.ts";
+import { makePluginInstall, requireDist } from "./fixtures/plugin-install.ts";
 
 const PACKAGE_DIR = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(PACKAGE_DIR, "dist");
-
-// Only meaningful once `bun run build` has run (`bun run verify` builds before
-// it tests); skipped rather than failed in a bare `vitest run` of this package.
-const built = existsSync(path.join(DIST, "index.cjs"));
 
 // tsserver's `Project.enableProxy` calls `ts.sys.require` and only proceeds when
 // the module it gets back is a function; it never unwraps `.default`. An
 // object-shaped CJS export makes it log "did not expose a proper factory
 // function" and skip the plugin, so no tsserver editor ever loaded it.
-describe.skipIf(!built)("the built CJS entry, as tsserver loads it", () => {
-  const install = built ? makePluginInstall() : "";
+describe("the built CJS entry, as tsserver loads it", () => {
+  const install = makePluginInstall();
   afterAll(() => {
     if (install) rmSync(install, { recursive: true, force: true });
   });
@@ -34,6 +30,7 @@ describe.skipIf(!built)("the built CJS entry, as tsserver loads it", () => {
   };
 
   it("is a factory function that returns a plugin module with `create`", () => {
+    requireDist("index.cjs");
     const loaded = load();
     expect(typeof loaded).toBe("function");
     const plugin = (loaded as unknown as (modules: unknown) => unknown)({
@@ -43,6 +40,7 @@ describe.skipIf(!built)("the built CJS entry, as tsserver loads it", () => {
   });
 
   it("keeps `default` and every named export (additive)", () => {
+    requireDist("index.cjs");
     const loaded = load();
     const cjs = createRequire(import.meta.url)(path.join(DIST, "index.cjs"));
     expect(loaded.default).toBe(loaded);
