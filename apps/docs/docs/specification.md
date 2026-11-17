@@ -769,10 +769,11 @@ divergence in the bare `${expr}` line."
 
 ### HTML comments
 
-`<!doctype html>` arrives as a `MarkoDocumentType` whose `value` is
-`doctype html` with delimiters stripped, re-emitted as `<!${value}>`. Marko
-strips comment delimiters too, so an HTML comment and a `//` line comment are
-told apart by re-reading the source at the node's `loc`.
+`<!doctype html>` arrives as an `MxDoctype` whose `value` is `doctype html`,
+delimiters stripped as Marko strips them, and is re-emitted as `<!${value}>`.
+Comment delimiters are stripped too, and the front end records which comment
+it read (`MxComment.kind`: an HTML comment, a `//` line or a `/*` block), so
+lowering does not re-read the source to tell them apart.
 
 On the **html** host, `<html-comment>` renders a literal HTML comment and
 **lowers placeholders inside it**, through a comment-safe escape that escapes

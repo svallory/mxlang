@@ -707,10 +707,12 @@ export interface ImportName {
 
 export type IrNode =
   /**
-   * A literal run of text. `value` is Marko-normalized (newline-bearing
-   * whitespace runs dropped, the rest collapsed) while `span` slices the
-   * text exactly as authored — the two deliberately differ on e.g.
-   * `<div>line one\n  line two</div>`.
+   * A literal run of text. `value` is the text as the front end gives it
+   * (`MxText.value`, ast §3.8): in a normalizing body it follows Marko's
+   * whitespace rule (newline-bearing whitespace runs dropped, the rest
+   * collapsed), and in a preserving body such as `<pre>` it is the authored
+   * text unchanged. `span` slices the text exactly as authored — the two
+   * deliberately differ on e.g. `<div>line one\n  line two</div>`.
    */
   | ({
       kind: "Text";
@@ -1066,11 +1068,15 @@ export type IrNode =
   /** A statement lifted by the `hoist` hook. */
   | ({ kind: "Hoisted"; code: string; end: Position } & IrBase)
   | ({ kind: "DelegatedTag"; tag: DelegatedTag<unknown> } & IrBase)
-  /** `<!doctype html>`; `value` has its delimiters stripped by Marko. */
+  /**
+   * `<!doctype html>`; `value` is the doctype with its delimiters stripped
+   * (`doctype html`, as Marko gives it).
+   */
   | ({ kind: "DocumentType"; value: string } & IrBase)
   /**
-   * A comment. `html` distinguishes `<!-- -->` from a `//` line comment —
-   * Marko strips the delimiters, so only the source can tell them apart.
+   * A comment. `value` has the delimiters stripped. `html` is true for
+   * `<!-- -->` and false for a `//` line or a `/*` block comment, as the
+   * front end recorded it (`MxComment.kind`).
    */
   | ({
       kind: "Comment";
@@ -1078,7 +1084,8 @@ export type IrNode =
       html: boolean;
       /**
        * File-absolute UTF-16 code-unit span of the whole comment, delimiters
-       * included (`<!-- … -->`, or the `//` line).
+       * included (`<!-- … -->`, a `/*` block through its closing delimiter,
+       * or the `//` line).
        */
       span?: SourceSpan;
     } & IrBase);

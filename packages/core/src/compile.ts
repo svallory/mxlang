@@ -245,13 +245,13 @@ let current: {
  * Prints one expression node back to source text.
  *
  * The emitted module is text rather than a Babel AST, so every expression
- * Marko already parsed has to become code again. Marko bundles its own Babel
- * and these nodes belong to that instance, so its generator is the one that
- * can print them — the export is `generator`, not `generate`. A different
- * Babel instance's generator can still print the same node shape, but it is
- * the wrong generator for a Marko-owned node: only the instance a node's own
- * parser produced it with is guaranteed to agree with that parser's AST
- * shape and options across a version bump.
+ * the front end parsed has to become code again. The nodes are Babel AST
+ * nodes: the front end's payloads, which core's `@babel/parser` fork parsed,
+ * and nodes rewritten from them. Core prints them with its own Babel's
+ * generator (`coreBabel()` in `babel.ts`), which is stock `@babel/generator`.
+ * That generator agrees with the fork's AST because the fork parses as npm
+ * `@babel/parser` does. `babel.ts`'s header says why this replaced Marko's
+ * bundled Babel.
  */
 export function printExpression(node: Node): string {
   const { generator } = coreBabel();
