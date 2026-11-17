@@ -238,6 +238,34 @@ export function readPackageJson(dir: string): PackageJson {
   return JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
 }
 
+// Mirrors the root package.json `workspaces` globs.
+const WORKSPACE_PARENTS = ["packages", "packages/*", "examples", "apps"];
+
+function listDirs(parent: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(join(repoRoot, parent))) {
+    if (name === "node_modules") continue;
+    const rel = join(parent, name);
+    if (statSync(join(repoRoot, rel)).isDirectory()) out.push(rel);
+  }
+  return out;
+}
+
+/** Every workspace directory (repo-relative), with or without a `package.json`. */
+export function workspaceDirs(): string[] {
+  const dirs: string[] = [];
+  for (const glob of WORKSPACE_PARENTS) {
+    const parents = glob.endsWith("/*") ? listDirs(glob.slice(0, -2)) : [glob];
+    for (const parent of parents) {
+      // `packages` and `examples`/`apps` list their children; `packages/*`
+      // lists the grandchildren, so the group directories themselves count
+      // only when they hold a package.json.
+      for (const dir of listDirs(parent)) dirs.push(dir);
+    }
+  }
+  return dirs;
+}
+
 /**
  * Splits the workspace packages a consumer install must pin (it cannot fetch
  * them) by each package's own `private` flag: `private: true` -> an empty stub

@@ -1,41 +1,13 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { repoRoot, workspaceDirs } from "./pack-hygiene.ts";
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-// Mirrors the root package.json `workspaces` globs.
-const WORKSPACE_PARENTS = ["packages", "packages/*", "examples", "apps"];
 const DEP_FIELDS = [
   "dependencies",
   "devDependencies",
   "peerDependencies",
 ] as const;
-
-function listDirs(parent: string): string[] {
-  const out: string[] = [];
-  for (const name of readdirSync(join(repoRoot, parent))) {
-    if (name === "node_modules") continue;
-    const rel = join(parent, name);
-    if (statSync(join(repoRoot, rel)).isDirectory()) out.push(rel);
-  }
-  return out;
-}
-
-function workspaceDirs(): string[] {
-  const dirs: string[] = [];
-  for (const glob of WORKSPACE_PARENTS) {
-    const parents = glob.endsWith("/*") ? listDirs(glob.slice(0, -2)) : [glob];
-    for (const parent of parents) {
-      // `packages` and `examples`/`apps` list their children; `packages/*`
-      // lists the grandchildren, so the group directories themselves count
-      // only when they hold a package.json.
-      for (const dir of listDirs(parent)) dirs.push(dir);
-    }
-  }
-  return dirs;
-}
 
 /** name -> workspace names it depends on (`workspace:` ranges only). */
 function workspaceGraph(): Map<string, string[]> {
