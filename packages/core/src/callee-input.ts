@@ -1317,8 +1317,8 @@ class InputAnalyzer {
     }
     if (!resolved) return undefined;
     // A component's types never come from a runtime module: a .js/.jsx/
-    // .mjs/.cjs (or non-script) target is not read, parsed or recorded, and
-    // counts as unresolved.
+    // .mjs/.cjs (or non-script) target is not read or parsed, and counts as
+    // unresolved (relative probe candidates stay dependencies).
     if (!isTypeDeclarationModule(resolved)) return undefined;
 
     let source: string;
