@@ -7487,10 +7487,12 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Builtin identity is independent of host rendering policy: default HTML
   // drops `let`, but it remains Marko syntax. A delegated vocabulary or
   // registered custom tag can reclaim `let`/`id`; structural names cannot.
+  // Under the `none` tag rules `let` and `id` are ordinary names.
   const compilerValueTag =
     name === "const" ||
     name === "return" ||
     ((name === "let" || name === "id") &&
+      ctx.tagRules !== "none" &&
       (!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
       (ctx.declarations.isBuiltinTag?.(name, ctx) ??
         !ctx.declarations.isDelegatedTag?.(name, ctx)));

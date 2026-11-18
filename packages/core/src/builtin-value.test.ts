@@ -3,9 +3,14 @@ import { printExpression } from "./compile.ts";
 import { newCtx } from "./core.ts";
 import { parseFragment } from "./fragment.ts";
 import { lower } from "./lower.ts";
+import type { TagRulesPreset } from "./tag-presets.ts";
 import { lookup } from "./test-targets.ts";
 
-function check(source: string, vocabulary = false): void {
+function check(
+  source: string,
+  vocabulary = false,
+  tagRules?: TagRulesPreset,
+): void {
   const ctx = newCtx(
     source,
     printExpression,
@@ -20,12 +25,40 @@ function check(source: string, vocabulary = false): void {
     "probe.mx",
     lookup,
   );
+  if (tagRules !== undefined) ctx.tagRules = tagRules;
   lower(ctx, parseFragment(source, { filename: "probe.mx" }).body);
 }
 const onlyValue = (tag: string) =>
   `The \`<${tag}>\` tag only supports the \`value=\` attribute.`;
 
 describe("builtin duplicate value validation (Marko 6.4.4)", () => {
+  const outcome = (source: string) => {
+    try {
+      check(source, false, "none");
+      return { threw: false };
+    } catch (caught) {
+      const { message, diagnosticCode } = caught as {
+        message: string;
+        diagnosticCode?: string;
+      };
+      return { threw: true, message, diagnosticCode };
+    }
+  };
+  it.each([
+    ["id", '<id value="one" label="two"/>'],
+    ["let", '<let value="one" value="two"/>'],
+  ])(
+    "checks no `<%s>` value attributes under the `none` tag rules: %s",
+    (name, source) => {
+      const control = JSON.parse(
+        JSON.stringify(outcome(source.replaceAll(name, "zzz"))).replaceAll(
+          "zzz",
+          name,
+        ),
+      );
+      expect(outcome(source)).toEqual(control);
+    },
+  );
   it("does not impose compiler-builtin rules on delegated vocabulary", () => {
     expect(() => check('<id value="one" label="two"/>', true)).not.toThrow();
     expect(() => check('<let value="one" value="two"/>', true)).not.toThrow();
