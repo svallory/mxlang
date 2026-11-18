@@ -650,7 +650,10 @@ export interface IrBuilders {
    * `attrs` are carried on the node as given; omitted means none. A built
    * `style` with attributes is refused, as an authored `<style media=x>` is,
    * where the host reads `style` as an element and no `style` contract is
-   * registered (skipped under the `none` tag rules).
+   * registered (skipped under the `none` tag rules). A built `html-comment`
+   * or `try` with attributes is refused too, as the authored tags are (the
+   * `html-comment` check is skipped under an `html-comment` contract and the
+   * `none` tag rules).
    */
   delegatedTag(
     name: string,
@@ -811,8 +814,9 @@ export function shadowedBuiltinMessage(name: string): string {
 /**
  * The no-attributes refusal of a tag that takes none, as stock Marko's
  * `assertNoAttributes` refuses them. Shared by the authored `<html-comment>`
- * check (`rejectHtmlCommentAttributes` in `lower.ts`), so other refusals of
- * the same rule can share its words.
+ * check (`rejectHtmlCommentAttributes` in `lower.ts`) and the builder's
+ * `ctx.build.delegatedTag("html-comment" | "try", …, attrs)`, so a built tag
+ * is refused in the same words as an authored one.
  */
 export function noAttributesMessage(ctx: Ctx, name: string): string {
   return `The ${voiceOfCtx(ctx).tag(name)} tag does not support ${voiceOfCtx(ctx).attributes}.`;
@@ -1327,6 +1331,27 @@ export function buildersFor(
           TAG_HOOK_ERROR_CODE,
           tagName,
           bareStyleAttributesMessage(ctx),
+          firstAttr.loc,
+          undefined,
+          voiceOfCtx(ctx),
+        );
+      }
+      // A built `html-comment` or `try` takes no attributes, as the authored
+      // tags take none: refused, never dropped. `html-comment` keeps the
+      // authored check's skips (an `html-comment` contract, the `none` tag
+      // rules); `try`'s authored refusal is core's own contract, which no
+      // preset or registration lifts.
+      if (
+        firstAttr !== undefined &&
+        ((name === "html-comment" &&
+          ctx.tagRules !== "none" &&
+          !(ctx.customTags && Object.hasOwn(ctx.customTags, "html-comment"))) ||
+          name === "try")
+      ) {
+        return failAt(
+          TAG_HOOK_ERROR_CODE,
+          tagName,
+          noAttributesMessage(ctx, name),
           firstAttr.loc,
           undefined,
           voiceOfCtx(ctx),

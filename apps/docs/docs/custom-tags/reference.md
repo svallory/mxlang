@@ -268,6 +268,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | `delegatedTag` is called from `finalize`. | `` `<name>`: `ctx.build.delegatedTag` is not available in `finalize` `` |
 | The active host does not claim a requested primitive. | `` `<name>`: this host does not claim `<primitive>`, so a custom tag cannot emit one `` |
 | A hook builds a `style` primitive with attributes, with no `style` contract. | `` `<name>`: The `style` does not support html attributes. … `` |
+| A hook builds an `html-comment` or `try` primitive with attributes (an `html-comment` contract and the `none` tag rules skip the `html-comment` check). | `` `<name>`: The `<primitive>` tag does not support attributes. `` |
 | `template` is called from `finalize`. | `` `<name>`: `ctx.build.template` is not available in `finalize` `` |
 | `template(call)` is used without an adjacent template file. | `` `<name>`: this tag has no template file… `` |
 

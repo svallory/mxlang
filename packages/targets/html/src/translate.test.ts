@@ -3025,6 +3025,46 @@ describe("a custom tag's built void elements (executed)", () => {
 });
 
 /**
+ * A custom tag's built `<html-comment>` or `<try>` takes no attributes, as
+ * the authored tags take none (stock's `assertNoAttributes`): refused at the
+ * first attribute, never dropped from the output.
+ */
+describe("a custom tag's built html-comment and try attributes", () => {
+  it.each([
+    [
+      "html-comment",
+      "`<widget>`: The `<html-comment>` tag does not support attributes.",
+    ],
+    ["try", "`<widget>`: The `<try>` tag does not support attributes."],
+  ])("refuses a built `%s` with attributes", (name, message) => {
+    expect(() =>
+      compile(src('<widget a="1"/>'), "/tmp/mx-translator-test/entry.mx", {
+        customTags: {
+          widget: {
+            attributes: { a: { type: "string" } },
+            transform: (call, ctx) => [
+              ctx.build.delegatedTag(
+                name,
+                [ctx.build.text("x")],
+                [],
+                call.attrs,
+              ),
+            ],
+          },
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        message,
+        diagnosticCode: "MX_TAG_HOOK_ERROR",
+        line: 1,
+        column: 8,
+      }),
+    );
+  });
+});
+
+/**
  * A tag template is a compilation unit, so these compile the
  * *unit itself* through this host rather than only its caller — the half a
  * caller-side test cannot reach, since the template's body never enters the

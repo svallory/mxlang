@@ -2209,7 +2209,7 @@ describe("ctx.build.delegatedTag attributes", () => {
       resolveDelegatedTag: () => ({}),
       ...overrides,
     });
-  const styleAttrNames = (ir: Ir): string[] =>
+  const delegatedAttrNames = (ir: Ir): string[] =>
     find(ir.body, "DelegatedTag").tag.attrs.map(
       (attr) => (attr as { name: string }).name,
     );
@@ -2234,7 +2234,7 @@ describe("ctx.build.delegatedTag attributes", () => {
       { widget, style: { attributes: { media: { type: "string" } } } },
       claimsStyle(),
     );
-    expect(styleAttrNames(ir)).toEqual(["media"]);
+    expect(delegatedAttrNames(ir)).toEqual(["media"]);
   });
 
   it("carries them where the host reads no tag as an element", () => {
@@ -2243,7 +2243,7 @@ describe("ctx.build.delegatedTag attributes", () => {
       { widget },
       claimsStyle({ isElement: () => false }),
     );
-    expect(styleAttrNames(ir)).toEqual(["media"]);
+    expect(delegatedAttrNames(ir)).toEqual(["media"]);
   });
 
   it("carries them under the `none` tag rules", () => {
@@ -2259,7 +2259,93 @@ describe("ctx.build.delegatedTag attributes", () => {
       claimsStyle(),
       { dialect },
     );
-    expect(styleAttrNames(ir)).toEqual(["media"]);
+    expect(delegatedAttrNames(ir)).toEqual(["media"]);
+  });
+
+  // A built `html-comment` or `try` takes no attributes, as the authored
+  // tags take none. `html-comment` keeps the authored skips (a contract, the
+  // `none` tag rules); `try`'s refusal is core's contract, under every preset.
+  const builds = (name: string): CustomTag => ({
+    attributes: { a: { type: "string" } },
+    transform: (call, ctx) => [
+      ctx.build.delegatedTag(name, [], [], call.attrs),
+    ],
+  });
+  const claims = (name: string): Policy =>
+    fakeDeclarations({
+      isDelegatedTag: (claimed) => claimed === name,
+      resolveDelegatedTag: () => ({}),
+    });
+  const noneRules: Dialect = Object.freeze({
+    id: "t",
+    name: "T",
+    table: {},
+    tagRules: "none",
+  });
+
+  it.each([
+    [
+      "html-comment",
+      "`<widget>`: The `<html-comment>` tag does not support attributes.",
+    ],
+    ["try", "`<widget>`: The `<try>` tag does not support attributes."],
+  ])("refuses a built `%s`'s attributes at the first one", (name, message) => {
+    expect(() =>
+      lowerWithTags(
+        '<widget a="1"/>\n',
+        { widget: builds(name) },
+        claims(name),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message,
+        diagnosticCode: "MX_TAG_HOOK_ERROR",
+        line: 1,
+        column: 8,
+      }),
+    );
+  });
+
+  it("keeps a built `html-comment`'s attributes under an `html-comment` contract", () => {
+    const ir = lowerWithTags(
+      '<widget a="1"/>\n',
+      {
+        widget: builds("html-comment"),
+        "html-comment": { attributes: { a: { type: "string" } } },
+      },
+      claims("html-comment"),
+    );
+    expect(delegatedAttrNames(ir)).toEqual(["a"]);
+  });
+
+  it("keeps a built `html-comment`'s attributes under the `none` tag rules", () => {
+    const ir = lowerWithTags(
+      '<widget a="1"/>\n',
+      { widget: builds("html-comment") },
+      claims("html-comment"),
+      { dialect: noneRules },
+    );
+    expect(delegatedAttrNames(ir)).toEqual(["a"]);
+  });
+
+  it("refuses a built `try`'s attributes under the `none` tag rules", () => {
+    expect(() =>
+      lowerWithTags(
+        '<widget a="1"/>\n',
+        { widget: builds("try") },
+        claims("try"),
+        {
+          dialect: noneRules,
+        },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message: "`<widget>`: The `<try>` tag does not support attributes.",
+        diagnosticCode: "MX_TAG_HOOK_ERROR",
+        line: 1,
+        column: 8,
+      }),
+    );
   });
 });
 
