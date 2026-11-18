@@ -111,7 +111,6 @@ import {
   type WriteGuard,
   warn,
 } from "./core.ts";
-import { CORE_TAG_NAMES, CORE_TAGLIB_ID } from "./core-taglib.ts";
 import {
   buildersFor,
   type ChildNode,
@@ -249,6 +248,7 @@ import {
   parsedImportDeclarations,
   pendingFrontEndError,
 } from "./mx-parse.ts";
+import { isCoreTaglibTag, isNativeElementName } from "./native-element-name.ts";
 import {
   declaredBinding,
   type ScriptletDeclaration,
@@ -297,11 +297,7 @@ import {
   tagTypeParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
-import {
-  coreNativeTags,
-  ELEMENT_TAGLIB_IDS,
-  isNativeVoid,
-} from "./tag-table.ts";
+import { ELEMENT_TAGLIB_IDS, isNativeVoid } from "./tag-table.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -4631,19 +4627,6 @@ function rejectDynamicTagVarWithoutReturn(
 }
 
 /**
- * Whether `name` is one of Marko's core taglib tags (`<debug>`, `<log>`, ...):
- * by the tag table's id when it registered the full core taglib (only the
- * html target's table does), else by the core taglib's own name set - so
- * every target judges the same set. Stock Marko lets a core tag win over a
- * same-named lowercase import, so the local-variable rule must not fire for
- * one.
- */
-function isCoreTaglibTag(ctx: Ctx, name: string): boolean {
-  if (ctx.tagTable?.getTag(name)?.taglibId === CORE_TAGLIB_ID) return true;
-  return CORE_TAG_NAMES.has(name);
-}
-
-/**
  * A tag a host taglib registers (a third-party translator's `taglibs`), not an
  * element, a core tag or a custom tag.
  */
@@ -4741,26 +4724,6 @@ function lowercaseBindingFix(
  */
 function localVariableTagMessage(name: string): string {
   return `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
-}
-
-// HTML elements no native table lists (`@mxlang/web-elements` follows
-// Marko's element taglibs, which have no `<slot>`), native in a region and a
-// whole file alike.
-const UNLISTED_NATIVE_ELEMENTS: ReadonlySet<string> = new Set(["slot"]);
-
-/**
- * Whether `name` is a native HTML/SVG/MathML element: by the tag table's
- * taglib id when it knows the name, else by the elements the table was built
- * over (a region has no table): the host's `nativeTags`, or core's own when
- * it declares none.
- */
-function isNativeElementName(ctx: Ctx, name: string): boolean {
-  const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
-  if (taglibId !== undefined) return ELEMENT_TAGLIB_IDS.has(taglibId);
-  return (
-    (ctx.declarations.nativeTags ?? coreNativeTags()).has(name) ||
-    UNLISTED_NATIVE_ELEMENTS.has(name)
-  );
 }
 
 /**
