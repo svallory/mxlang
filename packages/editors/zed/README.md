@@ -273,8 +273,9 @@ package if `git subtree --help` reports "not a git command").
 
 See `PUBLISHING.md` for the full publish checklist: this split, the
 `repository`/`rev` swap for both grammars, the Zed extensions registry
-submission procedure, verifying the `.mx`/`.solid.mx` suffix precedence in a
-running Zed, and the manual `.mx`/`.astro.mx` editor checks still owed.
+submission procedure, verifying in a running Zed that every multi-segment
+suffix (`.solid.mx`, `.ng.mx`, `.astro.mx`, ...) wins over `.mx`, and the
+manual diagnostics and `.astro.mx` highlighting checks run on every publish.
 
 **Publish-time URL swap.** Both the dev-install steps above and
 `extension.toml`'s `[grammars.solid]` comment describe the monorepo URL and

@@ -73,41 +73,52 @@ pushes to arbitrary hosts. The procedure (from that repo's own README):
 
 ## 5. Verify `path_suffixes` precedence in a running Zed
 
-README.md "Zed suffix precedence: `.mx` vs `.solid.mx`" documents the
-expected precedence (`Solid`'s `path_suffixes = ["solid.mx"]` should win
-over `MX`'s `["mx"]` for a `Counter.solid.mx` file, since Zed picks the
-longest matching suffix) but says so **by inspection of the config**, not by
-observing it in a running Zed. Before or shortly after publishing, verify it
-for real:
+README.md "Zed suffix precedence: `.mx` vs `.solid.mx` vs `.ng.mx`"
+documents the expected precedence: Zed picks the longest matching
+`path_suffixes` entry, so a multi-segment suffix wins over `MX`'s `["mx"]`.
+The README states this **by inspection of the config**, not by observing it
+in a running Zed. The extension declares these multi-segment suffixes
+(`languages/*/config.toml`), each of which also matches `MX`'s `mx`:
+
+| Suffix | Expected language |
+|---|---|
+| `.solid.mx` | `Solid` |
+| `.ng.mx` | `AngularMX` |
+| `.astro.mx` | `AstroMX` |
+| `.react.mx` | `ReactMX` |
+| `.preact.mx` | `PreactMX` |
+| `.hono.mx` | `HonoMX` |
+
+Before or shortly after publishing, verify it for real:
 
 1. Install the extension (dev install from your checkout, or the published one).
-2. Open a `.solid.mx` file and a plain `.mx` file side by side in Zed.
+2. Open a plain `.mx` file and one file for each suffix in the table.
 3. Check the language shown in Zed's status bar / language picker for each:
-   the `.solid.mx` file must show `Solid`, and `.mx` must show `MX`.
-4. If `.solid.mx` incorrectly shows `MX`, the precedence assumption in
-   README.md is wrong and both `languages/*/config.toml` files need
-   re-checking — do not "fix" it by renaming `path_suffixes` without first
-   confirming which grammar Zed actually picked.
+   the `.mx` file must show `MX`, and every other file must show the
+   language in the table, not `MX`.
+4. If a file shows `MX` instead, the precedence assumption in README.md is
+   wrong and the `languages/*/config.toml` files need re-checking. Do not
+   "fix" it by renaming `path_suffixes` without first confirming which
+   grammar Zed actually picked.
 
-## 6. Manual editor checks Saulo still owes
+## 6. Manual editor checks (every publish)
 
-Two things this task's automated checks (`bun run --cwd
-packages/editors/tree-sitter-solid test`, `zed-compile-check`, `bun run
-verify`) cannot exercise, because they need a real Zed window:
+These need a real Zed window, so the automated checks (`bun run --cwd
+packages/editors/tree-sitter-solid test`, the `zed-compile-check` scripts
+and `bun run verify`) cannot exercise them. Run both on every publish:
 
-- **`.mx` diagnostics**: open an `.mx` file with a known host error (e.g. a
-  `<let>` tag under `strict` policy) and confirm `@mxlang/language-server`
-  reports it in Zed's Problems panel / inline diagnostics, alongside
-  Marko's own language server's output for the same file (see README.md
-  "Language server" for the dual-server setup this depends on).
-- **`.astro.mx` highlighting**: open an `.astro.mx` file and confirm the `---` fence
-  highlights as TypeScript and the body highlights as Marko/MX, per
-  README.md "What you get in Zed today". This is injection-based and has no
-  automated test today (`highlight-smoke.sh` only covers `.solid.mx`).
+1. **Host diagnostics**: open an `.mx` file and a `.solid.mx` file, each
+   with a known host error (in the `.mx` file, e.g. a `<let>` tag under
+   `strict` policy), and confirm `@mxlang/language-server` reports it in Zed's diagnostics,
+   alongside Marko's own language server's output for the `.mx` file (see
+   README.md "Language server" for the dual-server setup).
+2. **`.astro.mx` highlighting**: open an `.astro.mx` file and confirm the
+   `---` fence highlights as TypeScript and the body as Marko/MX (README.md
+   "What you get in Zed today"). This is injection-based; no automated
+   highlight test covers it.
 
-Both are one-time manual verifications per publish, not something to
-automate as part of this task — record the outcome (pass/fail, Zed version)
-wherever this checklist is run from next.
+Record pass/fail for each check, with the Zed version, in the PR that bumps
+`version` in `extension.toml` (step 3).
 
 ## See also
 
