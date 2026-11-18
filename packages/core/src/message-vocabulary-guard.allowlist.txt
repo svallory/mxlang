@@ -90,6 +90,7 @@ template-tag.ts :: routeTemplateCall :: add `<return value=…/>` to -- example:
 lower.ts :: fix :: native html `<script>` element -- html: the html element, not the built-in tag
 lower.ts :: scriptShapeRefusals :: native html `<script>` element -- html: the html element, not the built-in tag
 lower.ts :: refusePlaceholder :: native html `<script>` element -- html: the html element, not the built-in tag
+lower.ts :: rejectBareStyleAttributes :: native html [`<style>` tag] -- html: the html element in stock's verbatim message, not the built-in tag
 lower.ts :: <top> :: `<if=cond>` / `<for|item| of=list>` -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: <top> :: `<for by>` -- example: Marko's hint, shown only when the file spells the tag as MX does
 lower.ts :: <top> :: `<if>` -- example: Marko's hint, shown only when the file spells the tag as MX does
