@@ -6,12 +6,14 @@ import { describe, expect, it } from "vitest";
 import { configDefaults } from "vitest/config";
 import { createVitest } from "vitest/node";
 import {
-  CORE_DIST_ENTRY,
   commandLog,
   commentOnly,
   commentOnlySplit,
-  coreBuildNeeded,
+  DIST_PACKAGES,
+  type DistPackage,
   DOC_READERS,
+  distBuilds,
+  distEntries,
   FIXTURE_CONSUMERS,
   fixtureConsumers,
   hasVitestTests,
@@ -26,7 +28,6 @@ import {
   ownRunnerDirs,
   ownRunnerPlan,
   PROBE_CONSUMER,
-  parserBuildNeeded,
   probeConsumers,
   projectDirs,
   projectFor,
@@ -39,7 +40,6 @@ import {
   testScript,
   VITEST_TEST_FILE,
 } from "./test-affected.ts";
-import { CORE_DIR } from "./vitest-lanes.ts";
 
 describe("laneFor", () => {
   it("names the slow-lane packages a change touches", () => {
@@ -147,6 +147,10 @@ describe("isRelatedSource (what vitest related can see)", () => {
     ];
     expect(relatedSources(changed)).toEqual([
       "packages/web-elements/src/index.ts",
+      ...WEB_ELEMENTS_DIST,
+      ...CORE_DIST,
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
     ]);
     const { byProject, unmapped } = nonSourceProjects(
       changed.filter((f) => !isRelatedSource(f)),
@@ -424,98 +428,235 @@ describe("probeConsumers", () => {
   });
 });
 
-describe("parserBuildNeeded", () => {
-  it("asks for the rebuild when a parser:build input changed", () => {
-    for (const f of [
-      "packages/babel/src/tokenizer/index.ts",
-      "packages/babel/package.json",
-      "packages/parser/src/frontend/babel.ts",
-      "packages/parser/package.json",
-      "packages/parser/tsconfig.json",
-      "bun.lock",
-      "tsconfig.base.json",
-    ])
-      expect(parserBuildNeeded([f]), f).toBe(true);
-  });
-  it("does not for any other change", () => {
-    for (const f of [
-      "packages/parser/src/frontend/parse.ts",
-      "packages/core/src/babel.ts",
-      "packages/babel/README.md",
-      "packages/parser/moon.yml",
-      "packages/core/tsconfig.json",
-      "apps/docs/bun.lock",
-    ])
-      expect(parserBuildNeeded([f]), f).toBe(false);
-    expect(parserBuildNeeded([])).toBe(false);
-  });
-});
+const PARSER = "packages/parser";
+const WEB_ELEMENTS = "packages/web-elements";
+const CORE = "packages/core";
+const TSX_BRIDGE = "packages/tsx-bridge";
+const HTML = "packages/targets/html";
+const ANGULAR = "packages/hosts/angular";
+const VITE_PLUGIN = "packages/tooling/vite-plugin";
+const ANGULAR_CHECKER = "packages/tooling/angular-checker";
+const TS_PLUGIN = "packages/tooling/typescript-plugin";
 
-describe("coreBuildNeeded", () => {
-  it("asks for the rebuild when a bundled core:build input changed", () => {
-    for (const f of [
-      "packages/core/src/lower.ts",
-      "packages/core/build/frontend.ts",
-      "packages/parser/src/template/index.ts",
-      "packages/babel/src/tokenizer/index.ts",
-      "packages/core/package.json",
-      "bun.lock",
-      "scripts/third-party-notices.ts",
-    ])
-      expect(coreBuildNeeded([f]), f).toBe(true);
+/** Each row's dist entries, as literals. */
+const PARSER_DIST = ["packages/parser/dist/babel.js"];
+const WEB_ELEMENTS_DIST = ["packages/web-elements/dist/index.js"];
+const CORE_DIST = ["packages/core/dist/index.js"];
+const TSX_BRIDGE_DIST = ["packages/tsx-bridge/dist/index.js"];
+const ANGULAR_DIST = [
+  "packages/hosts/angular/dist/index.js",
+  "packages/hosts/angular/dist/descriptor.js",
+];
+const VITE_PLUGIN_DIST = ["packages/tooling/vite-plugin/dist/index.js"];
+const TS_PLUGIN_DIST = ["packages/tooling/typescript-plugin/dist/index.cjs"];
+
+describe("distBuilds", () => {
+  const dirs = (files: string[]) => distBuilds(files).map((r) => r.dir);
+
+  it("rebuilds a changed input's dist and every dist that bundles it, in table order", () => {
+    const cases: [string, string[]][] = [
+      [
+        "packages/web-elements/src/index.ts",
+        [WEB_ELEMENTS, CORE, VITE_PLUGIN, TS_PLUGIN],
+      ],
+      [
+        "packages/tsx-bridge/src/index.ts",
+        [TSX_BRIDGE, ANGULAR, VITE_PLUGIN, TS_PLUGIN],
+      ],
+      [
+        "packages/babel/src/tokenizer/index.ts",
+        [PARSER, CORE, TSX_BRIDGE, ANGULAR, VITE_PLUGIN, TS_PLUGIN],
+      ],
+      ["packages/parser/src/frontend/babel.ts", [PARSER, CORE]],
+      ["packages/core/src/lower.ts", [CORE, VITE_PLUGIN]],
+      ["packages/hosts/preact/src/emitter.ts", [VITE_PLUGIN, TS_PLUGIN]],
+      [
+        "packages/tooling/angular-checker/src/index.ts",
+        [ANGULAR_CHECKER, TS_PLUGIN],
+      ],
+      [
+        "bun.lock",
+        [
+          PARSER,
+          WEB_ELEMENTS,
+          CORE,
+          TSX_BRIDGE,
+          HTML,
+          ANGULAR,
+          VITE_PLUGIN,
+          ANGULAR_CHECKER,
+          TS_PLUGIN,
+        ],
+      ],
+    ];
+    for (const [f, want] of cases) expect(dirs([f]), f).toEqual(want);
   });
-  it("does not for a test file, a fixture or a file outside the inputs", () => {
+
+  it("rebuilds nothing for a test file, a fixture, a file in no row, or no change", () => {
     for (const f of [
       "packages/core/src/lower.test.ts",
       "packages/core/src/fixtures/syntax/member-fixture.ts",
-      "packages/hosts/preact/src/emitter.ts",
-      "packages/core/AGENTS.md",
+      "packages/tooling/language-server/src/diagnose.ts",
+      "packages/tooling/tsc/src/index.ts",
       "packages/parser/moon.yml",
+      "packages/hosts/angular/test/cli.test.ts",
     ])
-      expect(coreBuildNeeded([f]), f).toBe(false);
-    expect(coreBuildNeeded([])).toBe(false);
+      expect(dirs([f]), f).toEqual([]);
+    expect(dirs([])).toEqual([]);
+  });
+
+  it("keeps #883's parser and core cases as dir lists", () => {
+    const cases: [string, string[]][] = [
+      // Former parserBuildNeeded true cases.
+      ["packages/babel/package.json", [PARSER, CORE]],
+      ["packages/parser/package.json", [PARSER, CORE]],
+      ["packages/parser/tsconfig.json", [PARSER]],
+      [
+        "tsconfig.base.json",
+        [
+          PARSER,
+          WEB_ELEMENTS,
+          CORE,
+          TSX_BRIDGE,
+          HTML,
+          ANGULAR,
+          VITE_PLUGIN,
+          ANGULAR_CHECKER,
+          TS_PLUGIN,
+        ],
+      ],
+      // Former parserBuildNeeded false cases.
+      ["packages/parser/src/frontend/parse.ts", [CORE]],
+      ["packages/core/src/babel.ts", [CORE, VITE_PLUGIN]],
+      ["packages/babel/README.md", []],
+      ["packages/core/tsconfig.json", [CORE]],
+      ["apps/docs/bun.lock", []],
+      // Former coreBuildNeeded true cases.
+      ["packages/core/build/frontend.ts", [CORE]],
+      ["packages/parser/src/template/index.ts", [CORE]],
+      ["packages/core/package.json", [CORE]],
+      [
+        "scripts/third-party-notices.ts",
+        [CORE, TSX_BRIDGE, ANGULAR, VITE_PLUGIN, TS_PLUGIN],
+      ],
+      // Former coreBuildNeeded false cases.
+      ["packages/core/AGENTS.md", []],
+    ];
+    for (const [f, want] of cases) expect(dirs([f]), f).toEqual(want);
+  });
+
+  /** A; B bundles A; C bundles B. */
+  const table: DistPackage[] = [
+    { dir: "a", inputs: [/^a\//], entries: ["a/dist/a.js"], bundles: [] },
+    { dir: "b", inputs: [/^b\//], entries: ["b/dist/b.js"], bundles: ["a"] },
+    { dir: "c", inputs: [/^c\//], entries: ["c/dist/c.js"], bundles: ["b"] },
+  ];
+
+  it("cascades through a fixture table's bundle chain, in table order", () => {
+    expect(distBuilds(["a/x.ts"], table).map((r) => r.dir)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(distEntries(["a/x.ts"], table)).toEqual([
+      "a/dist/a.js",
+      "b/dist/b.js",
+      "c/dist/c.js",
+    ]);
+    expect(distBuilds(["c/x.ts"], table).map((r) => r.dir)).toEqual(["c"]);
+    expect(distEntries(["c/x.ts"], table)).toEqual(["c/dist/c.js"]);
+    expect(distBuilds(["a/package.json"], table).map((r) => r.dir)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(distEntries(["a/package.json"], table)).toEqual([]);
+  });
+
+  it("the table is well formed: bundles name earlier rows, entries are published entries", () => {
+    const seen: string[] = [];
+    for (const row of DIST_PACKAGES) {
+      for (const d of row.bundles)
+        expect(seen, `${row.dir} bundles ${d}`).toContain(d);
+      seen.push(row.dir);
+      const manifest = JSON.parse(
+        readFileSync(
+          resolve(import.meta.dirname, "..", row.dir, "package.json"),
+          "utf8",
+        ),
+      ) as {
+        main?: string;
+        exports?: Record<string, string | { default?: string }>;
+      };
+      const published = [
+        ...Object.values(manifest.exports ?? {}).map((e) =>
+          typeof e === "string" ? e : e.default,
+        ),
+        manifest.main,
+      ]
+        .filter((e): e is string => e !== undefined)
+        .map((e) => posix.join(row.dir, e));
+      for (const entry of row.entries)
+        expect(published, `${row.dir}: ${entry}`).toContain(entry);
+    }
+    expect(seen).toEqual([
+      PARSER,
+      WEB_ELEMENTS,
+      CORE,
+      TSX_BRIDGE,
+      HTML,
+      ANGULAR,
+      VITE_PLUGIN,
+      ANGULAR_CHECKER,
+      TS_PLUGIN,
+    ]);
   });
 });
 
-describe("core dist consumers", () => {
-  it("CORE_DIST_ENTRY is core's published entry", () => {
-    const manifest = JSON.parse(
-      readFileSync(
-        resolve(import.meta.dirname, "..", CORE_DIR, "package.json"),
-        "utf8",
-      ),
-    ) as { exports: { ".": { default: string } } };
-    expect(CORE_DIST_ENTRY).toBe("packages/core/dist/index.js");
-    expect(posix.join(CORE_DIR, manifest.exports["."].default)).toBe(
-      CORE_DIST_ENTRY,
-    );
+describe("dist consumers", () => {
+  /** The test files `project` selects for `related`, filtered by `filter`. Needs built dists (CI and verify build first). */
+  const selected = async (
+    project: string,
+    filter: string,
+    related: string[],
+  ): Promise<string[]> => {
+    const ctx = await createVitest("test", {
+      root: resolve(import.meta.dirname, ".."),
+      watch: false,
+      project: [project],
+      related: related.map((f) => resolve(import.meta.dirname, "..", f)),
+    });
+    try {
+      await ctx.init();
+      const specs = await ctx.getRelevantTestSpecifications([filter]);
+      return specs.map((s) =>
+        posix.relative(ctx.config.root, s.moduleId.replaceAll("\\", "/")),
+      );
+    } finally {
+      await ctx.close();
+    }
+  };
+
+  it("a test that reaches core only through its dist is selected by core's entry, not by a core source", async () => {
+    expect(
+      await selected("@mxlang/host-preact", "region-errors", CORE_DIST),
+    ).toEqual(["packages/hosts/preact/src/region-errors.test.ts"]);
+    expect(
+      await selected("@mxlang/host-preact", "region-errors", [
+        "packages/core/src/custom-tags.ts",
+      ]),
+    ).toEqual([]);
   });
 
-  it("a test that reaches core only through its dist is selected by CORE_DIST_ENTRY, not by a core source", async () => {
-    // Needs a built core dist (CI and verify build first).
-    const selected = async (related: string[]): Promise<string[]> => {
-      const ctx = await createVitest("test", {
-        root: resolve(import.meta.dirname, ".."),
-        watch: false,
-        project: ["@mxlang/host-preact"],
-        related: related.map((f) => resolve(import.meta.dirname, "..", f)),
-      });
-      try {
-        await ctx.init();
-        const specs = await ctx.getRelevantTestSpecifications([
-          "region-errors",
-        ]);
-        return specs.map((s) =>
-          posix.relative(ctx.config.root, s.moduleId.replaceAll("\\", "/")),
-        );
-      } finally {
-        await ctx.close();
-      }
-    };
-    expect(await selected([CORE_DIST_ENTRY])).toEqual([
-      "packages/hosts/preact/src/region-errors.test.ts",
-    ]);
-    expect(await selected(["packages/core/src/custom-tags.ts"])).toEqual([]);
+  it("a test that reaches a CJS dist only by name is selected by its entry, not by the package's source", async () => {
+    expect(
+      await selected("@mxlang/tsc", "shorthand-mappings", TS_PLUGIN_DIST),
+    ).toEqual(["packages/tooling/tsc/src/shorthand-mappings.test.ts"]);
+    expect(
+      await selected("@mxlang/tsc", "shorthand-mappings", [
+        "packages/tooling/typescript-plugin/src/index.ts",
+      ]),
+    ).toEqual([]);
   });
 });
 
@@ -771,6 +912,8 @@ describe("Markdown selection", () => {
       CORPUS,
       PROBE_CONSUMER,
       "packages/parser/src/frontend/boundary.test.ts",
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
     ]);
   });
 
@@ -804,7 +947,8 @@ describe("Markdown selection", () => {
     expect(relatedSources(["packages/core/src/core.ts"])).toEqual([
       "packages/core/src/core.ts",
       ...CORE_READERS,
-      CORE_DIST_ENTRY,
+      ...CORE_DIST,
+      ...VITE_PLUGIN_DIST,
     ]);
   });
 
@@ -812,11 +956,16 @@ describe("Markdown selection", () => {
     expect(relatedSources(["packages/core/src/lower.ts"])).toEqual([
       "packages/core/src/lower.ts",
       ...CORE_READERS,
-      CORE_DIST_ENTRY,
+      ...CORE_DIST,
+      ...VITE_PLUGIN_DIST,
     ]);
     expect(relatedSources(["packages/tsx-bridge/src/public.d.ts"])).toEqual([
       "packages/tsx-bridge/src/public.d.ts",
       "packages/tsx-bridge/src/pack-contents.test.ts",
+      ...TSX_BRIDGE_DIST,
+      ...ANGULAR_DIST,
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
     ]);
   });
 
@@ -825,7 +974,8 @@ describe("Markdown selection", () => {
       "packages/core/src/ir-entry/index.ts",
       ...CORE_READERS,
       "packages/core/src/ir-entry/partial.test.ts",
-      CORE_DIST_ENTRY,
+      ...CORE_DIST,
+      ...VITE_PLUGIN_DIST,
     ]);
     expect(
       relatedSources([
@@ -836,29 +986,62 @@ describe("Markdown selection", () => {
       "packages/core/src/lower.ts",
       "packages/core/src/core.ts",
       ...CORE_READERS,
-      CORE_DIST_ENTRY,
+      ...CORE_DIST,
+      ...VITE_PLUGIN_DIST,
     ]);
   });
 
-  it("a source bundled into core's dist adds CORE_DIST_ENTRY last", () => {
-    for (const f of [
-      "packages/core/src/custom-tags.ts",
-      "packages/parser/src/template/index.ts",
-      "packages/babel/src/tokenizer/index.ts",
-    ])
-      expect(relatedSources([f]).at(-1), f).toBe(CORE_DIST_ENTRY);
+  /** What `relatedSources` appends after the changed source and its readers. */
+  const distTail = (f: string) =>
+    relatedSources([f]).filter((e) => /\/dist\//.test(e));
+
+  it("a source bundled into a dist adds that dist's entries and its bundlers', last and in table order", () => {
+    expect(distTail("packages/web-elements/src/index.ts")).toEqual([
+      ...WEB_ELEMENTS_DIST,
+      ...CORE_DIST,
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
+    ]);
+    expect(distTail("packages/babel/src/tokenizer/index.ts")).toEqual([
+      ...PARSER_DIST,
+      ...CORE_DIST,
+      ...TSX_BRIDGE_DIST,
+      ...ANGULAR_DIST,
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
+    ]);
+    expect(distTail("packages/tsx-bridge/src/index.ts")).toEqual([
+      ...TSX_BRIDGE_DIST,
+      ...ANGULAR_DIST,
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
+    ]);
+    expect(
+      relatedSources(["packages/core/src/custom-tags.ts"]).slice(-2),
+    ).toEqual([...CORE_DIST, ...VITE_PLUGIN_DIST]);
+    expect(
+      relatedSources(["packages/parser/src/template/index.ts"]).at(-1),
+    ).toBe(CORE_DIST[0]);
+    expect(distTail("packages/parser/src/template/index.ts")).toEqual(
+      CORE_DIST,
+    );
+    expect(distTail("scripts/bundled-build.ts")).toEqual([
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
+    ]);
   });
 
-  it("a test file, fixture, manifest, lockfile, the notices script or a host source adds no CORE_DIST_ENTRY", () => {
+  it("a test file, fixture, manifest, tsconfig, lockfile or build-only script adds no dist entry", () => {
     for (const f of [
       "packages/core/src/lower.test.ts",
       "packages/core/src/fixtures/syntax/member-fixture.ts",
       "packages/core/package.json",
+      "packages/core/tsconfig.json",
       "bun.lock",
       "scripts/third-party-notices.ts",
-      "packages/hosts/preact/src/emitter.ts",
+      "packages/tsx-bridge/scripts/emit-declarations.ts",
     ])
-      expect(relatedSources([f]), f).not.toContain(CORE_DIST_ENTRY);
+      expect(distTail(f), f).toEqual([]);
   });
 });
 

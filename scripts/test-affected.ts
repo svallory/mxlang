@@ -73,21 +73,21 @@
  * tsc tests import core and parser). Which slow-lane packages were touched is
  * still printed.
  *
- * Core parses through `packages/parser/dist/babel.js`, a bundle of the Babel
- * fork, so a change to one of its build inputs (`PARSER_BUILD_INPUTS`) first
- * rebuilds that dist; under `--moon`, `core:test`'s `parser:build` dep does.
- *
- * Every other package imports `@mxlang/core` by name, which resolves to
- * `packages/core/dist/index.js` (`CORE_DIST_ENTRY`), a single bundle: no
- * host test's import set holds a `packages/core/src` file. So a kept change
- * to an input of core's `build` task (`CORE_BUILD_INPUTS`, test files and
- * fixtures excluded: `coreBuildNeeded`) first rebuilds that dist (`bun run
- * --cwd packages/core build`; under `--moon`, the `core:build` dep does), and
- * a JS/TS source among them that goes into the bundle also sends
- * `CORE_DIST_ENTRY` to `vitest related`, which then selects every test whose
- * import graph reaches core's bundle. Through the bundle every such test
- * depends on every core module, so any token edit to a bundled source selects
- * the same set, close to the whole suite.
+ * A workspace package that resolves through `dist/` (core, the parser's
+ * Babel bundle, web-elements, tsx-bridge, the html target, host-angular,
+ * vite-plugin, angular-checker, typescript-plugin) puts only its dist file in
+ * its importers' import graphs, never its `src`. `DIST_PACKAGES` lists them
+ * in rebuild order, each with its `build` task's inputs, the dist entries
+ * tests import and the earlier rows whose dist its bundle inlines. A kept
+ * change to a row's input (test files and fixtures excluded) first rebuilds
+ * that dist and every dist that bundles it (`distBuilds`: `bun run --cwd
+ * <dir> build`, in table order; under `--moon`, the `build` deps do), and a
+ * JS/TS source among them that goes into a bundle also sends those rows'
+ * entries to `vitest related` (`distEntries`), which then selects every test
+ * whose import graph reaches one of those dists. Through a bundle every such
+ * test depends on every bundled module, so any token edit to a bundled source
+ * of core, web-elements, tsx-bridge or the Babel fork selects close to the
+ * whole suite.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
@@ -146,88 +146,257 @@ export function probeConsumers(changed: readonly string[]): string[] {
   return hit ? [PROBE_CONSUMER] : [];
 }
 
-/**
- * The inputs of `packages/parser/dist/babel.js`, the bundle core parses
- * through. Keep in step with `parser:build`'s inputs in
- * packages/parser/moon.yml: the lockfile (the bundle inlines the locked npm
- * code) and the tsconfig chain count too, so a lockfile bump rebuilds it.
- */
-const PARSER_BUILD_INPUTS: readonly RegExp[] = [
-  /^packages\/babel\/src\//,
-  /^packages\/babel\/package\.json$/,
-  /^packages\/parser\/src\/frontend\/babel\.ts$/,
-  /^packages\/parser\/package\.json$/,
-  /^packages\/parser\/tsconfig\.json$/,
+/** A workspace package whose tests' importers resolve it through `dist/`. */
+export interface DistPackage {
+  /** Workspace-relative package dir. */
+  dir: string;
+  /** Its `build` task's inputs in `<dir>/moon.yml`. */
+  inputs: readonly RegExp[];
+  /** The dist files tests import by name (passed to `vitest related`). */
+  entries: readonly string[];
+  /** Dirs of EARLIER rows whose dist this package's bundle inlines. */
+  bundles: readonly string[];
+}
+
+/** Files shared by most rows' `build` inputs: the lockfile and the base tsconfig. */
+const ROOT_INPUTS: readonly RegExp[] = [
   /^bun\.lock$/,
   /^tsconfig\.base\.json$/,
 ];
 
-function isParserBuildInput(file: string): boolean {
-  return PARSER_BUILD_INPUTS.some((re) => re.test(file));
-}
-
-/**
- * Whether the change touches an input of `packages/parser/dist/babel.js`, so
- * `main()` must rebuild it before core's tests read it.
- */
-export function parserBuildNeeded(changed: readonly string[]): boolean {
-  return changed.some(isParserBuildInput);
-}
-
-/**
- * The inputs of `packages/core/dist/index.js`, the bundle every other package
- * imports as `@mxlang/core`. Keep in step with `core:build`'s inputs in
- * packages/core/moon.yml.
- */
-const CORE_BUILD_INPUTS: readonly RegExp[] = [
-  /^packages\/core\/src\//,
-  /^packages\/core\/build\//,
-  /^packages\/parser\/src\//,
-  /^packages\/parser\/package\.json$/,
-  /^packages\/babel\/src\//,
-  /^packages\/babel\/package\.json$/,
+/** The notices script and the Babel fork's license files the bundles copy. */
+const NOTICE_INPUTS: readonly RegExp[] = [
+  /^scripts\/third-party-notices\.ts$/,
   /^packages\/babel\/LICENSE$/,
   /^packages\/babel\/UPSTREAM\.md$/,
-  /^scripts\/third-party-notices\.ts$/,
-  /^packages\/core\/tsconfig\.json$/,
-  /^packages\/core\/tsconfig\.build\.json$/,
-  /^packages\/core\/package\.json$/,
-  /^bun\.lock$/,
-  /^tsconfig\.base\.json$/,
 ];
 
-/** A `core:build` input that can change the bundle: not a test file, not a fixture. */
-function isCoreBuildInput(file: string): boolean {
+/**
+ * The workspace dists tests import by name, in rebuild order (the root
+ * `build` script's order without language-server and tsc, whose dists no
+ * test imports by name). Keep each row's inputs in step with `build`'s
+ * inputs in <dir>/moon.yml.
+ */
+export const DIST_PACKAGES: readonly DistPackage[] = [
+  {
+    dir: "packages/parser",
+    inputs: [
+      /^packages\/parser\/src\/frontend\/babel\.ts$/,
+      /^packages\/babel\/src\//,
+      /^packages\/babel\/package\.json$/,
+      /^packages\/parser\/package\.json$/,
+      /^packages\/parser\/tsconfig\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: ["packages/parser/dist/babel.js"],
+    bundles: [],
+  },
+  {
+    dir: "packages/web-elements",
+    inputs: [
+      /^packages\/web-elements\/src\//,
+      /^packages\/web-elements\/tsconfig\.json$/,
+      /^packages\/web-elements\/tsconfig\.build\.json$/,
+      /^packages\/web-elements\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: ["packages/web-elements/dist/index.js"],
+    bundles: [],
+  },
+  {
+    dir: "packages/core",
+    inputs: [
+      /^packages\/core\/src\//,
+      /^packages\/core\/build\//,
+      /^packages\/parser\/src\//,
+      /^packages\/parser\/package\.json$/,
+      /^packages\/babel\/src\//,
+      /^packages\/babel\/package\.json$/,
+      ...NOTICE_INPUTS,
+      /^packages\/core\/tsconfig\.json$/,
+      /^packages\/core\/tsconfig\.build\.json$/,
+      /^packages\/core\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: ["packages/core/dist/index.js"],
+    bundles: ["packages/web-elements"],
+  },
+  {
+    dir: "packages/tsx-bridge",
+    inputs: [
+      /^packages\/tsx-bridge\/src\//,
+      /^packages\/babel\/src\//,
+      /^packages\/tsx-bridge\/scripts\/emit-declarations\.ts$/,
+      ...NOTICE_INPUTS,
+      /^packages\/tsx-bridge\/package\.json$/,
+      /^packages\/tsx-bridge\/tsconfig\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: ["packages/tsx-bridge/dist/index.js"],
+    bundles: [],
+  },
+  {
+    dir: "packages/targets/html",
+    inputs: [
+      /^packages\/targets\/html\/src\//,
+      /^packages\/targets\/html\/tsconfig\.json$/,
+      /^packages\/targets\/html\/tsconfig\.build\.json$/,
+      /^packages\/targets\/html\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: [
+      "packages/targets/html/dist/index.js",
+      "packages/targets/html/dist/descriptor.js",
+      "packages/targets/html/dist/runtime.js",
+    ],
+    bundles: [],
+  },
+  {
+    dir: "packages/hosts/angular",
+    inputs: [
+      /^packages\/hosts\/angular\/src\//,
+      ...NOTICE_INPUTS,
+      /^packages\/hosts\/angular\/tsconfig\.json$/,
+      /^packages\/hosts\/angular\/tsconfig\.build\.json$/,
+      /^packages\/hosts\/angular\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: [
+      "packages/hosts/angular/dist/index.js",
+      "packages/hosts/angular/dist/descriptor.js",
+    ],
+    bundles: ["packages/tsx-bridge"],
+  },
+  {
+    dir: "packages/tooling/vite-plugin",
+    inputs: [
+      /^packages\/tooling\/vite-plugin\/src\//,
+      /^packages\/tooling\/vite-plugin\/build\//,
+      /^scripts\/bundled-build\.ts$/,
+      /^scripts\/baked-paths\.ts$/,
+      ...NOTICE_INPUTS,
+      /^packages\/target-registry\/src\//,
+      /^packages\/hosts\/[^/]+\/src\//,
+      /^packages\/targets\/[^/]+\/src\//,
+      /^packages\/core\/src\//,
+      /^packages\/tsx-bridge\/src\//,
+      /^packages\/babel\/src\//,
+      /^packages\/tooling\/vite-plugin\/tsconfig\.json$/,
+      /^packages\/tooling\/vite-plugin\/tsconfig\.build\.json$/,
+      /^packages\/tooling\/vite-plugin\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: ["packages/tooling/vite-plugin/dist/index.js"],
+    bundles: [
+      "packages/web-elements",
+      "packages/targets/html",
+      "packages/hosts/angular",
+    ],
+  },
+  {
+    dir: "packages/tooling/angular-checker",
+    inputs: [
+      /^packages\/tooling\/angular-checker\/src\//,
+      /^packages\/tooling\/angular-checker\/tsconfig\.json$/,
+      /^packages\/tooling\/angular-checker\/tsconfig\.build\.json$/,
+      /^packages\/tooling\/angular-checker\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: ["packages/tooling/angular-checker/dist/index.js"],
+    bundles: [],
+  },
+  {
+    dir: "packages/tooling/typescript-plugin",
+    inputs: [
+      /^packages\/tooling\/typescript-plugin\/src\//,
+      /^packages\/tooling\/typescript-plugin\/build\//,
+      /^packages\/target-registry\/src\//,
+      /^packages\/hosts\/[^/]+\/src\//,
+      /^scripts\/bundled-build\.ts$/,
+      /^scripts\/baked-paths\.ts$/,
+      ...NOTICE_INPUTS,
+      /^packages\/tooling\/typescript-plugin\/tsconfig\.json$/,
+      /^packages\/tooling\/typescript-plugin\/tsconfig\.build\.json$/,
+      /^packages\/tooling\/typescript-plugin\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: ["packages/tooling/typescript-plugin/dist/index.cjs"],
+    bundles: [
+      "packages/web-elements",
+      "packages/targets/html",
+      "packages/hosts/angular",
+      "packages/tooling/angular-checker",
+    ],
+  },
+];
+
+/**
+ * Inputs that only write notice files or `.d.ts`: they rebuild their rows'
+ * dists but select no dist importers.
+ */
+const BUILD_ONLY_INPUTS: readonly RegExp[] = [
+  /^scripts\/third-party-notices\.ts$/,
+  /^packages\/tsx-bridge\/scripts\/emit-declarations\.ts$/,
+];
+
+/** A file that can change `row`'s dist: one of its inputs, not a test file, not a fixture. */
+function isDistInput(row: DistPackage, file: string): boolean {
   return (
-    CORE_BUILD_INPUTS.some((re) => re.test(file)) &&
+    row.inputs.some((re) => re.test(file)) &&
     !VITEST_TEST_FILE.test(file) &&
     !FIXTURE_DIR.test(file)
   );
 }
 
 /**
- * Whether the change touches an input of `packages/core/dist/index.js`, so
- * `main()` must rebuild it before any test that imports `@mxlang/core` reads
- * it. Test files and fixtures are never bundled, so they do not count.
+ * The rows of `table` marked by `direct` (a row's own test of the change) or
+ * by a row named in its `bundles`, in table order. One pass is enough because
+ * `bundles` names only earlier rows.
  */
-export function coreBuildNeeded(files: readonly string[]): boolean {
-  return files.some(isCoreBuildInput);
+function cascade(
+  table: readonly DistPackage[],
+  direct: (row: DistPackage) => boolean,
+): DistPackage[] {
+  const marked = new Set<string>();
+  const out: DistPackage[] = [];
+  for (const row of table) {
+    if (direct(row) || row.bundles.some((d) => marked.has(d))) {
+      marked.add(row.dir);
+      out.push(row);
+    }
+  }
+  return out;
 }
 
-/** Core's published entry (`exports["."]`), the file `@mxlang/core` resolves to. */
-export const CORE_DIST_ENTRY = `${CORE_DIR}/dist/index.js`;
+/**
+ * The dists `main()` must rebuild, in rebuild order: a row whose inputs a
+ * changed file matches (test files and fixtures excluded, they are never
+ * bundled), and every row that bundles a rebuilt one.
+ */
+export function distBuilds(
+  files: readonly string[],
+  table: readonly DistPackage[] = DIST_PACKAGES,
+): DistPackage[] {
+  return cascade(table, (row) => files.some((f) => isDistInput(row, f)));
+}
 
 /**
- * Whether the change touches a JS/TS source that goes into core's bundle, so
- * `vitest related` must also get `CORE_DIST_ENTRY` to reach the tests that
- * import `@mxlang/core`. A manifest, tsconfig, lockfile or the notices script
- * rebuilds the dist (`coreBuildNeeded`) but selects no dist consumers.
+ * The dist entries `vitest related` must get to reach the tests that import
+ * those packages by name (their importers' graphs hold the dist file, never
+ * the package's `src`): a row with a changed JS/TS input that goes into the
+ * bundle, and every row that bundles one, flattened in table order. A
+ * manifest, tsconfig, lockfile, license file or `BUILD_ONLY_INPUTS` script
+ * rebuilds its rows (`distBuilds`) but selects nothing.
  */
-function coreDistConsumersNeeded(files: readonly string[]): boolean {
-  return files.some(
-    (f) =>
-      isCoreBuildInput(f) && isRelatedSource(f) && !f.startsWith("scripts/"),
-  );
+export function distEntries(
+  files: readonly string[],
+  table: readonly DistPackage[] = DIST_PACKAGES,
+): string[] {
+  const selecting = (f: string) =>
+    isRelatedSource(f) && !BUILD_ONLY_INPUTS.some((re) => re.test(f));
+  return cascade(table, (row) =>
+    files.some((f) => selecting(f) && isDistInput(row, f)),
+  ).flatMap((row) => row.entries);
 }
 
 /**
@@ -581,10 +750,10 @@ export function splitDocs(
  * and `commentOnlySplit` adds them for a comment-only edit, which never
  * reaches here), the consumers of every readers-only file (`readersOnly`: its
  * readers run here instead of a whole project), and `DOC_READERS` when any
- * changed file is a corpus input (`CORPUS_INPUT`), and `CORE_DIST_ENTRY` when a
- * changed source goes into core's bundle (`coreDistConsumersNeeded`: every
- * other package imports core through that dist, never through its `src`).
- * Deduped, in that order.
+ * changed file is a corpus input (`CORPUS_INPUT`), and the dist entries of
+ * every `DIST_PACKAGES` row a changed source goes into, directly or through a
+ * bundled row (`distEntries`: their importers reach them through that dist,
+ * never through the package's `src`). Deduped, in that order.
  */
 export function relatedSources(changed: readonly string[]): string[] {
   const related = changed.filter(isRelatedSource);
@@ -598,7 +767,7 @@ export function relatedSources(changed: readonly string[]): string[] {
       ]),
       ...changed.filter((f) => readersOnly(f)).flatMap(fixtureConsumers),
       ...(changed.some((f) => CORPUS_INPUT.test(f)) ? DOC_READERS : []),
-      ...(coreDistConsumersNeeded(changed) ? [CORE_DIST_ENTRY] : []),
+      ...distEntries(changed),
     ]),
   ];
 }
@@ -1220,29 +1389,23 @@ function main(): number {
     );
     return 0;
   }
-  // Core's tests read the parser's dist; rebuild it when the change touches
-  // one of its inputs. Under --moon, `core:test`'s `parser:build` dep does.
-  if (!moon && parserBuildNeeded(changed)) {
-    console.log(
-      `test:affected: ${changed.find(isParserBuildInput)} is an input of packages/parser's dist -> bun run --cwd packages/parser build`,
-    );
-    const built = run(
-      ["bun", "run", "--cwd", "packages/parser", "build"],
-      process.env,
-    );
-    if (built !== 0) return built;
-  }
-  // Every other package imports core through its dist; rebuild it when a kept
-  // change touches one of its bundled inputs. Under --moon, `core:build` does.
-  if (!moon && coreBuildNeeded(kept)) {
-    console.log(
-      `test:affected: ${kept.find(isCoreBuildInput)} is an input of packages/core's dist -> bun run --cwd packages/core build`,
-    );
-    const built = run(
-      ["bun", "run", "--cwd", "packages/core", "build"],
-      process.env,
-    );
-    if (built !== 0) return built;
+  // Tests import these packages through their dists; rebuild every dist a
+  // kept change reaches, directly or through a bundled dist, in rebuild order.
+  // Under --moon, each test task's `build` deps do.
+  if (!moon) {
+    const rebuilt = new Set<string>();
+    for (const row of distBuilds(kept)) {
+      const input = kept.find((f) => isDistInput(row, f));
+      const inner = row.bundles.find((d) => rebuilt.has(d));
+      console.log(
+        input !== undefined
+          ? `test:affected: ${input} is an input of ${row.dir}'s dist -> bun run --cwd ${row.dir} build`
+          : `test:affected: ${row.dir} bundles ${inner}'s dist -> bun run --cwd ${row.dir} build`,
+      );
+      const built = run(["bun", "run", "--cwd", row.dir, "build"], process.env);
+      if (built !== 0) return built;
+      rebuilt.add(row.dir);
+    }
   }
   const dirs = projectDirs();
   // Project docs (.md) map to the Markdown readers only, never to their
