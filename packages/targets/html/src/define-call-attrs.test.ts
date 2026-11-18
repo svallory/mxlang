@@ -37,6 +37,21 @@ describe("html: a <define> call passes its attributes as the first param", () =>
     ).toContain("Row()");
   });
 
+  // Stock Marko 6.4.4 (@marko/compiler 5.42.11, stock htmljs-parser 5.18.0)
+  // compiles this call to `G.content({})`: the attribute object is dropped
+  // unevaluated, so `seen.push(1)` never runs and stock renders `g0`
+  // (confirmed against the stock render in the `define-call-attrs` oracle
+  // fixture). html matches it.
+  it("does not evaluate the attributes of a define without params", () => {
+    const filename = new URL("../define-noparam.mx", import.meta.url).pathname;
+    expect(
+      mx(
+        "<const/seen=[]/><define/G>g</define><G n=seen.push(1)/>${seen.length}",
+        { filename },
+      )({}),
+    ).toBe("g0");
+  });
+
   it("still rejects a spread next to tag arguments", () => {
     expect(() =>
       emit("<define/Row|a|><li>${a}</li></define>\n<Row(1) ...{ b: 2 }/>"),
