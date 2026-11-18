@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "engines": {
     "node": ">=22.18",
-    "bun": ">=1.3"
+    "bun": ">=1.4"
   },
   "private": true,
   "type": "module",
