@@ -61,8 +61,13 @@ CLONE_DIR="$TMP_DIR/clone"
 
 # Clone the whole monorepo (this grammar has no repo of its own yet — it
 # lives nested at $PKG_REL, same as extension.toml's monorepo URL + path dev
-# form), at HEAD, so only committed files are present. This mirrors exactly
-# what Zed's checkout_repo does for [grammars.mx].
+# form) from the local repository's committed HEAD over file:// (a plain
+# local path would make git ignore --depth 1), so only committed files are
+# compiled, like Zed's checkout of [grammars.mx]. Unlike Zed, this does not
+# fetch the pushed `rev` from extension.toml, so it proves neither that `rev`
+# is pushed nor that it is current. For `rev`, see
+# packages/editors/zed/scripts/check-grammar-revs.sh: it checks that `rev` is
+# in HEAD's history and has the same grammar src as HEAD.
 echo "Cloning committed HEAD only (file://$REPO_ROOT, at $PKG_REL)..."
 git clone --quiet --depth 1 "file://$REPO_ROOT" "$CLONE_DIR"
 
