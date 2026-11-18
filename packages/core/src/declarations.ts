@@ -23,9 +23,30 @@ import type { Ctx, Disposition, Node } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
 import type { Attr, DelegatedTag } from "./ir.ts";
+import { RESERVED_NAMES } from "./tag-names.ts";
 import type { NativeTags } from "./tag-table.ts";
 
 export type { Disposition };
+
+const RESERVED: ReadonlySet<string> = new Set(RESERVED_NAMES);
+
+/**
+ * The host's row for `name`, as core applies it. Under the `none` tag rules
+ * every name but the reserved ones is an ordinary tag (spec §13.7.3), so a
+ * host's row for it does not apply; a row for a reserved name does. The
+ * `none` preset's own names (`import`, `static`, `export`, `const`,
+ * `return`) are all reserved names, so `RESERVED_NAMES` alone is the kept
+ * set. Internal to core: not re-exported from the package.
+ */
+export function hostTagRow(
+  ctx: Pick<Ctx, "declarations" | "tagRules">,
+  name: string,
+): Disposition | undefined {
+  if (ctx.tagRules === "none" && !RESERVED.has(name)) return undefined;
+  return Object.hasOwn(ctx.declarations.tags, name)
+    ? ctx.declarations.tags[name]
+    : undefined;
+}
 
 /** One authored ancestor of an unnamed tag, as `resolveDefaultTag` receives it. */
 export interface DefaultTagParent {
@@ -183,7 +204,8 @@ export interface HostDeclarations {
    * Per-tag-name dispositions: `inert` (accepted, no output, in a declared
    * shape), `unsupported` (this target cannot express it; core words the
    * refusal and the host adds a hint) or `error` (a refusal in the host's own
-   * words).
+   * words). Under the `none` tag rules only the rows for reserved names
+   * (`RESERVED_NAMES`) apply.
    */
   tags: Record<string, Disposition>;
   /**

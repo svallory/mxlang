@@ -183,3 +183,43 @@ describe("a dialect's id is unique on the compile path too", () => {
     );
   });
 });
+
+// Under `none` every name but the reserved ones is an ordinary tag (spec
+// §13.7.3), so a host's row for it does not apply; a reserved name's does.
+describe("the host's tag rows under the `none` tag rules", () => {
+  const rows: HostDeclarations = {
+    ...host,
+    tags: {
+      probe: { kind: "error", reason: "R" },
+      define: { kind: "error", reason: "D" },
+    },
+  };
+  const compileWithRows = (
+    source: string,
+    filename: string,
+    options: { dialect?: Dialect } = {},
+  ) =>
+    messageOf(() =>
+      compileSource(source, filename, rows, {
+        targets: lookup,
+        emitIr: () => "",
+        ...options,
+      }),
+    );
+
+  it("a row for a name that is not reserved does not apply", () => {
+    expect(
+      compileWithRows("<probe/>\n", "/page.mx", { dialect: none }),
+    ).toBeUndefined();
+  });
+
+  it("a row for a reserved name applies", () => {
+    expect(compileWithRows("<define/>\n", "/page.mx", { dialect: none })).toBe(
+      "D",
+    );
+  });
+
+  it("outside `none` the row applies", () => {
+    expect(compileWithRows("<probe/>\n", "/page.mx")).toBe("R");
+  });
+});

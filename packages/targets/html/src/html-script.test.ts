@@ -633,9 +633,12 @@ describe("a custom tag's own fields are not the raw primitive it builds", () => 
 /**
  * Under the `none` tag rules `let`, `server` and `client` are ordinary tag
  * names, so this host does not claim them there: a built one is refused as an
- * unclaimed name, and an authored one takes an ordinary tag's route.
+ * unclaimed name, and an authored one takes an ordinary tag's route. Nor does
+ * core apply this host's rows (`TAGS`, and the strict policy's) for a name
+ * that is not reserved: such a tag compiles as the ordinary `<zzz>` does, and
+ * `<script>`, a web element, as the ordinary element `<span>` does.
  */
-describe("the `none` tag rules: `let`, `server` and `client` are ordinary", () => {
+describe("the `none` tag rules: host rows and `let`, `server`, `client` are ordinary", () => {
   const builds = (name: string): CustomTag => ({
     transform: (_call, ctx) => [ctx.build.delegatedTag(name, [], [])],
   });
@@ -658,9 +661,13 @@ describe("the `none` tag rules: `let`, `server` and `client` are ordinary", () =
     },
   );
 
-  const outcome = (source: string) => {
+  const outcome = (
+    source: string,
+    options?: Parameters<typeof compile>[2],
+    page = dialectPage("none"),
+  ) => {
     try {
-      return { code: compile(source, dialectPage("none")).code };
+      return { code: compile(source, page, options).code };
     } catch (caught) {
       const { message, diagnosticCode } = caught as TranslateError;
       return { message, diagnosticCode };
@@ -674,6 +681,81 @@ describe("the `none` tag rules: `let`, `server` and `client` are ordinary", () =
         JSON.stringify(outcome("<zzz>x</zzz>")).replaceAll("zzz", name),
       );
       expect(outcome(`<${name}>x</${name}>`)).toEqual(control);
+    },
+  );
+
+  // The control is the same source with the name swapped for an ordinary
+  // one: `<zzz>` for a tag, `<span>` for `<script>`, which is a web element.
+  const asControl = (
+    shape: (name: string) => string,
+    name: string,
+    options?: Parameters<typeof compile>[2],
+  ) => {
+    const ordinary = name === "script" ? "span" : "zzz";
+    return JSON.parse(
+      JSON.stringify(outcome(shape(ordinary), options)).replaceAll(
+        ordinary,
+        name,
+      ),
+    );
+  };
+  const withBody = (name: string) => `<${name} a=1>x</${name}>`;
+  const bare = (name: string) => `<${name}/>`;
+
+  it.each(
+    ["lifecycle", "id", "log", "debug", "await", "script"].flatMap((name) => [
+      [withBody(name), name, withBody] as const,
+      [bare(name), name, bare] as const,
+    ]),
+  )(
+    "an authored `%s` compiles as its ordinary control",
+    (source, name, shape) => {
+      expect(outcome(source)).toEqual(asControl(shape, name));
+    },
+  );
+
+  it.each([
+    "effect",
+    "let",
+    "client",
+    "lifecycle",
+    "id",
+    "log",
+    "debug",
+    "await",
+    "script",
+  ])(
+    "under the strict policy an authored `<%s a=1>x</…>` compiles as its ordinary control",
+    (name) => {
+      expect(outcome(withBody(name), { strict: true })).toEqual(
+        asControl(withBody, name, { strict: true }),
+      );
+    },
+  );
+
+  it.each([
+    [
+      "<log a=1/>",
+      {
+        message:
+          "`<log>` does not support the `a` attribute; it emits nothing, so the attribute would be silently discarded",
+        diagnosticCode: "MX_INERT_TAG_SHAPE",
+      },
+    ],
+    [
+      "<await/>",
+      {
+        message:
+          "`<await>` suspends on a promise; this target is a synchronous `(input) => string` and cannot await",
+        diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      },
+    ],
+  ])(
+    "the `markup` tag rules still apply this host's row to `%s`",
+    (source, refusal) => {
+      expect(outcome(source, undefined, dialectPage("markup"))).toEqual(
+        refusal,
+      );
     },
   );
 });

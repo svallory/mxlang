@@ -47,7 +47,7 @@ alias of that type only. Every member is a lower-time question:
 
 | Member | What it decides |
 | --- | --- |
-| `tags` | Per-tag-name dispositions: `inert` (accepted, no output, in a declared shape), `unsupported` (this target cannot express it; core words the refusal, one shape on every host, and the host adds an optional `hint`) or `error` (a refusal in the host's own words). |
+| `tags` | Per-tag-name dispositions: `inert` (accepted, no output, in a declared shape), `unsupported` (this target cannot express it; core words the refusal, one shape on every host, and the host adds an optional `hint`) or `error` (a refusal in the host's own words). Under the `none` tag rules only the rows for reserved names (`RESERVED_NAMES`) apply. |
 | `hostName?` | The display name an `unsupported` refusal names: "`<let>` is not supported in embedded MX on Preact." |
 | `isElement(name, ctx)` | Whether an unbound lowercase tag name is a real element. |
 | `isComponent(name, ctx)` | Whether a tag name resolves to a component in this host. |

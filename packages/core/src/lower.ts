@@ -137,7 +137,7 @@ import {
   validateCustomTagChildren,
   validateCustomTagParents,
 } from "./custom-tags.ts";
-import type { HostDeclarations } from "./declarations.ts";
+import { type HostDeclarations, hostTagRow } from "./declarations.ts";
 import {
   deferredDefaultTagProblems,
   invalidDefaultTagHint,
@@ -926,8 +926,7 @@ function isBuiltinScript(ctx: Ctx, tag: Node): boolean {
  * tag), so the refusal is the tag's only diagnostic.
  */
 function hostRefusesScript(ctx: Ctx): boolean {
-  if (!Object.hasOwn(ctx.declarations.tags, "script")) return false;
-  const kind = ctx.declarations.tags.script?.kind;
+  const kind = hostTagRow(ctx, "script")?.kind;
   return kind === "unsupported" || kind === "error";
 }
 
@@ -6392,9 +6391,7 @@ function dataFileRefusal(
 ): Extract<Disposition, { kind: "error" | "unsupported" }> | undefined {
   // Only asked of a name that is not `if`, `for`, `else` or `else-if`: those
   // are branches, which `authoredChildTree` handles before it gets here.
-  const refusal = Object.hasOwn(ctx.declarations.tags, name)
-    ? ctx.declarations.tags[name]
-    : undefined;
+  const refusal = hostTagRow(ctx, name);
   return (refusal?.kind === "error" || refusal?.kind === "unsupported") &&
     refusal.code === NOT_IN_DATA_FILE_CODE
     ? refusal
@@ -7468,7 +7465,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     !ctx.customTags ||
     !Object.hasOwn(ctx.customTags, name) ||
     Object.hasOwn(BUILTIN_CUSTOM_TAGS, name) ||
-    Object.hasOwn(ctx.declarations.tags, name) ||
+    hostTagRow(ctx, name) !== undefined ||
     [
       "import",
       "static",
@@ -7532,9 +7529,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     );
   }
 
-  const disposition = Object.hasOwn(ctx.declarations.tags, name)
-    ? ctx.declarations.tags[name]
-    : undefined;
+  const disposition = hostTagRow(ctx, name);
   if (
     disposition &&
     (disposition.kind === "error" || disposition.kind === "unsupported")

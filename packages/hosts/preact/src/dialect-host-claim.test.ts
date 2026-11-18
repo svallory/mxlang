@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TranslateError } from "@mxlang/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { compilePreactRegion } from "./index.ts";
+import { compilePreactMx, compilePreactRegion } from "./index.ts";
 
 let dir: string;
 beforeEach(() => {
@@ -25,8 +25,14 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** A project depending on a dialect package whose manifest names `extensions`, and the package's `package.json`. */
-function claimingProject(extensions: readonly string[]): string {
+/**
+ * A project depending on a dialect package whose manifest names `extensions`
+ * and whose module is `module`, and the package's `package.json`.
+ */
+function claimingProject(
+  extensions: readonly string[],
+  module = "export default { table: {} };",
+): string {
   const packageDir = join(dir, "node_modules", "test-dialect");
   mkdirSync(packageDir, { recursive: true });
   const packageFile = join(packageDir, "package.json");
@@ -48,10 +54,7 @@ function claimingProject(extensions: readonly string[]): string {
       2,
     )}\n`,
   );
-  writeFileSync(
-    join(packageDir, "index.mjs"),
-    "export default { table: {} };\n",
-  );
+  writeFileSync(join(packageDir, "index.mjs"), `${module}\n`);
   writeFileSync(
     join(dir, "package.json"),
     `${JSON.stringify(
@@ -92,6 +95,50 @@ describe("`compilePreactRegion` hands routing its target's host file kinds", () 
       column: 6,
       message:
         "`mx.dialect.extensions` cannot claim `.preact.mx`: `.preact.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mydsl.mx`)",
+    });
+  });
+});
+
+/** A dialect module stating the `none` tag rules. */
+const NONE_DIALECT = 'export default { table: {}, tagRules: "none" };';
+
+/** The compiled code, or the refusal's message and code. */
+function outcome(source: string, filename: string) {
+  try {
+    return { code: compilePreactMx(source, filename).code };
+  } catch (thrown) {
+    const { message, diagnosticCode } = thrown as TranslateError;
+    return { message, diagnosticCode };
+  }
+}
+
+/**
+ * Under the `none` tag rules every name but the reserved ones is an ordinary
+ * tag, so core ignores the host's rows for the others (`statefulErrors`,
+ * which React and Hono share): such a tag compiles as the ordinary `<zzz>`
+ * does. A row for a reserved name still applies.
+ */
+describe("the `none` tag rules: host rows for non-reserved names do not apply", () => {
+  it.each(["<lifecycle a=1>x</lifecycle>", "<id a=1/>", "<await>x</await>"])(
+    "`%s` compiles as the ordinary `<zzz>` control",
+    (source) => {
+      claimingProject([".tst"], NONE_DIALECT);
+      const page = join(dir, "page.tst");
+      const name = /^<([a-z]+)/.exec(source)?.[1] ?? "";
+      const control = JSON.parse(
+        JSON.stringify(
+          outcome(source.replaceAll(name, "zzz"), page),
+        ).replaceAll("zzz", name),
+      );
+      expect(outcome(source, page)).toEqual(control);
+    },
+  );
+
+  it("the reserved `<else>` keeps its row", () => {
+    claimingProject([".tst"], NONE_DIALECT);
+    expect(outcome("<else/>", join(dir, "page.tst"))).toEqual({
+      message: "`<else>` must follow an `<if>`",
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
     });
   });
 });
