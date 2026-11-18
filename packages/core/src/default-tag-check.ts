@@ -15,6 +15,8 @@ import {
   readTargetDefaultTag,
   type TargetPolicyDiagnostic,
 } from "./host-policy.ts";
+import { RESERVED_NAMES } from "./tag-names.ts";
+import type { TagRulesPreset } from "./tag-presets.ts";
 import { type NativeTags, type TagTable, tagTable } from "./tag-table.ts";
 
 /** What one package's `mx.<target>.defaultTag` came to. */
@@ -212,6 +214,27 @@ function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
 }
 
 let coreTranslator: unknown;
+let reservedTranslator: unknown;
+
+/** A translator registering only `taglib` under core's taglib id. */
+const translatorOf = (taglib: unknown) => ({
+  taglibs: [[CORE_TAGLIB_ID, taglib]],
+  tagDiscoveryDirs: [],
+  translate: {},
+});
+
+/** Core's taglib restricted to its `<name>` entries for the reserved names. */
+function reservedTaglib(): unknown {
+  const reserved = new Set<string>(RESERVED_NAMES);
+  return Object.fromEntries(
+    Object.entries(CORE_TAGLIB as Record<string, unknown>).filter(
+      ([key]) =>
+        key.startsWith("<") &&
+        key.endsWith(">") &&
+        reserved.has(key.slice(1, -1)),
+    ),
+  );
+}
 
 /**
  * The table a default tag is judged in: the compile's or the target's own,
@@ -220,18 +243,24 @@ let coreTranslator: unknown;
  * whose translator registers no core taglib (the JSX, Solid, Angular and
  * Astro hosts) would otherwise not know `html-script` or `else-if` as tags at
  * all and judge them natively; registration, the compile and every entry that
- * scans for itself build their view here, so they cannot disagree.
+ * scans for itself build their view here, so they cannot disagree. Under the
+ * `none` tag rules only the reserved names are core (§13.7.3), so only they
+ * keep a core def.
  */
 export function judgingLookup(
   primary: TagTable | undefined,
   nativeTags: NativeTags | undefined,
+  preset?: TagRulesPreset,
 ): TagTable {
-  coreTranslator ??= {
-    taglibs: [[CORE_TAGLIB_ID, CORE_TAGLIB]],
-    tagDiscoveryDirs: [],
-    translate: {},
-  };
-  const core = tagTable(coreTranslator, nativeTags);
+  let translator: unknown;
+  if (preset === "none") {
+    reservedTranslator ??= translatorOf(reservedTaglib());
+    translator = reservedTranslator;
+  } else {
+    coreTranslator ??= translatorOf(CORE_TAGLIB);
+    translator = coreTranslator;
+  }
+  const core = tagTable(translator, nativeTags);
   if (!primary) return core;
   return {
     getTag: (name: string) => primary.getTag(name) ?? core.getTag(name),

@@ -1,7 +1,11 @@
 import { contractDefaultTagProblems } from "./contract-default-tag.ts";
 import { bodyChildren, type Ctx, isTagNode, type Node, raise } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
-import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
+import type {
+  DefaultTagContext,
+  DefaultTagParent,
+  HostDeclarations,
+} from "./declarations.ts";
 import {
   elementPredicate,
   judgingLookup,
@@ -22,6 +26,7 @@ import {
   tagNameOf,
   tagNameSpanOf,
 } from "./tag-fields.ts";
+import { policyUnder, tagRulesPreset } from "./tag-presets.ts";
 import {
   type ContractScope,
   matchWildcardChild,
@@ -96,13 +101,33 @@ export function invalidDefaultTagHint(node: Node): string | undefined {
 
 /** The scope this compile can judge a default tag in; a target adds its built-ins. */
 function scopeOf(ctx: Ctx): DefaultTagScope {
-  const lookup = judgingLookup(ctx.tagTable, ctx.declarations.nativeTags);
+  const lookup = judgingLookup(
+    ctx.tagTable,
+    ctx.declarations.nativeTags,
+    ctx.tagRules,
+  );
   return {
     ...(ctx.customTags ? { customTags: ctx.customTags } : {}),
     ...(lookup ? { lookup } : {}),
     isElement: elementPredicate(lookup, ctx.declarations),
     isNativeElement: nativeElementPredicate(lookup, ctx.declarations),
   };
+}
+
+/** Whether `declarations` are the ones this compile lowers under: the same object, or, under a preset, the object `policyUnder` made of them. */
+function isCompileDeclarations(
+  ctx: Ctx,
+  declarations: HostDeclarations | undefined,
+): boolean {
+  if (!declarations) return false;
+  if (declarations === ctx.declarations) return true;
+  return (
+    ctx.tagRules !== undefined &&
+    policyUnder(
+      tagRulesPreset(ctx.tagRules, declarations.nativeTags),
+      declarations,
+    ) === ctx.declarations
+  );
 }
 
 /**
@@ -122,9 +147,8 @@ export function deferredDefaultTagProblems(
   const targets = ctx.targets;
   const names = targets.allTargetNames?.() ?? targets.targetNames();
   const own =
-    names.find(
-      (each) =>
-        targets.target(each)?.declarations?.default === ctx.declarations,
+    names.find((each) =>
+      isCompileDeclarations(ctx, targets.target(each)?.declarations?.default),
     ) ?? targets.defaultTarget();
   const descriptor = targets.target(own);
   const hostName = descriptor?.host?.name;

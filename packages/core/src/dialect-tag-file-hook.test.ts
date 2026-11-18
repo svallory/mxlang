@@ -38,6 +38,7 @@ import {
 import { discoverProjectTags, scanCustomTags } from "./scan.ts";
 import { clearScanCache, scanCached } from "./scan-cache.ts";
 import { clearTagFileCache, ownScanChecksForTests } from "./tag-file.ts";
+import { createTargetLookup, type TargetLookup } from "./target-descriptor.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
@@ -216,8 +217,8 @@ function delegatedTags(nodes: readonly IrNode[] | undefined): IrNode[] {
  * the call's `DelegatedTag` must match apart from `definedIn`.
  */
 describe("the pin: a derived contract behaves as the same `.tag.ts` contract", () => {
-  function bothSides(contract: unknown) {
-    kitProject();
+  function bothSides(contract: unknown, fields = "") {
+    kitProject(fields);
     // Tags the contracts name, on both sides.
     for (const side of ["tags", "components"]) {
       write(`${side}/purse.tag.ts`, "export default {};\n");
@@ -420,14 +421,18 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
       ...extra,
     });
 
-    /** `SOURCE` compiled at `page` under `policy`: its errors, or none. */
-    function compileErrors(page: string, policy: Policy) {
+    /** `SOURCE` compiled at `page` under `policy` and `lookup`: its errors, or none. */
+    function compileErrors(
+      page: string,
+      policy: Policy,
+      lookup: TargetLookup = targets,
+    ) {
       const file = join(dir, page);
-      const { customTags } = scanCached(file, { targets });
+      const { customTags } = scanCached(file, { targets: lookup });
       try {
         compileSource(SOURCE, file, policy, {
           customTags,
-          targets,
+          targets: lookup,
           tagDiscoveryDirs: [],
           emitIr: () => "",
         });
@@ -514,6 +519,143 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
         },
       ]);
     });
+
+    const NONE = 'tagRules: "none",';
+    const invalid = (message: string) => [
+      { message, line: 1, column: 0, code: "MX_INVALID_DEFAULT_TAG" },
+    ];
+
+    // Under the `none` tag rules only the reserved names are core vocabulary
+    // (spec §13.7.3): every other core taglib name is judged as any ordinary
+    // name is. Without `tagRules` every verdict is today's.
+    it.each([
+      [
+        "let",
+        NONE,
+        "invalid `defaultTag` value: `<let>` is not a tag reachable from this package (contract of `<money>`)",
+      ],
+      [
+        "await",
+        NONE,
+        "invalid `defaultTag` value: `<await>` is not a tag reachable from this package (contract of `<money>`)",
+      ],
+      [
+        "script",
+        NONE,
+        "invalid `defaultTag` value: `<script>` is not a tag reachable from this package (contract of `<money>`)",
+      ],
+      [
+        "if",
+        NONE,
+        "invalid `defaultTag` value: `<if>` is a control-flow tag, not a plain tag (contract of `<money>`)",
+      ],
+      [
+        "const",
+        NONE,
+        "invalid `defaultTag` value: `<const>` is a void tag, not a plain tag (contract of `<money>`)",
+      ],
+      [
+        "try",
+        NONE,
+        "invalid `defaultTag` value: `<try>` is not an element of this target (contract of `<money>`)",
+      ],
+      [
+        "nope",
+        NONE,
+        "invalid `defaultTag` value: `<nope>` is not a tag reachable from this package (contract of `<money>`)",
+      ],
+      [
+        "let",
+        "",
+        "invalid `defaultTag` value: `<let>` is a void tag, not a plain tag (contract of `<money>`)",
+      ],
+      [
+        "await",
+        "",
+        "invalid `defaultTag` value: `<await>` is not an element of this target (contract of `<money>`)",
+      ],
+      [
+        "script",
+        "",
+        "invalid `defaultTag` value: `<script>` is a text tag, not a plain tag (contract of `<money>`)",
+      ],
+      [
+        "if",
+        "",
+        "invalid `defaultTag` value: `<if>` is a control-flow tag, not a plain tag (contract of `<money>`)",
+      ],
+      [
+        "const",
+        "",
+        "invalid `defaultTag` value: `<const>` is a void tag, not a plain tag (contract of `<money>`)",
+      ],
+      [
+        "try",
+        "",
+        "invalid `defaultTag` value: `<try>` is not an element of this target (contract of `<money>`)",
+      ],
+      [
+        "nope",
+        "",
+        "invalid `defaultTag` value: `<nope>` is not a tag reachable from this package (contract of `<money>`)",
+      ],
+    ])(
+      "`defaultTag: %j` with dialect fields %j: %s",
+      (name, fields, message) => {
+        bothSides({ defaultTag: name }, fields);
+        expect(brief(lowerAt("page.kit.mx", SOURCE))).toEqual(invalid(message));
+      },
+    );
+
+    // Two targets that differ in `defaultTag`; the compile runs under the
+    // second one's own declarations, so its `defaultTag` is a built-in.
+    it.each([
+      ['with `tagRules: "none"`', NONE],
+      ["without `tagRules`", ""],
+    ])("the compile's own target answers, %s", (_, fields) => {
+      bothSides({ defaultTag: "bnode" }, fields);
+      const ownPolicy = policyWith({});
+      const lookup = createTargetLookup([
+        {
+          descriptorVersion: 0,
+          name: "page",
+          packageName: "@t/page",
+          defaultTag: "node",
+        },
+        {
+          descriptorVersion: 0,
+          name: "bpage",
+          packageName: "@t/bpage",
+          defaultTag: "bnode",
+          declarations: { default: ownPolicy },
+        },
+      ]);
+      expect(compileErrors("page.kit.mx", ownPolicy, lookup)).toEqual([]);
+    });
+
+    // Declarations whose `isElement` accepts any name: under `none`
+    // `html-script` is a dashed native name, as `sl-card` is.
+    it.each([
+      ["html-script", []],
+      [
+        "let",
+        [
+          {
+            message:
+              "invalid `defaultTag` value: `<let>` is not a tag reachable from this package (contract of `<money>`)",
+            code: "MX_INVALID_DEFAULT_TAG",
+            line: 1,
+            column: 0,
+          },
+        ],
+      ],
+    ])(
+      "under `none`, `defaultTag: %j` on a host that accepts unknown elements",
+      (name, expected) => {
+        bothSides({ defaultTag: name }, NONE);
+        expect(compileErrors("page.kit.mx", policyWith({}))).toEqual(expected);
+      },
+    );
   });
 });
 
