@@ -3940,6 +3940,42 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
   });
 
   it.each([
+    [
+      "an attribute tag",
+      'import Card from "./card.mx"\n<Card><@item class:active=c style:color=d on:click=f/></Card>',
+    ],
+    [
+      "a dynamic-tag call",
+      "<${input.t} class:active=c style:color=d on:click=f/>",
+    ],
+  ])(
+    "keeps reserved-head colon names whole on %s, without consulting the modifier hooks",
+    (site, source) => {
+      const ir = lowerSource(
+        source,
+        fakeDeclarations({
+          rejectModifier: () => {
+            throw new Error("rejectModifier consulted");
+          },
+          resolveModifier: () => {
+            throw new Error("resolveModifier consulted");
+          },
+        }),
+      );
+      const component = find(ir.body, "Component");
+      const attrs =
+        site === "an attribute tag"
+          ? component.attributeTags[0]?.attrs
+          : component.attrs;
+      expect(attrs).toMatchObject([
+        { kind: "dynamic", name: "class:active" },
+        { kind: "dynamic", name: "style:color" },
+        { kind: "dynamic", name: "on:click" },
+      ]);
+    },
+  );
+
+  it.each([
     ["<div x:() {}/>", "x:", 1, 5],
     ["<div value:foo() {}/>", "value:foo", 1, 5],
     ["<div x:foo() {}/>", "x:foo", 1, 5],

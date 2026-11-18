@@ -288,6 +288,16 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
     );
     expect(error).toMatchObject({ line: 1, column: 5 });
   });
+
+  it("keeps `class:active` whole as a prop on a component call", () => {
+    const { code } = compile(
+      'import Card from "./card.mx"\n<Card class:active=input.on/>',
+      "/fixtures/test.mx",
+    );
+    expect(code).toContain(
+      '__mxRenderTag(__mxOut, Card)({ "class:active": input.on });',
+    );
+  });
 });
 
 /**
