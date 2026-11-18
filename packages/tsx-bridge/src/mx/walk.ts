@@ -183,13 +183,20 @@ const FRAGMENT_OPEN = "<${_}>";
  *    the depth-0 close throws `StopWalk` and we catch it here. Without this,
  *    htmljs-parser scans the entire rest of the file as if it were markup —
  *    measurably (~44x more events on a 3000-line file).
+ *
+ * `voids: false` declares no tag void, for a file whose dialect states the
+ * `none` tag rules: core lowers its regions with no native elements, so
+ * `<input>` there is an ordinary tag with children and a closing tag.
+ * Omitted, HTML's void elements apply.
  */
 export function walkMxRegion(
   source: string,
   start: number,
-  options: { fragment?: boolean } = {},
+  options: { fragment?: boolean; voids?: boolean } = {},
 ): MxWalkResult {
   const fragment = options.fragment === true;
+  const voids = options.voids !== false;
+  const isVoid = (name: string | null) => voids && isVoidTag(name);
   // A fragment region starts at its `<>`. The walk is handed a synthetic open
   // tag in its place, so every offset htmljs-parser reports is shifted by the
   // difference in length: `base` is the source offset of data index 0.
@@ -284,7 +291,7 @@ export function walkMxRegion(
           ? data.slice(range.start, range.end)
           : null;
 
-      if (isVoidTag(pending.staticName)) return TagType.void;
+      if (isVoid(pending.staticName)) return TagType.void;
       return undefined;
     },
 
@@ -368,7 +375,7 @@ export function walkMxRegion(
       flushAttrName();
       const el = pending;
       pending = null;
-      const closesItself = range.selfClosed || isVoidTag(el.staticName);
+      const closesItself = range.selfClosed || isVoid(el.staticName);
       el.selfClosing = closesItself;
       el.range = { start: el.range.start, end: range.end + base };
 
@@ -479,12 +486,7 @@ export function walkMxRegion(
   // A void element closes at its open tag, so htmljs-parser stops before any
   // `</input>` the author wrote and would leave it for Babel to trip over as
   // stray syntax. Catch it here instead, where the element is still in hand.
-  if (
-    done &&
-    root !== null &&
-    isVoidTag(root.staticName) &&
-    errors.length === 0
-  ) {
+  if (done && root !== null && isVoid(root.staticName) && errors.length === 0) {
     const closeTag = `</${root.staticName}>`;
     // Only the run of plain text right after the tag can belong to it: a `<`
     // starts something else, and anything past that is no longer this

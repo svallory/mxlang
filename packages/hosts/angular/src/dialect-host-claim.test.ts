@@ -171,4 +171,19 @@ export class Page {}
       control,
     );
   });
+
+  // The region walker finds the region's end with no void tags, as core
+  // lowers it, so `<input>` takes children and a closing tag here.
+  it.each(["<input><child/></input>", "<input></input>"])(
+    "`%s` compiles as the ordinary `<zzz>` control",
+    (template) => {
+      claimingProject([".tst"], NONE_DIALECT);
+      const page = join(dir, "page.tst");
+      const control = moduleOutcome(template.replaceAll("input", "zzz"), page);
+      expect(control).toHaveProperty("code");
+      expect(moduleOutcome(template, page)).toEqual(
+        JSON.parse(JSON.stringify(control).replaceAll("zzz", "input")),
+      );
+    },
+  );
 });

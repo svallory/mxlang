@@ -10,6 +10,7 @@ import type {
 } from "@mxlang/babel";
 import { parseExpression } from "@mxlang/babel";
 import { Position, tokenContextTypes as tc } from "@mxlang/babel/internal";
+import { tagRulesOf } from "@mxlang/core";
 import { MxErrors } from "./errors.ts";
 import { computeMxRegionContext } from "./region-context.ts";
 import { type MxElement, type MxRange, walkMxRegion } from "./walk.ts";
@@ -105,6 +106,27 @@ function isShadowedLocally(
   );
 }
 
+/** `regionVoids`' answer per parse, keyed by the parser's options object. */
+const voidsByParse = new WeakMap<object, boolean>();
+
+/**
+ * Whether the file being parsed keeps HTML's void elements: false only when
+ * its dialect states the `none` tag rules, under which core lowers a region
+ * with no native elements. A file that does not route (or whose dialect fails
+ * to load) keeps them; its compile reports the failure. Resolved once per
+ * parse, not on each `<` the parser tries.
+ */
+function regionVoids(parser: MxParserHost): boolean {
+  const options: unknown = parser.options;
+  const key = typeof options === "object" && options !== null ? options : null;
+  const known = key ? voidsByParse.get(key) : undefined;
+  if (known !== undefined) return known;
+  const voids =
+    tagRulesOf(parser.options?.sourceFilename ?? "input.mx") !== "none";
+  if (key) voidsByParse.set(key, voids);
+  return voids;
+}
+
 /**
  * Parses one MX element starting at `startLoc` and leaves the tokenizer sitting
  * on the first token after the root tag closes.
@@ -136,7 +158,10 @@ export function mxParseElementAt(
   const fragment =
     parser.options?.mxRegionFragment === true &&
     source.charCodeAt(start + 1) === 62; /* > */
-  const { root, end, errors } = walkMxRegion(source, start, { fragment });
+  const { root, end, errors } = walkMxRegion(source, start, {
+    fragment,
+    voids: regionVoids(parser),
+  });
 
   if (fragment && errors.length > 0) {
     // htmljs-parser reports a `<>` inside an element child as a mismatched
@@ -439,7 +464,10 @@ function noteSiblingRoot(
   const fragment = next === ">" && parser.options?.mxRegionFragment === true;
   // `< c` (a space) is a comparison, never a root; so is `<=` and `<<`.
   if (!fragment && !/[A-Za-z_$@:]/.test(next)) return;
-  const sibling = walkMxRegion(source, at, { fragment });
+  const sibling = walkMxRegion(source, at, {
+    fragment,
+    voids: regionVoids(parser),
+  });
   if (sibling.errors.length > 0 || sibling.root === null) return;
   hints.push({ start: at, end: sibling.end });
 }

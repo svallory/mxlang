@@ -1,6 +1,15 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { File } from "@babel/types";
 import type { MxRegionCompile, MxRegionCompileInput } from "@mxlang/babel";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse } from "../index.ts";
 
 /** The spliced region node of `const view = <…>;`, the shape these assert on. */
@@ -180,6 +189,80 @@ describe("mxRegionCompile", () => {
 
     expect(calls).toHaveLength(0);
     expect(regionNode(file).type).toBe("JSXElement");
+  });
+
+  /**
+   * The walker finds a region's end before core lowers it, so it must agree
+   * with core on which tags are void: none in a file whose dialect states the
+   * `none` tag rules, HTML's in every other file.
+   */
+  describe("a file whose dialect states the `none` tag rules", () => {
+    let dir: string;
+    beforeEach(() => {
+      dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-bridge-tag-rules-")));
+      const packageDir = join(dir, "node_modules", "test-dialect");
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(
+        join(packageDir, "package.json"),
+        `${JSON.stringify({
+          name: "test-dialect",
+          mx: {
+            dialect: {
+              id: "test",
+              name: "Test",
+              extensions: [".tst"],
+              module: "./index.mjs",
+            },
+          },
+        })}\n`,
+      );
+      writeFileSync(
+        join(packageDir, "index.mjs"),
+        'export default { table: {}, tagRules: "none" };\n',
+      );
+      writeFileSync(
+        join(dir, "package.json"),
+        `${JSON.stringify({
+          name: "app",
+          devDependencies: { "test-dialect": "0.0.0" },
+        })}\n`,
+      );
+    });
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it.each([["<input><child/></input>"], ["<input></input>"]])(
+      "`%s` is one region with no void tags",
+      (region) => {
+        const { hook, calls } = recordingHook();
+        parse(`const view = ${region};\n`, join(dir, "page.tst"), {
+          mxRegionCompile: hook,
+        });
+        expect(calls.map((call) => call.source)).toEqual([region]);
+      },
+    );
+
+    it.each([
+      [
+        "<input><child/></input>",
+        "An MX region has exactly one root element. Wrap sibling elements in a fragment, `<>…</>`.",
+      ],
+      [
+        "<input></input>",
+        "<input> is a void element and cannot have a closing tag.",
+      ],
+    ])(
+      "`%s` keeps HTML's void `<input>` in a file with no dialect",
+      (region, message) => {
+        const { hook } = recordingHook();
+        expect(() =>
+          parse(`const view = ${region};\n`, join(dir, "page.ts"), {
+            mxRegionCompile: hook,
+          }),
+        ).toThrow(message);
+      },
+    );
   });
 
   describe("a throwing hook", () => {
