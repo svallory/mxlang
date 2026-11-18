@@ -1490,6 +1490,28 @@ export function diagnosticCodesOf(
 }
 
 /**
+ * The tag rules `filename` parses under when a dialect routes it: the preset
+ * its dialect states, `"html"` when the dialect states none, and `undefined`
+ * for MX's own files (they parse under their target's tag rules) or when
+ * routing or loading the dialect fails (the file's compile says why).
+ * `options` are the routing options the caller routes with.
+ *
+ * Its consumer is the tsx-bridge region walker, which finds a region's end
+ * before core lowers it and must agree with core on which tags are void.
+ * @unstable
+ */
+export function tagRulesOf(
+  filename: string,
+  options: RouteDialectOptions = {},
+): TagRulesPreset | undefined {
+  try {
+    return fileTagRules(resolveSyntaxOf(filename, options));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * The tag rules a file's dialect states for it ({@link dialectTagRules}), or
  * `undefined` for MX's own files, which parse under their target's tag
  * rules. A routed dialect and an explicit `dialect` option both count; a bare

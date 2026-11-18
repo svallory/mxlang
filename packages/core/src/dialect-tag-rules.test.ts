@@ -18,7 +18,7 @@ import { parseFragment } from "./fragment.ts";
 import type { Ir, IrNode } from "./ir.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import { lower, lowerChildren } from "./lower.ts";
-import type { Dialect } from "./syntax-table.ts";
+import { type Dialect, tagRulesOf } from "./syntax-table.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 import { lookup, testTargetLookupWithSegments } from "./test-targets.ts";
 
@@ -406,5 +406,21 @@ describe("lowering a fragment adopts the preset's native elements", () => {
       { kind: "Element", name: "br", void: true },
       { kind: "Element", name: "br", void: true },
     ]);
+  });
+});
+
+describe("`tagRulesOf` reports the preset a routed file parses under", () => {
+  it("the routed dialect's `none` for its files, nothing for MX's own", () => {
+    dialectProject(dir, {
+      module: 'export default { table: {}, tagRules: "none" };',
+    });
+    expect(tagRulesOf(join(dir, "page.tst"))).toBe("none");
+    expect(tagRulesOf(join(dir, "page.mx"))).toBeUndefined();
+    expect(tagRulesOf("relative.mx")).toBeUndefined();
+  });
+
+  it("`html` for a dialect that states none", () => {
+    dialectProject(dir, { module: "export default { table: {} };" });
+    expect(tagRulesOf(join(dir, "page.tst"))).toBe("html");
   });
 });

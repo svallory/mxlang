@@ -400,6 +400,7 @@ export {
   type TriggerShorthand,
   type TriggerUse,
   type TriggerValueForm,
+  tagRulesOf,
   type UnknownTag,
   type UnknownTagAncestor,
   type UnknownTagExplanation,
