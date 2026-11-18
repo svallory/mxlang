@@ -1,5 +1,5 @@
 import type { MxChild } from "@mxlang/babel/mx-ast";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { strippedMethodTypeParams } from "./attr-fields.ts";
 import type { AttrTagDecl, CalleeInput } from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
@@ -67,6 +67,92 @@ function fakeDeclarations(overrides: Partial<Policy> = {}): Policy {
 }
 
 /**
+ * `@marko/compiler`, loaded once for the file.
+ *
+ * `parseWithMarko` calls `compiler.compileSync` through this object, never a
+ * destructured copy, so a test can spy on the call.
+ */
+const compiler: typeof import("@marko/compiler") = createRequire(
+  import.meta.url,
+)("@marko/compiler");
+
+/** The current helper call's handler for the parsed program body. */
+let programExit: ((body: Node[]) => void) | null = null;
+
+/**
+ * A translator whose Program visitor hands the parsed body to the current
+ * call's `programExit` instead of emitting.
+ *
+ * Built once per taglib set, not once per call: `@marko/compiler` keys its
+ * process-wide caches (the compile cache, the loaded-taglib map) by the
+ * translator object, so a new translator per call leaked one whole compile per
+ * call into every later test file the worker runs.
+ */
+function lowerTranslator(customTags?: Readonly<Record<string, CustomTag>>) {
+  return {
+    taglibs: [
+      [STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB],
+      ...(customTags ? [customTagTaglib(customTags)] : []),
+    ].filter((entry): entry is [string, unknown] => entry !== null),
+    tagDiscoveryDirs: [] as string[],
+    translate: {
+      Program: {
+        exit(path: { node: { body: Node[] } }) {
+          if (!programExit) {
+            throw new Error("parseWithMarko: no Program.exit handler is set");
+          }
+          programExit(path.node.body);
+          path.node.body = [];
+        },
+      },
+    },
+  };
+}
+
+const baseTranslator = lowerTranslator();
+const customTagTranslators = new WeakMap<
+  Readonly<Record<string, CustomTag>>,
+  ReturnType<typeof lowerTranslator>
+>();
+
+/**
+ * Parses `source` with the real Marko compiler and hands the parsed program
+ * body to `onProgramExit`.
+ *
+ * The translator is shared per taglib set; `cache: new Map()` gives every call
+ * a fresh compile cache, so each call is a full parse (a repeated source never
+ * hits Marko's compile cache) and nothing is added to `@marko/compiler`'s
+ * process-wide `globalConfig.cache`.
+ */
+function parseWithMarko(
+  source: string,
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+  onProgramExit: (body: Node[]) => void,
+): void {
+  let translator = baseTranslator;
+  if (customTags) {
+    const memo = customTagTranslators.get(customTags);
+    if (memo) {
+      translator = memo;
+    } else {
+      translator = lowerTranslator(customTags);
+      customTagTranslators.set(customTags, translator);
+    }
+  }
+  programExit = onProgramExit;
+  try {
+    compiler.compileSync(source, "/tmp/mx-core-test/lower.mx", {
+      translator,
+      output: "html",
+      writeVersionComment: false,
+      cache: new Map(),
+    });
+  } finally {
+    programExit = null;
+  }
+}
+
+/**
  * Lowers `source` to an IR, through the real Marko parse.
  *
  * `@marko/compiler`'s `compileSync` is driven for its parse and its taglib
@@ -90,49 +176,27 @@ function lowerSource(
   // This helper needs `lower` over the compiler's real parsed body.
   // `newCtx` plus the compiler's parse is the seam: a
   // translator whose Program visitor lowers instead of emitting.
-  const translator = {
-    taglibs: [
-      [STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB],
-      ...(customTags ? [customTagTaglib(customTags)] : []),
-    ].filter((entry): entry is [string, unknown] => entry !== null),
-    tagDiscoveryDirs: [] as string[],
-    translate: {
-      Program: {
-        exit(path: { node: { body: Node[] } }) {
-          const ctx: Ctx = newCtx(
-            source,
-            printExpression,
-            policy,
-            undefined,
-            "test.mx",
-            lookup,
-          );
-          if (calleeInput) {
-            ctx.calleeInputFor =
-              typeof calleeInput === "function"
-                ? calleeInput
-                : () => calleeInput;
-          }
-          ctx.ownInput = ownInput;
-          ctx.customTags = customTags;
-          reshape?.(path.node.body, ctx);
-          try {
-            ir = lower(ctx, path.node.body);
-          } catch (error) {
-            thrown = error;
-          }
-          path.node.body = [];
-        },
-      },
-    },
-  };
-
-  const require = createRequire(import.meta.url);
-  const compiler = require("@marko/compiler");
-  compiler.compileSync(source, "/tmp/mx-core-test/lower.mx", {
-    translator,
-    output: "html",
-    writeVersionComment: false,
+  parseWithMarko(source, customTags, (body) => {
+    const ctx: Ctx = newCtx(
+      source,
+      printExpression,
+      policy,
+      undefined,
+      "test.mx",
+      lookup,
+    );
+    if (calleeInput) {
+      ctx.calleeInputFor =
+        typeof calleeInput === "function" ? calleeInput : () => calleeInput;
+    }
+    ctx.ownInput = ownInput;
+    ctx.customTags = customTags;
+    reshape?.(body, ctx);
+    try {
+      ir = lower(ctx, body);
+    } catch (error) {
+      thrown = error;
+    }
   });
   if (thrown) throw thrown;
   if (!ir) throw new Error("lowerer produced no IR");
@@ -156,40 +220,21 @@ function lowerWithWarnings(
   let ir: Ir | null = null;
   let thrown: unknown = null;
 
-  const translator = {
-    taglibs: [[STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB]] as Array<
-      [string, unknown]
-    >,
-    tagDiscoveryDirs: [] as string[],
-    translate: {
-      Program: {
-        exit(path: { node: { body: Node[] } }) {
-          const ctx: Ctx = newCtx(
-            source,
-            printExpression,
-            policy,
-            undefined,
-            "test.mx",
-            lookup,
-          );
-          ctx.warnings = warnings;
-          try {
-            ir = lower(ctx, path.node.body);
-          } catch (error) {
-            thrown = error;
-          }
-          path.node.body = [];
-        },
-      },
-    },
-  };
-
-  const require = createRequire(import.meta.url);
-  const compiler = require("@marko/compiler");
-  compiler.compileSync(source, "/tmp/mx-core-test/lower.mx", {
-    translator,
-    output: "html",
-    writeVersionComment: false,
+  parseWithMarko(source, undefined, (body) => {
+    const ctx: Ctx = newCtx(
+      source,
+      printExpression,
+      policy,
+      undefined,
+      "test.mx",
+      lookup,
+    );
+    ctx.warnings = warnings;
+    try {
+      ir = lower(ctx, body);
+    } catch (error) {
+      thrown = error;
+    }
   });
   if (thrown) throw thrown;
   if (!ir) throw new Error("lowerer produced no IR");
@@ -1174,6 +1219,30 @@ describe("one fixture per IR kind", () => {
         expect(lowerSource(source, v2()).needsAttrTagImport).toBe(expected);
       },
     );
+
+    it("parses through one shared translator and a fresh compile cache per call", () => {
+      const { globalConfig } = createRequire(import.meta.url)(
+        "@marko/compiler/config",
+      );
+      const src = "export interface Input { head?: AttrTag }\n<p>x</p>";
+      const cacheSizeBefore = globalConfig.cache.size;
+      const compileSync = vi.spyOn(compiler, "compileSync");
+      try {
+        lowerSource(src, v2());
+        lowerWithWarnings(src);
+        expect(compileSync).toHaveBeenCalledTimes(2);
+        const [first, second] = compileSync.mock.calls.map((call) => call[2]);
+        expect(first?.translator).toBe(second?.translator);
+        expect(first?.cache).toBeInstanceOf(Map);
+        expect(second?.cache).toBeInstanceOf(Map);
+        expect(first?.cache).not.toBe(globalConfig.cache);
+        expect(second?.cache).not.toBe(globalConfig.cache);
+        expect(first?.cache).not.toBe(second?.cache);
+        expect(globalConfig.cache.size).toBe(cacheSizeBefore);
+      } finally {
+        compileSync.mockRestore();
+      }
+    });
 
     it("enforces template sidecar repeatability before Input cardinality", () => {
       const templateTag: CustomTag = {
