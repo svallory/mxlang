@@ -36,7 +36,7 @@ tasks:
   # Delegates to package.json's build (`rm -rf dist`, the bundle and its
   # `--define`s) so the two cannot drift. `dist/babel.js` is core's
   # `@mxlang/parser/frontend/babel`, and `core:test` depends on this task.
-  # Keep these inputs in step with `PARSER_BUILD_INPUTS` in
+  # Keep these inputs in step with the parser row of `DIST_PACKAGES` in
   # scripts/test-affected.ts, which rebuilds the dist for `test:affected`.
   build:
     command: "bun"
