@@ -142,3 +142,34 @@ describe("the `none` tag rules: host rows for non-reserved names do not apply", 
     });
   });
 });
+
+/**
+ * The region entry (`compileJsxRegion`, which React and Hono share) lowers a
+ * dialect file without setting the tag rules; lowering adopts the dialect's,
+ * so the host's `lifecycle` row does not apply there either.
+ */
+describe("`compilePreactRegion` under the `none` tag rules", () => {
+  /** The region's code, or the refusal's message and code. */
+  function regionOutcome(source: string, filename: string) {
+    try {
+      return { code: compilePreactRegion(source, { filename }).code };
+    } catch (thrown) {
+      const { message, diagnosticCode } = thrown as TranslateError;
+      return { message, diagnosticCode };
+    }
+  }
+
+  it("`<lifecycle a=1>x</lifecycle>` compiles as the ordinary `<zzz>` control", () => {
+    claimingProject([".tst"], NONE_DIALECT);
+    const page = join(dir, "page.tst");
+    const control = JSON.parse(
+      JSON.stringify(regionOutcome("<zzz a=1>x</zzz>", page)).replaceAll(
+        "zzz",
+        "lifecycle",
+      ),
+    );
+    expect(regionOutcome("<lifecycle a=1>x</lifecycle>", page)).toEqual(
+      control,
+    );
+  });
+});

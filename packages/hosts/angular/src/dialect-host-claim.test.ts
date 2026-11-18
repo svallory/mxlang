@@ -133,3 +133,42 @@ describe("the `none` tag rules: host rows for non-reserved names do not apply", 
     });
   });
 });
+
+/**
+ * `compileNgMx` lowers each region of a dialect file without setting the tag
+ * rules; lowering adopts the dialect's, so the host's `lifecycle` row does not
+ * apply there either.
+ */
+describe("`compileNgMx` under the `none` tag rules", () => {
+  /** A module whose one region is `template`. */
+  const moduleWith = (template: string) =>
+    `import { Component } from "@angular/core";
+
+@Component({ selector: "app-page", template: ${template} })
+export class Page {}
+`;
+
+  /** The module's code, or the refusal's message and code. */
+  function moduleOutcome(template: string, filename: string) {
+    try {
+      return { code: compileNgMx(moduleWith(template), filename).code };
+    } catch (thrown) {
+      const { message, diagnosticCode } = thrown as TranslateError;
+      return { message, diagnosticCode };
+    }
+  }
+
+  it("`<lifecycle a=1>x</lifecycle>` compiles as the ordinary `<zzz>` control", () => {
+    claimingProject([".tst"], NONE_DIALECT);
+    const page = join(dir, "page.tst");
+    const control = JSON.parse(
+      JSON.stringify(moduleOutcome("<zzz a=1>x</zzz>", page)).replaceAll(
+        "zzz",
+        "lifecycle",
+      ),
+    );
+    expect(moduleOutcome("<lifecycle a=1>x</lifecycle>", page)).toEqual(
+      control,
+    );
+  });
+});

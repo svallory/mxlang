@@ -25,8 +25,14 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** A project depending on a dialect package whose manifest names `extensions`, and the package's `package.json`. */
-function claimingProject(extensions: readonly string[]): string {
+/**
+ * A project depending on a dialect package whose manifest names `extensions`
+ * and whose module is `module`, and the package's `package.json`.
+ */
+function claimingProject(
+  extensions: readonly string[],
+  module = "export default { table: {} };",
+): string {
   const packageDir = join(dir, "node_modules", "test-dialect");
   mkdirSync(packageDir, { recursive: true });
   const packageFile = join(packageDir, "package.json");
@@ -48,10 +54,7 @@ function claimingProject(extensions: readonly string[]): string {
       2,
     )}\n`,
   );
-  writeFileSync(
-    join(packageDir, "index.mjs"),
-    "export default { table: {} };\n",
-  );
+  writeFileSync(join(packageDir, "index.mjs"), `${module}\n`);
   writeFileSync(
     join(dir, "package.json"),
     `${JSON.stringify(
@@ -90,6 +93,47 @@ describe("`lowerAstroMx` hands routing its target's host file kinds", () => {
       column: 6,
       message:
         "`mx.dialect.extensions` cannot claim `.astro.mx`: `.astro.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mydsl.mx`)",
+    });
+  });
+});
+
+/** A dialect module stating the `none` tag rules. */
+const NONE_DIALECT = 'export default { table: {}, tagRules: "none" };';
+
+/** The lowered code, or the refusal's message and code. */
+function outcome(template: string, filename: string) {
+  try {
+    return { code: lowerAstroMx(`---\n---\n${template}\n`, filename).code };
+  } catch (thrown) {
+    const { message, diagnosticCode } = thrown as TranslateError;
+    return { message, diagnosticCode };
+  }
+}
+
+/**
+ * `lowerAstroMx` lowers a dialect file without setting the tag rules; lowering
+ * adopts the dialect's. Under `none` every name but the reserved ones is an
+ * ordinary tag, so core ignores the host's rows for the others (`TAGS`): such
+ * a tag lowers as the ordinary `<zzz>` does. A reserved name keeps its row.
+ */
+describe("`lowerAstroMx` under the `none` tag rules", () => {
+  it("`<lifecycle a=1>x</lifecycle>` lowers as the ordinary `<zzz>` control", () => {
+    claimingProject([".tst"], NONE_DIALECT);
+    const page = join(dir, "page.tst");
+    const control = JSON.parse(
+      JSON.stringify(outcome("<zzz a=1>x</zzz>", page)).replaceAll(
+        "zzz",
+        "lifecycle",
+      ),
+    );
+    expect(outcome("<lifecycle a=1>x</lifecycle>", page)).toEqual(control);
+  });
+
+  it("the reserved `<else>` keeps its row", () => {
+    claimingProject([".tst"], NONE_DIALECT);
+    expect(outcome("<else/>", join(dir, "page.tst"))).toEqual({
+      message: "`<else>` must follow an `<if>`",
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
     });
   });
 });
