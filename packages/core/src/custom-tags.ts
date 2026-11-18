@@ -26,6 +26,7 @@ import {
   isTranslateError,
   paramListBindings,
   positionError,
+  rejectUnsupportedFields,
   relatedErrorsOf,
   TranslateError,
   warn,
@@ -78,6 +79,7 @@ import {
   type Owner,
   ownerText,
   structuralMessage,
+  triggerOfNode,
   type Voice,
   VoiceHookError,
   voiceOfCtx,
@@ -4145,6 +4147,20 @@ function spanDefaultedAttrs(
 }
 
 /**
+ * Refuses the fields the core `<style>` does not have: arguments, type
+ * arguments, params, attribute tags and a tag variable. Runs on an authored
+ * `<style>` only (a claimed one, or a contract-only `style` call), never on a
+ * `style` a custom tag builds, whose node is the custom tag's own.
+ */
+export function rejectStyleTagFields(ctx: Ctx, node: Node): void {
+  rejectUnsupportedFields(
+    ctx,
+    node,
+    lazyOwner(() => voiceOfCtx(ctx).tag("style", triggerOfNode(node))),
+  );
+}
+
+/**
  * The `DelegatedTag` a validated contract-only call lowers to. It is the node an
  * unregistered claimed tag produces (same body, same attributes), except that
  * the call is validated against its contract and declared defaults are added.
@@ -4167,6 +4183,16 @@ function contractOnlyDelegatedTag(
 ): IrNode {
   const definedIn = definedInOf(definition);
   const attrs = spanDefaultedAttrs(call.attrs, authored, call.nameSpan);
+  // A contract-only `style` the host reads as an element is the core
+  // `<style>`, checked before the host resolves it.
+  if (call.name === "style" && ctx.declarations.isElement("style", ctx)) {
+    rejectStyleTagFields(ctx, node);
+  }
+  const data = ctx.declarations.resolveDelegatedTag?.(
+    call.name,
+    markoViewOf(ctx, node),
+    ctx,
+  );
   return {
     kind: "DelegatedTag",
     tag: {
@@ -4187,11 +4213,7 @@ function contractOnlyDelegatedTag(
       // text is parsed (unknown only when it is no param list).
       ...withBindings(call.content?.bindings ?? paramListBindings(call.params)),
       var: call.var,
-      data: ctx.declarations.resolveDelegatedTag?.(
-        call.name,
-        markoViewOf(ctx, node),
-        ctx,
-      ),
+      data,
       loc: call.loc,
     },
     loc: call.loc,

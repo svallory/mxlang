@@ -123,6 +123,7 @@ import {
   isContractOnlyDelegated,
   isDeferredContract,
   rejectStructuralBody,
+  rejectStyleTagFields,
   runAnalyzeHooks,
   runFinalizeHooks,
   setChildEnd,
@@ -5919,6 +5920,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   // A claimed `style` the host reads as an element is the core `<style>`:
   // its attribute refusal runs once the host's resolve has had its say.
   const resolveStyle = () => {
+    rejectStyleTagFields(ctx, node);
     const data = resolve();
     rejectBareStyleAttributes(ctx, node);
     return data;

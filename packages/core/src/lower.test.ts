@@ -3739,6 +3739,34 @@ describe("a bare <style> refuses attributes, as stock Marko does", () => {
     ).toBe("DelegatedTag");
   });
 
+  // The core `<style>` has no params or tag variable; core refuses them on
+  // the authored tag, so a `style` a custom tag builds is never checked
+  // against its builder's own fields.
+  it.each([
+    ["<style|x|>a{}</style>", 0],
+    ["<style/v>a{}</style>", 7],
+  ])(
+    "refuses the fields of %s when the host claims `style` as an element",
+    (source, column) => {
+      expect(() => compileStyle(source, { declarations: claims() })).toThrow(
+        expect.objectContaining({
+          message: expect.stringContaining("on `<style>`"),
+          diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+          line: 1,
+          column,
+        }),
+      );
+    },
+  );
+
+  it("keeps the params of a claimed `style` the host does not read as an element", () => {
+    expect(
+      compileStyle("<style|x|>a{}</style>", {
+        declarations: claims({ isElement: () => false }),
+      }),
+    ).toBe("DelegatedTag");
+  });
+
   it("reports the host's own resolve error first", () => {
     expect(() =>
       compileStyle('<style media="print">a{}</style>', {

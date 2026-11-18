@@ -1339,7 +1339,7 @@ function resolveDelegatedTag(
   }
 
   if (name === "style") {
-    rejectUnsupportedFields(ctx, node, "`<style>`");
+    // Core checks an authored `<style>`'s fields; a built one has none.
     return { kind: "style", writeAttrs: hasStyleContract(ctx) };
   }
 

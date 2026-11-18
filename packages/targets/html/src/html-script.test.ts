@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { loadMx, mx } from "./helpers.ts";
+import { loadMx, type MxOptions, mx } from "./helpers.ts";
 import { compile, TranslateError } from "./index.ts";
 
 /**
@@ -355,6 +355,79 @@ describe("<style> refuses attributes, as stock Marko does", () => {
         column: 8,
       }),
     );
+  });
+
+  it.each([
+    [
+      "attribute tags",
+      "<widget><@item/></widget>",
+      {
+        widget: {
+          attributeTags: { item: {} },
+          transform: (_call, ctx) => [ctx.build.delegatedTag("style", [], [])],
+        },
+      },
+    ],
+    [
+      "tag params",
+      "<widget|x|>a</widget>",
+      {
+        widget: {
+          transform: (_call, ctx) => [ctx.build.delegatedTag("style", [], [])],
+        },
+      },
+    ],
+  ] satisfies [string, string, MxOptions["customTags"]][])(
+    "a custom tag's own %s are not the `<style>` it builds",
+    (_fields, source, customTags) => {
+      expect(mx(source, { customTags })({})).toBe("<style></style>");
+    },
+  );
+
+  // The authored `<style>`'s own fields are still refused, claimed or under a
+  // contract-only `style` registration. (`<style><@a/></style>` is no field:
+  // the body is text.)
+  it.each([
+    [
+      "<style|x|>a{}</style>",
+      "tag params `|...|` on `<style>` are not supported in a standalone template",
+      0,
+    ],
+    [
+      "<style/v>a{}</style>",
+      "tag variable `/v` on `<style>` is not supported in a standalone template",
+      7,
+    ],
+  ])("refuses the fields of %s", (source, message, column) => {
+    expect(refusal(source)).toEqual({
+      message,
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      line: 1,
+      column,
+    });
+  });
+
+  it("refuses the params of a contract-only `style` call", () => {
+    let caught: unknown;
+    try {
+      mx("<style|x|>a{}</style>", { customTags: { style: {} } })({});
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(TranslateError);
+    const { diagnosticCode, line, column } = caught as TranslateError;
+    expect({
+      message: (caught as Error).message,
+      diagnosticCode,
+      line,
+      column,
+    }).toEqual({
+      message:
+        "tag params `|...|` on `<style>` are not supported in a standalone template",
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      line: 1,
+      column: 0,
+    });
   });
 
   it.each(["<style.less>a{}</style>", "<style.module.css>a{}</style>"])(
