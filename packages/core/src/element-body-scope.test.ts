@@ -33,9 +33,12 @@ const withLet: HostDeclarations = {
   resolveAttributeMethod: () => true,
 };
 
-function attempt(source: string): TranslateError | undefined {
+function attempt(
+  source: string,
+  host: HostDeclarations = withLet,
+): TranslateError | undefined {
   try {
-    compileSource(source, "/page.mx", withLet, {
+    compileSource(source, "/page.mx", host, {
       targets: lookup,
       emitIr: () => "",
     } as never);
@@ -270,6 +273,81 @@ describe("a literal dynamic tag name that names a native element is that element
     expect(kindOf(irOf(source, setup.host, setup.customTags))).toBe(
       `Component dynamic ${target}`,
     );
+  });
+});
+
+describe("a literal dynamic tag that stays dynamic keeps Marko's native-tag field rules", () => {
+  const ARGS = [
+    "Tag does not support arguments.",
+    "MX_UNSUPPORTED_TAG_ARGUMENTS",
+  ] as const;
+  const PARAMS = [
+    "Tag does not support parameters.",
+    "MX_UNSUPPORTED_CONSTRUCT",
+  ] as const;
+  const ATTR_TAGS = [
+    "Tag does not support nested attribute tags.",
+    "MX_UNSUPPORTED_CONSTRUCT",
+  ] as const;
+  const DESTRUCTURED = [
+    "Tag variables on native tags cannot be destructured.",
+    "MX_INVALID_TAG_VAR",
+  ] as const;
+  // Columns are Marko 6.4.4's own (stock parser): the arguments, the first
+  // param, the first attribute tag, the variable. Rows with two fields pin
+  // the rule Marko reports first.
+  const REFUSED: Array<[string, readonly [string, string], number]> = [
+    ['<${"Foo"}(1)/>', ARGS, 10],
+    ['<${"my-el"}(1)/>', ARGS, 12],
+    ['<${"style"}(1)/>', ARGS, 12],
+    ['<${"Foo"}|x|>x</>', PARAMS, 10],
+    ['<${"my-el"}|x|/>', PARAMS, 12],
+    ['<${"for"}|x| of=[1]>x</>', PARAMS, 10],
+    ['<${"Foo"}><@a/></>', ATTR_TAGS, 10],
+    ['<${"my-el"}>x<@a/></>', ATTR_TAGS, 13],
+    ['<${"Foo"}/{a}/>', DESTRUCTURED, 10],
+    ['<${"my-el"}/[a]/>', DESTRUCTURED, 12],
+    ['<${"Foo"}(1) a=2/>', ARGS, 10],
+    ['<${"Foo"}(1) ref=x/>', ARGS, 10],
+    ['<${"Foo"}(1)|x|>x</>', ARGS, 10],
+    ['<${"Foo"}(1)><@a/></>', ARGS, 10],
+    ['<${"Foo"}|x|><@a/></>', PARAMS, 10],
+    ['<${"Foo"}/{a}|x|>x</>', PARAMS, 14],
+    ['<${"Foo"}/{a}(1)/>', ARGS, 14],
+    ['<${"Foo"}/{a}><@a/></>', ATTR_TAGS, 14],
+  ];
+  for (const [label, host] of [
+    ["an element host", withLet],
+    ["a host claiming dynamic tags", claimsDynamic],
+  ] as const) {
+    it.each(REFUSED)(
+      `refuses %s under ${label}`,
+      (source, [message, code], column) => {
+        const error = attempt(source, host);
+        expect(error?.message).toBe(message);
+        expect(error?.diagnosticCode).toBe(code);
+        expect([error?.line, error?.column]).toEqual([1, column]);
+      },
+    );
+  }
+
+  const bindsVar: HostDeclarations = { ...withLet, bindsDynamicTagVar: true };
+  it.each<[string, HostDeclarations]>([
+    ['<${"Foo"} a=1/>', withLet],
+    ['<${"my-el"}>x</>', withLet],
+    ['<${"Foo"}()/>', withLet],
+    ['<${"Foo"}||>x</>', withLet],
+    ['<${"my-el"}||>x</>', withLet],
+    ['<${"Foo"}||>x</>', claimsDynamic],
+    ['<${"my-el"}||>x</>', claimsDynamic],
+    ['<${"Foo"}/el/>', bindsVar],
+    ["<${input.t}(1)/>", withLet],
+    ["<${input.t}|x|>x</>", withLet],
+    ["<${input.t}><@a/></>", withLet],
+    ['<${"di" + "v"}><@a/></>', withLet],
+    ['<const/x="Foo"/><${x}(1)/>', withLet],
+  ])("still compiles %s", (source, host) => {
+    expect(attempt(source, host)).toBeUndefined();
   });
 });
 

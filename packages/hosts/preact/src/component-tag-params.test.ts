@@ -326,9 +326,11 @@ export interface Input { items: string[] }
 const STRING_CASES = {
   "a literal string target": `export interface Input { items: string[] }
 <\${"my-el"}|item|>body \${item}</>`,
-  "a literal string target with args": `export interface Input { items: string[] }
-<\${"my-el"}("a")|item|>body \${item}</>`,
 };
+
+/** Marko 6.4.4 reports the arguments first when both are written. */
+const STRING_WITH_ARGS = `export interface Input { items: string[] }
+<\${"my-el"}("a")|item|>body \${item}</>`;
 
 /** An optional render target: absent, Marko renders the body with no args. */
 const NULLISH_TARGET = `export interface Input { c?: string }
@@ -507,10 +509,25 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
       expect(error).toMatchObject({
         message: expect.stringContaining("Tag does not support parameters"),
         line: 2,
-        column: 0,
+        column: 12,
       });
     },
   );
+
+  it("a literal string target with args and a params body is refused at the arguments, as in Marko", async () => {
+    const compile = await compilerFor(host);
+    let error: unknown;
+    try {
+      compile(STRING_WITH_ARGS, "/fixtures/t.mx");
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      message: expect.stringContaining("Tag does not support arguments."),
+      line: 2,
+      column: 12,
+    });
+  });
 
   it("an absent dynamic target renders the body with no args, as Marko does", async () => {
     const { scratch, compile } = scratchFor(host, { caller: NULLISH_TARGET });

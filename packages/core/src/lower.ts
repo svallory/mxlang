@@ -71,6 +71,7 @@ import {
   declName,
   expr,
   exprWithNodes,
+  firstAttributeTag,
   flattenErrors,
   hasContent,
   importBindings,
@@ -2613,6 +2614,51 @@ function rejectKnownWrongNativeAttrs(ctx: Ctx, node: Node): void {
     const message =
       knownWrongNativeAttr(ctx, attr) ?? reservedColonAttrMessage(ctx, attr);
     if (message) raise(INVALID_ATTRIBUTE_CODE, message, attr);
+  }
+}
+
+/**
+ * Marko's native-tag field rules on a one-quasi string-literal dynamic tag
+ * that stays dynamic (`<${"Foo"}>`, `<${"my-el"}>`): Marko 6.4.4 sends every
+ * such literal down its native-tag path, which refuses tag arguments, tag
+ * params, attribute tags and a destructured tag variable. Raised in the order
+ * Marko reports them when several are written (arguments, params, attribute
+ * tags, variable), each at the position Marko reports. An empty `()` and an
+ * empty `||` write nothing and stay accepted, as in Marko; an identifier tag
+ * variable keeps the dynamic tag's handling.
+ */
+function rejectNativeLiteralFields(ctx: Ctx, node: Node): void {
+  const args = tagArgsOf(node) ?? [];
+  if (args.length > 0) {
+    raise(
+      UNSUPPORTED_TAG_ARGUMENTS_CODE,
+      "Tag does not support arguments.",
+      argumentsBlame(ctx, args, node),
+    );
+  }
+  const params = tagParamsOf(node);
+  if (params.length > 0) {
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
+      "Tag does not support parameters.",
+      params[0],
+    );
+  }
+  const attributeTag = firstAttributeTag(node);
+  if (attributeTag) {
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
+      "Tag does not support nested attribute tags.",
+      attributeTag,
+    );
+  }
+  const tagVar = tagVarOf(node);
+  if (tagVar && tagVar.type !== "Identifier") {
+    raise(
+      INVALID_TAG_VAR_CODE,
+      "Tag variables on native tags cannot be destructured.",
+      tagVar,
+    );
   }
 }
 
@@ -7276,20 +7322,25 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // resolved at run time like any other host.
   if (node.name && !hasStaticName(node)) {
     validateBoundAttributes(ctx, node);
-    rejectArgsWithProps(ctx, node);
     // Marko reads a one-quasi string-literal name as a static name and checks
-    // its attribute names as a native tag's, whatever it names. A literal
-    // naming a native element (`<${"div"}>`) is already that element (the
-    // pre-pass in `default-tag.ts`); a literal that does not name a native
-    // element (`<${"Foo"}>`) still lowers as a dynamic tag here.
+    // its attribute names and fields as a native tag's, whatever it names. A
+    // literal naming a native element (`<${"div"}>`) is already that element
+    // (the pre-pass in `default-tag.ts`); a literal that does not name a
+    // native element (`<${"Foo"}>`) still lowers as a dynamic tag here. Ahead
+    // of `rejectArgsWithProps`: Marko 6.4.4 reports "Tag does not support
+    // arguments." for `<${"Foo"}(1) a=2/>`, not the dynamic-tag rule, and
+    // for `<${"Foo"}(1) ref=x/>`, so the field rules run before the
+    // attribute names are checked.
     const literalName = tagNameExprOf(node);
     if (
       literalName?.type === "TemplateLiteral" &&
       literalName.expressions?.length === 0 &&
       literalName.quasis?.length === 1
     ) {
+      rejectNativeLiteralFields(ctx, node);
       rejectKnownWrongNativeAttrs(ctx, node);
     }
+    rejectArgsWithProps(ctx, node);
     const isBare =
       tagAttributesOf(node).length === 0 && !bodyChildren(node).length;
     const dynamicExpr = exprOf(ctx, tagNameExprOf(node));
