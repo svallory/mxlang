@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { loadMx } from "./helpers.ts";
+import { loadMx, mx } from "./helpers.ts";
 import { compile, TranslateError } from "./index.ts";
 
 /**
@@ -372,11 +372,33 @@ describe("<style> refuses attributes, as stock Marko does", () => {
     );
   });
 
-  it("a `style` contract turns the refusal off", () => {
-    expect(() =>
-      compile('<style nonce="abc">a{}</style>', "/fixtures/test.mx", {
-        customTags: { style: { attributes: { nonce: { type: "string" } } } },
+  // Under a `style` contract the attributes it accepts are the author's, and
+  // are written on the open tag rather than dropped. `loadMx` compiles with
+  // the discovered tags only, so these rows pass `customTags` through `mx`.
+  const withContract = (
+    source: string,
+    attributes: Record<string, { type: "string"; default?: string }>,
+    input: Record<string, unknown> = {},
+  ) => mx(source, { customTags: { style: { attributes } } })(input);
+  const nonce = { nonce: { type: "string" } } as const;
+
+  it("a `style` contract turns the refusal off and writes the attribute", () => {
+    expect(withContract('<style nonce="abc">a{}</style>', nonce)).toBe(
+      '<style nonce="abc">a{}</style>',
+    );
+  });
+
+  it("a contract's dynamic attribute is written HTML-escaped", () => {
+    expect(
+      withContract("<style nonce=input.n>a{}</style>", nonce, { n: 'x"y' }),
+    ).toBe('<style nonce="x&quot;y">a{}</style>');
+  });
+
+  it("a contract's default is written", () => {
+    expect(
+      withContract("<style>a{}</style>", {
+        media: { type: "string", default: "print" },
       }),
-    ).not.toThrow();
+    ).toBe('<style media="print">a{}</style>');
   });
 });

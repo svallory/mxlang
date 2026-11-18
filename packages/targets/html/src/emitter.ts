@@ -1905,7 +1905,15 @@ export function createEmitter(
           )
           .map((c) => c.value)
           .join("");
-        write(quote(`<style>${text}</style>`));
+        if (!data.writeAttrs) {
+          write(quote(`<style>${text}</style>`));
+          return;
+        }
+        // Under a `style` contract the attributes it accepted (and its
+        // defaults) are written on the open tag; the body is unchanged.
+        literal("<style");
+        elementAttributes("style", tag.attrs);
+        literal(`>${text}</style>`);
         return;
       }
       case "try": {

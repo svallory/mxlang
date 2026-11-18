@@ -1184,7 +1184,12 @@ export type DelegatedTagData =
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
   | { kind: "raw-element"; tag: string }
-  | { kind: "style" }
+  /**
+   * `writeAttrs`: a `style` contract accepted the attributes, so the emitter
+   * writes them on the open tag; without one they were refused (or, under the
+   * `none` preset or as `<style.less>`'s extension shorthand, are dropped).
+   */
+  | { kind: "style"; writeAttrs: boolean }
   | { kind: "try" }
   /**
    * `<${expr}/>`: the target expression only.
@@ -1214,6 +1219,11 @@ function isDelegatedTag(name: string): boolean {
   return CLAIMED.has(name);
 }
 
+/** Whether `customTags` (or `mx.contracts`) registers a `style` contract. */
+function hasStyleContract(ctx: Ctx): boolean {
+  return ctx.customTags !== undefined && Object.hasOwn(ctx.customTags, "style");
+}
+
 /**
  * Stock Marko 6.4.4's `assertNoStyleAttributes`: the core `<style>` refuses
  * every attribute, a spread included, at the first one. This target writes
@@ -1231,7 +1241,7 @@ function isDelegatedTag(name: string): boolean {
  */
 function rejectStyleAttributes(ctx: Ctx, node: Node): void {
   if (ctx.tagRules === "none") return;
-  if (ctx.customTags && Object.hasOwn(ctx.customTags, "style")) return;
+  if (hasStyleContract(ctx)) return;
   const attr = (node.attributes ?? []).find(
     (attr: Node) =>
       !(
@@ -1367,7 +1377,7 @@ function resolveDelegatedTag(
   if (name === "style") {
     rejectUnsupportedFields(ctx, node, "`<style>`");
     rejectStyleAttributes(ctx, node);
-    return { kind: "style" };
+    return { kind: "style", writeAttrs: hasStyleContract(ctx) };
   }
 
   // `<try>` itself is a core-owned custom tag
