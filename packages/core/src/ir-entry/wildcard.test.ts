@@ -107,20 +107,21 @@ describe("wildcard-matched tags in the IR", () => {
   });
 });
 
+/** A catch-all holder whose `"*"` row lowers any child as an `entry`. */
+const holders: Record<string, CustomTag> = {
+  entry: { attributes: { value: { type: "string" } } },
+  holder: {
+    parents: ["#root"],
+    children: { "*": [{ contract: "entry" }] },
+  },
+};
+
 /**
  * One meaning of "built-in": the names the entry point's declarations list
  * in `builtinTags` (`object`) are built-ins for a `children["*"]` wildcard
  * exactly as they are for the `defaultTag` check.
  */
 describe("builtinTags and the wildcard", () => {
-  const holders: Record<string, CustomTag> = {
-    entry: { attributes: { value: { type: "string" } } },
-    holder: {
-      parents: ["#root"],
-      children: { "*": [{ contract: "entry" }] },
-    },
-  };
-
   const messages = (source: string) =>
     lowerSource(source, "/u.mx", { customTags: holders }).diagnostics.map(
       (d) => d.message,
@@ -149,14 +150,6 @@ describe("builtinTags and the wildcard", () => {
  * `"*"` claims them as it claims any other name.
  */
 describe("the wildcard under the `none` tag rules", () => {
-  const holders: Record<string, CustomTag> = {
-    entry: { attributes: { value: { type: "string" } } },
-    holder: {
-      parents: ["#root"],
-      children: { "*": [{ contract: "entry" }] },
-    },
-  };
-
   const messages = (name: string) =>
     lowerSource(`<holder>\n  <${name} value='a'/>\n</holder>\n`, "/u.mx", {
       customTags: holders,

@@ -235,22 +235,21 @@ describe("the host's tag rows under the `none` tag rules", () => {
   });
 
   it("a row for a name that is not reserved does not keep a wildcard from claiming it", () => {
-    const customTags = WILDCARD_HOLDER;
     expect(
       compileWithRows("<holder><zzz/></holder>\n", "/page.mx", {
         dialect: none,
-        customTags,
+        customTags: WILDCARD_HOLDER,
       }),
     ).toBeUndefined();
     expect(
       compileWithRows("<holder><probe/></holder>\n", "/page.mx", {
         dialect: none,
-        customTags,
+        customTags: WILDCARD_HOLDER,
       }),
     ).toBeUndefined();
     expect(
       compileWithRows("<holder><probe/></holder>\n", "/page.mx", {
-        customTags,
+        customTags: WILDCARD_HOLDER,
       }),
     ).toBe(
       "`<holder>`: `<probe>` is not allowed here; names must not already be a tag (`<probe>` is a built-in tag, so the wildcard does not apply to it)",
