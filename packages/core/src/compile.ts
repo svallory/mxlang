@@ -68,13 +68,13 @@ import {
   tableParseError,
 } from "./syntax-table.ts";
 import {
+  policyUnder,
   type TagRules,
   type TagRulesPreset,
   taglibsOfRules,
   tagRulesPreset,
 } from "./tag-presets.ts";
 import {
-  coreNativeTags,
   type NativeTags,
   type TagTable,
   tagTable,
@@ -483,28 +483,6 @@ export const structuralDecided = new WeakMap<HostOptions, "pass" | "reject">();
 /** `preset`'s rules over the target's native elements (none under `none`). */
 function rulesUnder(preset: TagRulesPreset, policy: Policy): TagRules {
   return tagRulesPreset(preset, policy.nativeTags);
-}
-
-const policiesUnder = new WeakMap<Policy, WeakMap<NativeTags, Policy>>();
-
-/**
- * `policy` with `rules`' native elements, one object per pair so a cache
- * keyed on the policy stays warm. The policy itself when they are its own.
- */
-function policyUnder(rules: TagRules, policy: Policy): Policy {
-  if (rules.nativeTags === (policy.nativeTags ?? coreNativeTags()))
-    return policy;
-  let byNatives = policiesUnder.get(policy);
-  if (!byNatives) {
-    byNatives = new WeakMap();
-    policiesUnder.set(policy, byNatives);
-  }
-  let under = byNatives.get(rules.nativeTags);
-  if (!under) {
-    under = { ...policy, nativeTags: rules.nativeTags };
-    byNatives.set(rules.nativeTags, under);
-  }
-  return under;
 }
 
 /**

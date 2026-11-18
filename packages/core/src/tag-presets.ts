@@ -26,6 +26,7 @@
  */
 
 import { CORE_TAGLIB_ID, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
+import type { Policy } from "./declarations.ts";
 import {
   coreNativeTags,
   type NativeTags,
@@ -138,6 +139,28 @@ export function tagRulesPreset(
     byPreset.set(preset, rules);
   }
   return rules;
+}
+
+const policiesUnder = new WeakMap<Policy, WeakMap<NativeTags, Policy>>();
+
+/**
+ * `policy` with `rules`' native elements, one object per pair so a cache
+ * keyed on the policy stays warm. The policy itself when they are its own.
+ */
+export function policyUnder(rules: TagRules, policy: Policy): Policy {
+  if (rules.nativeTags === (policy.nativeTags ?? coreNativeTags()))
+    return policy;
+  let byNatives = policiesUnder.get(policy);
+  if (!byNatives) {
+    byNatives = new WeakMap();
+    policiesUnder.set(policy, byNatives);
+  }
+  let under = byNatives.get(rules.nativeTags);
+  if (!under) {
+    under = { ...policy, nativeTags: rules.nativeTags };
+    byNatives.set(rules.nativeTags, under);
+  }
+  return under;
 }
 
 const taglibsCache = new WeakMap<TagRules, Array<[string, unknown]>>();
