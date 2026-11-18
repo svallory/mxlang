@@ -871,6 +871,19 @@ hosts and Solid hand the body over as raw HTML, Astro as `set:html` on an
 element and its attributes (such as `media`) and scoping the CSS, so the style
 cannot reach the page as written.
 
+The bare `<style>` takes no attributes, as in Marko, on every host: an authored
+attribute (`<style media="print">`), a value-less one (`<style scoped>`), a
+spread (`<style ...attrs>`) and the `#id` and authored `class` shorthands
+(`<style#a>`, `<style.a class="b">`) are `MX_INVALID_ATTRIBUTE` at the first
+attribute (at the id word for `<style#a>`), with Marko's message
+`` The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead. ``
+The file-extension shorthand (`<style.less>`, `<style.module.css>`) is not an
+attribute and compiles. An attribute error of its own (an invalid name, a
+refused modifier) is reported first. The `none` tag rules skip the refusal,
+and a `style` contract in `customTags` takes the tag, attributes included.
+Write `<html-style>` for a `<style>` element that keeps its attributes
+(Angular refuses that tag, as above).
+
 An `<html-script>` takes no event handler and no method attribute: `onClick=fn`, `onclick() { … }` and `foo() { … }` are refused on the html target, Preact, React and Hono, positioned at the attribute, because a script element never fires or calls one (Angular refuses `<html-script>` outright). Solid does not refuse them yet (TODO `solid-html-script-event-attr`). A string value (`onclick="…"`) is an ordinary attribute.
 
 A `<script>` body must parse. It is read as the statements of a TypeScript
