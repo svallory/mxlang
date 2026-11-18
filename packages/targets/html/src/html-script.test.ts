@@ -1,6 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { CustomTag } from "@mxlang/core";
 import { afterAll, describe, expect, it } from "vitest";
 import { loadMx, type MxOptions, mx } from "./helpers.ts";
 import { compile, TranslateError } from "./index.ts";
@@ -34,6 +35,40 @@ const render = (source: string, input: Record<string, unknown> = {}) => {
 };
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+// A dialect's tag rules come from its discovered package, so each preset
+// gets its own project dir with a test dialect for `.tst` files.
+const dialectPage = (tagRules: string) => {
+  const project = join(dir, `dialect-${tagRules}`);
+  const packageDir = join(project, "node_modules", "test-dialect");
+  mkdirSync(packageDir, { recursive: true });
+  writeFileSync(
+    join(packageDir, "package.json"),
+    JSON.stringify({
+      name: "test-dialect",
+      mx: {
+        dialect: {
+          id: "test",
+          name: "Test",
+          extensions: [".tst"],
+          module: "./index.mjs",
+        },
+      },
+    }),
+  );
+  writeFileSync(
+    join(packageDir, "index.mjs"),
+    `export default { tagRules: ${JSON.stringify(tagRules)}, table: {} };\n`,
+  );
+  writeFileSync(
+    join(project, "package.json"),
+    JSON.stringify({
+      name: "app",
+      devDependencies: { "test-dialect": "0.0.0" },
+    }),
+  );
+  return join(project, "page.tst");
+};
 
 describe("<html-script> keeps its attributes", () => {
   it("static, dynamic and boolean attributes, in authored order", () => {
@@ -439,40 +474,6 @@ describe("<style> refuses attributes, as stock Marko does", () => {
     },
   );
 
-  // A dialect's tag rules come from its discovered package, so each preset
-  // gets its own project dir with a test dialect for `.tst` files.
-  const dialectPage = (tagRules: string) => {
-    const project = join(dir, `dialect-${tagRules}`);
-    const packageDir = join(project, "node_modules", "test-dialect");
-    mkdirSync(packageDir, { recursive: true });
-    writeFileSync(
-      join(packageDir, "package.json"),
-      JSON.stringify({
-        name: "test-dialect",
-        mx: {
-          dialect: {
-            id: "test",
-            name: "Test",
-            extensions: [".tst"],
-            module: "./index.mjs",
-          },
-        },
-      }),
-    );
-    writeFileSync(
-      join(packageDir, "index.mjs"),
-      `export default { tagRules: ${JSON.stringify(tagRules)}, table: {} };\n`,
-    );
-    writeFileSync(
-      join(project, "package.json"),
-      JSON.stringify({
-        name: "app",
-        devDependencies: { "test-dialect": "0.0.0" },
-      }),
-    );
-    return join(project, "page.tst");
-  };
-
   it("the `none` tag rules skip the refusal, as for `<html-comment>`", () => {
     expect(
       compile('<style media="print">a{}</style>', dialectPage("none")).code,
@@ -627,4 +628,52 @@ describe("a custom tag's own fields are not the raw primitive it builds", () => 
       column: 0,
     });
   });
+});
+
+/**
+ * Under the `none` tag rules `let`, `server` and `client` are ordinary tag
+ * names, so this host does not claim them there: a built one is refused as an
+ * unclaimed name, and an authored one takes an ordinary tag's route.
+ */
+describe("the `none` tag rules: `let`, `server` and `client` are ordinary", () => {
+  const builds = (name: string): CustomTag => ({
+    transform: (_call, ctx) => [ctx.build.delegatedTag(name, [], [])],
+  });
+
+  it.each(["let", "server", "client"])(
+    "a custom tag that builds `<%s>` is refused as unclaimed",
+    (name) => {
+      expect(() =>
+        compile("<widget/>", dialectPage("none"), {
+          customTags: { widget: builds(name) },
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          message: `\`<widget>\`: this host does not claim \`<${name}>\`, so a custom tag cannot emit one`,
+          diagnosticCode: "MX_TAG_HOOK_ERROR",
+          line: 1,
+          column: 0,
+        }),
+      );
+    },
+  );
+
+  const outcome = (source: string) => {
+    try {
+      return { code: compile(source, dialectPage("none")).code };
+    } catch (caught) {
+      const { message, diagnosticCode } = caught as TranslateError;
+      return { message, diagnosticCode };
+    }
+  };
+
+  it.each(["server", "client"])(
+    "an authored `<%s>` compiles as the ordinary `<zzz>` does",
+    (name) => {
+      const control = JSON.parse(
+        JSON.stringify(outcome("<zzz>x</zzz>")).replaceAll("zzz", name),
+      );
+      expect(outcome(`<${name}>x</${name}>`)).toEqual(control);
+    },
+  );
 });

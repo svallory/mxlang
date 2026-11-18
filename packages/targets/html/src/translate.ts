@@ -1217,7 +1217,20 @@ const CLAIMED = new Set([
   DYNAMIC_TAG,
 ]);
 
-function isDelegatedTag(name: string): boolean {
+/**
+ * The claimed names that are ordinary tag names under the `none` tag rules
+ * (`tag-presets.ts`: `none` knows only `import`, `static`, `export`, `const`
+ * and `return`), so this host does not read them as Marko's primitives there:
+ * an authored one is an ordinary tag, a built one is unclaimed.
+ */
+const ORDINARY_UNDER_NONE: ReadonlySet<string> = new Set([
+  "let",
+  "server",
+  "client",
+]);
+
+function isDelegatedTag(name: string, ctx: Ctx): boolean {
+  if (ctx.tagRules === "none" && ORDINARY_UNDER_NONE.has(name)) return false;
   return CLAIMED.has(name);
 }
 
