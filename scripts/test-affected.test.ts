@@ -695,7 +695,12 @@ describe("Markdown selection", () => {
         "packages/parser/src/template/corpus-equivalence.test.ts",
         "packages/core/CHANGELOG.md",
       ]),
-    ).toEqual(["packages/hosts/solid/src/emitter.ts", CORPUS, PROBE_CONSUMER]);
+    ).toEqual([
+      "packages/hosts/solid/src/emitter.ts",
+      CORPUS,
+      PROBE_CONSUMER,
+      "packages/parser/src/frontend/boundary.test.ts",
+    ]);
   });
 
   it("a readers-only file sends only its readers to vitest related", () => {
@@ -711,13 +716,52 @@ describe("Markdown selection", () => {
     ).toEqual(["packages/core/src/message-vocabulary-guard.test.ts"]);
   });
 
-  it("any corpus input adds the Markdown readers; a source-only change adds none", () => {
+  /** The core row's readers, in row order. */
+  const CORE_READERS = [
+    "packages/core/src/diagnostic-code-sites.test.ts",
+    "packages/core/src/cold-start.test.ts",
+    "packages/tooling/language-server/src/bundled-deps.test.ts",
+    "packages/tooling/typescript-plugin/src/bundled-deps.test.ts",
+    "packages/core/src/message-vocabulary-guard.test.ts",
+  ];
+
+  it("any corpus input adds the Markdown readers; a source change adds none of them", () => {
     expect(relatedSources(["docs/a.md"])).toEqual([CORPUS]);
     expect(
       relatedSources(["packages/oracle/fixtures/marko/x/input.mx"]),
     ).toEqual([CORPUS]);
     expect(relatedSources(["packages/core/src/core.ts"])).toEqual([
       "packages/core/src/core.ts",
+      ...CORE_READERS,
+    ]);
+  });
+
+  it("a token edit to a source a row matches adds the tests that read its text (mx-qo73)", () => {
+    expect(relatedSources(["packages/core/src/lower.ts"])).toEqual([
+      "packages/core/src/lower.ts",
+      ...CORE_READERS,
+    ]);
+    expect(relatedSources(["packages/tsx-bridge/src/public.d.ts"])).toEqual([
+      "packages/tsx-bridge/src/public.d.ts",
+      "packages/tsx-bridge/src/pack-contents.test.ts",
+    ]);
+  });
+
+  it("a source two rows match adds both rows' readers; shared readers are listed once", () => {
+    expect(relatedSources(["packages/core/src/ir-entry/index.ts"])).toEqual([
+      "packages/core/src/ir-entry/index.ts",
+      ...CORE_READERS,
+      "packages/core/src/ir-entry/partial.test.ts",
+    ]);
+    expect(
+      relatedSources([
+        "packages/core/src/lower.ts",
+        "packages/core/src/core.ts",
+      ]),
+    ).toEqual([
+      "packages/core/src/lower.ts",
+      "packages/core/src/core.ts",
+      ...CORE_READERS,
     ]);
   });
 });
@@ -1553,12 +1597,19 @@ function readOwners(file: string, dirs: readonly string[]): string[] {
     : projectsFor(file, dirs);
 }
 
-/** Detected readers whose result cannot change on a comment-only edit. */
+/**
+ * Detected readers that need no row: no edit to a file they read can change
+ * their result unless the import graph already selects them, so
+ * `vitest related` runs them whenever their result can change.
+ */
 const EXEMPT: readonly { test: string; reason: string }[] = [
-  // Hashes declarations printed with `removeComments: true`: comments never reach the hash.
+  // Imports `../index.ts`, which value-re-exports from ir.ts (`IR_VERSION`), mapping.ts, template-tag.ts and
+  // ir-entry/index.ts, which value-imports ./spans.ts: vitest related selects it for any edit to the four files
+  // it reads. It hashes their declarations printed with `removeComments: true`.
   {
     test: "packages/core/src/ir-entry/ir-version.test.ts",
-    reason: "hashes declarations printed without comments",
+    reason:
+      "imports every file it reads through ../index.ts; hashes declarations printed without comments",
   },
   // Its `here` walk reads only the .mx files under src/fixtures/host-dispatch, no source.
   {
@@ -1569,11 +1620,6 @@ const EXEMPT: readonly { test: string; reason: string }[] = [
   {
     test: "packages/core/src/ir-entry/conformance.test.ts",
     reason: "reads only the corpus .txt files",
-  },
-  // Parses export names and import specifiers with TypeScript; its one text match reads the built dist .d.ts.
-  {
-    test: "packages/tsx-bridge/src/pack-contents.test.ts",
-    reason: "parses sources with TypeScript; text match on dist",
   },
 ];
 

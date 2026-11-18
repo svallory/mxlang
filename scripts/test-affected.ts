@@ -45,7 +45,9 @@
  * left out only when the ordered tokens, the line breaks between them, the
  * shebang and every load-bearing marker comment (`@ts-`, `biome-ignore`,
  * `__PURE__` and the rest of `COMMENT_MARKERS`) are equal. The tests that read
- * such a file's text (`SOURCE_TEXT_READERS`) still run. A file that is new,
+ * a source's text (`SOURCE_TEXT_READERS`) run on any change to a source a row
+ * matches, comment-only edits included: `relatedSources` adds them for a
+ * kept source, `commentOnlySplit` for a left-out one. A file that is new,
  * renamed or untracked, a fixture, `.mx`, `.json`, `.md` or a wide file keeps
  * today's selection. The gate and CI run every test.
  *
@@ -504,12 +506,14 @@ export function splitDocs(
 
 /**
  * What `vitest related` gets: the changed related sources, the subprocess
- * probe's consumer (`probeConsumers`), for a related source under a
- * `FIXTURE_CONSUMERS` path (the tree-sitter-mx corpus readers, say) the
- * tests in other projects that read it, the consumers of every readers-only
- * file (`readersOnly`: its readers run here instead of a whole project), and
- * `DOC_READERS` when any changed file is a corpus input (`CORPUS_INPUT`).
- * Deduped, in that order.
+ * probe's consumer (`probeConsumers`), for each related source the tests in
+ * other projects that read it as a `FIXTURE_CONSUMERS` path (the tree-sitter-mx
+ * corpus readers, say) followed by the tests that read its text
+ * (`SOURCE_TEXT_READERS`; they run on any change to a source a row matches,
+ * and `commentOnlySplit` adds them for a comment-only edit, which never
+ * reaches here), the consumers of every readers-only file (`readersOnly`: its
+ * readers run here instead of a whole project), and `DOC_READERS` when any
+ * changed file is a corpus input (`CORPUS_INPUT`). Deduped, in that order.
  */
 export function relatedSources(changed: readonly string[]): string[] {
   const related = changed.filter(isRelatedSource);
@@ -517,7 +521,10 @@ export function relatedSources(changed: readonly string[]): string[] {
     ...new Set([
       ...related,
       ...probeConsumers(changed),
-      ...related.flatMap(fixtureConsumers),
+      ...related.flatMap((f) => [
+        ...fixtureConsumers(f),
+        ...sourceTextReaders(f),
+      ]),
       ...changed.filter((f) => readersOnly(f)).flatMap(fixtureConsumers),
       ...(changed.some((f) => CORPUS_INPUT.test(f)) ? DOC_READERS : []),
     ]),
@@ -782,14 +789,16 @@ export function commentOnly(
 }
 
 /**
- * Tests that read a source file's text (comments included), so a
- * comment-only edit to it can change their result. Each row lists every
- * consumer test file found reading a path the row matches. The
- * "SOURCE_TEXT_READERS guard" in `scripts/test-affected.test.ts` fails when a
- * test it detects reading a source a comment-only edit can leave out has no
- * row; it cannot see a path built in another module or passed through a
- * function parameter of an imported helper, so such a reader adds its row by
- * hand.
+ * Tests that read a source file's text (comments included) rather than
+ * importing it, so `vitest related` cannot select them. They run on any
+ * change to a source a row matches: `relatedSources` adds them for a source
+ * whose edit changes a token, `commentOnlySplit` for a comment-only edit.
+ * Each row lists every consumer test file found reading a path the row
+ * matches. The "SOURCE_TEXT_READERS guard" in `scripts/test-affected.test.ts`
+ * fails when a test it detects reading such a source has no row and no
+ * exemption; it cannot see a path built in another module or passed through
+ * a function parameter of an imported helper, so such a reader adds its row
+ * by hand.
  */
 export const SOURCE_TEXT_READERS: readonly {
   path: RegExp;
@@ -835,7 +844,18 @@ export const SOURCE_TEXT_READERS: readonly {
     path: /^examples\/angular-app\//,
     consumers: ["packages/hosts/angular/test/example-app.test.ts"],
   },
+  {
+    path: /^packages\/tsx-bridge\/src\/public\.d\.ts$/,
+    consumers: ["packages/tsx-bridge/src/pack-contents.test.ts"],
+  },
 ];
+
+/** The tests that read `file`'s text (`SOURCE_TEXT_READERS`), in row order, not deduplicated. */
+export function sourceTextReaders(file: string): string[] {
+  return SOURCE_TEXT_READERS.filter((row) => row.path.test(file)).flatMap(
+    (row) => row.consumers,
+  );
+}
 
 /**
  * `changed` split into the files whose edit is comment-only (`commentOnly`;
@@ -855,15 +875,7 @@ export function commentOnlySplit(
     const old = isRelatedSource(f) && !isWide(f) ? before(f) : undefined;
     (old !== undefined && commentOnly(f, old, after(f)) ? only : kept).push(f);
   }
-  const readers = [
-    ...new Set(
-      only.flatMap((f) =>
-        SOURCE_TEXT_READERS.filter((row) => row.path.test(f)).flatMap(
-          (row) => row.consumers,
-        ),
-      ),
-    ),
-  ];
+  const readers = [...new Set(only.flatMap(sourceTextReaders))];
   return { commentOnly: only, kept, readers };
 }
 
