@@ -2392,6 +2392,18 @@ describe("ctx.build.delegatedTag refuses what it cannot carry", () => {
       DYNAMIC_TAG,
       "`<widget>`: `ctx.build.delegatedTag` cannot build a dynamic tag (`<${…}>`): a built tag has no tag-name expression",
     ],
+    [
+      "static",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<static>`: a built tag has no statement code",
+    ],
+    [
+      "import",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<import>`: a built tag has no statement code",
+    ],
+    [
+      "export",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<export>`: a built tag has no statement code",
+    ],
   ])(
     "refuses %j on a host that claims it, before its resolve",
     (name, message) => {
@@ -2447,19 +2459,35 @@ describe("ctx.build.delegatedTag refuses what it cannot carry", () => {
     },
   );
 
-  it("still refuses `const` under the `none` tag rules", () => {
+  it.each([
+    [
+      "const",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<const>`: a built tag has no tag variable to bind",
+    ],
+    [
+      "static",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<static>`: a built tag has no statement code",
+    ],
+    [
+      "import",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<import>`: a built tag has no statement code",
+    ],
+    [
+      "export",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<export>`: a built tag has no statement code",
+    ],
+  ])("still refuses `%s` under the `none` tag rules", (name, message) => {
     const resolve = vi.fn(() => ({}));
     expect(() =>
       lowerWithTags(
         "<widget/>\n",
-        { widget: builds("const") },
-        claims("const", resolve),
+        { widget: builds(name) },
+        claims(name, resolve),
         { dialect: noneRules },
       ),
     ).toThrow(
       expect.objectContaining({
-        message:
-          "`<widget>`: `ctx.build.delegatedTag` cannot build `<const>`: a built tag has no tag variable to bind",
+        message,
         diagnosticCode: "MX_TAG_HOOK_ERROR",
         line: 1,
         column: 0,

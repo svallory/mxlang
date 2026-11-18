@@ -654,10 +654,11 @@ export interface IrBuilders {
    * registered (skipped under the `none` tag rules). A built `html-comment`
    * or `try` with attributes is refused too, as the authored tags are (the
    * `html-comment` check is skipped under an `html-comment` contract and the
-   * `none` tag rules). A request for `let`, `const`, `server`, `client` or
-   * a dynamic tag is refused, since the builder carries no tag variable,
-   * statement code or target expression (`let`, `server` and `client` are
-   * ordinary names under the `none` tag rules and are not refused there).
+   * `none` tag rules). A request for `let`, `const`, `server`, `client`,
+   * `static`, `import`, `export` or a dynamic tag is refused, since the
+   * builder carries no tag variable, statement code or target expression
+   * (`let`, `server` and `client` are ordinary names under the `none` tag
+   * rules and are not refused there).
    */
   delegatedTag(
     name: string,
@@ -4239,6 +4240,10 @@ function unbuildablePrimitive(name: string): UnbuildablePrimitive | undefined {
     ["const", { missing: "tag variable to bind", ordinaryUnderNone: false }],
     ["server", { missing: "statement code", ordinaryUnderNone: true }],
     ["client", { missing: "statement code", ordinaryUnderNone: true }],
+    // Module statements in every preset, `none` included: never ordinary.
+    ["static", { missing: "statement code", ordinaryUnderNone: false }],
+    ["import", { missing: "statement code", ordinaryUnderNone: false }],
+    ["export", { missing: "statement code", ordinaryUnderNone: false }],
     [DYNAMIC_TAG, { missing: "tag-name expression", ordinaryUnderNone: false }],
   ]);
   return unbuildablePrimitives.get(name);
