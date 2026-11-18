@@ -13,10 +13,13 @@ import {
   FIXTURE_CONSUMERS,
   fixtureConsumers,
   hasVitestTests,
+  isManifest,
   isProjectDoc,
   isRelatedSource,
   isWide,
   laneFor,
+  manifestMetadataOnly,
+  manifestSplit,
   nonSourceProjects,
   ownRunnerDirs,
   ownRunnerPlan,
@@ -947,6 +950,204 @@ describe("commentOnlySplit", () => {
   });
 });
 
+describe("manifestMetadataOnly", () => {
+  const BASE = `{
+  "name": "@mxlang/core",
+  "version": "1.0.0",
+  "license": "MIT",
+  "engines": { "bun": ">=1.3" },
+  "dependencies": { "a": "1.0.0" }
+}
+`;
+
+  it("is true for #844's engines.bun bump", () => {
+    expect(
+      manifestMetadataOnly(
+        '{ "name": "@mxlang/core", "type": "module", "engines": { "bun": ">=1.3" }, "dependencies": { "a": "1.0.0" } }',
+        '{ "name": "@mxlang/core", "type": "module", "engines": { "bun": ">=1.4" }, "dependencies": { "a": "1.0.0" } }',
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["engines", { node: ">=20" }],
+    ["description", "The MX compiler"],
+    ["keywords", ["mx", "marko"]],
+    ["author", "someone"],
+    ["license", "Apache-2.0"],
+    ["repository", { type: "git", url: "https://example.com/mx.git" }],
+    ["homepage", "https://example.com"],
+    ["bugs", { url: "https://example.com/issues" }],
+    ["funding", "https://example.com/fund"],
+  ])("is true when only %s changes", (key, value) => {
+    expect(
+      manifestMetadataOnly(
+        '{ "name": "a", "engines": { "bun": ">=1.3" }, "description": "d", "keywords": ["k"], "author": "x", "license": "MIT", "repository": "r", "homepage": "h", "bugs": "b", "funding": "f" }',
+        JSON.stringify({
+          name: "a",
+          engines: { bun: ">=1.3" },
+          description: "d",
+          keywords: ["k"],
+          author: "x",
+          license: "MIT",
+          repository: "r",
+          homepage: "h",
+          bugs: "b",
+          funding: "f",
+          [key]: value,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("is true when license is removed or funding is added", () => {
+    expect(
+      manifestMetadataOnly(
+        BASE,
+        '{ "name": "@mxlang/core", "version": "1.0.0", "engines": { "bun": ">=1.3" }, "dependencies": { "a": "1.0.0" } }',
+      ),
+    ).toBe(true);
+    expect(
+      manifestMetadataOnly(
+        BASE,
+        '{ "name": "@mxlang/core", "version": "1.0.0", "license": "MIT", "engines": { "bun": ">=1.3" }, "dependencies": { "a": "1.0.0" }, "funding": "https://example.com/fund" }',
+      ),
+    ).toBe(true);
+  });
+
+  it("is true for whitespace, top-level key order and key order inside repository", () => {
+    expect(
+      manifestMetadataOnly(
+        BASE,
+        '{"dependencies":{"a":"1.0.0"},"engines":{"bun":">=1.3"},"license":"MIT","version":"1.0.0","name":"@mxlang/core"}',
+      ),
+    ).toBe(true);
+    expect(
+      manifestMetadataOnly(
+        '{ "name": "a", "repository": { "type": "git", "url": "u", "directory": "packages/a" } }',
+        '{ "name": "a", "repository": { "directory": "packages/a", "url": "u", "type": "git" } }',
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["dependencies", '{ "a": "1.0.0" }', '{ "a": "1.1.0" }'],
+    ["exports", '"./dist/index.js"', '{ ".": "./dist/index.js" }'],
+    ["scripts", '{ "test": "vitest" }', '{ "test": "vitest run" }'],
+    ["version", '"1.0.0"', '"1.0.1"'],
+    ["files", '["dist"]', '["dist", "src"]'],
+  ])("is false when only %s changes", (key, from, to) => {
+    expect(
+      manifestMetadataOnly(
+        `{ "name": "a", "license": "MIT", "${key}": ${from} }`,
+        `{ "name": "a", "license": "MIT", "${key}": ${to} }`,
+      ),
+    ).toBe(false);
+  });
+
+  it("is false when engines and dependencies change together", () => {
+    expect(
+      manifestMetadataOnly(
+        BASE,
+        '{ "name": "@mxlang/core", "version": "1.0.0", "license": "MIT", "engines": { "bun": ">=1.4" }, "dependencies": { "a": "2.0.0" } }',
+      ),
+    ).toBe(false);
+  });
+
+  it("is false for invalid JSON, an array or null on either side", () => {
+    expect(manifestMetadataOnly('{ "name": "a",', '{ "name": "a" }')).toBe(
+      false,
+    );
+    expect(manifestMetadataOnly('{ "name": "a" }', '{ "name": "a",')).toBe(
+      false,
+    );
+    expect(manifestMetadataOnly('["a"]', '["a"]')).toBe(false);
+    expect(manifestMetadataOnly('{ "name": "a" }', "null")).toBe(false);
+    expect(manifestMetadataOnly("null", '{ "name": "a" }')).toBe(false);
+  });
+});
+
+describe("manifestSplit", () => {
+  const CORE = "packages/core/package.json";
+  const VSCODE = "packages/editors/vscode/package.json";
+  const FIXTURE = "packages/tooling/tsc/src/fixtures/x/package.json";
+  const NEW = "packages/x/package.json";
+  const DEPS = "packages/hosts/react/package.json";
+  const SOURCE = "packages/core/src/core.ts";
+  const before = new Map<string, string>([
+    [CORE, '{ "name": "@mxlang/core", "engines": { "bun": ">=1.3" } }'],
+    [VSCODE, '{ "name": "mx-vscode", "engines": { "vscode": "^1.90.0" } }'],
+    ["package.json", '{ "name": "mx", "engines": { "bun": ">=1.3" } }'],
+    [FIXTURE, '{ "name": "x", "engines": { "bun": ">=1.3" } }'],
+    [DEPS, '{ "name": "r", "dependencies": { "a": "1" } }'],
+    [SOURCE, "export const a = 1;\n"],
+  ]);
+  const after = new Map<string, string>([
+    [CORE, '{ "name": "@mxlang/core", "engines": { "bun": ">=1.4" } }'],
+    [VSCODE, '{ "name": "mx-vscode", "engines": { "vscode": "^1.95.0" } }'],
+    ["package.json", '{ "name": "mx", "engines": { "bun": ">=1.4" } }'],
+    [FIXTURE, '{ "name": "x", "engines": { "bun": ">=1.4" } }'],
+    [NEW, '{ "name": "x", "engines": { "bun": ">=1.4" } }'],
+    [DEPS, '{ "name": "r", "dependencies": { "a": "2" } }'],
+    [SOURCE, "export const a = 2;\n"],
+  ]);
+  const split = (changed: string[]) =>
+    manifestSplit(
+      changed,
+      (f) => before.get(f),
+      (f) => after.get(f) ?? "",
+    );
+
+  it("an engines-only edit of core's manifest runs only its readers (#844)", () => {
+    expect(split([CORE])).toEqual({
+      metadataOnly: [CORE],
+      kept: [],
+      readers: [
+        "scripts/pack-hygiene.test.ts",
+        "scripts/workspace-cycles.test.ts",
+      ],
+    });
+  });
+
+  it("the vscode and root manifests bring their readers", () => {
+    const vscode = split([VSCODE]);
+    expect(vscode.metadataOnly).toEqual([VSCODE]);
+    expect(vscode.readers).toContain(
+      "packages/target-registry/src/parity.test.ts",
+    );
+    expect(vscode.readers).toContain(
+      "packages/editors/vscode/src/manifest.test.ts",
+    );
+    const rootManifest = split(["package.json"]);
+    expect(rootManifest.metadataOnly).toEqual(["package.json"]);
+    expect(rootManifest.readers).toContain(
+      "packages/stock-marko/src/marko.test.ts",
+    );
+  });
+
+  it("keeps a fixture manifest, a new manifest, a dependencies change and a source", () => {
+    expect(split([FIXTURE, NEW, DEPS, SOURCE])).toEqual({
+      metadataOnly: [],
+      kept: [FIXTURE, NEW, DEPS, SOURCE],
+      readers: [],
+    });
+  });
+
+  it("isManifest: package.json outside fixtures-style dirs", () => {
+    expect(
+      [
+        "package.json",
+        "packages/core/package.json",
+        "apps/docs/package.json",
+        "packages/tooling/tsc/src/fixtures/x/package.json",
+        "test-fixtures/dialects/a/package.json",
+        "packages/core/package.json.bak",
+        "tsconfig.json",
+      ].map(isManifest),
+    ).toEqual([true, true, true, false, false, false, false]);
+  });
+});
+
 /*
  * The SOURCE_TEXT_READERS guard: finds the test files that read a package
  * source's text and checks each has a row. TypeScript parses the tests and its
@@ -1347,7 +1548,7 @@ function fixtureTargets(listed: readonly string[]): string[] {
  * readers, so a same-project reader of it is checked like a cross-project one.
  */
 function readOwners(file: string, dirs: readonly string[]): string[] {
-  return isProjectDoc(file, dirs) || readersOnly(file)
+  return isProjectDoc(file, dirs) || readersOnly(file) || isManifest(file)
     ? []
     : projectsFor(file, dirs);
 }
@@ -1395,19 +1596,11 @@ const FIXTURE_EXEMPT: readonly (Exemption & { reason: string })[] = [
     reason: "walk skips fixtures directories",
   },
   // Its `template/` walk reads only `.ts` (`path.endsWith(".ts")`); the read reaches only PROVENANCE.md, a project doc.
+  // Its `package.json` read has a FIXTURE_CONSUMERS row.
   {
     test: "packages/parser/src/frontend/boundary.test.ts",
+    path: /\.md$/,
     reason: "template walk reads only .ts files",
-  },
-  // Its directory reads are the manifest's grammar and configuration JSON; the read reaches only the package's .md docs.
-  {
-    test: "packages/editors/vscode/src/manifest.test.ts",
-    reason: "reads only the manifest's grammar and configuration JSON",
-  },
-  // Its prefix read is `join(pkgDir, pkg.types)`, the built dist .d.ts; the read reaches only the package's .md docs.
-  {
-    test: "packages/tsx-bridge/src/pack-contents.test.ts",
-    reason: "reads only the built dist .d.ts",
   },
   // Excluded from html's vitest project (its vitest.config.ts `exclude`); `test:bun` runs it, `test:affected` never does.
   {
@@ -1794,6 +1987,21 @@ describe("FIXTURE_CONSUMERS guard", () => {
     ]);
   });
 
+  it("catches a same-project manifest read: manifest.test.ts without its row", () => {
+    const reader = "packages/editors/vscode/src/manifest.test.ts";
+    const rows = FIXTURE_CONSUMERS.map((row) =>
+      row.path.test("packages/editors/vscode/package.json")
+        ? { ...row, consumers: row.consumers.filter((c) => c !== reader) }
+        : row,
+    );
+    expect(
+      uncovered(scanRepo(), rows, FIXTURE_EXEMPT, "FIXTURE_CONSUMERS"),
+    ).toEqual([
+      "packages/editors/vscode/src/manifest.test.ts reads packages/editors/vscode/ with no FIXTURE_CONSUMERS row",
+      "packages/editors/vscode/src/manifest.test.ts reads packages/editors/vscode/package.json with no FIXTURE_CONSUMERS row",
+    ]);
+  });
+
   it("a path-scoped exemption covers only reads whose files all match it", () => {
     const allow = "packages/core/src/message-vocabulary-guard.allowlist.txt";
     const reads: SourceRead[] = [
@@ -1828,7 +2036,7 @@ describe("FIXTURE_CONSUMERS guard", () => {
     ]);
   });
 
-  it("a project doc or a readers-only file has no owner; any other file keeps its projects", () => {
+  it("a project doc, a readers-only file or a manifest has no owner; any other file keeps its projects", () => {
     const dirs = projectDirs();
     expect(readOwners("packages/core/README.md", dirs)).toEqual([]);
     expect(readOwners("apps/docs/docs/specification.md", dirs)).toEqual([]);
@@ -1838,10 +2046,13 @@ describe("FIXTURE_CONSUMERS guard", () => {
         dirs,
       ),
     ).toEqual([]);
-    expect(readOwners("packages/core/package.json", dirs)).toEqual([
-      "@mxlang/core",
-      "@mxlang/core-isolated",
-    ]);
+    expect(readOwners("packages/core/package.json", dirs)).toEqual([]);
+    expect(
+      readOwners(
+        "packages/core/src/fixtures/host-policy/peer-only/package.json",
+        dirs,
+      ),
+    ).toEqual(["@mxlang/core", "@mxlang/core-isolated"]);
     expect(readOwners("packages/babel/UPSTREAM.md", dirs)).toEqual([
       "@mxlang/babel",
     ]);
@@ -1861,7 +2072,7 @@ describe("FIXTURE_CONSUMERS guard", () => {
       reads
         .filter(
           (r) =>
-            FIXTURE_EXEMPT.some((e) => e.test === r.test) &&
+            FIXTURE_EXEMPT.some((e) => exempts(e, r)) &&
             coveredRead(r, FIXTURE_CONSUMERS),
         )
         .map((r) => r.test),

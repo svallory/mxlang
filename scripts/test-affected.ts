@@ -49,6 +49,14 @@
  * renamed or untracked, a fixture, `.mx`, `.json`, `.md` or a wide file keeps
  * today's selection. The gate and CI run every test.
  *
+ * A `package.json` outside fixtures-style dirs whose edit changes only
+ * top-level metadata values (`MANIFEST_METADATA_KEYS`: `engines`,
+ * `description`, `license`, ...; `manifestMetadataOnly`, `manifestSplit`)
+ * runs only its `FIXTURE_CONSUMERS` readers through `vitest related`, never a
+ * whole project, an own-runner `test` script or the wide-file warning. Any
+ * other key changed, or a manifest that is new or does not parse, keeps
+ * today's selection.
+ *
  * A project that owns a changed file but has no vitest test files (the
  * tree-sitter grammars, whose tests are `*.bun-test.mts`, and the Zed
  * extension) is not given to `vitest run --project`, which would fail with
@@ -70,6 +78,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import ts from "typescript";
 import { cacheMode } from "./test-affected-cache.ts";
 import {
@@ -172,6 +181,11 @@ export function parserBuildNeeded(changed: readonly string[]): boolean {
  * related`, never its owner's project or a consumer's project. Use it only
  * when the row lists every test that reads the file: the guard then treats
  * the file as having no owner, so a same-project reader needs the row too.
+ *
+ * A manifest row (`isManifest`) also lists the manifest's same-project
+ * readers: a metadata-only manifest edit (`manifestSplit`) runs only its
+ * rows' consumers, never its owner's project, so the guard treats a manifest
+ * as having no owner too.
  */
 export const FIXTURE_CONSUMERS: readonly {
   path: RegExp;
@@ -230,7 +244,30 @@ export const FIXTURE_CONSUMERS: readonly {
   },
   {
     path: /^packages\/editors\/vscode\/package\.json$/,
-    consumers: ["packages/target-registry/src/parity.test.ts"],
+    consumers: [
+      "packages/editors/vscode/src/manifest.test.ts",
+      "packages/target-registry/src/parity.test.ts",
+    ],
+  },
+  {
+    path: /^packages\/hosts\/angular\/package\.json$/,
+    consumers: ["packages/hosts/angular/test/runtime.test.ts"],
+  },
+  {
+    path: /^packages\/parser\/package\.json$/,
+    consumers: ["packages/parser/src/frontend/boundary.test.ts"],
+  },
+  {
+    path: /^packages\/target-registry\/package\.json$/,
+    consumers: ["packages/target-registry/src/umbrella.test.ts"],
+  },
+  {
+    path: /^packages\/tooling\/angular-checker\/package\.json$/,
+    consumers: ["packages/tooling/angular-checker/src/dist.test.ts"],
+  },
+  {
+    path: /^packages\/tsx-bridge\/package\.json$/,
+    consumers: ["packages/tsx-bridge/src/pack-contents.test.ts"],
   },
   {
     path: /^packages\/parser\/src\/template\/(?:mx-nameless-ascii|mx-unicode-words)\.main\.json$/,
@@ -831,6 +868,84 @@ export function commentOnlySplit(
 }
 
 /**
+ * Top-level manifest keys that no test, build or module resolution reads in
+ * this repository. A test that reads one is a `FIXTURE_CONSUMERS` row of that
+ * manifest and still runs on a metadata-only edit.
+ */
+const MANIFEST_METADATA_KEYS: readonly string[] = [
+  "engines",
+  "description",
+  "keywords",
+  "author",
+  "license",
+  "repository",
+  "homepage",
+  "bugs",
+  "funding",
+];
+
+/** A `package.json` outside fixtures-style dirs: the root and every workspace manifest. */
+export function isManifest(file: string): boolean {
+  return basename(file) === "package.json" && !FIXTURE_DIR.test(file);
+}
+
+/** `text` parsed as a plain JSON object, or undefined. */
+function manifestObject(text: string): Record<string, unknown> | undefined {
+  try {
+    const v: unknown = JSON.parse(text);
+    return typeof v === "object" && v !== null && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a manifest edit changes only `MANIFEST_METADATA_KEYS`: both texts
+ * parse to plain objects and every top-level key on either side whose values
+ * differ (an added or removed key included) is a metadata key. A change of
+ * whitespace or key order only is metadata-only; a parse error or a
+ * non-object on either side is not. Never throws.
+ */
+export function manifestMetadataOnly(before: string, after: string): boolean {
+  const a = manifestObject(before);
+  const b = manifestObject(after);
+  if (a === undefined || b === undefined) return false;
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].every(
+    (k) =>
+      MANIFEST_METADATA_KEYS.includes(k) ||
+      (Object.hasOwn(a, k) === Object.hasOwn(b, k) &&
+        isDeepStrictEqual(a[k], b[k])),
+  );
+}
+
+/**
+ * `changed` split into the manifests whose edit is metadata-only
+ * (`isManifest`, present at the same path in the merge-base, read by
+ * `before`, and `manifestMetadataOnly`) and the rest (`kept`), plus the
+ * deduped `FIXTURE_CONSUMERS` consumers of the metadata-only manifests
+ * (`readers`). Each list keeps input order.
+ */
+export function manifestSplit(
+  changed: readonly string[],
+  before: (f: string) => string | undefined,
+  after: (f: string) => string,
+): { metadataOnly: string[]; kept: string[]; readers: string[] } {
+  const only: string[] = [];
+  const kept: string[] = [];
+  for (const f of changed) {
+    const old = isManifest(f) ? before(f) : undefined;
+    (old !== undefined && manifestMetadataOnly(old, after(f))
+      ? only
+      : kept
+    ).push(f);
+  }
+  const readers = [...new Set(only.flatMap((f) => fixtureConsumers(f)))];
+  return { metadataOnly: only, kept, readers };
+}
+
+/**
  * A file vitest collects with its default `include`
  * (`configDefaults.include`, `**\/*.{test,spec}.?(c|m)[jt]s?(x)`). Project
  * configs that set `include` only narrow it, so this is a safe superset.
@@ -988,30 +1103,39 @@ function main(): number {
   }
   // A source whose tokens, line breaks and marker comments are unchanged
   // since the merge-base is left out; the tests that read its text still run.
-  const split = commentOnlySplit(
-    changed,
-    (f) => {
-      const r = spawnSync("git", ["show", `${base}:${f}`], {
-        cwd: root,
-        encoding: "utf8",
-        maxBuffer: 256 * 1024 * 1024,
-      });
-      return r.status === 0 ? r.stdout : undefined;
-    },
-    (f) => readFileSync(resolve(root, f), "utf8"),
-  );
-  const { kept, readers } = split;
+  const before = (f: string): string | undefined => {
+    const r = spawnSync("git", ["show", `${base}:${f}`], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+    });
+    return r.status === 0 ? r.stdout : undefined;
+  };
+  const after = (f: string) => readFileSync(resolve(root, f), "utf8");
+  const split = commentOnlySplit(changed, before, after);
   if (split.commentOnly.length > 0) {
     console.log(
       `test:affected: comment-only change (no token changed) -> not run: ${split.commentOnly.join(", ")}` +
-        (readers.length > 0
-          ? `; source-text readers via vitest related: ${readers.join(", ")}`
+        (split.readers.length > 0
+          ? `; source-text readers via vitest related: ${split.readers.join(", ")}`
           : ""),
     );
   }
+  // A manifest whose edit changes only metadata keys runs only its readers.
+  const manifests = manifestSplit(split.kept, before, after);
+  if (manifests.metadataOnly.length > 0) {
+    console.log(
+      `test:affected: metadata-only manifest change (${MANIFEST_METADATA_KEYS.join(", ")}) -> no whole project: ${manifests.metadataOnly.join(", ")}` +
+        (manifests.readers.length > 0
+          ? `; their readers via vitest related: ${manifests.readers.join(", ")}`
+          : ""),
+    );
+  }
+  const { kept } = manifests;
+  const readers = [...new Set([...split.readers, ...manifests.readers])];
   if (kept.length === 0 && readers.length === 0) {
     console.log(
-      "test:affected: only comment-only changes vs origin/main; nothing to run.",
+      "test:affected: only comment-only or metadata-only changes vs origin/main; nothing to run.",
     );
     return 0;
   }
