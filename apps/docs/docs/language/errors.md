@@ -272,17 +272,34 @@ the value (an attribute-tag attribute at any depth is prefixed
 
 ## `class:foo` and `style:foo`
 
+Marko has no class or style toggle modifier: on a native element it refuses `class:active` and `style:color` and suggests the object form.
+
 ```html
 <div class:active=isActive></div>
-```
-
-isn't MX-specific syntax to avoid — it isn't Marko syntax at all. Marko's own parser rejects it before any host ever sees the template, with a fix-it suggesting the object form instead:
-
-```html
+<!-- write instead -->
 <div class={active: isActive}></div>
 ```
 
-There's no MX behavior to document here because no `.mx` file using the colon-modifier form compiles in the first place.
+The parser reads the colon form as a name and a modifier. What happens next depends on the tag (see the [attribute forms](/specification/#the-mx-language-4-elements-and-attributes-attribute-forms)).
+
+**On a native element** (including `<${"div"}>`, which is that element) the host refuses it in its own words, positioned at the attribute:
+
+| Host | Message for `class:active` (and `style:color` where it differs) |
+|---|---|
+| html target | `` `class:active` is not a valid attribute, did you mean `class={ active: condition }`? ``; for `style:color`, `` did you mean `style={ color: value }`? `` |
+| Preact, React, Hono | `` attribute modifier `class:active` is not Preact syntax; write the prop directly (`class={{ active: cond }}` rather than `class:active`) ``, with `React` or `Hono` in place of `Preact`; for `style:color`, `` (`style={{ color: value }}` rather than `style:color`) `` |
+| Solid | `` attribute modifier `class:active` is not supported by Solid `` |
+| Astro | `` attribute modifier `class:active` is not supported in an `.astro.mx` template `` |
+| Angular | `` attribute modifier `class:active` is not supported in an Angular template; use an object/array `class=` value, lowered to `[ngClass]` instead ``; for `style:color`, `` use an object `style=` value, lowered to `[ngStyle]` instead `` |
+| a host with no refusal of its own (`lowerSource` with the default declarations) | `` attribute modifier `class:active` is not supported in a standalone template ``, code `MX_UNSUPPORTED_CONSTRUCT`; a dialect may name the attribute with its own word |
+
+A host that keeps a modifier as syntax of its own may accept it instead; see [Policy and hooks](/architecture/policy-and-hooks/).
+
+**On a dynamic tag named by a plain string literal that stays dynamic** (`<${"Foo"}>`, `<${"my-el"}>`, `<${"style"}>`) and on `<html-script>` or `<html-style>` read as an element, MX refuses it before the host's own refusal runs, with Marko's message and code `MX_INVALID_ATTRIBUTE`, at the attribute: `` `class:active` is not a valid attribute, did you mean `class={ active: condition }`? `` (`style={ color: value }` for `style:color`).
+
+**On a component call, an attribute tag and a dynamic tag with any other name** (`<${input.t}>`) it is an ordinary attribute named `class:active`: it compiles, and the component receives the prop under that whole name. A bound `class:x:=y` and a spread key (`...{"class:x": 1}`) are never refused.
+
+`on:click` takes the same paths with an event fix-it; see [Attributes](/language/attributes/).
 
 ## A tag shorthand where the dialect turned them off
 
