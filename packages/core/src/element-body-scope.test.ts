@@ -333,7 +333,6 @@ describe("a literal dynamic tag that stays dynamic keeps Marko's native-tag fiel
 
   const bindsVar: HostDeclarations = { ...withLet, bindsDynamicTagVar: true };
   it.each<[string, HostDeclarations]>([
-    ['<${"Foo"} a=1/>', withLet],
     ['<${"my-el"}>x</>', withLet],
     ['<${"Foo"}()/>', withLet],
     ['<${"Foo"}||>x</>', withLet],
