@@ -307,7 +307,7 @@ tolerance. Other frameworks' attribute names on an element (`key=`, `ref=`,
 (`MX_INVALID_ATTRIBUTE`, with stock Marko's message, at the attribute) on every
 host whose declarations do not list it in `acceptsReservedAttrNames`, html
 among them (it lists none), also on a string-literal dynamic tag
-(`<${"div"} key=1/>`) and on the claimed `<html-script>`/`<html-style>`. In
+(`<${"my-el"} key=1/>`; `<${"div"}>` is the element `<div>` itself) and on the claimed `<html-script>`/`<html-style>`. In
 stock Marko it is the **translator** (`knownWrongAttrs`) that refuses them, not
 the parser. `$!{…}` in an attribute value
 needs no row either: the MX front end refuses it before lowering runs

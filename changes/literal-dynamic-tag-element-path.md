@@ -1,0 +1,5 @@
+---
+packages: [core, html, preact, react, hono, solid, angular, astro]
+kind: Changed
+---
+As in Marko, a dynamic tag whose name is a string literal with no placeholder (`<${"div"}>`, `<${'div'}>`, `` <${`div`}> ``) and names a native HTML, SVG or MathML element is now that element: it lowers exactly as `<div>` (an `Element` in the IR instead of a dynamic `Component`, or a `DelegatedTag` on html, Angular and Astro), with the element's attribute checks, body scope and messages, so `<${"div"}|x|>` is refused as `<div|x|>` is, and on Angular and Astro a body the dynamic-tag path refused now compiles as on `<div>`. A void element's body (`<${"br"}>x</>`, `<${"br"}> </>`) is refused at its first child with Marko's ``The `<br>` tag cannot have content, so it does not support a body.`` (`MX_UNSUPPORTED_CONSTRUCT`); an empty or newline-only body compiles. Every other literal (`<${"Foo"}>`, `<${"my-el"}>`, `<${"style"}>`, `<${"script"}>`, `<${"for"}>`, `<${""}>`, a name the host does not lower as an element, registers as a custom tag or delegates) and every computed name stays a dynamic tag.

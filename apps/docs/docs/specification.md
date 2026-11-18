@@ -1776,8 +1776,10 @@ React and Hono included, because `$!{html}` is MX's raw-HTML form and lowers to
 that prop there. The colon forms are refused on every host. A host declares
 its names through the generic `acceptsReservedAttrNames` hook.
 
-The same check runs on a dynamic tag whose name is a string literal with no
-placeholder (`<${"div"}>`, whatever it names, as Marko reads it as a static
+A dynamic tag whose name is a string literal with no placeholder and names a
+native element (`<${"div"}>`) is that element (§7, Dynamic tags), so the check
+runs on it as on `<div>`. The same check runs on every other such literal
+(`<${"Foo"}>`, `<${"my-el"}>`, `<${"style"}>`, as Marko reads it as a static
 name), and on `<html-script>`/`<html-style>`. A spread's keys (runtime data), a
 component's input, a dynamic tag with any other name (`<${input.t}>`,
 `<${"di" + "v"}>`), the `class:`/`style:`/`on:` colon names and other
@@ -2538,6 +2540,22 @@ row in §13.1's dynamic-tag entry.
 |---|---|
 | `dynamic tag name is not supported in a standalone template` | Superseded — this fired at the `lowerTag` stage for a tagged dynamic tag no host claimed; core no longer produces it there. A host's own emitter may still reject a dynamic-target `Component` in its own words (§13.1). |
 
+**A literal name that names a native element is that element.** A dynamic tag
+whose name is a string literal with no placeholder (`<${"div"}>`, `<${'div'}>`,
+`` <${`div`}> ``) is the static tag it names when that name is a native HTML,
+SVG or MathML element the host lowers as an element: it lowers exactly as
+`<div>` on every host, with `<div>`'s attribute checks, body scope and
+messages (`<${"div"}|x|>` is refused as `<div|x|>` is), as Marko 6.4.4 reads
+it. A void element's body is refused at its first child
+(``The `<br>` tag cannot have content, so it does not support a body.``): a
+space counts as content, a newline-only body does not, as in Marko. Every other
+literal stays a dynamic tag: a name that is not a native element (`<${"Foo"}>`,
+`<${"my-el"}>`, `<${""}>`), a core tag (`<${"style"}>`, `<${"script"}>`,
+`<${"for"}>`), a name the host does not lower as an element, registers as a
+custom tag or delegates, and any name built from an expression
+(`<${"di" + "v"}>`). The IR entry (data and `tree` files) treats no name as an
+element, so a literal stays a dynamic tag there.
+
 **A capitalized value import that isn't a `.mx` default import lowers as a
 dynamic tag, not a direct call.** Measured (TODO
 `value-import-as-tag-parity`): Marko 6.4.4 compiles *every* capitalized
@@ -2764,7 +2782,7 @@ call a framework's own render-prop components with ordinary markup. Params parse
 exactly like `<for>`'s: destructuring and type annotations included; empty pipes
 (`||`) lower to a no-argument function.
 
-On html a body with params is the callee's `content` too: `content: (item, i) => …` for an imported component and for a `${expr}` target alike (the dynamic form once dropped the params), and the callee calls `input.content(item, i)`. A literal string target (`<${"div"}|x|>`) is the compile error `Tag does not support parameters.`; a string that arrives at run time renders the element with the body called with no arguments, and a falsy target (`null`, `undefined`, `false`, `0`, the empty string) renders the body alone, as Marko 6.4.4 does for a value that arrives at run time (a literal `<${""}>` compiles in Marko to a nameless `<>` element, which MX instead renders as the body alone), all as Marko does at run time (the JSX hosts throw for the run-time string, below).
+On html a body with params is the callee's `content` too: `content: (item, i) => …` for an imported component and for a `${expr}` target alike (the dynamic form once dropped the params), and the callee calls `input.content(item, i)`. A literal string target that does not name an element (`<${"my-el"}|x|>`) is the compile error `Tag does not support parameters.` (one that does, `<${"div"}|x|>`, is the element, refused as `<div|x|>` is); a string that arrives at run time renders the element with the body called with no arguments, and a falsy target (`null`, `undefined`, `false`, `0`, the empty string) renders the body alone, as Marko 6.4.4 does for a value that arrives at run time (a literal `<${""}>` compiles in Marko to a nameless `<>` element, which MX instead renders as the body alone), all as Marko does at run time (the JSX hosts throw for the run-time string, below).
 
 On the JSX hosts (preact, react, hono), a call with params that is routed as a
 props object (an imported component, `<${expr}>`, a call of a `<define>`
@@ -2772,9 +2790,10 @@ written by name, a `<return>` unit) passes the function as the callee's
 `content`, and the callee calls it as `input.content(item, i)`, the shape
 Marko 6.4.4 emits (lead ruling on PR #371, 2026-10-06). A dynamic target that is falsy (`null`, `undefined`, `false`, `0`,
 the empty string) renders the body called with no arguments, as Marko
-does. A literal string target
-(`<${"div"}|item|>`) is the compile error `Tag does not support parameters.`,
-Marko's own. A string that only arrives at run time throws an MX run-time
+does. A literal string target that does not name an element
+(`<${"my-el"}|item|>`) is the compile error `Tag does not support parameters.`,
+Marko's own; one that does (`<${"div"}|item|>`) is the element, refused as
+`<div|item|>` is. A string that only arrives at run time throws an MX run-time
 error (`tag params |…| cannot be passed to a native element`). This is a
 deliberate divergence: Marko renders the element with the body. A `<define>`
 used as a dynamic target value (`<const/R = Row/>` then `<${R}|n|>` or `<${R}>`)

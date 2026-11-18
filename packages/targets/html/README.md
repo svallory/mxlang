@@ -446,7 +446,8 @@ table above is not mistaken for silent tolerance:
   `className=`, `htmlFor=`, `v-if=`, `v-on:click=`, ...) — core refuses it as
   stock Marko does, at the attribute, with Marko's hint (`MX_INVALID_ATTRIBUTE`:
   `` `key` is not a valid attribute, did you mean `<for by>`? ``), also on
-  `<${"div"}>`, `<html-script>` and `<html-style>`. Rows of a `<for>` are keyed
+  `<${"div"}>` (which is the element `<div>`), on any other string-literal
+  dynamic tag (`<${"my-el"}>`), `<html-script>` and `<html-style>`. Rows of a `<for>` are keyed
   with `by=`.
 
 ## Attribute tags follow Marko's own convention
