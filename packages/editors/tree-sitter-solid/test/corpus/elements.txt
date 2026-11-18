@@ -27,7 +27,7 @@ const a = <img src="x"/>;
       value: (mx_element))))
 
 ================================================================================
-Void element without a slash (checklist 2, Z12)
+Void element without a slash (checklist 2, walk.ts VOID_TAGS)
 ================================================================================
 
 const a = <input value=x>;
@@ -41,7 +41,7 @@ const a = <input value=x>;
       value: (mx_element))))
 
 ================================================================================
-Void element as a child does not swallow the parent's close tag (Z12)
+Void element as a child does not swallow the parent's close tag (walk.ts VOID_TAGS)
 ================================================================================
 
 const a = <div><br><span>after</span></div>;

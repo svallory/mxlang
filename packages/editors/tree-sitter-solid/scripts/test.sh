@@ -37,7 +37,7 @@ if [ ! -d "vendor/tree-sitter-typescript" ]; then
 fi
 
 echo "==> tree-sitter test"
-# `generate` is heavy and must be serialized across agents (Z4). `test` compiles
+# `generate` is heavy and must be serialized across agents. `test` compiles
 # the parser on demand, so it takes the same lock.
 flock /tmp/mx-zed-generate.lock bunx tree-sitter test
 

@@ -33,7 +33,7 @@ in the original list minus the 2 removed above (`<fragment>` #50/#72, tag
 params on `<if>` folded into #33/#36's still-valid non-`<if>` uses) = **72
 constructs remain current**; the corpus does not have a dedicated case per
 numbered entry (many entries share one corpus case), so "N/M covered" is not
-tracked as a literal count — the differential test (Z25, `scripts/
+tracked as a literal count — the differential test (`scripts/
 differential.ts`) is the stronger guarantee: every fixture's tree-sitter
 `mx_element` ranges are asserted byte-identical to `@mxlang/tsx-bridge`'s own
 region walk, not just "parses without ERROR/MISSING."

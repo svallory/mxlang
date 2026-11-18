@@ -3,7 +3,7 @@
 This extension has no automated release pipeline. Two things must happen
 before it can be installed by anyone other than a dev install: the
 grammars' monorepo URL and `path` must be swapped for their own repositories'
-GitHub URLs (Z36), and the extension itself must be registered with Zed's extensions
+GitHub URLs (see each `[grammars.*]` AT PUBLISH TIME comment in `extension.toml`), and the extension itself must be registered with Zed's extensions
 registry. Both are manual, one-time-per-release steps.
 
 ## 1. Subtree-split this package into its own repo
@@ -71,7 +71,7 @@ pushes to arbitrary hosts. The procedure (from that repo's own README):
    follow-up PR to the registry repo — there is no separate "publish"
    command for updates, only a new pinned commit.
 
-## 5. Verify `path_suffixes` precedence (Z37) in a running Zed
+## 5. Verify `path_suffixes` precedence in a running Zed
 
 README.md "Zed suffix precedence: `.mx` vs `.solid.mx`" documents the
 expected precedence (`Solid`'s `path_suffixes = ["solid.mx"]` should win
@@ -112,7 +112,7 @@ wherever this checklist is run from next.
 ## See also
 
 - README.md "Publishing: subtree-split" — the split procedure in full.
-- README.md "Zed suffix precedence" — the Z37 precedence claim this
+- README.md "Zed suffix precedence" — the precedence claim this
   checklist's step 5 verifies.
 - `extension.toml`'s own `[grammars.solid]`/`[grammars.astromx]` comments —
   the dev-form/publish-form distinction for each grammar.

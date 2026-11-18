@@ -113,7 +113,7 @@ That path resolves fine from a working tree, where `scripts/vendor.sh` has
 populated `vendor/` — every check that ran before this was caught
 (`tree-sitter test`, `scripts/parse-all.sh`, `scripts/highlight-smoke.sh`, CI)
 compiles from the working tree and could not see the problem. Zed's
-dev install, per Z7, git-clones this repo **at the pinned committed rev** and
+dev install git-clones this repo **at the committed `rev` pinned in `packages/editors/zed/extension.toml`** and
 compiles only what's there — `vendor/` is `.gitignore`'d, so it simply isn't
 present in that clone.
 
