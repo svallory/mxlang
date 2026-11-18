@@ -1084,21 +1084,7 @@ function isComponent(name: string, ctx: Ctx): boolean {
  * core falls back to `@mxlang/target-html`'s wording ("not supported in a standalone
  * template"), which is `.mx`'s vocabulary leaking into a Marko-parity target.
  */
-function rejectModifier(
-  attr: Node,
-  on: "element" | "component" = "element",
-): void {
-  // A modifier on a *component* call is a different diagnostic from one on an
-  // element: Marko's `class={ active: cond }` fix-it is about markup, and a
-  // component takes props rather than attributes, so suggesting it there
-  // would point the author at markup they did not write. The pre-IR walk drew
-  // the same line, and this keeps its wording.
-  if (on === "component") {
-    fail(
-      `attribute modifier \`${attr.name}:${attr.modifier}\` on a component call is not supported`,
-      attr,
-    );
-  }
+function rejectModifier(attr: Node): void {
   // The parser splits at the last colon; Marko's native reservation and
   // fix-it use the first head and the entire remainder instead.
   const name = `${attr.name}:${attr.modifier}`;

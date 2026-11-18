@@ -2770,10 +2770,11 @@ function lowerAttrNamed(
         loc,
       };
     }
-    // The tag kind travels with the rejection: a modifier on a *component*
-    // call is a different diagnostic from one on an element, and the pre-IR
-    // walk said so ("… on a component call is not supported"). Losing that
-    // distinction was a message regression even though both still fail.
+    // `on` is passed because the tag kind is part of the hook's contract. In
+    // practice only a native element reaches this point: on a component (and
+    // on every other non-element call site) `isOrdinaryColonName` keeps the
+    // whole colon name as an ordinary prop, so `name` never equals
+    // `attr.name` there.
     ctx.declarations.rejectModifier?.(hookView, on);
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
