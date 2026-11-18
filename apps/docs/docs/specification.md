@@ -1425,6 +1425,13 @@ Component props have no such reservation: `<Card class:active=c/>` forwards
 |---|---|
 | `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in a standalone template` | A modifier survived to the lowerer and the host's `resolveModifier` declined it. |
 
+A dynamic tag whose name is a string literal that does not name a native
+element (`<${"Foo"}>`, `<${"my-el"}>`) and a claimed `<html-script>`/`<html-style>`
+read as an element never reach those hooks. Marko reads them as native tags, so
+core refuses `class:x`, `style:x` and `on:x` there with Marko's own message
+above (`MX_INVALID_ATTRIBUTE`, at the attribute), as part of the check in
+Attribute names from other frameworks.
+
 ### `:modifier` — ordinary `value:` attribute names
 
 Marko's parser splits an attribute name at its **last** `:` and fills an empty
@@ -1782,8 +1789,12 @@ runs on it as on `<div>`. The same check runs on every other such literal
 (`<${"Foo"}>`, `<${"my-el"}>`, `<${"style"}>`, as Marko reads it as a static
 name), and on `<html-script>`/`<html-style>`. A spread's keys (runtime data), a
 component's input, a dynamic tag with any other name (`<${input.t}>`,
-`<${"di" + "v"}>`), the `class:`/`style:`/`on:` colon names and other
-spellings (`classname`, `Ref`, `ref:x`) are not affected. The rows of a
+`<${"di" + "v"}>`) and other spellings (`classname`, `Ref`, `ref:x`) are not
+affected. On those literal dynamic tags and on `<html-script>`/`<html-style>`
+the same check also refuses the `class:`/`style:`/`on:` colon names, with
+Marko's hints (`class={ x: condition }`, `style={ x: value }`, `onX`); a bound
+`class:x:=y` is not affected. On an element those names go to the host's
+modifier hooks (`class:foo` / `style:foo` modifiers). The rows of a
 `<for>` are keyed with `by=` on every host. When an element has several such
 names, the first one is reported (Marko reports the last).
 
