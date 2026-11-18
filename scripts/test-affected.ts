@@ -913,10 +913,7 @@ export function manifestMetadataOnly(before: string, after: string): boolean {
   const b = manifestObject(after);
   if (a === undefined || b === undefined) return false;
   return [...new Set([...Object.keys(a), ...Object.keys(b)])].every(
-    (k) =>
-      MANIFEST_METADATA_KEYS.includes(k) ||
-      (Object.hasOwn(a, k) === Object.hasOwn(b, k) &&
-        isDeepStrictEqual(a[k], b[k])),
+    (k) => MANIFEST_METADATA_KEYS.includes(k) || isDeepStrictEqual(a[k], b[k]),
   );
 }
 
