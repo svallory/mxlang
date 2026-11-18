@@ -560,9 +560,13 @@ interface HandlerTypeNames {
  * candidate that appears anywhere in the source text gets a numeric suffix,
  * the same conservative rule core's template-tag gensyms use. Checked against
  * the whole source, so a user `static`, `import`, `type` or plain mention of
- * the name is avoided.
+ * the name is avoided. A name in `reserved` is taken too: a region passes the
+ * surrounding module's bindings and imports, which its own text does not show.
  */
-function handlerTypeNames(source: string): HandlerTypeNames {
+export function handlerTypeNames(
+  source: string,
+  reserved: ReadonlySet<string> = new Set(),
+): HandlerTypeNames {
   // A JavaScript identifier may spell any character as a Unicode escape
   // (`__Mx\u0048` is `__MxH`), so the scan reads the source both as written
   // and with every `\uXXXX` / `\u{…}` escape decoded. Decoding every escape,
@@ -575,7 +579,7 @@ function handlerTypeNames(source: string): HandlerTypeNames {
     },
   );
   const taken = (name: string): boolean =>
-    source.includes(name) || decoded.includes(name);
+    source.includes(name) || decoded.includes(name) || reserved.has(name);
   const fresh = (base: string): string => {
     let name = base;
     for (let n = 1; taken(name); n++) name = `${base}${n}`;
@@ -603,7 +607,7 @@ function handlerTypeNames(source: string): HandlerTypeNames {
  * kept, optionality and `undefined`/`null` included, so forwarding an optional
  * callback checks as it does in plain TSX.
  */
-function handlerTypePreamble(
+export function handlerTypePreamble(
   dialect: JsxDialect,
   { jsx, map, handler }: HandlerTypeNames,
 ): string[] {

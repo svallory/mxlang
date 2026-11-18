@@ -146,3 +146,89 @@ describe("compilePreactRegion: recorded mappings", () => {
     ]);
   });
 });
+
+/**
+ * Under `typeCheck` a region wraps a native element's handler as whole-file
+ * `.mx` does, records the `satisfies` keyword at the handler, and hands the
+ * whole-file preamble to the bridge to place once per module.
+ */
+describe("compilePreactRegion: handler typing", () => {
+  const button = "<button onClick=((a: string) => a.length)>x</button>";
+  const filename = "/a/Button.preact.mx";
+
+  it("wraps the handler, maps `satisfies` to it and hoists the preamble", () => {
+    const { code, mappings, hoistedImports, hoistedDefines } =
+      compilePreactRegion(button, { filename, typeCheck: true, targets });
+    expect(code).toContain(
+      '((a: string) => a.length) satisfies __MxH<"button", "click"> as any',
+    );
+    expect(
+      mappings
+        .filter(
+          (m) => code.slice(m.generatedStart, m.generatedEnd) === "satisfies",
+        )
+        .map((m) => button.slice(m.sourceStart, m.sourceEnd)),
+    ).toEqual(["(a: string) => a.length"]);
+    expect(hoistedImports).toEqual([
+      {
+        code: 'import type { JSX as __MxJSX } from "preact/jsx-runtime";',
+        binding: "__MxJSX",
+        specifier: "preact/jsx-runtime",
+        resolvedPath: "preact/jsx-runtime#mx-handler-types-__MxJSX",
+      },
+    ]);
+    // Lines 2 and 3 of `compilePreactMx(button, …, { typeCheck: true })`.
+    expect(hoistedDefines).toEqual([
+      {
+        code: "type __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};",
+        binding: "__MxM",
+      },
+      {
+        code: "type __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];",
+        binding: "__MxH",
+      },
+    ]);
+  });
+
+  it("neither wraps nor hoists without `typeCheck`", () => {
+    const { code, hoistedImports, hoistedDefines } = compilePreactRegion(
+      button,
+      { filename, targets },
+    );
+    expect(code).toBe(
+      "<><button onClick={(a: string) => a.length}>x</button></>",
+    );
+    expect(hoistedImports).toEqual([]);
+    expect(hoistedDefines).toEqual([]);
+  });
+
+  it("hoists no preamble for a region with no handler", () => {
+    const { hoistedImports, hoistedDefines } = compilePreactRegion("<p>x</p>", {
+      filename,
+      typeCheck: true,
+      targets,
+    });
+    expect(hoistedImports).toEqual([]);
+    expect(hoistedDefines).toEqual([]);
+  });
+
+  it("moves the alias aside for a module binding of the same name", () => {
+    const { code, hoistedImports, hoistedDefines } = compilePreactRegion(
+      button,
+      {
+        filename,
+        typeCheck: true,
+        targets,
+        moduleBindings: new Set(["__MxH"]),
+      },
+    );
+    expect(code).toContain(
+      '((a: string) => a.length) satisfies __MxH1<"button", "click"> as any',
+    );
+    expect(hoistedImports.map((entry) => entry.binding)).toEqual(["__MxJSX"]);
+    expect(hoistedDefines.map((define) => define.binding)).toEqual([
+      "__MxM",
+      "__MxH1",
+    ]);
+  });
+});

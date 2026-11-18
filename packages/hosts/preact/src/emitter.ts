@@ -3696,7 +3696,8 @@ export class PreactEmitter implements Emitter<string> {
 /**
  * An emitter for a region of a `.<segment>.mx` module: a `<define>` outside a
  * callback is lifted (see `liftedDefines`) and `<const>` is refused naming
- * the file kind.
+ * the file kind. `handlerType`, the type-check projection's handler alias,
+ * wraps native event handlers as `createEmitter`'s `typeCheck` does.
  */
 export function createRegionEmitter(
   dialect: JsxDialect,
@@ -3705,10 +3706,12 @@ export function createRegionEmitter(
   locals: ReadonlySet<string> | WeakSet<object> = new Set(),
   publicDefines = false,
   importBindings?: ReadonlySet<string>,
+  handlerType?: string,
 ): PreactEmitter {
   const root = new Map<string, Position>();
   return new PreactEmitter({
     dialect,
+    typeCheck: handlerType,
     region: { segment, defines: [], root, positionAt },
     bindings: root,
     ...localsOption(locals),

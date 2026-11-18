@@ -47,6 +47,8 @@ import {
 import {
   attributeHelpers,
   dynamicHelpers,
+  handlerTypeNames,
+  handlerTypePreamble,
   type JsxHelper,
   runtimeImports,
 } from "./compile.ts";
@@ -92,8 +94,11 @@ export interface CompileJsxRegionOptions {
   segment: string;
   /**
    * Tooling projection (the TS plugin): every define keeps its public binding,
-   * the private name is unmapped and direct calls read the public name, as the
-   * whole-file `typeCheck` projection does.
+   * the private name is unmapped and direct calls read the public name, and a
+   * native element's event handler is wrapped as
+   * `(fn) satisfies __MxH<"tag", "event"> as any`, as the whole-file
+   * `typeCheck` projection does. The wrapper's type-only preamble is hoisted
+   * into the module (`hoistedImports`, `hoistedDefines`).
    */
   typeCheck?: boolean;
   /**
@@ -281,6 +286,18 @@ function emitJsxRegion(
   const { dialect, segment } = options;
   rejectModuleLevel(ir, segment, regionStart, ctx.returnValue?.loc);
 
+  // The handler wrapper's type names, fresh against the region's text and
+  // the module's own names (a region does not see the rest of the file).
+  const names =
+    options.typeCheck === true
+      ? handlerTypeNames(
+          source,
+          new Set([
+            ...(options.moduleBindings ?? []),
+            ...(options.importSpecifiers?.keys() ?? []),
+          ]),
+        )
+      : undefined;
   // A region is one root element, so its `<define>`s sit in markup; the
   // region emitter lifts those outside a callback into `liftedDefines`.
   // The padded source is file-shaped (offset = file offset), so a span's
@@ -292,6 +309,7 @@ function emitJsxRegion(
     scopeLocals(new Set(), [], ir.body),
     options.typeCheck === true,
     new Set(options.importSpecifiers?.keys()),
+    names?.handler,
   );
   drive(emitter, ir.body);
   const markupCode = emitter.result();
@@ -371,6 +389,26 @@ function emitJsxRegion(
     ...attributeHelpers(helperInput, dialect),
     ...dynamic,
   ];
+  // The whole-file preamble, unchanged, only when a handler was wrapped: its
+  // `import type` keyed by the alias (two regions with different names keep
+  // both), its two type aliases as defines the bridge declares once.
+  if (names && helperInput.includes(`${names.handler}<`)) {
+    const [jsxImport, mapType, handlerType] = handlerTypePreamble(
+      dialect,
+      names,
+    ) as [string, string, string];
+    const specifier = `${dialect.jsxImportSource}/jsx-runtime`;
+    hoistedImports.push({
+      code: jsxImport,
+      binding: names.jsx,
+      specifier,
+      resolvedPath: `${specifier}#mx-handler-types-${names.jsx}`,
+    });
+    hoistedDefines.push(
+      { code: mapType, binding: names.map },
+      { code: handlerType, binding: names.handler },
+    );
+  }
 
   // Always a fragment: a region sits in expression *and* JSX-child position,
   // and only a JSX element reads the same in both (a bare `{…}` or call in a
