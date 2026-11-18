@@ -14,6 +14,7 @@ import { compileSource } from "./compile.ts";
 import { type Ctx, newCtx, TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
+import type { Ir, IrNode } from "./ir.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import { lower, lowerChildren } from "./lower.ts";
 import type { Dialect } from "./syntax-table.ts";
@@ -232,28 +233,30 @@ function printExpression(node: unknown): string {
   return generator(node, { concise: true }).code;
 }
 
+/** A fragment entry's body and `Ctx`: `parseFragment`, then `newCtx`. */
+const fragmentCtx = (
+  source: string,
+  filename: string,
+  options: { dialect?: Dialect; declarations?: HostDeclarations } = {},
+) => {
+  const { body } = parseFragment(source, {
+    filename,
+    ...(options.dialect ? { dialect: options.dialect } : {}),
+  });
+  const ctx = newCtx(
+    source,
+    printExpression,
+    options.declarations ?? host,
+    undefined,
+    filename,
+    lookup,
+  );
+  return { body, ctx };
+};
+
 // A fragment entry (`parseFragment` + `newCtx` + `lower`) sets no tag rules;
 // lowering adopts the ones of the dialect the parse registered on the body.
 describe("lowering a fragment adopts the file's tag rules", () => {
-  const fragmentCtx = (
-    source: string,
-    filename: string,
-    options: { dialect?: Dialect; declarations?: HostDeclarations } = {},
-  ) => {
-    const { body } = parseFragment(source, {
-      filename,
-      ...(options.dialect ? { dialect: options.dialect } : {}),
-    });
-    const ctx = newCtx(
-      source,
-      printExpression,
-      options.declarations ?? host,
-      undefined,
-      filename,
-      lookup,
-    );
-    return { body, ctx };
-  };
   const tagRulesAfterLower = (
     filename: string,
     options: { dialect?: Dialect; preset?: Ctx["tagRules"] } = {},
@@ -307,5 +310,55 @@ describe("lowering a fragment adopts the file's tag rules", () => {
       },
     });
     expect(messageOf(() => lower(ctx, body))).toBeUndefined();
+  });
+});
+
+// `compileSource` lowers a preset file with the preset's native elements
+// (none under `none`); a fragment entry lowers it with the same set.
+describe("lowering a fragment adopts the preset's native elements", () => {
+  /** The first body node through `compileSource` and the fragment path. */
+  const firstNodes = (source: string, dialect: Dialect) => {
+    let compiled: Ir | undefined;
+    compileSource(source, "/page.mx", host, {
+      targets: lookup,
+      emitIr: (ir) => {
+        compiled = ir;
+        return "";
+      },
+      dialect,
+    });
+    const { body, ctx } = fragmentCtx(source, "/page.mx", { dialect });
+    return [compiled?.body[0], lower(ctx, body).body[0]];
+  };
+  const shape = (node: IrNode | undefined) =>
+    node?.kind === "Element"
+      ? { kind: node.kind, name: node.name, void: node.void }
+      : { kind: node?.kind };
+
+  it("a void web name with a body lowers on both paths under `none`", () => {
+    expect(compile("/page.mx", { dialect: none })).toBeUndefined();
+    const { body, ctx } = fragmentCtx(VOID_CHILD, "/page.mx", {
+      dialect: none,
+    });
+    expect(messageOf(() => lower(ctx, body))).toBeUndefined();
+  });
+
+  it("a literal dynamic web name stays dynamic under `none`", () => {
+    expect(firstNodes('<${"div"}/>\n', none).map(shape)).toEqual([
+      { kind: "Component" },
+      { kind: "Component" },
+    ]);
+  });
+
+  it("outside `none` the host's natives stay", () => {
+    const html: Dialect = Object.freeze({
+      id: "strict",
+      name: "Strict",
+      table: {},
+    });
+    expect(firstNodes('<${"br"}/>\n', html).map(shape)).toEqual([
+      { kind: "Element", name: "br", void: true },
+      { kind: "Element", name: "br", void: true },
+    ]);
   });
 });

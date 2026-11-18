@@ -303,6 +303,7 @@ import {
   tagTypeParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
+import { policyUnder, tagRulesPreset } from "./tag-presets.ts";
 import { ELEMENT_TAGLIB_IDS, isNativeVoid } from "./tag-table.ts";
 import {
   bindingForDiscoveredModule,
@@ -8857,14 +8858,21 @@ export function errorDependencies(error: unknown): readonly string[] {
 
 /**
  * A caller that decided the file's tag rules set `ctx.tagRules` (compileSource,
- * the IR entry, a tag unit's metadata compile); a fragment entry
- * (`parseFragment` + `newCtx`) does not. Its document's registered dialect,
- * which the trigger pass just put on `ctx.dialect`, states them, as
- * `compileSource`'s `fileTagRules` reads them. MX's own files have none.
+ * the IR entry, a tag unit's metadata compile) and keeps its own
+ * declarations; a fragment entry (`parseFragment` + `newCtx`) does not. Its
+ * document's registered dialect, which the trigger pass just put on
+ * `ctx.dialect`, states them, as `compileSource`'s `fileTagRules` reads them,
+ * and lowering adopts the preset's native elements too (none under `none`),
+ * the declarations `compileSource` lowers such a file with. MX's own files
+ * have none.
  */
 function adoptFileTagRules(ctx: Ctx): void {
-  if (ctx.tagRules === undefined && ctx.dialect)
-    ctx.tagRules = dialectTagRules(ctx.dialect);
+  if (ctx.tagRules !== undefined || !ctx.dialect) return;
+  ctx.tagRules = dialectTagRules(ctx.dialect);
+  ctx.declarations = policyUnder(
+    tagRulesPreset(ctx.tagRules, ctx.declarations.nativeTags),
+    ctx.declarations,
+  );
 }
 
 function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
