@@ -29,6 +29,7 @@ import {
   lowerChildren,
   paramSpansOf,
 } from "./lower.ts";
+import type { Dialect } from "./syntax-table.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -3598,6 +3599,79 @@ describe("other knownWrongAttrs names on a native element (Marko parity, D171)",
       "<button §v-on:click=f/>",
       said("v-on:click", "onClick"),
       host({ acceptsReservedAttrNames: ["v-on", "v-on:click"] }),
+    );
+  });
+});
+
+/**
+ * Stock Marko 6.4.4's `<style>` (`assertNoStyleAttributes`) refuses any
+ * attribute; only the positionless `class` the head builds for
+ * `<style.less>` is the stylesheet's extension. Core refuses on the native
+ * element path, so every host that does not claim `style` gets stock's
+ * error at the first offending attribute.
+ */
+describe("a bare <style> refuses attributes, as stock Marko does", () => {
+  const message =
+    "The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.";
+  const compileStyle = (
+    source: string,
+    options: { dialect?: Dialect } = {},
+  ): string =>
+    compileSource(source, "/tmp/mx-core-test/style.mx", fakeDeclarations(), {
+      targets: lookup,
+      emitIr: (ir) => ir.body[0]?.kind ?? "missing",
+      ...options,
+    }).code;
+
+  it.each([
+    ['<style media="print">a{}</style>', 7],
+    ["<style ...input.a>a{}</style>", 7],
+    ["<style scoped>a{}</style>", 7],
+    ["<style a=1 b=2>a{}</style>", 7],
+    ["<style#a>a{}</style>", 7],
+    ['<style.a class="b">a{}</style>', 9],
+  ])("refuses %s at column %i", (source, column) => {
+    expect(() => compileStyle(source)).toThrow(
+      expect.objectContaining({
+        message,
+        diagnosticCode: "MX_INVALID_ATTRIBUTE",
+        line: 1,
+        column,
+      }),
+    );
+  });
+
+  it.each([
+    "<style.less>a{}</style>",
+    "<style.module.css>a{}</style>",
+    "<style>a{}</style>",
+  ])("lowers %s to an element", (source) => {
+    expect(compileStyle(source)).toBe("Element");
+  });
+
+  const rules = (tagRules: "none" | "markup"): Dialect =>
+    Object.freeze({ id: "t", name: "T", table: {}, tagRules });
+
+  it("is skipped under the `none` tag rules", () => {
+    expect(
+      compileStyle('<style media="print">a{}</style>', {
+        dialect: rules("none"),
+      }),
+    ).toBe("Element");
+  });
+
+  it("refuses under the `markup` tag rules", () => {
+    expect(() =>
+      compileStyle('<style media="print">a{}</style>', {
+        dialect: rules("markup"),
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        message,
+        diagnosticCode: "MX_INVALID_ATTRIBUTE",
+        line: 1,
+        column: 7,
+      }),
     );
   });
 });

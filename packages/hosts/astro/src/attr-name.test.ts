@@ -121,10 +121,10 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
     },
   );
 
-  it("refuses define:vars on a style instead of changing CSS semantics", () => {
+  it("refuses define:vars on a style, as the core <style> refuses every attribute", () => {
     expect(failure("<style define:vars=x>p { color: red; }</style>")).toEqual({
       message:
-        "attribute `define:vars` cannot be preserved as a plain attribute in `.astro.mx`: Astro interprets it as a directive",
+        "The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.",
       line: 4,
       column: 7,
     });

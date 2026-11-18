@@ -90,10 +90,28 @@ describe("a literal innerHTML= on a native element is refused", () => {
 
 describe("a literal text prop on a raw-text element is refused", () => {
   it.each([
-    ["<style textContent=input.t>x</style>", "textContent", "style", 1, 7],
-    ["<style children=input.t/>", "children", "style", 1, 7],
-    ["<style prop:textContent=input.t/>", "prop:textContent", "style", 1, 7],
-    ["<style prop:innerText=input.t/>", "prop:innerText", "style", 1, 7],
+    [
+      "<html-style textContent=input.t>x</html-style>",
+      "textContent",
+      "html-style",
+      1,
+      12,
+    ],
+    ["<html-style children=input.t/>", "children", "html-style", 1, 12],
+    [
+      "<html-style prop:textContent=input.t/>",
+      "prop:textContent",
+      "html-style",
+      1,
+      12,
+    ],
+    [
+      "<html-style prop:innerText=input.t/>",
+      "prop:innerText",
+      "html-style",
+      1,
+      12,
+    ],
     ["<html-script prop:text=input.t/>", "prop:text", "html-script", 1, 13],
     ["<html-script textContent=input.t/>", "textContent", "html-script", 1, 13],
     [

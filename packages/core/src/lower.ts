@@ -3837,6 +3837,41 @@ function rejectHtmlCommentAttributes(ctx: Ctx, node: Node): void {
 }
 
 /**
+ * A bare `<style>` takes no attributes, as in Marko (`assertNoStyleAttributes`):
+ * stock refuses any attribute, spreads and the head's `#id` included, and
+ * points at `<html-style>` for a native `<style>` that keeps them. The one
+ * exemption is the positionless string `class` the head shorthand builds for
+ * `<style.less>` / `<style.module.css>` (stock reads it as the stylesheet's
+ * extension); beside an authored `class` the head merges into that positioned
+ * attribute, which is refused, as stock refuses it.
+ *
+ * Only a tag on the native element path reaches this: a `style` contract or
+ * a host that claims `style` lowers it elsewhere. Skipped under the `none`
+ * tag-rules preset, as {@link rejectHtmlCommentAttributes} is.
+ */
+function rejectBareStyleAttributes(ctx: Ctx, node: Node): void {
+  if (ctx.tagRules === "none") return;
+  const attr = tagAttributesOf(node).find(
+    (attr: Node) =>
+      !(
+        attr.type === "MarkoAttribute" &&
+        attr.name === "class" &&
+        attr.start == null &&
+        attr.value?.type === "StringLiteral"
+      ),
+  );
+  if (!attr) return;
+  raise(
+    INVALID_ATTRIBUTE_CODE,
+    `The \`style\` does not support html ${voiceOfCtx(ctx).attributes}. For a native html [\`<style>\` tag](https://markojs.com/docs/reference/core-tag#style) use the \`html-style\` core tag instead.`,
+    // The parser's attributes carry offsets, a shorthand's records `loc`; the
+    // head's `#id` record has neither, and its value (the word after the
+    // sigil) is positioned.
+    attr.loc || typeof attr.start === "number" ? attr : attr.value,
+  );
+}
+
+/**
  * The attribute an "only supports X" error points at: the first one `allowed`
  * rejects, else the second (X written twice).
  */
@@ -7896,6 +7931,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     );
   }
   const attrs = lowerAttrs(ctx, node, name, "element", true);
+  // After the attributes, as the html target's claimed `<style>`: an attribute
+  // core refuses on its own (an invalid name, a modifier) reports first.
+  if (name === "style") rejectBareStyleAttributes(ctx, node);
   // An element's body is its own scope for every binding it declares (Marko
   // 6.4.4 scopes a `<define>`, a `<const>` and a `<let>` to the body that
   // writes them, as it does for `<if>`, `<for>` and `<try>`): a `<Foo/>` after
