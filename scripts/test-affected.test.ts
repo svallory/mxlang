@@ -6,9 +6,11 @@ import { describe, expect, it } from "vitest";
 import { configDefaults } from "vitest/config";
 import { createVitest } from "vitest/node";
 import {
+  CORE_DIST_ENTRY,
   commandLog,
   commentOnly,
   commentOnlySplit,
+  coreBuildNeeded,
   DOC_READERS,
   FIXTURE_CONSUMERS,
   fixtureConsumers,
@@ -37,6 +39,7 @@ import {
   testScript,
   VITEST_TEST_FILE,
 } from "./test-affected.ts";
+import { CORE_DIR } from "./vitest-lanes.ts";
 
 describe("laneFor", () => {
   it("names the slow-lane packages a change touches", () => {
@@ -448,6 +451,74 @@ describe("parserBuildNeeded", () => {
   });
 });
 
+describe("coreBuildNeeded", () => {
+  it("asks for the rebuild when a bundled core:build input changed", () => {
+    for (const f of [
+      "packages/core/src/lower.ts",
+      "packages/core/build/frontend.ts",
+      "packages/parser/src/template/index.ts",
+      "packages/babel/src/tokenizer/index.ts",
+      "packages/core/package.json",
+      "bun.lock",
+      "scripts/third-party-notices.ts",
+    ])
+      expect(coreBuildNeeded([f]), f).toBe(true);
+  });
+  it("does not for a test file, a fixture or a file outside the inputs", () => {
+    for (const f of [
+      "packages/core/src/lower.test.ts",
+      "packages/core/src/fixtures/syntax/member-fixture.ts",
+      "packages/hosts/preact/src/emitter.ts",
+      "packages/core/AGENTS.md",
+      "packages/parser/moon.yml",
+    ])
+      expect(coreBuildNeeded([f]), f).toBe(false);
+    expect(coreBuildNeeded([])).toBe(false);
+  });
+});
+
+describe("core dist consumers", () => {
+  it("CORE_DIST_ENTRY is core's published entry", () => {
+    const manifest = JSON.parse(
+      readFileSync(
+        resolve(import.meta.dirname, "..", CORE_DIR, "package.json"),
+        "utf8",
+      ),
+    ) as { exports: { ".": { default: string } } };
+    expect(CORE_DIST_ENTRY).toBe("packages/core/dist/index.js");
+    expect(posix.join(CORE_DIR, manifest.exports["."].default)).toBe(
+      CORE_DIST_ENTRY,
+    );
+  });
+
+  it("a test that reaches core only through its dist is selected by CORE_DIST_ENTRY, not by a core source", async () => {
+    // Needs a built core dist (CI and verify build first).
+    const selected = async (related: string[]): Promise<string[]> => {
+      const ctx = await createVitest("test", {
+        root: resolve(import.meta.dirname, ".."),
+        watch: false,
+        project: ["@mxlang/host-preact"],
+        related: related.map((f) => resolve(import.meta.dirname, "..", f)),
+      });
+      try {
+        await ctx.init();
+        const specs = await ctx.getRelevantTestSpecifications([
+          "region-errors",
+        ]);
+        return specs.map((s) =>
+          posix.relative(ctx.config.root, s.moduleId.replaceAll("\\", "/")),
+        );
+      } finally {
+        await ctx.close();
+      }
+    };
+    expect(await selected([CORE_DIST_ENTRY])).toEqual([
+      "packages/hosts/preact/src/region-errors.test.ts",
+    ]);
+    expect(await selected(["packages/core/src/custom-tags.ts"])).toEqual([]);
+  });
+});
+
 describe("ownRunnerDirs", () => {
   const dirs = [
     "packages/core/",
@@ -733,6 +804,7 @@ describe("Markdown selection", () => {
     expect(relatedSources(["packages/core/src/core.ts"])).toEqual([
       "packages/core/src/core.ts",
       ...CORE_READERS,
+      CORE_DIST_ENTRY,
     ]);
   });
 
@@ -740,6 +812,7 @@ describe("Markdown selection", () => {
     expect(relatedSources(["packages/core/src/lower.ts"])).toEqual([
       "packages/core/src/lower.ts",
       ...CORE_READERS,
+      CORE_DIST_ENTRY,
     ]);
     expect(relatedSources(["packages/tsx-bridge/src/public.d.ts"])).toEqual([
       "packages/tsx-bridge/src/public.d.ts",
@@ -752,6 +825,7 @@ describe("Markdown selection", () => {
       "packages/core/src/ir-entry/index.ts",
       ...CORE_READERS,
       "packages/core/src/ir-entry/partial.test.ts",
+      CORE_DIST_ENTRY,
     ]);
     expect(
       relatedSources([
@@ -762,7 +836,29 @@ describe("Markdown selection", () => {
       "packages/core/src/lower.ts",
       "packages/core/src/core.ts",
       ...CORE_READERS,
+      CORE_DIST_ENTRY,
     ]);
+  });
+
+  it("a source bundled into core's dist adds CORE_DIST_ENTRY last", () => {
+    for (const f of [
+      "packages/core/src/custom-tags.ts",
+      "packages/parser/src/template/index.ts",
+      "packages/babel/src/tokenizer/index.ts",
+    ])
+      expect(relatedSources([f]).at(-1), f).toBe(CORE_DIST_ENTRY);
+  });
+
+  it("a test file, fixture, manifest, lockfile, the notices script or a host source adds no CORE_DIST_ENTRY", () => {
+    for (const f of [
+      "packages/core/src/lower.test.ts",
+      "packages/core/src/fixtures/syntax/member-fixture.ts",
+      "packages/core/package.json",
+      "bun.lock",
+      "scripts/third-party-notices.ts",
+      "packages/hosts/preact/src/emitter.ts",
+    ])
+      expect(relatedSources([f]), f).not.toContain(CORE_DIST_ENTRY);
   });
 });
 

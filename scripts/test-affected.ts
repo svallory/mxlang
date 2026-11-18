@@ -76,6 +76,18 @@
  * Core parses through `packages/parser/dist/babel.js`, a bundle of the Babel
  * fork, so a change to one of its build inputs (`PARSER_BUILD_INPUTS`) first
  * rebuilds that dist; under `--moon`, `core:test`'s `parser:build` dep does.
+ *
+ * Every other package imports `@mxlang/core` by name, which resolves to
+ * `packages/core/dist/index.js` (`CORE_DIST_ENTRY`), a single bundle: no
+ * host test's import set holds a `packages/core/src` file. So a kept change
+ * to an input of core's `build` task (`CORE_BUILD_INPUTS`, test files and
+ * fixtures excluded: `coreBuildNeeded`) first rebuilds that dist (`bun run
+ * --cwd packages/core build`; under `--moon`, the `core:build` dep does), and
+ * a JS/TS source among them that goes into the bundle also sends
+ * `CORE_DIST_ENTRY` to `vitest related`, which then selects every test whose
+ * import graph reaches core's bundle. Through the bundle every such test
+ * depends on every core module, so any token edit to a bundled source selects
+ * the same set, close to the whole suite.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
@@ -160,6 +172,62 @@ function isParserBuildInput(file: string): boolean {
  */
 export function parserBuildNeeded(changed: readonly string[]): boolean {
   return changed.some(isParserBuildInput);
+}
+
+/**
+ * The inputs of `packages/core/dist/index.js`, the bundle every other package
+ * imports as `@mxlang/core`. Keep in step with `core:build`'s inputs in
+ * packages/core/moon.yml.
+ */
+const CORE_BUILD_INPUTS: readonly RegExp[] = [
+  /^packages\/core\/src\//,
+  /^packages\/core\/build\//,
+  /^packages\/parser\/src\//,
+  /^packages\/parser\/package\.json$/,
+  /^packages\/babel\/src\//,
+  /^packages\/babel\/package\.json$/,
+  /^packages\/babel\/LICENSE$/,
+  /^packages\/babel\/UPSTREAM\.md$/,
+  /^scripts\/third-party-notices\.ts$/,
+  /^packages\/core\/tsconfig\.json$/,
+  /^packages\/core\/tsconfig\.build\.json$/,
+  /^packages\/core\/package\.json$/,
+  /^bun\.lock$/,
+  /^tsconfig\.base\.json$/,
+];
+
+/** A `core:build` input that can change the bundle: not a test file, not a fixture. */
+function isCoreBuildInput(file: string): boolean {
+  return (
+    CORE_BUILD_INPUTS.some((re) => re.test(file)) &&
+    !VITEST_TEST_FILE.test(file) &&
+    !FIXTURE_DIR.test(file)
+  );
+}
+
+/**
+ * Whether the change touches an input of `packages/core/dist/index.js`, so
+ * `main()` must rebuild it before any test that imports `@mxlang/core` reads
+ * it. Test files and fixtures are never bundled, so they do not count.
+ */
+export function coreBuildNeeded(files: readonly string[]): boolean {
+  return files.some(isCoreBuildInput);
+}
+
+/** Core's published entry (`exports["."]`), the file `@mxlang/core` resolves to. */
+export const CORE_DIST_ENTRY = `${CORE_DIR}/dist/index.js`;
+
+/**
+ * Whether the change touches a JS/TS source that goes into core's bundle, so
+ * `vitest related` must also get `CORE_DIST_ENTRY` to reach the tests that
+ * import `@mxlang/core`. A manifest, tsconfig, lockfile or the notices script
+ * rebuilds the dist (`coreBuildNeeded`) but selects no dist consumers.
+ */
+function coreDistConsumersNeeded(files: readonly string[]): boolean {
+  return files.some(
+    (f) =>
+      isCoreBuildInput(f) && isRelatedSource(f) && !f.startsWith("scripts/"),
+  );
 }
 
 /**
@@ -513,7 +581,10 @@ export function splitDocs(
  * and `commentOnlySplit` adds them for a comment-only edit, which never
  * reaches here), the consumers of every readers-only file (`readersOnly`: its
  * readers run here instead of a whole project), and `DOC_READERS` when any
- * changed file is a corpus input (`CORPUS_INPUT`). Deduped, in that order.
+ * changed file is a corpus input (`CORPUS_INPUT`), and `CORE_DIST_ENTRY` when a
+ * changed source goes into core's bundle (`coreDistConsumersNeeded`: every
+ * other package imports core through that dist, never through its `src`).
+ * Deduped, in that order.
  */
 export function relatedSources(changed: readonly string[]): string[] {
   const related = changed.filter(isRelatedSource);
@@ -527,6 +598,7 @@ export function relatedSources(changed: readonly string[]): string[] {
       ]),
       ...changed.filter((f) => readersOnly(f)).flatMap(fixtureConsumers),
       ...(changed.some((f) => CORPUS_INPUT.test(f)) ? DOC_READERS : []),
+      ...(coreDistConsumersNeeded(changed) ? [CORE_DIST_ENTRY] : []),
     ]),
   ];
 }
@@ -1156,6 +1228,18 @@ function main(): number {
     );
     const built = run(
       ["bun", "run", "--cwd", "packages/parser", "build"],
+      process.env,
+    );
+    if (built !== 0) return built;
+  }
+  // Every other package imports core through its dist; rebuild it when a kept
+  // change touches one of its bundled inputs. Under --moon, `core:build` does.
+  if (!moon && coreBuildNeeded(kept)) {
+    console.log(
+      `test:affected: ${kept.find(isCoreBuildInput)} is an input of packages/core's dist -> bun run --cwd packages/core build`,
+    );
+    const built = run(
+      ["bun", "run", "--cwd", "packages/core", "build"],
       process.env,
     );
     if (built !== 0) return built;
