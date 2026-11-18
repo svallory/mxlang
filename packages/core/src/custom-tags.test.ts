@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { compileSource, type HostOptions } from "./compile.ts";
-import { newCtx, TranslateError } from "./core.ts";
+import { DYNAMIC_TAG, newCtx, TranslateError } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import memberSyntax from "./fixtures/syntax/member-fixture.ts";
@@ -2346,6 +2346,126 @@ describe("ctx.build.delegatedTag attributes", () => {
         column: 8,
       }),
     );
+  });
+});
+
+// The builder has no slot for a tag variable, statement code or a tag-name
+// expression, so a host resolving one of these would read the custom tag's
+// own node in their place. Refused before the host's resolve runs.
+describe("ctx.build.delegatedTag refuses what it cannot carry", () => {
+  const builds = (name: string): CustomTag => ({
+    transform: (_call, ctx) => [ctx.build.delegatedTag(name, [], [])],
+  });
+  const claims = (
+    name: string,
+    resolveDelegatedTag: Policy["resolveDelegatedTag"],
+  ): Policy =>
+    fakeDeclarations({
+      isDelegatedTag: (claimed) => claimed === name,
+      resolveDelegatedTag,
+    });
+  const noneRules: Dialect = Object.freeze({
+    id: "t",
+    name: "T",
+    table: {},
+    tagRules: "none",
+  });
+
+  it.each([
+    [
+      "let",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<let>`: a built tag has no tag variable to bind",
+    ],
+    [
+      "const",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<const>`: a built tag has no tag variable to bind",
+    ],
+    [
+      "server",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<server>`: a built tag has no statement code",
+    ],
+    [
+      "client",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<client>`: a built tag has no statement code",
+    ],
+    [
+      DYNAMIC_TAG,
+      "`<widget>`: `ctx.build.delegatedTag` cannot build a dynamic tag (`<${…}>`): a built tag has no tag-name expression",
+    ],
+  ])(
+    "refuses %j on a host that claims it, before its resolve",
+    (name, message) => {
+      const resolve = vi.fn(() => ({}));
+      expect(() =>
+        lowerWithTags(
+          "<widget/>\n",
+          { widget: builds(name) },
+          claims(name, resolve),
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          message,
+          diagnosticCode: "MX_TAG_HOOK_ERROR",
+          line: 1,
+          column: 0,
+        }),
+      );
+      expect(resolve).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps the claim message on a host that does not claim the name", () => {
+    expect(() =>
+      lowerWithTags(
+        "<widget/>\n",
+        { widget: builds("let") },
+        fakeDeclarations({ isDelegatedTag: () => false }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "`<widget>`: this host does not claim `<let>`, so a custom tag cannot emit one",
+        diagnosticCode: "MX_TAG_HOOK_ERROR",
+        line: 1,
+        column: 0,
+      }),
+    );
+  });
+
+  it.each(["let", "server", "client"])(
+    "builds `%s` as an ordinary name under the `none` tag rules",
+    (name) => {
+      const resolve = vi.fn(() => ({}));
+      const ir = lowerWithTags(
+        "<widget/>\n",
+        { widget: builds(name) },
+        claims(name, resolve),
+        { dialect: noneRules },
+      );
+      expect(find(ir.body, "DelegatedTag").tag.name).toBe(name);
+      expect(resolve).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("still refuses `const` under the `none` tag rules", () => {
+    const resolve = vi.fn(() => ({}));
+    expect(() =>
+      lowerWithTags(
+        "<widget/>\n",
+        { widget: builds("const") },
+        claims("const", resolve),
+        { dialect: noneRules },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "`<widget>`: `ctx.build.delegatedTag` cannot build `<const>`: a built tag has no tag variable to bind",
+        diagnosticCode: "MX_TAG_HOOK_ERROR",
+        line: 1,
+        column: 0,
+      }),
+    );
+    expect(resolve).not.toHaveBeenCalled();
   });
 });
 

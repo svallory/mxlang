@@ -22,6 +22,7 @@ import {
   byPosition,
   carryPositioning,
   codedError,
+  DYNAMIC_TAG,
   endErrorAt,
   isTranslateError,
   paramListBindings,
@@ -653,7 +654,10 @@ export interface IrBuilders {
    * registered (skipped under the `none` tag rules). A built `html-comment`
    * or `try` with attributes is refused too, as the authored tags are (the
    * `html-comment` check is skipped under an `html-comment` contract and the
-   * `none` tag rules).
+   * `none` tag rules). A request for `let`, `const`, `server`, `client` or
+   * a dynamic tag is refused, since the builder carries no tag variable,
+   * statement code or target expression (`let`, `server` and `client` are
+   * ordinary names under the `none` tag rules and are not refused there).
    */
   delegatedTag(
     name: string,
@@ -1304,6 +1308,27 @@ export function buildersFor(
           TAG_HOOK_ERROR_CODE,
           tagName,
           `this host does not claim ${voiceOfCtx(ctx).tag(name)}, so a custom tag cannot emit one`,
+          loc,
+          undefined,
+          voiceOfCtx(ctx),
+        );
+      }
+      // A primitive whose data the builder cannot carry is refused before
+      // the host's resolve, which would read it off the custom tag's node.
+      const unbuildable = unbuildablePrimitive(name);
+      if (
+        unbuildable !== undefined &&
+        !(unbuildable.ordinaryUnderNone && ctx.tagRules === "none")
+      ) {
+        return failAt(
+          TAG_HOOK_ERROR_CODE,
+          tagName,
+          `\`ctx.build.delegatedTag\` cannot build ${
+            // The sentinel has no spelling of its own.
+            name === DYNAMIC_TAG
+              ? "a dynamic tag (`<${…}>`)"
+              : voiceOfCtx(ctx).tag(name)
+          }: a built tag has no ${unbuildable.missing}`,
           loc,
           undefined,
           voiceOfCtx(ctx),
@@ -4190,6 +4215,34 @@ export const RAW_PRIMITIVES: ReadonlySet<string> = new Set([
   "html-script",
   "html-style",
 ]);
+
+/**
+ * The Marko core tags (and core's dynamic-tag sentinel) `ctx.build.delegatedTag`
+ * refuses, each with what the builder has no slot for. A host resolving one
+ * would read that data off the custom tag's own node instead. `let`, `server`
+ * and `client` are ordinary tag names under the `none` tag rules, which do not
+ * refuse them. Built on first use: `DYNAMIC_TAG` comes from `core.ts`, which
+ * is still evaluating when an import cycle loads this module first.
+ */
+interface UnbuildablePrimitive {
+  readonly missing: string;
+  readonly ordinaryUnderNone: boolean;
+}
+
+let unbuildablePrimitives:
+  | ReadonlyMap<string, UnbuildablePrimitive>
+  | undefined;
+
+function unbuildablePrimitive(name: string): UnbuildablePrimitive | undefined {
+  unbuildablePrimitives ??= new Map([
+    ["let", { missing: "tag variable to bind", ordinaryUnderNone: true }],
+    ["const", { missing: "tag variable to bind", ordinaryUnderNone: false }],
+    ["server", { missing: "statement code", ordinaryUnderNone: true }],
+    ["client", { missing: "statement code", ordinaryUnderNone: true }],
+    [DYNAMIC_TAG, { missing: "tag-name expression", ordinaryUnderNone: false }],
+  ]);
+  return unbuildablePrimitives.get(name);
+}
 
 /**
  * Refuses the fields a Marko core primitive (`style`, `html-comment`,
