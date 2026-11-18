@@ -1308,7 +1308,7 @@ export function buildersFor(
         return failAt(
           TAG_HOOK_ERROR_CODE,
           tagName,
-          `this host does not claim ${voiceOfCtx(ctx).tag(name)}, so a custom tag cannot emit one`,
+          `this host does not claim ${builtTagLabel(ctx, name)}, so a custom tag cannot emit one`,
           loc,
           undefined,
           voiceOfCtx(ctx),
@@ -1324,12 +1324,7 @@ export function buildersFor(
         return failAt(
           TAG_HOOK_ERROR_CODE,
           tagName,
-          `\`ctx.build.delegatedTag\` cannot build ${
-            // The sentinel has no spelling: a dynamic tag is illustrated.
-            name === DYNAMIC_TAG
-              ? `a dynamic tag (${voiceOfCtx(ctx).dynamicTag("…")})`
-              : voiceOfCtx(ctx).tag(name)
-          }: a built tag has no ${unbuildable.missing}`,
+          `\`ctx.build.delegatedTag\` cannot build ${builtTagLabel(ctx, name)}: a built tag has no ${unbuildable.missing}`,
           loc,
           undefined,
           voiceOfCtx(ctx),
@@ -4247,6 +4242,18 @@ function unbuildablePrimitive(name: string): UnbuildablePrimitive | undefined {
     [DYNAMIC_TAG, { missing: "tag-name expression", ordinaryUnderNone: false }],
   ]);
   return unbuildablePrimitives.get(name);
+}
+
+/**
+ * How `ctx.build.delegatedTag`'s refusals spell the tag a hook asked for.
+ * Compares against `DYNAMIC_TAG` at call time, for the same import-cycle
+ * reason as `unbuildablePrimitive`.
+ */
+function builtTagLabel(ctx: Ctx, name: string): string {
+  // The sentinel has no spelling: a dynamic tag is illustrated.
+  return name === DYNAMIC_TAG
+    ? `a dynamic tag (${voiceOfCtx(ctx).dynamicTag("…")})`
+    : voiceOfCtx(ctx).tag(name);
 }
 
 /**

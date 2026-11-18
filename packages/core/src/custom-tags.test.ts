@@ -2444,6 +2444,31 @@ describe("ctx.build.delegatedTag refuses what it cannot carry", () => {
     );
   });
 
+  it("spells an unclaimed dynamic tag as one, not as the sentinel", () => {
+    let message = "";
+    expect(() => {
+      try {
+        lowerWithTags(
+          "<widget/>\n",
+          { widget: builds(DYNAMIC_TAG) },
+          fakeDeclarations({ isDelegatedTag: () => false }),
+        );
+      } catch (error) {
+        message = (error as Error).message;
+        throw error;
+      }
+    }).toThrow(
+      expect.objectContaining({
+        message:
+          "`<widget>`: this host does not claim a dynamic tag (`<${…}>`), so a custom tag cannot emit one",
+        diagnosticCode: "MX_TAG_HOOK_ERROR",
+        line: 1,
+        column: 0,
+      }),
+    );
+    expect(message).not.toContain("\u0000");
+  });
+
   it.each(["let", "server", "client"])(
     "builds `%s` as an ordinary name under the `none` tag rules",
     (name) => {
