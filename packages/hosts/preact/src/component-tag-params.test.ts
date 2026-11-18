@@ -343,6 +343,9 @@ const RUNTIME_STRING = `export interface Input { tag: string }
 const RUNTIME_STRING_ARGS = `export interface Input { tag: string }
 <\${input.tag}("a")|item|>body \${item}</>`;
 
+/** An empty `||` passes core (Marko writes nothing for it) but still marks a params body. */
+const LITERAL_EMPTY_PARAMS = `<\${"my-el"}||>x</>`;
+
 const NATIVE_PARAMS_MESSAGE =
   "tag params |…| cannot be passed to a native element: a string target has nothing to call its body";
 
@@ -552,6 +555,23 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
       await expect(
         renderHtml(host, mod.default, { tag: "div" }),
       ).rejects.toThrow(new Error(NATIVE_PARAMS_MESSAGE));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("a literal string target with an empty `||` compiles and throws the same error when it renders", async () => {
+    const { scratch, compile } = scratchFor(host, {
+      caller: LITERAL_EMPTY_PARAMS,
+    });
+    try {
+      await compile();
+      const mod = (await import(
+        `${join(scratch, "main.tsx")}?tp=${serial++}`
+      )) as { default: unknown };
+      await expect(renderHtml(host, mod.default, {})).rejects.toThrow(
+        new Error(NATIVE_PARAMS_MESSAGE),
+      );
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
