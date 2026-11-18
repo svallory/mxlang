@@ -287,6 +287,7 @@ import {
 } from "./statement-parse-options.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
+  dialectTagRules,
   fileTagRules,
   resolveSyntaxOf,
   type SyntaxBuildContext,
@@ -8043,6 +8044,7 @@ function lowerChildrenOf(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
     lowerTriggers(ctx, children);
+    adoptFileTagRules(ctx);
     children = childrenWithTriggers(children);
     resolveUnnamedTags(ctx, children);
     ctx.unnamedTagsResolved = true;
@@ -8853,6 +8855,18 @@ export function errorDependencies(error: unknown): readonly string[] {
     : [];
 }
 
+/**
+ * A caller that decided the file's tag rules set `ctx.tagRules` (compileSource,
+ * the IR entry, a tag unit's metadata compile); a fragment entry
+ * (`parseFragment` + `newCtx`) does not. Its document's registered dialect,
+ * which the trigger pass just put on `ctx.dialect`, states them, as
+ * `compileSource`'s `fileTagRules` reads them. MX's own files have none.
+ */
+function adoptFileTagRules(ctx: Ctx): void {
+  if (ctx.tagRules === undefined && ctx.dialect)
+    ctx.tagRules = dialectTagRules(ctx.dialect);
+}
+
 function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   // Before anything reads a tag name: an unnamed tag has none yet. The flag
   // tells `lowerChildren` the whole tree is already resolved, so only a call
@@ -8860,6 +8874,7 @@ function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   // A syntax table's triggers, before anything reads an expression, an
   // attribute list or a body.
   lowerTriggers(ctx, authored);
+  adoptFileTagRules(ctx);
   const body = childrenWithTriggers(authored);
   resolveUnnamedTags(ctx, body);
   const wasResolved = ctx.unnamedTagsResolved;

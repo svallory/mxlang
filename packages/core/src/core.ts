@@ -522,10 +522,13 @@ export interface Ctx {
    */
   tagTable?: TagTable;
   /**
-   * The tag rules preset the file parses under, when the caller decided one
-   * (the IR entry point, or a file routed to a dialect). Absent for MX's own
-   * files and for a region. Only `"none"` changes a rule today: under it
-   * `effect` is an ordinary tag name.
+   * The tag rules preset the file parses under. A caller that decided one sets
+   * it (`compileSource`, the IR entry point, a tag unit's metadata compile);
+   * otherwise lowering adopts the preset of the dialect the parse registered
+   * on the body (a fragment entry: `parseFragment` + `newCtx`). Absent for
+   * MX's own files. Only `"none"` changes a rule: under it every name but the
+   * reserved ones is an ordinary tag, and the host's rows for them do not
+   * apply.
    */
   tagRules?: TagRulesPreset;
   /** Custom tags already discovered and loaded by the calling integration. */

@@ -6,14 +6,16 @@
  * `compileSource` and `parseFragment` are given.
  */
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
-import { TranslateError } from "./core.ts";
+import { type Ctx, newCtx, TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import { lowerSource } from "./ir-entry/index.ts";
+import { lower, lowerChildren } from "./lower.ts";
 import type { Dialect } from "./syntax-table.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 import { lookup, testTargetLookupWithSegments } from "./test-targets.ts";
@@ -221,5 +223,89 @@ describe("the host's tag rows under the `none` tag rules", () => {
 
   it("outside `none` the row applies", () => {
     expect(compileWithRows("<probe/>\n", "/page.mx")).toBe("R");
+  });
+});
+
+function printExpression(node: unknown): string {
+  const require = createRequire(import.meta.url);
+  const { generator } = require("@marko/compiler/internal/babel");
+  return generator(node, { concise: true }).code;
+}
+
+// A fragment entry (`parseFragment` + `newCtx` + `lower`) sets no tag rules;
+// lowering adopts the ones of the dialect the parse registered on the body.
+describe("lowering a fragment adopts the file's tag rules", () => {
+  const fragmentCtx = (
+    source: string,
+    filename: string,
+    options: { dialect?: Dialect; declarations?: HostDeclarations } = {},
+  ) => {
+    const { body } = parseFragment(source, {
+      filename,
+      ...(options.dialect ? { dialect: options.dialect } : {}),
+    });
+    const ctx = newCtx(
+      source,
+      printExpression,
+      options.declarations ?? host,
+      undefined,
+      filename,
+      lookup,
+    );
+    return { body, ctx };
+  };
+  const tagRulesAfterLower = (
+    filename: string,
+    options: { dialect?: Dialect; preset?: Ctx["tagRules"] } = {},
+  ) => {
+    const { body, ctx } = fragmentCtx("<div/>\n", filename, options);
+    if (options.preset) ctx.tagRules = options.preset;
+    lower(ctx, body);
+    return ctx.tagRules;
+  };
+
+  it("the `dialect` option's `none`", () => {
+    expect(tagRulesAfterLower("/page.mx", { dialect: none })).toBe("none");
+  });
+
+  it("a routed dialect's `none`", () => {
+    dialectProject(dir, {
+      module: 'export default { table: {}, tagRules: "none" };',
+    });
+    expect(tagRulesAfterLower(join(dir, "page.tst"))).toBe("none");
+  });
+
+  it("a routed dialect that states none gets `html`", () => {
+    dialectProject(dir, { module: "export default { table: {} };" });
+    expect(tagRulesAfterLower(join(dir, "page.tst"))).toBe("html");
+  });
+
+  it("MX's own file gets none", () => {
+    expect(tagRulesAfterLower("/page.mx")).toBeUndefined();
+  });
+
+  it("a value the caller set is kept", () => {
+    expect(
+      tagRulesAfterLower("/page.mx", { dialect: none, preset: "markup" }),
+    ).toBe("markup");
+  });
+
+  it("`lowerChildren` adopts it too", () => {
+    const { body, ctx } = fragmentCtx("<div/>\n", "/page.mx", {
+      dialect: none,
+    });
+    lowerChildren(ctx, body);
+    expect(ctx.tagRules).toBe("none");
+  });
+
+  it("a host row for a name that is not reserved does not apply", () => {
+    const { body, ctx } = fragmentCtx("<probe/>\n", "/page.mx", {
+      dialect: none,
+      declarations: {
+        ...host,
+        tags: { probe: { kind: "error", reason: "R" } },
+      },
+    });
+    expect(messageOf(() => lower(ctx, body))).toBeUndefined();
   });
 });
