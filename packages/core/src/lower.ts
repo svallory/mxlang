@@ -43,6 +43,7 @@ import {
 } from "./attr-fields.ts";
 import { attrLabel } from "./attr-label.ts";
 import { coreBabel, coreParser } from "./babel.ts";
+import { bareStyleAttributesMessage } from "./bare-style.ts";
 import {
   BUILTIN_CUSTOM_TAGS,
   tryMissingHandlerMessage,
@@ -3852,8 +3853,8 @@ function rejectHtmlCommentAttributes(ctx: Ctx, node: Node): void {
  * `style` contract lowers the tag elsewhere and reaches neither. Skipped
  * under the `none` tag-rules preset, as {@link rejectHtmlCommentAttributes} is.
  *
- * A host's `bareStyleAttributesHint` replaces stock's second sentence (the
- * route to `<html-style>`); stock's first sentence is kept.
+ * The text is {@link bareStyleAttributesMessage}'s, which a custom tag's
+ * built `style` (`ctx.build.delegatedTag`) is refused with too.
  */
 function rejectBareStyleAttributes(ctx: Ctx, node: Node): void {
   if (ctx.tagRules === "none") return;
@@ -3867,12 +3868,9 @@ function rejectBareStyleAttributes(ctx: Ctx, node: Node): void {
       ),
   );
   if (!attr) return;
-  const hint =
-    ctx.declarations.bareStyleAttributesHint ??
-    "For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.";
   raise(
     INVALID_ATTRIBUTE_CODE,
-    `The \`style\` does not support html ${voiceOfCtx(ctx).attributes}. ${hint}`,
+    bareStyleAttributesMessage(ctx),
     // The parser's attributes carry offsets, a shorthand's records `loc`; the
     // head's `#id` record has neither, and its value (the word after the
     // sigil) is positioned.

@@ -51,6 +51,7 @@ const SCANNED = [
   "render-let-write.ts",
   "tag-names.ts",
   "attribute-value.ts",
+  "bare-style.ts",
 ] as const;
 
 /**
