@@ -133,3 +133,29 @@ describe.each([
     expect(outcome("<lifecycle a=1>x</lifecycle>", page)).toEqual(control);
   });
 });
+
+/**
+ * Under `none` no name is a native element, so a void web name takes a body
+ * as the ordinary `<zzz>` does, as on `compileSource`: lowering adopts the
+ * preset's native elements with its tag rules.
+ */
+describe("`compileSolidUnit` under the `none` native elements", () => {
+  function outcome(source: string, filename: string) {
+    try {
+      return { code: compileSolidUnit(source, { filename }).code };
+    } catch (thrown) {
+      const { message, diagnosticCode } = thrown as TranslateError;
+      return { message, diagnosticCode };
+    }
+  }
+
+  it("`<input><child/></input>` compiles as the ordinary `<zzz>` control", () => {
+    claimingProject([".tst"], NONE_DIALECT);
+    const page = join(dir, "page.tst");
+    const control = outcome("<zzz><child/></zzz>", page);
+    expect(control).toHaveProperty("code");
+    expect(outcome("<input><child/></input>", page)).toEqual(
+      JSON.parse(JSON.stringify(control).replaceAll("zzz", "input")),
+    );
+  });
+});
