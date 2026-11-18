@@ -18,8 +18,8 @@
 // MX scanner when the MX token is valid, and otherwise defers to upstream.
 //
 // The header is copied into src/ (not included from ../vendor/) because
-// vendor/ is .gitignore'd — only src/ is committed, and Zed's file:// dev
-// install compiles nothing but what is committed at the pinned rev. An
+// vendor/ is .gitignore'd — only src/ is committed, and Zed's dev install
+// compiles nothing but what is committed at the pinned rev. An
 // include reaching outside src/ compiles fine from a working tree (where
 // scripts/vendor.sh has populated vendor/) but fails in Zed's clean clone
 // with "file not found" (see UPSTREAM.md "A real defect this caused").
@@ -28,7 +28,7 @@
 
 // `scanner_mx.c` is included rather than compiled separately: tree-sitter
 // builds exactly one `src/scanner.c` per grammar, and Zed's extension builder
-// does the same (Z7). It defines the MX token id and the region scan.
+// does the same. It defines the MX token id and the region scan.
 #include "scanner_mx.c"
 
 void *tree_sitter_solid_external_scanner_create(void) { return NULL; }

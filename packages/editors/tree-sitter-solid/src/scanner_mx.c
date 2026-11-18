@@ -16,19 +16,24 @@
 // that; this scanner only has to agree with it about where the region ENDS.
 //
 // It cannot call htmljs-parser, so it replicates its tokenization. The rules
-// below are ported from `notes/zed/mx-scanner-rules.md`, which derives them
-// from `packages/parser/src/mx/walk.ts` plus htmljs-parser 5.15.0. Each
-// block cites the rule row and the bridge function it mirrors.
+// below are replicated from the bridge's `walkMxRegion` in
+// `packages/tsx-bridge/src/mx/walk.ts` plus htmljs-parser 5.15.0.
+//
+// Each rule has a number (§1 to §8, §9.2, §9.3, §10 and §13). The index below
+// lists every number with the code it mirrors and the function that
+// implements it here. `scanner-rules §n` in this file and in UPSTREAM.md, and
+// `scanner-rules n` in the test/corpus/*.txt titles, mean row §n of this
+// index. Each block below cites its rule number and the function it mirrors.
 //
 // ---------------------------------------------------------------------------
-// RULE-TO-IMPLEMENTATION INDEX  (scanner-rules.md §13; §-refs are to that file)
+// RULE-TO-IMPLEMENTATION INDEX  (the scanner-rules §n numbers)
 //
-//   Rule (spec row)                        | Mirrors                  | Here
+//   Rule (number)                          | Mirrors                  | Here
 //   ---------------------------------------|--------------------------|------
 //   End offset, region stop           §1,§2 | walkMxRegion/`finish`    | scan_mx_element_body
-//                                           | walk.ts:170              |
-//   Depth stack                         §5  | walk.ts:303 push / :334  | depth in
-//                                           | pop                      | scan_mx_element_body
+//                                           | in walk.ts               |
+//   Depth stack                         §5  | `stack.push` /           | depth in
+//                                           | `stack.pop` in walk.ts   | scan_mx_element_body
 //   Void set is depth-neutral, REPO-LOCAL   | VOID_TAGS/isVoidTag      | is_void_tag
 //                                       §5  | walk.ts:92,110           |
 //   Tag-name terminators, `.`/`#`, `${}`§4  | htmljs TAG_NAME.parse    | scan_tag_name
@@ -59,7 +64,7 @@
 // NOT IMPLEMENTED, DELIBERATELY: concise mode. `Parser.parse` starts in
 // CONCISE_HTML_CONTENT, but `case 60:` (`<`) immediately calls
 // `beginHtmlBlock`, and `HTML_CONTENT.enter` sets `isConcise = false`; nothing
-// on the `<`-rooted path re-enters concise mode (§3, Z11). So there are no `;`
+// on the `<`-rooted path re-enters concise mode (§3). So there are no `;`
 // line-ends, no `--` blocks, no `[ ]` attribute groups and no
 // shouldTerminateConcise* here. This is proven, not assumed.
 //
@@ -69,9 +74,9 @@
 // tree-sitter then re-lexes the same position internally, where the ordinary
 // `<` token yields `type_parameters`.
 //
-// In a .tsx file TypeScript forbids `<T>(x) => x`; a generic arrow must be
-// `<T,>` or `<T extends U>` (Z14). No lookahead, precedence or conflict
-// implements that here: a generic arrow is rejected by this scanner *failing to
+// In a .tsx file TypeScript forbids `<T>(x) => x`; by TypeScript's own .tsx
+// rule a generic arrow must be `<T,>` or `<T extends U>`. No lookahead,
+// precedence or conflict implements that here: a generic arrow is rejected by this scanner *failing to
 // find an element*, which is the same code path that rejects any malformed
 // region. See the note above `scan_tag_name` for why the tsx GLR conflict does
 // not transfer to a single external token.
@@ -166,7 +171,7 @@ static inline bool is_word_char(int32_t c) {
 }
 
 // ---------------------------------------------------------------------------
-// Void elements — REPO-LOCAL (scanner-rules §5, Z12).
+// Void elements — REPO-LOCAL (scanner-rules §5).
 //
 // htmljs-parser is markup-agnostic and does not know these. Depth-neutral
 // treatment of `<br>` exists only because walk.ts:92-110 declares TagType.void
@@ -968,8 +973,8 @@ static bool scan_markup_decl(TSLexer *lexer, unsigned *budget) {
 //   1. `onCloseTagEnd` with an empty stack — the root's `</name>` completed.
 //   2. `onOpenTagEnd` with `closesItself && stack empty` — the root wrote `/>`
 //      or the root is a void tag.
-// End-of-input without either is "Unterminated MX element." upstream
-// (walk.ts:374-380); here it is a failed token, which lets the parser report a
+// End-of-input without either is walk.ts's "Unterminated MX element." error
+// upstream; here it is a failed token, which lets the parser report a
 // normal syntax error at the `<`.
 // Assumes the root tag's leading `<` has ALREADY been consumed by the caller
 // and that the caller has already ruled out the four things that cannot
@@ -1004,7 +1009,8 @@ static bool scan_mx_element_body(TSLexer *lexer) {
     }
 
     // Depth 1: inside the root. Increment on a non-self-closing open tag
-    // (walk.ts:303), decrement on a close tag (walk.ts:334).
+    // (`stack.push` in walk.ts), decrement on a close tag (`stack.pop` in
+    // walk.ts).
     int depth = 1;
 
     while (!is_eof(lexer)) {
@@ -1064,7 +1070,7 @@ static bool scan_mx_element_body(TSLexer *lexer) {
             if (!scan_open_tag(lexer, &budget, &nested_self_closed)) {
                 return false;
             }
-            // Void tags are depth-neutral (§5, Z12).
+            // Void tags are depth-neutral (§5).
             if (!nested_self_closed && !(!dynamic && is_void_tag(name, len))) {
                 depth++;
             }
