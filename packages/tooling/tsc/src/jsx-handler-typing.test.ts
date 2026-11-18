@@ -38,7 +38,7 @@ interface Diagnostic {
 function parseDiagnostics(output: string): Diagnostic[] {
   const found: Diagnostic[] = [];
   for (const match of output.matchAll(
-    /(?:^|\n)\S*?([A-Za-z0-9]+)\.mx\((\d+),(\d+)\): error (TS\d+): ([^\n]*)/g,
+    /(?:^|\n)\S*?([A-Za-z0-9.]+)\.mx\((\d+),(\d+)\): error (TS\d+): ([^\n]*)/g,
   )) {
     found.push({
       file: match[1] ?? "",
@@ -52,6 +52,20 @@ function parseDiagnostics(output: string): Diagnostic[] {
 }
 
 const sources = join(fixtures, "handler-typing", "src");
+
+/**
+ * The same handlers in a region file (`Region.<host>.mx`), four regions in
+ * one module: a mistyped arrow, a mistyped shorthand, an error in an arrow's
+ * body and a valid handler. Whole-file P12, P01 and BodyArrow give columns
+ * 18, 9 and 27 for the same tags.
+ */
+const REGION_SOURCE = [
+  "export const arrow = <button onClick=((a: string) => a.length)>x</button>;",
+  "export const shorthand = <button onClick(a: string, b: string) { a.length + b.length; }>x</button>;",
+  "export const body = <button onClick=((e) => e.nope())>x</button>;",
+  "export const valid = <button onClick=((e) => e.currentTarget)>x</button>;",
+  "",
+].join("\n");
 const roots: string[] = [];
 const results = new Map<HostName, Diagnostic[]>();
 
@@ -68,6 +82,7 @@ beforeAll(() => {
         recursive: true,
       });
     }
+    writeFileSync(join(root, "src", `Region.${host}.mx`), REGION_SOURCE);
     writeFileSync(
       join(root, "package.json"),
       JSON.stringify({ mx: { host } }, null, 2),
@@ -202,6 +217,19 @@ describe.each(HOSTS)("mx-tsc handler typing on $host", ({ host }) => {
     // `static const __MxH`, `static const __MxJSX` and `type __MxM` are the
     // preamble's base names; its own identifiers move aside.
     expect(errorsIn(host, "Collision")).toEqual([]);
+  });
+
+  it("checks region handlers as whole-file does, one preamble for four regions", () => {
+    // The `satisfies` keyword maps to the arrow (column 39) and to the
+    // shorthand's attribute name (column 34); the body error keeps its exact
+    // column (47); the valid handler on line 4 is clean. No duplicate
+    // declaration (TS2300/TS2451) from the hoisted preamble.
+    const found = errorsIn(host, `Region.${host}`);
+    expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 39, "TS1360"],
+      [2, 34, "TS1360"],
+      [3, 47, "TS2339"],
+    ]);
   });
 
   it("leaves custom elements and dynamic tags unchecked", () => {

@@ -186,10 +186,15 @@ describe(".preact.mx: the Preact region kind's own plugin", () => {
     expect(text).toContain("class=");
   });
 
-  it("lowers a literal dynamic tag naming an element as that element, the handler mapped to its start", () => {
-    // `<${"button"}>` is `<button>` after core's pre-pass. The dynamic name's
-    // `"button"` range is a host-recorded mapping, so the handler's own
-    // mapping is not pushed past it.
+  it("lowers a literal dynamic tag naming an element as that element, its handler wrapped and mapped to its start", () => {
+    // `<${"button"}>` is `<button>` after core's pre-pass, so both sources
+    // project to the same text, handler wrapper included. These assertions
+    // pin that identical text, the handler's own mapping (37, literal 42)
+    // and the wrapper's `satisfies` keyword mapped to the same handler start.
+    // They guard no mapping of the dynamic name: the element emitter writes
+    // the name as unmapped text, so no host-recorded mapping covers the
+    // literal's `"button"`; the bridge text-searches it and finds the
+    // `"button"` inside the wrapper's `__MxH<"button", "click">`.
     const project = (source: string) => {
       const virtual = preact?.createVirtualCode?.(
         "/a/Button.preact.mx",
@@ -200,10 +205,13 @@ describe(".preact.mx: the Preact region kind's own plugin", () => {
       if (!virtual) throw new Error("Expected region virtual code");
       const text = virtual.snapshot.getText(0, virtual.snapshot.getLength());
       const map = new SourceMap(virtual.mappings as never);
-      const handler = [
-        ...map.toSourceLocation(text.indexOf("(a: string) => a.length")),
-      ][0]?.[0];
-      return { text, handler };
+      const sourceOf = (needle: string) =>
+        [...map.toSourceLocation(text.indexOf(needle))][0]?.[0];
+      return {
+        text,
+        handler: sourceOf("(a: string) => a.length"),
+        keyword: sourceOf("satisfies"),
+      };
     };
     const literal = project(
       'export const view = <${"button"} onClick=((a: string) => a.length)>x</>;\n',
@@ -212,11 +220,13 @@ describe(".preact.mx: the Preact region kind's own plugin", () => {
       "export const view = <button onClick=((a: string) => a.length)>x</button>;\n",
     );
     expect(literal.text).toContain(
-      "export const view = <><button onClick={(a: string) => a.length}>x</button></>;",
+      'export const view = <><button onClick={((a: string) => a.length) satisfies __MxH<"button", "click"> as any}>x</button></>;',
     );
     expect(literal.text).toBe(element.text);
     expect(literal.handler).toBe(42);
     expect(element.handler).toBe(37);
+    expect(literal.keyword).toBe(42);
+    expect(element.keyword).toBe(37);
   });
 });
 

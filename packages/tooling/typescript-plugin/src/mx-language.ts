@@ -52,6 +52,7 @@ import {
   type MxDiagnosticLanguagePlugin,
   mergeMappings,
   nearestPackageDir,
+  recordedMappings,
   warningDiagnostic,
 } from "./language.ts";
 import { dropOwnLocationHeader } from "./own-location-header.ts";
@@ -736,32 +737,6 @@ function withoutOverlaps(
       low === 0 || (furthestEnd[low - 1] ?? Number.NEGATIVE_INFINITY) <= start
     );
   });
-}
-
-function recordedMappings(
-  mappings: readonly GeneratedMapping[],
-): CodeMapping[] {
-  return mappings
-    .filter(
-      (mapping) =>
-        mapping.sourceEnd > mapping.sourceStart &&
-        mapping.generatedEnd > mapping.generatedStart,
-    )
-    .map((mapping) => {
-      const sourceLength = mapping.sourceEnd - mapping.sourceStart;
-      const generatedLength = mapping.generatedEnd - mapping.generatedStart;
-      return {
-        sourceOffsets: [mapping.sourceStart],
-        generatedOffsets: [mapping.generatedStart],
-        lengths: [sourceLength],
-        ...(sourceLength === generatedLength
-          ? {}
-          : { generatedLengths: [generatedLength] }),
-        // A mapping the emitter restricted to some tooling uses carries just
-        // those (Volar's `CodeInformation` keys); every other one serves all.
-        data: mapping.use ? { ...mapping.use } : codeInformation,
-      };
-    });
 }
 
 type PositionedCode =

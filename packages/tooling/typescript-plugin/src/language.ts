@@ -7,6 +7,7 @@ import {
   ATTR_TAG_RECORD,
   dropOwnParserPosition,
   errorDependencies,
+  type GeneratedMapping,
   type HostFileKind,
   type IrDiagnosticFix,
   isTranslateError,
@@ -304,12 +305,16 @@ export function createRegionLanguagePlugin(
         );
         const discovered = scan.customTags;
         const regions: MxSourceRegion[] = [];
+        // Each region's own result by `baseOffset`: the last compile of a
+        // region wins, so a speculative re-compile counts once.
+        const regionResults = new Map<number, RecordedRegionResult>();
         const compiled = compileWithDependencies(
           options.readSource,
           dependencies.get(fileName) ?? [],
           () => {
             const warnings: MxWarning[] = [];
             regions.length = 0;
+            regionResults.clear();
             const printed = print(source, fileName, {
               mx: isKind(fileName),
               defaultTag: defaultTagFor(
@@ -321,10 +326,15 @@ export function createRegionLanguagePlugin(
                   source: input.source,
                   baseOffset: input.baseOffset,
                 });
-                return regionCompile({
+                const result = regionCompile({
                   ...input,
                   warnings,
-                }) as ReturnType<MxRegionCompile>;
+                });
+                regionResults.set(
+                  input.baseOffset,
+                  result as RecordedRegionResult,
+                );
+                return result as ReturnType<MxRegionCompile>;
               },
               ...(Object.keys(discovered).length > 0
                 ? { customTags: discovered }
@@ -356,7 +366,10 @@ export function createRegionLanguagePlugin(
           generated,
           source,
           printed.map,
-          attributeTagDiagnosticMappings(source, printed.code),
+          [
+            ...attributeTagDiagnosticMappings(source, printed.code),
+            ...handlerKeywordMappings(regionResults, printed.code),
+          ],
           "tsx",
           () => regionAuthoredSpans(regions, fileName, discovered),
         );
@@ -1185,6 +1198,104 @@ function dependencySources(
     if (source !== undefined) sources.set(dependency, source);
   }
   return sources;
+}
+
+/** What a region compile returns that the keyword mappings read. */
+interface RecordedRegionResult {
+  code: string;
+  mappings?: readonly GeneratedMapping[];
+}
+
+/** A wrapped handler's keyword in a region's code and its alias. */
+const HANDLER_KEYWORD_TAIL = /^ ([A-Za-z_$][\w$]*)<"/;
+
+/**
+ * Maps each `satisfies` keyword of a region's handler wrapper
+ * (`(fn) satisfies __MxH<"tag", "event"> as any`) in the printed module to
+ * the handler the host recorded it for. TypeScript reports a handler
+ * mismatch (TS1360) on that keyword, and the printed module's source map
+ * cannot carry it: the keyword's text never equals the handler's.
+ *
+ * The host's mappings are offsets into each region's own `code`, so the
+ * keywords are found by text, as `attributeTagDiagnosticMappings` does: the
+ * recorded keywords (regions by `baseOffset`, each by `generatedStart`) are
+ * paired in order with the printed `satisfies <alias><"` occurrences. A
+ * count mismatch maps none, so a diagnostic falls back to the nearest
+ * mapped span rather than being mapped to the wrong handler.
+ */
+function handlerKeywordMappings(
+  regions: ReadonlyMap<number, RecordedRegionResult>,
+  printed: string,
+): CodeMapping[] {
+  const recorded: GeneratedMapping[] = [];
+  const aliases = new Set<string>();
+  for (const [, { code, mappings }] of [...regions].sort(
+    ([left], [right]) => left - right,
+  )) {
+    for (const mapping of [...(mappings ?? [])].sort(
+      (left, right) => left.generatedStart - right.generatedStart,
+    )) {
+      if (
+        code.slice(mapping.generatedStart, mapping.generatedEnd) !==
+          "satisfies" ||
+        code.slice(mapping.generatedStart - 2, mapping.generatedStart) !== ") "
+      )
+        continue;
+      const alias = HANDLER_KEYWORD_TAIL.exec(
+        code.slice(mapping.generatedEnd),
+      )?.[1];
+      if (alias === undefined) continue;
+      aliases.add(alias);
+      recorded.push(mapping);
+    }
+  }
+  if (recorded.length === 0) return [];
+  const keyword = new RegExp(
+    `satisfies (?:${[...aliases].map(escapeRegExp).join("|")})<"`,
+    "g",
+  );
+  const found = [...printed.matchAll(keyword)].map((match) => match.index);
+  if (found.length !== recorded.length) return [];
+  return recordedMappings(
+    recorded.map((mapping, index) => {
+      const generatedStart = found[index] as number;
+      return {
+        ...mapping,
+        generatedStart,
+        generatedEnd: generatedStart + "satisfies".length,
+      };
+    }),
+  );
+}
+
+/**
+ * A host's recorded mappings (`GeneratedMapping`, generated offsets into the
+ * virtual code) as Volar `CodeMapping`s. Package-internal.
+ */
+export function recordedMappings(
+  mappings: readonly GeneratedMapping[],
+): CodeMapping[] {
+  return mappings
+    .filter(
+      (mapping) =>
+        mapping.sourceEnd > mapping.sourceStart &&
+        mapping.generatedEnd > mapping.generatedStart,
+    )
+    .map((mapping) => {
+      const sourceLength = mapping.sourceEnd - mapping.sourceStart;
+      const generatedLength = mapping.generatedEnd - mapping.generatedStart;
+      return {
+        sourceOffsets: [mapping.sourceStart],
+        generatedOffsets: [mapping.generatedStart],
+        lengths: [sourceLength],
+        ...(sourceLength === generatedLength
+          ? {}
+          : { generatedLengths: [generatedLength] }),
+        // A mapping the emitter restricted to some tooling uses carries just
+        // those (Volar's `CodeInformation` keys); every other one serves all.
+        data: mapping.use ? { ...mapping.use } : codeInformation,
+      };
+    });
 }
 
 function createVirtualCode(
