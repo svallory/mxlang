@@ -1324,9 +1324,9 @@ export function buildersFor(
           TAG_HOOK_ERROR_CODE,
           tagName,
           `\`ctx.build.delegatedTag\` cannot build ${
-            // The sentinel has no spelling of its own.
+            // The sentinel has no spelling: a dynamic tag is illustrated.
             name === DYNAMIC_TAG
-              ? "a dynamic tag (`<${…}>`)"
+              ? `a dynamic tag (${voiceOfCtx(ctx).dynamicTag("…")})`
               : voiceOfCtx(ctx).tag(name)
           }: a built tag has no ${unbuildable.missing}`,
           loc,
