@@ -545,13 +545,13 @@ const cases: Record<string, Case> = {
     },
     expect: { bun: "app/x.cjs", node: "app/x.cjs" },
   },
-  // Not pinned: Bun 1.3.14 normalizes the ".." on Linux and not on macOS.
   "exports a pattern match that leaves the package": {
     spec: "@fake/p/../escaped",
     files: {
       [`${P}/package.json`]: '{"exports":{"./*":"./*.cjs"}}',
       [ESCAPED]: "",
     },
+    expect: { bun: "ERR", node: "ERR" },
   },
   // The module kind this process gives the file the child found.
   'an ESM main under "type": "module"': {
