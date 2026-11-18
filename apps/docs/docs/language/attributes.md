@@ -180,9 +180,17 @@ what it is for. (`on-` with nothing after the dash is an error.)
 
 ### `on:click` is not an event binding; `oncapture:click` is an ordinary attribute
 
-MX has no event modifiers. `on:*` is handed to the host, which rejects it with
-a fix-it naming both forms: `on<Name>` for a DOM event and `on-<exact>` for a
-custom event name. A lowercase `oncapture:click` is what
+MX has no event modifiers. On an element (including `<${"div"}>`, which is
+`<div>`), `on:*` is handed to the host, which rejects it with a fix-it naming
+both forms: `on<Name>` for a DOM event and `on-<exact>` for a custom event
+name. On a dynamic tag named by any other string literal (`<${"Foo"}>`,
+`<${"my-el"}>`, `<${"style"}>`) and on `<html-script>`/`<html-style>` when the
+host reads `script`/`style` as an element, MX refuses the colon forms itself,
+before any host sees them, with Marko's message (`MX_INVALID_ATTRIBUTE`, at the
+attribute): `` `on:click` is not a valid attribute, did you mean `onClick`? ``,
+`` `class:active` is not a valid attribute, did you mean `class={ active: condition }`? ``
+and `` `style:color` is not a valid attribute, did you mean `style={ color: value }`? ``.
+A bound `class:x:=y` and a spread are not refused. A lowercase `oncapture:click` is what
 it is in Marko: an ordinary attribute that keeps its full name, neither an
 event nor a capture-mode listener. To stop an event, call `event.preventDefault()` in the
 handler; for listener options such as `capture` or `passive`, use a `ref`
