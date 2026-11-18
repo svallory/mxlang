@@ -2586,8 +2586,7 @@ arguments (`<${"Foo"}(1)/>`: `Tag does not support arguments.`), tag params
 (`<${"Foo"}><@a/></>`: `Tag does not support nested attribute tags.`) and a
 destructured tag variable (`<${"Foo"}/{a}/>`:
 `Tag variables on native tags cannot be destructured.`). An empty `()` or `||`
-writes nothing and compiles (on the JSX hosts a literal with `||` and a body
-then throws at run time, see below). An identifier tag variable (`<${"my-el"}/el/>`)
+writes nothing and compiles. An identifier tag variable (`<${"my-el"}/el/>`)
 and attribute values keep the dynamic tag's handling. A name built from an
 expression is not checked.
 
@@ -2829,9 +2828,7 @@ does. A literal string target that does not name an element
 (`<${"my-el"}|item|>`) is the compile error `Tag does not support parameters.`,
 Marko's own; one that does (`<${"div"}|item|>`) is the element, refused as
 `<div|item|>` is. A string that only arrives at run time throws an MX run-time
-error (`tag params |…| cannot be passed to a native element`). A literal string
-target with an empty `||` and a body (`<${"my-el"}||>x</>`) compiles but throws
-the same MX run-time error when it renders. Both are a deliberate divergence:
+error (`tag params |…| cannot be passed to a native element`). This is a deliberate divergence:
 Marko renders the element with the body. A `<define>`
 used as a dynamic target value (`<const/R = Row/>` then `<${R}|n|>` or `<${R}>`)
 receives the body as its `content`, as a direct call does (the args form,
