@@ -131,10 +131,9 @@ describe("mx-helpers on Bun (virtual-module require path)", () => {
     }
   });
 
-  // Bun 1.3.14 cannot resolve a `data:` URL past ~1.5 KB:
-  // `NameTooLong while resolving package 'data:text/typescript;base64,…'`.
-  // Bun 1.4.2 has no such limit, so these only go red on a Bun before 1.4
-  // (1.3.14 measured) — run them under a Bun 1.3.x to see the regression.
+  // A template whose emitted module is far past ~1.5 KB, and a large page that
+  // imports a large nested tag (whose module the page's module embeds): both
+  // evaluate through `mx-virtual:` modules, which have no size bound.
   it("evaluates a template whose emitted module is far past any data: URL limit", () => {
     const big = "lorem ipsum dolor sit amet ".repeat(400);
     const render = mx<{ n: number }>(`<p>${big}\${input.n}</p>`);

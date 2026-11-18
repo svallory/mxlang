@@ -474,12 +474,11 @@ own `vitest.config.ts` excludes it from the vitest project so the root
 `bun run test` does not try to load `bun:test` under Node/Vite.
 
 `mx()`/`loadMx()` (`src/helpers.ts`) evaluate on Bun as `Bun.plugin`
-virtual modules under the `mx-virtual:` scheme, never `data:` URLs: Bun 1.3.14
-fails `require("data:…")` with `NameTooLong` past ~1.5 KB, and nested tags
-embed base64 in base64. Bun 1.4.x has no such limit, so `test:bun` passes there
-even if a `data:` path comes back, and CI (pinned to a Bun 1.4.x in `ci.yml` and
-`.prototools`) no longer catches one. To check for this class of bug, run
-`test:bun` by hand under a Bun 1.3.x (for example `PATH=~/.proto/tools/bun/1.3.14:$PATH`).
+virtual modules under the `mx-virtual:` scheme, never `data:` URLs: one private
+scheme and one import-rewrite pass serve both Bun and Node, with no size bound
+on a module, where a nested tag's `data:` URL would embed base64 in base64.
+(Bun 1.3.14 failed `require("data:…")` with `NameTooLong` past ~1.5 KB; Bun
+1.4.4 loads a 12 KB `data:` module and a nested 19 KB one.)
 
 ## `.mx` import typing
 

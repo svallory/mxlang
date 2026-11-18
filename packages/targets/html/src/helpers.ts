@@ -22,15 +22,15 @@
  * - **Bun**: a `Bun.plugin` virtual module (`build.module(name, …)`) under
  *   the same private `mx-virtual:` scheme Node uses, evaluated with a
  *   synchronous `require()` and Bun's own real TypeScript stripping. Not a
- *   `data:` URL: Bun 1.3.14 fails `require("data:…")` with
- *   `NameTooLong while resolving package 'data:text/typescript;base64,…'`
- *   once the URL passes ~1.5 KB, and a nested tag's `data:` URL is embedded
- *   base64-in-base64 in its importer, so any page that calls a tag crosses
- *   that line. A virtual module has no location of its own either, so a
- *   relative import inside it cannot resolve — which is why every import is
- *   rewritten to an absolute `file://` target (or another in-memory
- *   module's own URL) before this ever runs, not left for Bun's own
- *   resolver to puzzle out.
+ *   `data:` URL: one private scheme and one import-rewrite pass serve both
+ *   runtimes, and a virtual module has no size bound, while a nested tag's
+ *   `data:` URL would be embedded base64-in-base64 in its importer (Bun
+ *   1.3.14 failed `require("data:…")` with `NameTooLong` past ~1.5 KB; Bun
+ *   1.4.4 loads a 12 KB one and a nested 19 KB one). A virtual module has no
+ *   location of its own either, so a relative import inside it cannot
+ *   resolve — which is why every import is rewritten to an absolute
+ *   `file://` target (or another in-memory module's own URL) before this
+ *   ever runs, not left for Bun's own resolver to puzzle out.
  * - **Node ≥22.15**: `node:module`'s `registerHooks({ resolve, load })`
  *   intercepts a synchronous `require()` for a private `mx-virtual:` scheme
  *   this module owns; `load` runs the source through `node:module`'s
