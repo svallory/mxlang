@@ -2566,6 +2566,16 @@ literal stays a dynamic tag: a name that is not a native element (`<${"Foo"}>`,
 custom tag or delegates, and any name built from an expression
 (`<${"di" + "v"}>`). The IR entry (data and `tree` files) treats no name as an
 element, so a literal stays a dynamic tag there.
+A literal that stays a dynamic tag still keeps Marko's native-tag rules, on
+every host and in the IR entry, with Marko's messages: it is refused tag
+arguments (`<${"Foo"}(1)/>`: `Tag does not support arguments.`), tag params
+(`<${"my-el"}|x|>`: `Tag does not support parameters.`), attribute tags
+(`<${"Foo"}><@a/></>`: `Tag does not support nested attribute tags.`) and a
+destructured tag variable (`<${"Foo"}/{a}/>`:
+`Tag variables on native tags cannot be destructured.`). An empty `()` or `||`
+writes nothing and compiles. An identifier tag variable (`<${"my-el"}/el/>`)
+and attribute values keep the dynamic tag's handling. A name built from an
+expression is not checked.
 
 **A capitalized value import that isn't a `.mx` default import lowers as a
 dynamic tag, not a direct call.** Measured (TODO
