@@ -3654,6 +3654,23 @@ describe("a bare <style> refuses attributes, as stock Marko does", () => {
     );
   });
 
+  it("ends with the host's `bareStyleAttributesHint` in place of stock's route", () => {
+    expect(() =>
+      compileStyle('<style media="print">a{}</style>', {
+        declarations: fakeDeclarations({
+          bareStyleAttributesHint: "Use a stylesheet.",
+        }),
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        message: "The `style` does not support html attributes. Use a stylesheet.",
+        diagnosticCode: "MX_INVALID_ATTRIBUTE",
+        line: 1,
+        column: 7,
+      }),
+    );
+  });
+
   it.each([
     "<style.less>a{}</style>",
     "<style.module.css>a{}</style>",

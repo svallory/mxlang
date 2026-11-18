@@ -3851,6 +3851,9 @@ function rejectHtmlCommentAttributes(ctx: Ctx, node: Node): void {
  * refusals, its arguments and parameters among them, report first). A
  * `style` contract lowers the tag elsewhere and reaches neither. Skipped
  * under the `none` tag-rules preset, as {@link rejectHtmlCommentAttributes} is.
+ *
+ * A host's `bareStyleAttributesHint` replaces stock's second sentence (the
+ * route to `<html-style>`); stock's first sentence is kept.
  */
 function rejectBareStyleAttributes(ctx: Ctx, node: Node): void {
   if (ctx.tagRules === "none") return;
@@ -3864,9 +3867,12 @@ function rejectBareStyleAttributes(ctx: Ctx, node: Node): void {
       ),
   );
   if (!attr) return;
+  const hint =
+    ctx.declarations.bareStyleAttributesHint ??
+    "For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.";
   raise(
     INVALID_ATTRIBUTE_CODE,
-    `The \`style\` does not support html ${voiceOfCtx(ctx).attributes}. For a native html [\`<style>\` tag](https://markojs.com/docs/reference/core-tag#style) use the \`html-style\` core tag instead.`,
+    `The \`style\` does not support html ${voiceOfCtx(ctx).attributes}. ${hint}`,
     // The parser's attributes carry offsets, a shorthand's records `loc`; the
     // head's `#id` record has neither, and its value (the word after the
     // sigil) is positioned.

@@ -120,6 +120,14 @@ export interface HostDeclarations {
    */
   hostName?: string;
   /**
+   * The sentence that ends core's refusal of an attribute on a bare `<style>`
+   * on this host, in place of stock Marko's route to `<html-style>`. For a
+   * host that refuses `<html-style>` itself, so stock's advice would lead to
+   * a second error. Stock's first sentence is kept. Unset: stock's message
+   * verbatim. @unstable
+   */
+  bareStyleAttributesHint?: string;
+  /**
    * @deprecated Ignored. Every host emits attribute tags from
    * `attributeTagTree` as records (spec §8); core no longer gates on it.
    */

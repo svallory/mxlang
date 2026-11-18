@@ -118,8 +118,10 @@ function unknownTagMessage(name: string, ctx: Ctx): string {
 const HTML_SCRIPT_MESSAGE =
   '`<html-script>` cannot be emitted into an Angular template: Angular\'s template compiler removes every `<script>` element, so the script would never reach the page. Load it from `index.html` or the `scripts` array of `angular.json`, or create it in the component with the DOM API (`document.createElement("script")`).';
 
-const HTML_STYLE_MESSAGE =
-  "`<html-style>` cannot be emitted into an Angular template: Angular's template compiler lifts every `<style>` element out of the template into the component's styles, dropping the element and its attributes (such as `media`) and scoping the CSS to the component's view, so the style cannot reach the page as written. Put the CSS in the component's `styles` or `styleUrls`, or in a global stylesheet listed in the `styles` array of `angular.json`.";
+const ANGULAR_STYLE_ROUTE =
+  "Put the CSS in the component's `styles` or `styleUrls`, or in a global stylesheet listed in the `styles` array of `angular.json`.";
+
+const HTML_STYLE_MESSAGE = `\`<html-style>\` cannot be emitted into an Angular template: Angular's template compiler lifts every \`<style>\` element out of the template into the component's styles, dropping the element and its attributes (such as \`media\`) and scoping the CSS to the component's view, so the style cannot reach the page as written. ${ANGULAR_STYLE_ROUTE}`;
 
 const MODULE_LEVEL_MESSAGE =
   "cannot be emitted into an Angular template: an Angular template has no module scope. Move it into the component's TypeScript file, or use `.ng.mx` (step 2), where MX emits the module for you.";
@@ -202,6 +204,9 @@ export const DEFAULT_TAG = "div";
 export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/host-angular",
   hostName: "Angular",
+  // Core's bare-`<style>` refusal would send the author to `<html-style>`,
+  // which this host refuses too (`HTML_STYLE_MESSAGE`).
+  bareStyleAttributesHint: `Angular refuses \`<html-style>\` too: its template compiler lifts every \`<style>\` element into the component's styles and drops its attributes. ${ANGULAR_STYLE_ROUTE} For \`media\`, write an \`@media\` rule in that CSS.`,
   nativeTags: WEB_ELEMENTS,
   attributeArgs: "refuse",
   // The ladder: the parent's contract `defaultTag`, then

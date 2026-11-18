@@ -877,12 +877,15 @@ spread (`<style ...attrs>`) and the `#id` and authored `class` shorthands
 (`<style#a>`, `<style.a class="b">`) are `MX_INVALID_ATTRIBUTE` at the first
 attribute (at the id word for `<style#a>`), with Marko's message
 `` The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead. ``
+On Angular, which refuses `<html-style>`, the second sentence is Angular's
+route instead:
+`` Angular refuses `<html-style>` too: its template compiler lifts every `<style>` element into the component's styles and drops its attributes. Put the CSS in the component's `styles` or `styleUrls`, or in a global stylesheet listed in the `styles` array of `angular.json`. For `media`, write an `@media` rule in that CSS. ``
 The file-extension shorthand (`<style.less>`, `<style.module.css>`) is not an
 attribute and compiles. An attribute error of its own (an invalid name, a
 refused modifier) is reported first. The `none` tag rules skip the refusal,
 and a `style` contract in `customTags` takes the tag, attributes included.
-Write `<html-style>` for a `<style>` element that keeps its attributes
-(Angular refuses that tag, as above).
+Write `<html-style>` for a `<style>` element that keeps its attributes, on
+every host but Angular (which refuses that tag, as above).
 
 An `<html-script>` takes no event handler and no method attribute: `onClick=fn`, `onclick() { … }` and `foo() { … }` are refused on the html target, Preact, React and Hono, positioned at the attribute, because a script element never fires or calls one (Angular refuses `<html-script>` outright). Solid does not refuse them yet (TODO `solid-html-script-event-attr`). A string value (`onclick="…"`) is an ordinary attribute.
 

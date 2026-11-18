@@ -36,24 +36,27 @@ const moduleFor = (template: string) =>
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: messages can carry ANSI colour
 const strip = (text: string) => text.replace(/\x1b\[[0-9;]*m/g, "");
-function failure(source: string) {
+function errorOf(run: () => unknown) {
   try {
-    compileNgMx(source, file);
+    run();
   } catch (error) {
     const e = error as {
       message: string;
+      diagnosticCode?: string;
       line?: number;
       column?: number;
       loc?: { line: number; column: number };
     };
     return {
       message: strip(e.message).replace(/ \(\d+:\d+\)$/, ""),
+      code: e.diagnosticCode,
       line: e.line ?? e.loc?.line,
       column: e.column ?? e.loc?.column,
     };
   }
   throw new Error("expected one MX compile error");
 }
+const failure = (source: string) => errorOf(() => compileNgMx(source, file));
 
 describe("<html-script> on Angular", () => {
   it("Angular's own template parser drops a <script> element", () => {
@@ -157,4 +160,25 @@ describe("<html-style> on Angular", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+describe("a bare <style> with an attribute on Angular", () => {
+  const source = '<style media="print">a{}</style>';
+  const message =
+    "The `style` does not support html attributes. Angular refuses `<html-style>` too: its template compiler lifts every `<style>` element into the component's styles and drops its attributes. Put the CSS in the component's `styles` or `styleUrls`, or in a global stylesheet listed in the `styles` array of `angular.json`. For `media`, write an `@media` rule in that CSS.";
+
+  it.each([
+    ["a .ng.mx template", () => failure(moduleFor(source)), 5, 19],
+    ["a page", () => errorOf(() => compile(source, "x.mx")), 1, 7],
+  ])(
+    "refuses it in %s, at `media`, with Angular's route, not <html-style>'s",
+    (_label, refuse, line, column) => {
+      expect(refuse()).toEqual({
+        message,
+        code: "MX_INVALID_ATTRIBUTE",
+        line,
+        column,
+      });
+    },
+  );
 });
