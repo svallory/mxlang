@@ -122,6 +122,7 @@ import {
   hasAttributeTagContract,
   isContractOnlyDelegated,
   isDeferredContract,
+  noAttributesMessage,
   rejectStructuralBody,
   rejectStyleTagFields,
   runAnalyzeHooks,
@@ -3833,7 +3834,7 @@ function rejectHtmlCommentAttributes(ctx: Ctx, node: Node): void {
   if (first)
     raise(
       INVALID_ATTRIBUTE_CODE,
-      `The ${voiceOfCtx(ctx).tag("html-comment")} tag does not support ${voiceOfCtx(ctx).attributes}.`,
+      noAttributesMessage(ctx, "html-comment"),
       first,
     );
 }

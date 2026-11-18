@@ -809,6 +809,16 @@ export function shadowedBuiltinMessage(name: string): string {
 }
 
 /**
+ * The no-attributes refusal of a tag that takes none, as stock Marko's
+ * `assertNoAttributes` refuses them. Shared by the authored `<html-comment>`
+ * check (`rejectHtmlCommentAttributes` in `lower.ts`), so other refusals of
+ * the same rule can share its words.
+ */
+export function noAttributesMessage(ctx: Ctx, name: string): string {
+  return `The ${voiceOfCtx(ctx).tag(name)} tag does not support ${voiceOfCtx(ctx).attributes}.`;
+}
+
+/**
  * Converts registered tags into the parser-only part of a Marko taglib.
  *
  * Hooks and attribute declarations never enter the compiler's taglib: some
