@@ -279,8 +279,9 @@ ran against the working tree (`tree-sitter test`, `parse-all.sh`,
 `highlight-smoke.sh`) kept passing, because `src/grammar.json`/`src/
 parser.c` in `src/` — the *committed*, already-generated output Zed actually
 compiles — were never regenerated from the corrupted patch. Running
-`tree-sitter generate` from the corrupted `vendor/` (this task's first
-verification step) failed immediately with `ReferenceError: Undefined
+`tree-sitter generate` from the corrupted `vendor/` (the
+zed-solidmx-followups change's first verification step) failed
+immediately with `ReferenceError: Undefined
 symbol 'mx_element'`, proving the committed `src/` had silently gone stale
 relative to `patches/`.
 
@@ -303,7 +304,7 @@ Two lessons, both now load-bearing for anyone editing `patches/`:
   `scanner.h`.
 
 The TSX-fragment feature that patch was attempting could not be completed
-in this task's time budget after the corruption was fixed and the base
+in that change's time budget after the corruption was fixed and the base
 patch restored — see the differential-test PR's report for the grammar-level
 blocker found (the external `jsx_text` scanner does not recognize a
 fragment's own bespoke opening-tag production the way it recognizes
