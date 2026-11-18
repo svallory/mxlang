@@ -3310,6 +3310,36 @@ describe("dangerouslySetInnerHTML", () => {
   });
 });
 
+/**
+ * Stock Marko 6.4.4 refuses, on a native element, attribute names from other
+ * frameworks' template syntax (`knownWrongAttrs`); html gives none of them a
+ * meaning, so core refuses each, also on a string-literal dynamic tag and on
+ * the claimed `<html-script>`/`<html-style>`.
+ */
+describe("other frameworks' attribute names", () => {
+  it.each([
+    [
+      "<div ref=x/>",
+      5,
+      "`ref` is not a valid attribute, did you mean `<tag/ref>`?",
+    ],
+    [
+      '<${"div"} key=1/>',
+      10,
+      "`key` is not a valid attribute, did you mean `<for by>`?",
+    ],
+    [
+      "<html-script key=1/>",
+      13,
+      "`key` is not a valid attribute, did you mean `<for by>`?",
+    ],
+  ])("refuses %s at the attribute", (source, column, message) => {
+    expect(() => compile(source, "t.mx")).toThrow(
+      expect.objectContaining({ message, line: 1, column }),
+    );
+  });
+});
+
 describe("`<for>` parameter annotations", () => {
   it.each([
     [

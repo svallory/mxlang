@@ -1733,18 +1733,62 @@ and so does every host that renders JSX (Preact, React, Hono, Solid) and the htm
 target. The raw-HTML form is `$!{html}`. Only an authored attribute is refused; a
 spread's keys are runtime data.
 
-### `key`
+### Attribute names from other frameworks
 
-`key` is not an attribute of a native element: stock Marko refuses it
-(``` `key` is not a valid attribute, did you mean `<for by>`? ```), and so do the
-html target and the Solid, Angular and Astro hosts, at the attribute. On
-Preact, React and Hono, `key=` on a native element is the JSX reconciliation
-key, as it is in those frameworks, a recorded divergence (`divergences.md`).
-A host opts in through the generic `acceptsReservedAttrNames` hook, which lists
-the names its output language gives a meaning of its own. The rows of a
-`<for>` are keyed with `by=` on every host. Only an authored `key` is affected;
-a spread's keys, a component's or dynamic tag's `key` input, and other names
-(`key:x`, `Key`) are not.
+As in Marko, a native element refuses the attribute names that belong to
+another framework's template syntax (`key`, `ref`, `className`, `htmlFor`,
+`v-if`, ...), at the attribute, with Marko's message and its hint toward the
+Marko form (``` `ref` is not a valid attribute, did you mean `<tag/ref>`? ```),
+so an author, human or agent, does not mix that framework's syntax into the
+template. Because MX targets several frameworks, a name is refused only when
+the target host's framework gives it no meaning on an element; when it does,
+the name passes through with that meaning (`key=` is the JSX key on Preact).
+The rule has one entry in `divergences.md`.
+
+The names and their hints, as Marko writes them:
+
+| Name | Hint |
+|---|---|
+| `className`, `classList` | `class` |
+| `htmlFor` | `for` |
+| `acceptCharset` | `accept-charset` |
+| `httpEquiv` | `http-equiv` |
+| `defaultValue` | `value` |
+| `defaultChecked` | `checked` |
+| `key` | `<for by>` |
+| `ref` | `<tag/ref>` |
+| `v-if`, `v-show` | `<if>` |
+| `v-else` | `<else>` |
+| `v-else-if` | `<else if>` |
+| `v-for` | `<for>` |
+| `v-model` | `value:=state` |
+| `v-bind` | `...attrs` |
+| `v-html` | `$!{html}` |
+| `v-text` | `${text}` |
+| `v-on:x` | `onX` |
+| `bind:x`, `v-model:x` | `x:=state` |
+| `v-bind:x` | `x` |
+
+A bound `x:=` and a method `x(){}` keep the name, so `className:=x` is refused
+too. The list is exact: `v-cloak`, `v-slot` and `v-on` without a colon are
+ordinary names. A tag hint is shown in the file's own spelling when a dialect
+spells the tag otherwise.
+
+Which names each host's framework gives a meaning on an element, as reference:
+Preact and React keep `key`, `ref`, `className`, `htmlFor`, `acceptCharset`,
+`httpEquiv`, `defaultValue` and `defaultChecked`; Hono keeps `key`, `ref`,
+`className`, `htmlFor` and `httpEquiv`; Solid keeps `ref`; html, Angular and
+Astro keep none. The colon forms are refused on every host. A host declares
+its names through the generic `acceptsReservedAttrNames` hook.
+
+The same check runs on a dynamic tag whose name is a string literal with no
+placeholder (`<${"div"}>`, whatever it names, as Marko reads it as a static
+name), and on `<html-script>`/`<html-style>`. A spread's keys (runtime data), a
+component's input, a dynamic tag with any other name (`<${input.t}>`,
+`<${"di" + "v"}>`), the `class:`/`style:`/`on:` colon names and other
+spellings (`classname`, `Ref`, `ref:x`) are not affected. The rows of a
+`<for>` are keyed with `by=` on every host. When an element has several such
+names, the first one is reported (Marko reports the last).
 
 ### Spread and trust
 

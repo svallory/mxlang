@@ -302,11 +302,14 @@ configuration), and `<script>` is the one inert tag taking a body (raw text).
 
 Some constructs need no row at all, because core refuses them before this
 translator runs — do not add code for these, and do not read their absence as
-tolerance. `key=` on an element is one: core refuses it
-(`MX_INVALID_ATTRIBUTE`, with stock Marko's message, in `lowerAttrNamed`) on
-every host whose declarations do not list it in `acceptsReservedAttrNames`,
-html among them. In stock Marko it is the **translator** (`knownWrongAttrs`)
-that refuses it, not the parser. `$!{…}` in an attribute value
+tolerance. Other frameworks' attribute names on an element (`key=`, `ref=`,
+`className=`, `v-if=`, `v-on:click=`, ...) are one: core refuses each
+(`MX_INVALID_ATTRIBUTE`, with stock Marko's message, at the attribute) on every
+host whose declarations do not list it in `acceptsReservedAttrNames`, html
+among them (it lists none), also on a string-literal dynamic tag
+(`<${"div"} key=1/>`) and on the claimed `<html-script>`/`<html-style>`. In
+stock Marko it is the **translator** (`knownWrongAttrs`) that refuses them, not
+the parser. `$!{…}` in an attribute value
 needs no row either: the MX front end refuses it before lowering runs
 (`MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE`,
 `packages/parser/src/frontend/parse.ts`).
