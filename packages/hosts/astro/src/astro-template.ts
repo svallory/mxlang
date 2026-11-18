@@ -38,6 +38,7 @@ import {
   type Node,
   newCtx,
   parseFragment,
+  printExpression,
   rejectUnsupportedFields,
   type TargetLookup,
   unresolvedCustomTagMessage,
@@ -1783,12 +1784,17 @@ export function lowerAstroMx(
   }
 }
 
-/** Prints an expression by slicing its file-relative source range. */
+/**
+ * Prints an expression by slicing its file-relative source range. Core also
+ * hands `generate` nodes it built without a position (a head class merged into
+ * an authored `class`); those print through core's generator, as on the other
+ * hosts.
+ */
 function sourceOf(source: string, node: Node): string {
   const start = node?.loc?.start?.index;
   const end = node?.loc?.end?.index;
   if (typeof start === "number" && typeof end === "number") {
     return source.slice(start, end);
   }
-  fail("expression has no source position", node);
+  return printExpression(node);
 }

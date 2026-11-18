@@ -118,6 +118,16 @@ async function renderSource(name: string, source: string): Promise<string> {
   return container.renderToString(component);
 }
 
+describe("a head class merged into an authored class (astro)", () => {
+  it("renders `a b` for a string and an expression authored class", async () => {
+    const html = await renderSource(
+      "merged-head-class",
+      '---\nconst x = "b";\n---\n<div.a class="b"/><div.a class=x/>',
+    );
+    expect(html).toBe('<div class="a b"></div><div class="a b"></div>');
+  });
+});
+
 /**
  * A top-level `return` in the `---` fence is valid Astro: the fence is
  * compiled into the component function body, and `return Astro.redirect("/")`

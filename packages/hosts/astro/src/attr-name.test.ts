@@ -189,3 +189,34 @@ describe("other frameworks' attribute names (astro)", () => {
     });
   });
 });
+
+/**
+ * Core merges a head class into an authored `class` by building a new value
+ * (a template literal of two strings, or an array) with no source position;
+ * Astro prints it through core's generator, as every other host does.
+ */
+describe("a head class merged into an authored class (astro)", () => {
+  const template = (source: string): string =>
+    lowerAstroMx(`${FENCE}${source}`, "Test.astro.mx").code;
+
+  it("compiles a string head class merged into a string class", () => {
+    expect(template('<div.a class="b"/>')).toContain(
+      '<div class={__mxAttrOut("class", `${"a"} ${"b"}`)}></div>',
+    );
+  });
+
+  it("compiles a head class merged into an expression class as class:list", () => {
+    expect(template("<div.a class=x/>")).toContain(
+      '<div class:list={["a", x]}></div>',
+    );
+  });
+
+  it("refuses the merged class on a bare <style> at the authored class", () => {
+    expect(failure('<style.a class="b">a{}</style>')).toEqual({
+      message:
+        "The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.",
+      line: 4,
+      column: 9,
+    });
+  });
+});
