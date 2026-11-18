@@ -31,6 +31,9 @@ const declarations = {
   tags: {},
   isElement: () => true,
   isComponent: () => false,
+  // The fixture's attribute trigger writes an attribute named `ref`, a name
+  // core refuses on a native element unless the host keeps it.
+  acceptsReservedAttrNames: ["ref"],
 };
 
 /** `~user.name`: a path into the record the template reads. */

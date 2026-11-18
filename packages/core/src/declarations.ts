@@ -133,14 +133,14 @@ export interface HostDeclarations {
    */
   acceptsForeignAttrNames?: boolean;
   /**
-   * Names stock Marko refuses on a native element that this host's output
-   * language gives a meaning of its own; core passes such a name through on a
-   * native element instead of refusing it. Only a host whose output language
-   * gives `key` a meaning of its own, such as a reconciliation key, lists it;
-   * every other host refuses `key=` on a native element the way Marko 6.4.4
-   * does ("`key` is not a valid attribute, did you mean `<for by>`?"),
-   * positioned at the attribute. Core reserves only `key` today; a listed name
-   * core does not reserve has no effect.
+   * Core refuses, on a native element, the attribute names stock Marko's
+   * `knownWrongAttrs` refuses because they belong to another framework's
+   * template syntax (`key`, `ref`, `className`, `htmlFor`, `v-if`, ...), with
+   * Marko's message and hint ("`ref` is not a valid attribute, did you mean
+   * `<tag/ref>`?"), positioned at the attribute. A host lists here the names
+   * its output language gives a meaning on an element; core passes each listed
+   * name through as an ordinary attribute. A listed name core does not
+   * reserve has no effect, and the colon forms (`v-on:click`) have no opt-in.
    */
   acceptsReservedAttrNames?: readonly string[];
   /**

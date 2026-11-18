@@ -2474,11 +2474,107 @@ function wholeAttrSpan(
 }
 
 /**
- * The attribute name Marko refuses on a native element ("`key` is not a valid
- * attribute, did you mean `<for by>`?") unless the host's declarations list it
- * in `acceptsReservedAttrNames`.
+ * A hint that names a built-in tag: Marko's own text when the file spells the
+ * tag as MX does, otherwise the tag in the file's voice plus `suffix`.
  */
-const RESERVED_NATIVE_ATTR = "key";
+interface TagHint {
+  readonly tag: string;
+  readonly stock: string;
+  readonly suffix?: string;
+}
+
+/**
+ * The attribute names Marko refuses on a native element because they belong
+ * to another framework's template syntax (Marko 6.4.4 `knownWrongAttrs`), each
+ * with Marko's hint toward the Marko form. A host whose output language gives
+ * a name a meaning on an element lists it in `acceptsReservedAttrNames`.
+ * `dangerouslySetInnerHTML` is left to the hosts, which refuse it themselves.
+ */
+const KNOWN_WRONG_NATIVE_ATTRS: Readonly<Record<string, string | TagHint>> = {
+  className: "`class`",
+  classList: "`class`",
+  htmlFor: "`for`",
+  acceptCharset: "`accept-charset`",
+  httpEquiv: "`http-equiv`",
+  defaultValue: "`value`",
+  defaultChecked: "`checked`",
+  key: { tag: "for", stock: "`<for by>`", suffix: " with `by=`" },
+  ref: "`<tag/ref>`",
+  "v-if": { tag: "if", stock: "`<if>`" },
+  "v-else": { tag: "else", stock: "`<else>`" },
+  "v-else-if": { tag: "else-if", stock: "`<else if>`" },
+  "v-for": { tag: "for", stock: "`<for>`" },
+  "v-show": { tag: "if", stock: "`<if>`" },
+  "v-model": "`value:=state`",
+  "v-bind": "`...attrs`",
+  "v-html": "`$!{html}`",
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko's hint quotes MX placeholder syntax, not a JS template
+  "v-text": "`${text}`",
+};
+
+/**
+ * The colon forms Marko refuses (`getWrongAttrSuggestion`), by the part
+ * before the first `:`, with the hint built from the rest. `class:`, `style:`
+ * and `on:` are MX's own modifier names and go through their own branches.
+ */
+const KNOWN_WRONG_NATIVE_ATTR_PREFIXES: Readonly<
+  Record<string, (rest: string) => string>
+> = {
+  "v-on": (rest) => `on${rest.charAt(0).toUpperCase()}${rest.slice(1)}`,
+  bind: (rest) => `${rest}:=state`,
+  "v-model": (rest) => `${rest}:=state`,
+  "v-bind": (rest) => rest,
+};
+
+/**
+ * Marko's message for an attribute name another framework's template syntax
+ * uses ("`ref` is not a valid attribute, did you mean `<tag/ref>`?"), or
+ * nothing when the name is not one of them or the host's declarations list it
+ * in `acceptsReservedAttrNames`. A bound `x:=` and a method `x(){}` keep the
+ * name; a modifier joins it (`v-on:click`), as Marko joins it before the check.
+ */
+function knownWrongNativeAttr(ctx: Ctx, attr: Node): string | undefined {
+  if (isSpreadAttributeNode(attr)) return undefined;
+  const voice = voiceOfCtx(ctx);
+  const name = attrNameOf(attr);
+  if (typeof name !== "string") return undefined;
+  if (attr.modifier == null) {
+    if (!Object.hasOwn(KNOWN_WRONG_NATIVE_ATTRS, name)) return undefined;
+    if (ctx.declarations.acceptsReservedAttrNames?.includes(name)) {
+      return undefined;
+    }
+    const hint = KNOWN_WRONG_NATIVE_ATTRS[name] as string | TagHint;
+    const said =
+      typeof hint === "string"
+        ? hint
+        : writesMxSyntax(ctx, hint.tag)
+          ? hint.stock
+          : `${voice.tag(hint.tag)}${hint.suffix ?? ""}`;
+    return `\`${name}\` is not a valid ${voice.attribute}, did you mean ${said}?`;
+  }
+  const joined = `${name}:${attr.modifier}`;
+  const colon = joined.indexOf(":");
+  const prefix = joined.slice(0, colon);
+  if (!Object.hasOwn(KNOWN_WRONG_NATIVE_ATTR_PREFIXES, prefix)) {
+    return undefined;
+  }
+  const hint = KNOWN_WRONG_NATIVE_ATTR_PREFIXES[prefix]?.(
+    joined.slice(colon + 1),
+  );
+  return `\`${joined}\` is not a valid ${voice.attribute}, did you mean \`${hint}\`?`;
+}
+
+/**
+ * Marko's other-framework-names check on a tag Marko reads as native but core
+ * lowers another way (a one-quasi string-literal dynamic tag, a delegated
+ * `html-script`/`html-style`): raised at the first offending attribute.
+ */
+function rejectKnownWrongNativeAttrs(ctx: Ctx, node: Node): void {
+  for (const attr of tagAttributesOf(node)) {
+    const message = knownWrongNativeAttr(ctx, attr);
+    if (message) raise(INVALID_ATTRIBUTE_CODE, message, attr);
+  }
+}
 
 function lowerAttrNamed(
   ctx: Ctx,
@@ -2556,25 +2652,13 @@ function lowerAttrNamed(
     );
   }
 
-  // Marko refuses an authored `key` on a native element (rows are keyed with
-  // `<for by>`). A host whose output language gives the name a meaning of its
-  // own lists it in `acceptsReservedAttrNames`. `key:x` (a modifier) is
-  // another name; a bound `key:=` and a method `key(){}` are still `key`.
-  if (
-    isElement &&
-    attr.name === RESERVED_NATIVE_ATTR &&
-    attr.modifier == null &&
-    !ctx.declarations.acceptsReservedAttrNames?.includes(RESERVED_NATIVE_ATTR)
-  ) {
-    raise(
-      INVALID_ATTRIBUTE_CODE,
-      `\`${RESERVED_NATIVE_ATTR}\` is not a valid ${voiceOfCtx(ctx).attribute}, did you mean ${
-        writesMxSyntax(ctx, "for")
-          ? "`<for by>`"
-          : `${voiceOfCtx(ctx).tag("for")} with \`by=\``
-      }?`,
-      attr,
-    );
+  // Marko refuses another framework's attribute names on a native element
+  // (`key`, `ref`, `className`, `v-if`, ...), unless the host's output
+  // language gives the name a meaning (`acceptsReservedAttrNames`). Ahead of
+  // the value checks, as Marko checks the name before the value.
+  if (isElement) {
+    const message = knownWrongNativeAttr(ctx, attr);
+    if (message) raise(INVALID_ATTRIBUTE_CODE, message, attr);
   }
 
   // Ordinary native colon names are not handler methods. Marko rejects a
@@ -5714,6 +5798,18 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 /** A tag this host claims, with every part lowered for its emitter. */
 function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   if (ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
+  // Marko's `html-script`/`html-style` are its `script`/`style` elements, so
+  // their attribute names get the native-element check when the host reads
+  // that name as an element.
+  const canonical =
+    name === "html-script"
+      ? "script"
+      : name === "html-style"
+        ? "style"
+        : undefined;
+  if (canonical && ctx.declarations.isElement(canonical, ctx)) {
+    rejectKnownWrongNativeAttrs(ctx, node);
+  }
   const loc = posOf(ctx, node);
   // A comment's attribute error is Marko's `assertNoAttributes`, ahead of its
   // body: raised right after the host has resolved the claim (and had its
@@ -7173,6 +7269,17 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (node.name && !hasStaticName(node)) {
     validateBoundAttributes(ctx, node);
     rejectArgsWithProps(ctx, node);
+    // Marko reads a one-quasi string-literal name (`<${"div"}>`) as a static
+    // name and checks its attribute names as a native tag's, whatever it
+    // names; the tag still lowers as a dynamic tag here.
+    const literalName = tagNameExprOf(node);
+    if (
+      literalName?.type === "TemplateLiteral" &&
+      literalName.expressions?.length === 0 &&
+      literalName.quasis?.length === 1
+    ) {
+      rejectKnownWrongNativeAttrs(ctx, node);
+    }
     const isBare =
       tagAttributesOf(node).length === 0 && !bodyChildren(node).length;
     const dynamicExpr = exprOf(ctx, tagNameExprOf(node));

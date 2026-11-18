@@ -3325,6 +3325,180 @@ describe("key= on a native element (Marko parity, D171)", () => {
 });
 
 /**
+ * Marko 6.4.4 refuses, on a native element, every attribute name of its
+ * `knownWrongAttrs` table (another framework's template syntax) and the
+ * `v-on:`/`bind:`/`v-model:`/`v-bind:` colon forms, each with a hint, at the
+ * attribute (`assertValidNativeAttrName`). Core does the same unless the
+ * host lists the plain name in `acceptsReservedAttrNames` (D171, D184), on an
+ * element, on a dynamic tag whose name is a one-quasi string literal (Marko
+ * reads it as a static name) and on a delegated `html-script`/`html-style`
+ * whose canonical name is an element.
+ */
+describe("other knownWrongAttrs names on a native element (Marko parity, D171)", () => {
+  const host = (overrides: Partial<Policy> = {}): Policy =>
+    fakeDeclarations({
+      isBuiltinTag: (name) => name === "let",
+      isDelegatedTag: (name) => name === "let",
+      resolveDelegatedTag: () => ({}),
+      resolveAttributeMethod: () => true,
+      ...overrides,
+    });
+  const claimsDynamic = (): Policy =>
+    host({ isDelegatedTag: (name) => name === DYNAMIC_TAG || name === "let" });
+  const claimsNative = (overrides: Partial<Policy> = {}): Policy =>
+    host({
+      isDelegatedTag: (name) =>
+        ["html-script", "html-style", "style", "let"].includes(name),
+      ...overrides,
+    });
+  const said = (name: string, hint: string) =>
+    `\`${name}\` is not a valid attribute, did you mean \`${hint}\`?`;
+  // `§` marks where the error must land; it is stripped before lowering.
+  const refusedOnElement: [string, string][] = [
+    ["<div §ref=x/>", said("ref", "<tag/ref>")],
+    ['<div §className="a"/>', said("className", "class")],
+    ["<div §classList=x/>", said("classList", "class")],
+    ['<label §htmlFor="a"/>', said("htmlFor", "for")],
+    ['<form §acceptCharset="utf-8"/>', said("acceptCharset", "accept-charset")],
+    ['<meta §httpEquiv="refresh"/>', said("httpEquiv", "http-equiv")],
+    ['<input §defaultValue="a"/>', said("defaultValue", "value")],
+    ["<input §defaultChecked/>", said("defaultChecked", "checked")],
+    ["<div §v-if=x/>", said("v-if", "<if>")],
+    ["<div §v-else/>", said("v-else", "<else>")],
+    ["<div §v-else-if=x/>", said("v-else-if", "<else if>")],
+    ["<div §v-for=x/>", said("v-for", "<for>")],
+    ["<div §v-show=x/>", said("v-show", "<if>")],
+    ["<input §v-model=x/>", said("v-model", "value:=state")],
+    ["<div §v-bind=x/>", said("v-bind", "...attrs")],
+    ["<div §v-html=x/>", said("v-html", "$!{html}")],
+    ["<div §v-text=x/>", said("v-text", "${text}")],
+    ["<div §className:=x/>", said("className", "class")],
+    ["<div §ref(){}/>", said("ref", "<tag/ref>")],
+    ["<input §v-model:=x/>", said("v-model", "value:=state")],
+    ["<button §v-on:click=f/>", said("v-on:click", "onClick")],
+    ["<input §v-model:value=x/>", said("v-model:value", "value:=state")],
+    ["<div §v-bind:title=x/>", said("v-bind:title", "title")],
+    ["<input §bind:value=x/>", said("bind:value", "value:=state")],
+    ['<div §className="a" ref=x/>', said("className", "class")],
+    ["<svg><circle §ref=x/></svg>", said("ref", "<tag/ref>")],
+    ["div §ref=x", said("ref", "<tag/ref>")],
+  ];
+  const refusedDynamic: [string, string][] = [
+    ['<${"div"} §key=1/>', said("key", "<for by>")],
+    ['<${"div"} §ref=x/>', said("ref", "<tag/ref>")],
+    ['<${"circle"} §ref=1/>', said("ref", "<tag/ref>")],
+    ['<${"my-el"} §ref=1/>', said("ref", "<tag/ref>")],
+    ['<${"style"} §ref=1/>', said("ref", "<tag/ref>")],
+    ['<${"script"} §key=1/>', said("key", "<for by>")],
+    ['<${"Foo"} §ref=1/>', said("ref", "<tag/ref>")],
+    ["<${`circle`} §ref=1/>", said("ref", "<tag/ref>")],
+    ['<${"div"} id="a" §v-on:click=f/>', said("v-on:click", "onClick")],
+  ];
+  const fails = (marked: string, message: string, policy: Policy) => {
+    const column = marked.indexOf("§");
+    expect(() => lowerSource(marked.replace("§", ""), policy)).toThrow(
+      expect.objectContaining({
+        message,
+        diagnosticCode: "MX_INVALID_ATTRIBUTE",
+        line: 1,
+        column,
+      }),
+    );
+  };
+
+  it.each(refusedOnElement)("refuses %s at the attribute", (marked, message) =>
+    fails(marked, message, host()),
+  );
+
+  it.each(refusedDynamic)(
+    "refuses %s, a string-literal dynamic tag, when the host does not claim dynamic tags",
+    (marked, message) => fails(marked, message, host()),
+  );
+
+  it.each(refusedDynamic)(
+    "refuses %s, a string-literal dynamic tag, when the host claims dynamic tags",
+    (marked, message) => fails(marked, message, claimsDynamic()),
+  );
+
+  it.each([
+    ["<html-script §key=1/>", said("key", "<for by>")],
+    ['<html-style §className="a"/>', said("className", "class")],
+  ])(
+    "refuses %s when the host claims it and reads its canonical name as an element",
+    (marked, message) => fails(marked, message, claimsNative()),
+  );
+
+  it.each([
+    "<html-script key=1/>",
+    '<html-style className="a"/>',
+    "<style ref=x>a{}</style>",
+  ])("lowers a claimed %s when the host reads no element there", (source) => {
+    expect(() =>
+      lowerSource(source, claimsNative({ isElement: () => false })),
+    ).not.toThrow();
+  });
+
+  it("lowers a claimed `<style>` with `ref` as today (not this check)", () => {
+    expect(() =>
+      lowerSource("<style ref=x>a{}</style>", claimsNative()),
+    ).not.toThrow();
+  });
+
+  it.each([
+    "<div v-cloak/>",
+    "<div v-on=x/>",
+    '<div classname="a"/>',
+    "<div Ref=1/>",
+    "<div ref:x=1/>",
+    "<div data-ref=1/>",
+    '<div ...{ref: 1, className: "a"}/>',
+    '<define/Foo>x</define><Foo ref=1 className="a"/>',
+    "<${input.t} ref=1/>",
+    '<const/x="div"/><${x} ref=1/>',
+    '<${"di" + "v"} ref=1/>',
+  ])("lowers %s, which Marko compiles", (source) => {
+    expect(() => lowerSource(source, host())).not.toThrow();
+    expect(() => lowerSource(source, claimsDynamic())).not.toThrow();
+  });
+
+  it("passes a listed name through as today's attribute", () => {
+    const ir = lowerSource(
+      '<div ref=x className="a"/>',
+      host({ acceptsReservedAttrNames: ["ref", "className"] }),
+    );
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "dynamic", name: "ref", value: { code: "x" } },
+      { kind: "static", name: "className", value: "a" },
+    ]);
+  });
+
+  it("passes a listed name through on a string-literal dynamic tag", () => {
+    expect(() =>
+      lowerSource(
+        '<${"div"} ref=x/>',
+        host({ acceptsReservedAttrNames: ["ref"] }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("refuses `className` when the host lists only `ref`", () => {
+    fails(
+      '<div ref=x §className="a"/>',
+      said("className", "class"),
+      host({ acceptsReservedAttrNames: ["ref"] }),
+    );
+  });
+
+  it("gives the colon forms no opt-in", () => {
+    fails(
+      "<button §v-on:click=f/>",
+      said("v-on:click", "onClick"),
+      host({ acceptsReservedAttrNames: ["v-on", "v-on:click"] }),
+    );
+  });
+});
+
+/**
  * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
  * name at its **last** `:`; an empty head is not an error but the `value`
  * attribute, so `<div :foo="y"/>` is `value` with modifier `foo` and compiles
