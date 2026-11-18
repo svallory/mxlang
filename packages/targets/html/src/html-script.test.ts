@@ -522,3 +522,109 @@ describe("<style> refuses attributes, as stock Marko does", () => {
     ).toBe('<style media="print">a{}</style>');
   });
 });
+
+/**
+ * `<html-comment>`, `<html-script>` and `<html-style>` have no attribute tags
+ * or params; core refuses them on the authored tag. A custom tag whose hook
+ * builds one of them keeps its own: they are the custom tag's, not the built
+ * primitive's.
+ */
+describe("a custom tag's own fields are not the raw primitive it builds", () => {
+  type CustomTags = NonNullable<MxOptions["customTags"]>;
+  const builds = (
+    name: string,
+    attributeTags?: CustomTags[string]["attributeTags"],
+  ): CustomTags => ({
+    widget: {
+      ...(attributeTags ? { attributeTags } : {}),
+      transform: (_call, ctx) => [ctx.build.delegatedTag(name, [], [])],
+    },
+  });
+
+  it.each([
+    ["html-comment", "<!---->"],
+    ["html-script", "<script></script>"],
+    ["html-style", "<style></style>"],
+  ])("<%s>: the widget's tag params", (name, rendered) => {
+    expect(mx("<widget|x|>a</widget>", { customTags: builds(name) })({})).toBe(
+      rendered,
+    );
+  });
+
+  it.each([
+    ["html-comment", "<!---->"],
+    ["html-script", "<script></script>"],
+    ["html-style", "<style></style>"],
+  ])("<%s>: the widget's attribute tags", (name, rendered) => {
+    expect(
+      mx("<widget><@item/></widget>", {
+        customTags: builds(name, { item: {} }),
+      })({}),
+    ).toBe(rendered);
+  });
+
+  // The authored tags' fields are still refused, claimed or under a
+  // contract-only registration, with the text and position they had.
+  const refusal = (run: () => unknown) => {
+    let caught: unknown;
+    try {
+      run();
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(TranslateError);
+    const { diagnosticCode, line, column } = caught as TranslateError;
+    return { message: (caught as Error).message, diagnosticCode, line, column };
+  };
+
+  it.each([
+    [
+      "<html-comment|x|>a</html-comment>",
+      "tag params `|...|` on `<html-comment>` are not supported in a standalone template",
+      0,
+    ],
+    [
+      "<html-comment/v>a</html-comment>",
+      "tag variable `/v` on `<html-comment>` is not supported in a standalone template",
+      14,
+    ],
+    [
+      "<html-comment(1)>a</html-comment>",
+      "Tag does not support arguments.",
+      14,
+    ],
+    [
+      "<html-script|x|>a</html-script>",
+      "tag params `|...|` on `<html-script>` are not supported in a standalone template",
+      0,
+    ],
+    [
+      "<html-style/v>a</html-style>",
+      "tag variable `/v` on `<html-style>` is not supported in a standalone template",
+      12,
+    ],
+  ])("refuses the fields of an authored %s", (source, message, column) => {
+    expect(refusal(() => compile(source, "/fixtures/test.mx"))).toEqual({
+      message,
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      line: 1,
+      column,
+    });
+  });
+
+  it("refuses the params of a contract-only `html-comment` call", () => {
+    expect(
+      refusal(() =>
+        mx("<html-comment|x|>a</html-comment>", {
+          customTags: { "html-comment": {} },
+        })({}),
+      ),
+    ).toEqual({
+      message:
+        "tag params `|...|` on `<html-comment>` are not supported in a standalone template",
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      line: 1,
+      column: 0,
+    });
+  });
+});

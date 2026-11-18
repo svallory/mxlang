@@ -3781,6 +3781,86 @@ describe("a bare <style> refuses attributes, as stock Marko does", () => {
 });
 
 /**
+ * `<html-comment>`, `<html-script>` and `<html-style>` have no params,
+ * attribute tags or arguments (and only `<html-comment>` binds a tag
+ * variable, in stock Marko). Core refuses them on the authored tag once the
+ * host's resolve has recorded a decision for it, so one a custom tag builds is
+ * never checked against its builder's own fields.
+ */
+describe("an authored raw primitive refuses the fields it does not have", () => {
+  const compilePrimitive = (
+    source: string,
+    name: string,
+    overrides: Partial<Policy> = {},
+  ): string =>
+    compileSource(
+      source,
+      "/tmp/mx-core-test/primitive.mx",
+      fakeDeclarations({
+        isDelegatedTag: (tag) => tag === name,
+        resolveDelegatedTag: () => ({}),
+        ...overrides,
+      }),
+      {
+        targets: lookup,
+        emitIr: (ir) => ir.body[0]?.kind ?? "missing",
+      },
+    ).code;
+
+  it.each(["html-comment", "html-script", "html-style"])(
+    "refuses the params of an authored <%s> the host resolves",
+    (name) => {
+      expect(() => compilePrimitive(`<${name}|x|>a</${name}>`, name)).toThrow(
+        expect.objectContaining({
+          message: expect.stringContaining(`on \`<${name}>\``),
+          diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+          line: 1,
+          column: 0,
+        }),
+      );
+    },
+  );
+
+  it("refuses an authored <html-style>'s tag variable at the `/v`", () => {
+    expect(() =>
+      compilePrimitive("<html-style/v>a</html-style>", "html-style"),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "tag variable `/v` on `<html-style>` is not supported in a standalone template",
+        diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+        line: 1,
+        column: 12,
+      }),
+    );
+  });
+
+  it("leaves an <html-comment>'s tag variable to the host", () => {
+    expect(
+      compilePrimitive("<html-comment/v>a</html-comment>", "html-comment"),
+    ).toBe("DelegatedTag");
+  });
+
+  it("keeps the fields when the host's resolve records nothing", () => {
+    expect(
+      compilePrimitive("<html-comment|x|>a</html-comment>", "html-comment", {
+        resolveDelegatedTag: () => undefined,
+      }),
+    ).toBe("DelegatedTag");
+  });
+
+  it("reports the host's own resolve error first", () => {
+    expect(() =>
+      compilePrimitive("<html-comment|x|>a</html-comment>", "html-comment", {
+        resolveDelegatedTag: () => {
+          throw new Error("host says no");
+        },
+      }),
+    ).toThrow("host says no");
+  });
+});
+
+/**
  * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
  * name at its **last** `:`; an empty head is not an error but the `value`
  * attribute, so `<div :foo="y"/>` is `value` with modifier `foo` and compiles

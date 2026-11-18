@@ -49,6 +49,21 @@ describe("Comment", () => {
 });
 
 describe("DelegatedTag html-comment", () => {
+  it("refuses an authored html-comment's params and arguments, as Marko does", () => {
+    expect(() => emit("<html-comment|x|>a</html-comment>")).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining("on `<html-comment>`"),
+        diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      }),
+    );
+    expect(() => emit("<html-comment(1)>a</html-comment>")).toThrow(
+      expect.objectContaining({
+        message: "Tag does not support arguments.",
+        diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      }),
+    );
+  });
+
   it("emits a plain-text html-comment", () => {
     const out = emit("<html-comment>plain text</html-comment>");
     expect(out).toBe("<!-- plain text -->");

@@ -1019,6 +1019,20 @@ describe("<html-comment> (Marko 6.4.4 parity)", () => {
       "Tag does not support arguments.",
     );
   });
+
+  it("a custom tag's own params are not the <html-comment> it builds", () => {
+    expect(
+      lowerAstroMx("---\n---\n<widget|x|>a</widget>", "Test.astro.mx", {
+        customTags: {
+          widget: {
+            transform: (_call, ctx) => [
+              ctx.build.delegatedTag("html-comment", [], []),
+            ],
+          },
+        },
+      }).code,
+    ).toContain("<!---->");
+  });
 });
 
 describe("<textarea value> (Marko 6.4.4 parity)", () => {

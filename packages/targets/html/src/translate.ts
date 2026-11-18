@@ -1329,12 +1329,19 @@ function resolveDelegatedTag(
   }
 
   if (name === "html-comment") {
-    rejectUnsupportedFields(ctx, node, "`<html-comment>`");
+    // Core checks an authored `<html-comment>`'s other fields; a built one has
+    // none. Its `/var` stays refused here: this target has no comment node to
+    // bind it to.
+    rejectUnsupportedFields(ctx, node, "`<html-comment>`", {
+      attributeTags: true,
+      params: true,
+      args: true,
+    });
     return { kind: "html-comment" };
   }
 
   if (name === "html-script" || name === "html-style") {
-    rejectUnsupportedFields(ctx, node, `\`<${name}>\``);
+    // Core checks an authored tag's fields; a built one has none.
     return { kind: "raw-element", tag: name.slice("html-".length) };
   }
 

@@ -123,8 +123,9 @@ import {
   isContractOnlyDelegated,
   isDeferredContract,
   noAttributesMessage,
+  RAW_PRIMITIVES,
+  rejectPrimitiveFields,
   rejectStructuralBody,
-  rejectStyleTagFields,
   runAnalyzeHooks,
   runFinalizeHooks,
   setChildEnd,
@@ -5917,11 +5918,19 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   // Every other tag resolves last, after its attributes and children, as the
   // contract-only delegated path does; only a comment resolves early.
   const early = name === "html-comment";
-  const commentData = early ? resolve() : undefined;
+  // A raw primitive's fields are checked once the host has recorded a
+  // decision for it (and had its chance to refuse the tag first).
+  const resolveRaw = () => {
+    const data = resolve();
+    if (data !== undefined) rejectPrimitiveFields(ctx, node, name);
+    return data;
+  };
+  const raw = RAW_PRIMITIVES.has(name);
+  const commentData = early ? resolveRaw() : undefined;
   // A claimed `style` the host reads as an element is the core `<style>`:
   // its attribute refusal runs once the host's resolve has had its say.
   const resolveStyle = () => {
-    rejectStyleTagFields(ctx, node);
+    rejectPrimitiveFields(ctx, node, "style");
     const data = resolve();
     rejectBareStyleAttributes(ctx, node);
     return data;
@@ -5972,7 +5981,13 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       params: paramsOf(ctx, node),
       bindings,
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
-      data: early ? commentData : styleElement ? resolveStyle() : resolve(),
+      data: early
+        ? commentData
+        : styleElement
+          ? resolveStyle()
+          : raw
+            ? resolveRaw()
+            : resolve(),
       loc,
     },
     loc,

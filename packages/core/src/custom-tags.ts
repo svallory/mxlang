@@ -4182,16 +4182,33 @@ function spanDefaultedAttrs(
 }
 
 /**
- * Refuses the fields the core `<style>` does not have: arguments, type
- * arguments, params, attribute tags and a tag variable. Runs on an authored
- * `<style>` only (a claimed one, or a contract-only `style` call), never on a
- * `style` a custom tag builds, whose node is the custom tag's own.
+ * The Marko core primitives whose fields core checks right after the host's
+ * resolve has recorded a decision for them (`<style>` is checked before it).
  */
-export function rejectStyleTagFields(ctx: Ctx, node: Node): void {
+export const RAW_PRIMITIVES: ReadonlySet<string> = new Set([
+  "html-comment",
+  "html-script",
+  "html-style",
+]);
+
+/**
+ * Refuses the fields a Marko core primitive (`style`, `html-comment`,
+ * `html-script`, `html-style`) does not have: arguments, type arguments,
+ * params, attribute tags and a tag variable. An `<html-comment>`'s tag
+ * variable is left to the host: stock Marko binds it to the comment node.
+ * Runs on an authored tag only (a claimed one, or a contract-only call),
+ * never on one a custom tag builds, whose node is the custom tag's own.
+ */
+export function rejectPrimitiveFields(
+  ctx: Ctx,
+  node: Node,
+  name: string,
+): void {
   rejectUnsupportedFields(
     ctx,
     node,
-    lazyOwner(() => voiceOfCtx(ctx).tag("style", triggerOfNode(node))),
+    lazyOwner(() => voiceOfCtx(ctx).tag(name, triggerOfNode(node))),
+    name === "html-comment" ? { var: true } : {},
   );
 }
 
@@ -4221,13 +4238,18 @@ function contractOnlyDelegatedTag(
   // A contract-only `style` the host reads as an element is the core
   // `<style>`, checked before the host resolves it.
   if (call.name === "style" && ctx.declarations.isElement("style", ctx)) {
-    rejectStyleTagFields(ctx, node);
+    rejectPrimitiveFields(ctx, node, "style");
   }
   const data = ctx.declarations.resolveDelegatedTag?.(
     call.name,
     markoViewOf(ctx, node),
     ctx,
   );
+  // The other raw primitives are checked once the host has recorded a
+  // decision for them, so a host's own refusal reports first.
+  if (RAW_PRIMITIVES.has(call.name) && data !== undefined) {
+    rejectPrimitiveFields(ctx, node, call.name);
+  }
   return {
     kind: "DelegatedTag",
     tag: {

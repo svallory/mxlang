@@ -392,7 +392,13 @@ export const astroTemplateDeclarations: HostDeclarations = {
     // `<html-comment>` lowers to a real `<!-- -->`, as Marko and the html
     // target do, rather than falling through to a literal element.
     if (name === "html-comment") {
-      rejectUnsupportedFields(ctx, node, "`<html-comment>`");
+      // Core checks an authored `<html-comment>`'s other fields; a built one
+      // has none. Its `/var` stays refused here, as on the html target.
+      rejectUnsupportedFields(ctx, node, "`<html-comment>`", {
+        attributeTags: true,
+        params: true,
+        args: true,
+      });
       return { kind: "html-comment" };
     }
     if (name !== DYNAMIC_TAG) {
