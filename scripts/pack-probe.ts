@@ -25,7 +25,8 @@
 //   bun run scripts/pack-probe.ts [--keep] [--only <name>]
 //
 // `npm pack`, not `bun pm pack`, for the same reason as
-// `packages/targets/html/scripts/consumer-check.ts` (bun 1.3.14 hangs on macOS).
+// `packages/targets/html/scripts/consumer-check.ts`: bun 1.3.14 hung on macOS;
+// bun 1.4.4 no longer does (macOS, 2026-11-18, 6/6), switching is a follow-up.
 // npm does NOT rewrite `workspace:*` in the packed manifest, so private
 // workspace deps are pinned to tarballs/stubs with `overrides`, as consumer-check does.
 

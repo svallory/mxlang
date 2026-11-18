@@ -25,9 +25,9 @@
 // `workspace:*`, a missing IR, or a missing diagnostic fails the run.
 //
 // `bun pm pack`, not `npm pack`, because npm does not rewrite `workspace:*` and
-// the point is to prove what `bun publish` ships. The root CLAUDE.md records a
-// `bun pm pack` hang on macOS with bun 1.3.14; it did not hang here, and the
-// per-step timeout kills it if it does.
+// the point is to prove what `bun publish` ships. The root AGENTS.md records a
+// `bun pm pack` hang on macOS with bun 1.3.14; it no longer hangs on bun 1.4.4
+// (macOS, 2026-11-18, 6/6), and the per-step timeout kills it if it does.
 //
 // It builds core itself first. It installs into a scratch dir, so it needs the
 // network only for core's registry dependencies (not for core itself: the

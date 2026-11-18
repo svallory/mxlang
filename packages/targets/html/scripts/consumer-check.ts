@@ -29,15 +29,17 @@ const simulateMissingDist = process.argv.includes("--simulate-missing-dist");
 /**
  * Every external step runs under a hard wall-clock timeout (a
  * script must be able to fail, and a hang is a silent, unbounded pass).
- * `bun pm pack` hangs: first observed inside `packages/parser` (before
+ * `bun pm pack` hung: first observed inside `packages/parser` (before
  * `core-extract` removed the translator's dependency on it), then again
  * on `packages/targets/html` and `packages/core` with bun 1.3.14 on macOS,
  * spinning at 100% CPU (`kevent64`/`unlinkat` in `sample`), both when
  * spawned from a bun parent and from a plain shell. Root cause not
  * determined; this script packs with `npm pack` instead (PR #51), which
- * produces the same tarball for these packages. The timeout stays
- * as a standing guard against the same class of hang recurring on any
- * future dependency. Wrapped in the POSIX `timeout` command rather than
+ * produces the same tarball for these packages. `npm pack` stays from that
+ * hang: `bun pm pack` no longer hangs on bun 1.4.4 (macOS, 2026-11-18, 6/6
+ * packs of these two packages), and switching packers is a follow-up. The
+ * timeout stays as a standing guard against the same class of hang recurring
+ * on any future dependency. Wrapped in the POSIX `timeout` command rather than
  * `AbortSignal.timeout` so a killed child's descendants are actually reaped
  * (`execFileSync` has no portable way to kill a process *tree*, and a
  * package-manager subcommand may spawn its own children).
