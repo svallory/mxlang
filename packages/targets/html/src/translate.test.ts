@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
+import { mx } from "./helpers.ts";
 import { compile } from "./index.ts";
 import { brandRender } from "./translate.ts";
 
@@ -842,6 +843,88 @@ describe("error constructs: the target genuinely cannot express them", () => {
     const body =
       "<try><p>b</p><@placeholder><p>loading</p></@placeholder></try>";
     expect(() => compile(src(body), file)).toThrow(/second render pass/);
+  });
+
+  // The refusal reads the `<try>` this target renders, so a custom tag's own
+  // `<@placeholder>` is not the `<try>`'s, and a placeholder a hook builds is
+  // refused rather than dropped.
+  const placeholderMessage =
+    "`<try>` with a `<@placeholder>` needs a second render pass over suspended content; a synchronous string render has nowhere to schedule it";
+  const caught = (run: () => unknown) => {
+    try {
+      run();
+    } catch (error) {
+      const { message, diagnosticCode, line, column, end } = error as Error & {
+        diagnosticCode?: string;
+        line: number;
+        column: number;
+        end?: { line: number; column: number };
+      };
+      return { message, diagnosticCode, line, column, end };
+    }
+    throw new Error("compiled");
+  };
+
+  it("a custom tag's own <@placeholder> is not the <try> it builds", () => {
+    expect(
+      mx("<widget><@placeholder>w</@placeholder><p>b</p></widget>", {
+        customTags: {
+          widget: {
+            attributeTags: { placeholder: {} },
+            transform: (call, ctx) => [
+              ctx.build.delegatedTag("try", call.content?.children ?? [], []),
+            ],
+          },
+        },
+      })({}),
+    ).toBe("<p>b</p>");
+  });
+
+  it("rejects an authored <try>'s <@placeholder> at its name", () => {
+    expect(
+      caught(() =>
+        compile(
+          "<try><p>b</p><@placeholder><p>l</p></@placeholder></try>",
+          "/fixtures/test.mx",
+        ),
+      ),
+    ).toEqual({
+      message: placeholderMessage,
+      diagnosticCode: undefined,
+      line: 1,
+      column: 13,
+      end: { line: 1, column: 26 },
+    });
+  });
+
+  it("rejects a <@placeholder> a custom tag builds on a <try>", () => {
+    expect(
+      caught(() =>
+        mx("<widget><@wait>w</@wait><p>b</p></widget>", {
+          customTags: {
+            widget: {
+              attributeTags: { wait: {} },
+              transform: (call, ctx) => [
+                ctx.build.delegatedTag(
+                  "try",
+                  call.content?.children ?? [],
+                  call.attributeTags.map((t) => ({
+                    ...t,
+                    name: "placeholder",
+                  })),
+                ),
+              ],
+            },
+          },
+        })({}),
+      ),
+    ).toEqual({
+      message: placeholderMessage,
+      diagnosticCode: undefined,
+      line: 1,
+      column: 8,
+      end: { line: 1, column: 14 },
+    });
   });
 });
 

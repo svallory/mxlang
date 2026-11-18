@@ -1231,7 +1231,10 @@ function hasStyleContract(ctx: Ctx): boolean {
  *
  * Every rejection this host makes for its own tags happens here, during
  * resolve, so a construct the target cannot express fails with a position
- * rather than reaching an emitter that would have to re-derive why.
+ * rather than reaching an emitter that would have to re-derive why. The one
+ * exception is a `<try>`'s `<@placeholder>`, which the emitter refuses on the
+ * `<try>` it renders: on a `<try>` a custom tag builds, `node` is the custom
+ * tag's own.
  */
 function resolveDelegatedTag(
   name: string,
@@ -1354,18 +1357,9 @@ function resolveDelegatedTag(
   // (`packages/core/src/builtin-tags.ts`): every other shape check — no
   // params, no `/var`, one `<@catch>`, one `<@placeholder>` with no params of
   // its own — already ran before this host is asked to render the primitive.
-  // Only this target's own limit remains here: a `<@placeholder>` needs a
-  // second render pass over suspended content, which this target has no way
-  // to schedule.
-  const placeholder = (node.attributeTags ?? []).find(
-    (t: Node) => String(t.name?.value) === "@placeholder",
-  );
-  if (placeholder) {
-    fail(
-      "`<try>` with a `<@placeholder>` needs a second render pass over suspended content; a synchronous string render has nowhere to schedule it",
-      placeholder,
-    );
-  }
+  // This target's own limit, a `<@placeholder>`, is refused by the emitter on
+  // the `<try>` it renders: `node` here can be a custom tag's own, whose
+  // attribute tags are not the built `<try>`'s.
   return { kind: "try" };
 }
 

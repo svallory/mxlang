@@ -1917,6 +1917,30 @@ export function createEmitter(
         return;
       }
       case "try": {
+        // A `<@placeholder>` needs a second render pass over suspended
+        // content, which this target has no way to schedule. Read on the
+        // `<try>` rendered here, built or authored, so a placeholder a custom
+        // tag builds is refused rather than dropped.
+        const placeholder = tag.attributeTags.find(
+          (t) => t.name === "placeholder",
+        );
+        if (placeholder) {
+          const error = new TranslateError(
+            "`<try>` with a `<@placeholder>` needs a second render pass over suspended content; a synchronous string render has nowhere to schedule it",
+            placeholder.loc.line,
+            placeholder.loc.column,
+          );
+          // The range ends after `<@name`, as core's `fail` blames a tag.
+          error.end = {
+            line: placeholder.loc.line,
+            column:
+              placeholder.loc.column +
+              2 +
+              placeholder.nameSpan.sourceEnd -
+              placeholder.nameSpan.sourceStart,
+          };
+          throw error;
+        }
         // A `<try>` without a `<@placeholder>` is a plain try/catch: the body
         // renders into a buffered sub-sink that is committed only when it
         // finishes, so a throw drops the half-rendered body and `<@catch>`
