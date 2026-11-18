@@ -1725,14 +1725,6 @@ emits `<input value=… type=text>`. A browser applies `type` before `value`, an
 some types reinterpret a later `value`. The html target reproduces this, and the
 oracle compares attribute order, so getting it wrong fails the gate.
 
-### `dangerouslySetInnerHTML`
-
-`dangerouslySetInnerHTML` is not an attribute of a native element: stock Marko
-refuses it (``` `dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`? ```),
-and so does every host that renders JSX (Preact, React, Hono, Solid) and the html
-target. The raw-HTML form is `$!{html}`. Only an authored attribute is refused; a
-spread's keys are runtime data.
-
 ### Attribute names from other frameworks
 
 As in Marko, a native element refuses the attribute names that belong to
@@ -1755,6 +1747,7 @@ The names and their hints, as Marko writes them:
 | `httpEquiv` | `http-equiv` |
 | `defaultValue` | `value` |
 | `defaultChecked` | `checked` |
+| `dangerouslySetInnerHTML` | `$!{html}` |
 | `key` | `<for by>` |
 | `ref` | `<tag/ref>` |
 | `v-if`, `v-show` | `<if>` |
@@ -1778,7 +1771,9 @@ Which names each host's framework gives a meaning on an element, as reference:
 Preact and React keep `key`, `ref`, `className`, `htmlFor`, `acceptCharset`,
 `httpEquiv`, `defaultValue` and `defaultChecked`; Hono keeps `key`, `ref`,
 `className`, `htmlFor` and `httpEquiv`; Solid keeps `ref`; html, Angular and
-Astro keep none. The colon forms are refused on every host. A host declares
+Astro keep none. `dangerouslySetInnerHTML` is refused on every host, Preact,
+React and Hono included, because `$!{html}` is MX's raw-HTML form and lowers to
+that prop there. The colon forms are refused on every host. A host declares
 its names through the generic `acceptsReservedAttrNames` hook.
 
 The same check runs on a dynamic tag whose name is a string literal with no
