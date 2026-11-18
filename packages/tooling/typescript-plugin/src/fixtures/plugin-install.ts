@@ -11,7 +11,9 @@ export const PACKAGE_DIR = path.resolve(import.meta.dirname, "../..");
  * it does in a consumer's project (the package cannot resolve itself).
  */
 export function makePluginInstall(): string {
-  const root = mkdtempSync(path.join(tmpdir(), "mx-ts-plugin-"));
+  // `PID` in the name: every real-tsserver test then runs under a path that
+  // tsserver's PID substitution in its log path would break if it saw it.
+  const root = mkdtempSync(path.join(tmpdir(), "mx-ts-plugin-PID-"));
   const scope = path.join(root, "node_modules", "@mxlang");
   mkdirSync(scope, { recursive: true });
   symlinkSync(PACKAGE_DIR, path.join(scope, "typescript-plugin"), "dir");

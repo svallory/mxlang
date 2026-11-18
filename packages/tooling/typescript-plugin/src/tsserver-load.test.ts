@@ -26,18 +26,30 @@ const TSSERVER = createRequire(import.meta.url).resolve(
 const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
+ * The `--logFile` every tsserver here gets, relative to its `cwd`. tsserver
+ * replaces the first `PID` in `--logFile` with its process id and silently
+ * logs nothing when that path's directory does not exist, so an absolute path
+ * would break whenever a directory name (mkdtemp's random suffix included)
+ * contains `PID`. A relative constant keeps every directory name out of it.
+ */
+const LOG_FILE = "tsserver.log";
+
+/**
  * Speaks the tsserver protocol over stdio; every request resolves on its
  * response. A request rejects, with tsserver's stderr and the tail of its log
  * in the message, when tsserver exits first or answers nothing in
  * {@link REQUEST_TIMEOUT_MS}; a hung tsserver is killed, never left running.
  * Every event tsserver sends is recorded from spawn on, so `waitForEvent`
- * also sees an event that arrived before anyone waited for it.
+ * also sees an event that arrived before anyone waited for it. tsserver logs
+ * to {@link LOG_FILE} in `cwd`; `log()` reads it.
  */
-function startTsserver(args: string[], cwd: string, logFile: string) {
-  const child: ChildProcess = spawn(process.execPath, [TSSERVER, ...args], {
-    cwd,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+function startTsserver(args: string[], cwd: string) {
+  const logFile = path.join(cwd, LOG_FILE);
+  const child: ChildProcess = spawn(
+    process.execPath,
+    [TSSERVER, ...args, "--logFile", LOG_FILE],
+    { cwd, stdio: ["pipe", "pipe", "pipe"] },
+  );
   let stderr = "";
   child.stderr?.on("data", (chunk: Buffer) => {
     stderr += chunk.toString();
@@ -166,6 +178,8 @@ function startTsserver(args: string[], cwd: string, logFile: string) {
         eventWaiters.add(waiter);
       });
     },
+    /** The log tsserver has written so far. */
+    log: (): string => readFileSync(logFile, "utf8"),
     kill: () => child.kill("SIGKILL"),
   };
 }
@@ -174,7 +188,7 @@ function startTsserver(args: string[], cwd: string, logFile: string) {
 function writeProject(
   root: string,
   plugins: { name: string }[],
-): { file: string; logFile: string } {
+): { file: string } {
   writeFileSync(
     path.join(root, "tsconfig.json"),
     JSON.stringify({
@@ -197,10 +211,7 @@ function writeProject(
     path.join(root, "index.ts"),
     'import Comp from "./comp.mx";\nconst misuse: number = Comp;\n',
   );
-  return {
-    file: path.join(root, "index.ts"),
-    logFile: path.join(root, "tsserver.log"),
-  };
+  return { file: path.join(root, "index.ts") };
 }
 
 /** Opens `index.ts` in one real tsserver and asserts the plugin loaded and typed it. */
@@ -211,18 +222,15 @@ async function expectPluginLoaded(
   /** Where the log must say the plugin was loaded from. */
   loadedFrom?: string,
 ) {
-  const { file, logFile } = writeProject(root, plugins);
+  const { file } = writeProject(root, plugins);
   const server = startTsserver(
     [
       "--logVerbosity",
       "verbose",
-      "--logFile",
-      logFile,
       ...extraArgs,
       "--disableAutomaticTypingAcquisition",
     ],
     root,
-    logFile,
   );
   try {
     // What an editor sends so the project can hold `.mx` files at all.
@@ -236,7 +244,7 @@ async function expectPluginLoaded(
     const diagnostics = (await server.request("semanticDiagnosticsSync", {
       file,
     })) as { code: number; text: string }[];
-    const log = readFileSync(logFile, "utf8");
+    const log = server.log();
 
     expect(log).toMatch(/Loading @mxlang\/typescript-plugin from/);
     if (loadedFrom !== undefined) {
@@ -293,7 +301,7 @@ describe("an MX quick fix through a real tsserver", () => {
     const root = realpathSync(makePluginInstall());
     let server: ReturnType<typeof startTsserver> | undefined;
     try {
-      const { file, logFile } = writeProject(root, [
+      const { file } = writeProject(root, [
         { name: "@mxlang/typescript-plugin" },
       ]);
       const page = path.join(root, "effect.mx");
@@ -308,12 +316,9 @@ describe("an MX quick fix through a real tsserver", () => {
           root,
           "--logVerbosity",
           "verbose",
-          "--logFile",
-          logFile,
           "--disableAutomaticTypingAcquisition",
         ],
         root,
-        logFile,
       );
       await server.request("configure", {
         extraFileExtensions: [
@@ -428,19 +433,15 @@ describe("Angular tag calls through a real tsserver", () => {
         tag,
         readFileSync(path.join(fixture, "tags", "user-card.mx"), "utf8"),
       );
-      const log = path.join(root, "tsserver.log");
       server = startTsserver(
         [
           "--pluginProbeLocations",
           root,
           "--logVerbosity",
           "verbose",
-          "--logFile",
-          log,
           "--disableAutomaticTypingAcquisition",
         ],
         root,
-        log,
       );
       await server.request("configure", {
         extraFileExtensions: [
@@ -517,17 +518,9 @@ describe("a misbehaving ambientTypes host through a real tsserver", () => {
         },
       });
       const file = project.path("index.ts");
-      const log = project.path("tsserver.log");
       server = startTsserver(
-        [
-          "--pluginProbeLocations",
-          root,
-          "--logFile",
-          log,
-          "--disableAutomaticTypingAcquisition",
-        ],
+        ["--pluginProbeLocations", root, "--disableAutomaticTypingAcquisition"],
         root,
-        log,
       );
       await server.request("open", { file });
 
@@ -595,17 +588,13 @@ describe("a misbehaving ambientTypes host through a real tsserver", () => {
           },
         });
         const file = project.path("index.ts");
-        const log = project.path("tsserver.log");
         server = startTsserver(
           [
             "--pluginProbeLocations",
             root,
-            "--logFile",
-            log,
             "--disableAutomaticTypingAcquisition",
           ],
           root,
-          log,
         );
         await server.request("open", { file });
 
