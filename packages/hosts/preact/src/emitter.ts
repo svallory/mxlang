@@ -2861,10 +2861,20 @@ export class PreactEmitter implements Emitter<string> {
       // `mxDynamic` itself.
       // Tag params make the body a function the callee calls with values
       // (see `#propsObject`). A native element has nothing to call it: core
-      // refuses a literal tag name with non-empty params (Marko's own error),
-      // and `__mxDynamic` throws for a literal with an empty `||` and for a
-      // string that arrives at run time rather than render an empty element.
-      const hasParams = hasContent && node.content?.hasParams === true;
+      // refuses a literal tag name with non-empty params (Marko's own error).
+      // An empty `||` on a literal writes nothing, as in Marko, so the body
+      // is not a params body and the element renders with it. `__mxDynamic`
+      // throws only for a params body whose string target arrives at run
+      // time, rather than render an empty element. The literal test is the
+      // one-quasi test core applies to a dynamic tag name.
+      const target = node.target.expr.node;
+      const literalTarget =
+        target?.type === "StringLiteral" ||
+        (target?.type === "TemplateLiteral" && target.expressions.length === 0);
+      const hasParams =
+        hasContent &&
+        node.content?.hasParams === true &&
+        !(literalTarget && node.content.params.length === 0);
       const content = contentRef ? `, ${contentRef}` : "";
       const takesParams = hasParams
         ? `${node.args.length > 0 ? "" : ", undefined"}, true`

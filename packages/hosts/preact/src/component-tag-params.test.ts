@@ -343,7 +343,7 @@ const RUNTIME_STRING = `export interface Input { tag: string }
 const RUNTIME_STRING_ARGS = `export interface Input { tag: string }
 <\${input.tag}("a")|item|>body \${item}</>`;
 
-/** An empty `||` passes core (Marko writes nothing for it) but still marks a params body. */
+/** An empty `||` on a literal target writes nothing, as in Marko: the element renders with its body. */
 const LITERAL_EMPTY_PARAMS = `<\${"my-el"}||>x</>`;
 
 const NATIVE_PARAMS_MESSAGE =
@@ -560,7 +560,7 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
     }
   });
 
-  it("a literal string target with an empty `||` compiles and throws the same error when it renders", async () => {
+  it("a literal string target with an empty `||` renders the element with its body, as Marko does", async () => {
     const { scratch, compile } = scratchFor(host, {
       caller: LITERAL_EMPTY_PARAMS,
     });
@@ -569,9 +569,9 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
       const mod = (await import(
         `${join(scratch, "main.tsx")}?tp=${serial++}`
       )) as { default: unknown };
-      await expect(renderHtml(host, mod.default, {})).rejects.toThrow(
-        new Error(NATIVE_PARAMS_MESSAGE),
-      );
+      // Stock Marko 6.4.4 (packages/stock-marko, html output) renders this
+      // source as `<my-el>x</my-el>`, the same as `<${"my-el"}>x</>`.
+      expect(await renderHtml(host, mod.default, {})).toBe("<my-el>x</my-el>");
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
