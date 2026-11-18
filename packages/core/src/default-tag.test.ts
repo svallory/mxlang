@@ -25,6 +25,53 @@ function declarations(resolveDefaultTag?: Resolver): Policy {
   };
 }
 
+/**
+ * `@marko/compiler`, loaded once for the file.
+ */
+const compiler: typeof import("@marko/compiler") = createRequire(
+  import.meta.url,
+)("@marko/compiler");
+
+/** The current `lowerSource` call's handler for the parsed program body. */
+let programExit: ((body: Node[]) => void) | null = null;
+
+/**
+ * A translator whose Program visitor hands the parsed body to the current
+ * call's `programExit` instead of emitting.
+ *
+ * Built once per taglib set, not once per call: `@marko/compiler` keys its
+ * process-wide caches (the compile cache, the loaded-taglib map) by the
+ * translator object, so a new translator per call leaked one whole compile per
+ * call into every later test file the worker runs.
+ */
+function defaultTagTranslator(
+  customTags?: Readonly<Record<string, CustomTag>>,
+) {
+  return {
+    taglibs: [...(customTags ? [customTagTaglib(customTags)] : [])].filter(
+      (entry): entry is [string, unknown] => entry !== null,
+    ),
+    tagDiscoveryDirs: [] as string[],
+    translate: {
+      Program: {
+        exit(path: { node: { body: Node[] } }) {
+          if (!programExit) {
+            throw new Error("lowerSource: no Program.exit handler is set");
+          }
+          programExit(path.node.body);
+          path.node.body = [];
+        },
+      },
+    },
+  };
+}
+
+const baseTranslator = defaultTagTranslator();
+const customTagTranslators = new WeakMap<
+  Readonly<Record<string, CustomTag>>,
+  ReturnType<typeof defaultTagTranslator>
+>();
+
 /** Lowers through the node core really receives: Marko's parse, then `lower`. */
 function lowerSource(
   source: string,
@@ -34,40 +81,43 @@ function lowerSource(
 ): Ir {
   let ir: Ir | null = null;
   let thrown: unknown = null;
-  const translator = {
-    taglibs: [...(customTags ? [customTagTaglib(customTags)] : [])].filter(
-      (entry): entry is [string, unknown] => entry !== null,
-    ),
-    tagDiscoveryDirs: [] as string[],
-    translate: {
-      Program: {
-        exit(path: { node: { body: Node[] } }) {
-          const ctx: Ctx = newCtx(
-            source,
-            printExpression,
-            policy,
-            undefined,
-            "test.mx",
-            lookup,
-          );
-          ctx.customTags = customTags;
-          if (defaultTag !== undefined) ctx.defaultTag = defaultTag;
-          try {
-            ir = lower(ctx, path.node.body);
-          } catch (error) {
-            thrown = error;
-          }
-          path.node.body = [];
-        },
-      },
-    },
+  let translator = baseTranslator;
+  if (customTags) {
+    const memo = customTagTranslators.get(customTags);
+    if (memo) {
+      translator = memo;
+    } else {
+      translator = defaultTagTranslator(customTags);
+      customTagTranslators.set(customTags, translator);
+    }
+  }
+  programExit = (body) => {
+    const ctx: Ctx = newCtx(
+      source,
+      printExpression,
+      policy,
+      undefined,
+      "test.mx",
+      lookup,
+    );
+    ctx.customTags = customTags;
+    if (defaultTag !== undefined) ctx.defaultTag = defaultTag;
+    try {
+      ir = lower(ctx, body);
+    } catch (error) {
+      thrown = error;
+    }
   };
-  const require = createRequire(import.meta.url);
-  require("@marko/compiler").compileSync(source, "/tmp/mx-core-test/dt.mx", {
-    translator,
-    output: "html",
-    writeVersionComment: false,
-  });
+  try {
+    compiler.compileSync(source, "/tmp/mx-core-test/dt.mx", {
+      translator,
+      output: "html",
+      writeVersionComment: false,
+      cache: new Map(),
+    });
+  } finally {
+    programExit = null;
+  }
   if (thrown) throw thrown;
   if (!ir) throw new Error("no IR");
   return ir;
@@ -376,13 +426,14 @@ describe("a contract error on a shorthand attribute is positioned at its tag", (
     attributes: { value: { type: "string" } },
     transform: () => [],
   };
+  const customTags = { box: tag };
   const run = (source: string) => {
     let error: unknown;
     try {
       lowerSource(
         source,
         declarations(() => "box"),
-        { box: tag },
+        customTags,
       );
     } catch (e) {
       error = e;

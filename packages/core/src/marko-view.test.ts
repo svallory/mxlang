@@ -296,39 +296,56 @@ function viaMx(source: string, decls: HostDeclarations): Outcome {
   return { ir };
 }
 
+/** The current `viaMarko` call's handler for the parsed program body. */
+let programExit: ((body: Node[]) => void) | null = null;
+
+/**
+ * The one translator every `viaMarko` call shares: its Program visitor hands
+ * the parsed body to the current call's `programExit` instead of emitting.
+ *
+ * `@marko/compiler` keys its process-wide caches (the compile cache, the
+ * loaded-taglib map) by the translator object, so a new translator per call
+ * leaked one whole compile per call into every later test file the worker
+ * runs.
+ */
+const markoTranslator = {
+  taglibs: [[STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB]],
+  tagDiscoveryDirs: [] as string[],
+  translate: {
+    Program: {
+      exit(path: { node: { body: Node[] } }) {
+        if (!programExit) {
+          throw new Error("viaMarko: no Program.exit handler is set");
+        }
+        programExit(path.node.body);
+        path.node.body = [];
+      },
+    },
+  },
+};
+
 /** Lowers `source` through Marko's own parse, as core did before PR 5. */
 function viaMarko(source: string, decls: HostDeclarations): Outcome {
   let ir: Ir | undefined;
   let thrown: unknown;
-  const translator = {
-    taglibs: [[STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB]],
-    tagDiscoveryDirs: [] as string[],
-    translate: {
-      Program: {
-        exit(path: { node: { body: Node[] } }) {
-          const ctx = newCtx(
-            source,
-            printExpression,
-            decls,
-            undefined,
-            FILE,
-            lookup,
-          );
-          try {
-            ir = lower(ctx, path.node.body);
-          } catch (error) {
-            thrown = error;
-          }
-          path.node.body = [];
-        },
-      },
-    },
+  programExit = (body) => {
+    const ctx = newCtx(source, printExpression, decls, undefined, FILE, lookup);
+    try {
+      ir = lower(ctx, body);
+    } catch (error) {
+      thrown = error;
+    }
   };
-  markoCompiler().compileSync(source, FILE, {
-    translator,
-    output: "html",
-    writeVersionComment: false,
-  });
+  try {
+    markoCompiler().compileSync(source, FILE, {
+      translator: markoTranslator,
+      output: "html",
+      writeVersionComment: false,
+      cache: new Map(),
+    });
+  } finally {
+    programExit = null;
+  }
   if (thrown) return { error: errorOf(thrown) };
   return { ir };
 }

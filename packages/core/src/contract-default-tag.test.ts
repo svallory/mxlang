@@ -171,6 +171,43 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
     leaf: { transform: () => [] },
   };
 
+  /** `@marko/compiler`, loaded once for the describe. */
+  const compiler: typeof import("@marko/compiler") = createRequire(
+    import.meta.url,
+  )("@marko/compiler");
+
+  /** The current `asked` or `configFirstError` call's handler for the parsed program body. */
+  let programExit: ((body: Node[]) => void) | null = null;
+
+  /**
+   * The one Marko translator `asked` and `configFirstError` share: its Program
+   * visitor hands the parsed body to the current call's `programExit` instead
+   * of emitting.
+   *
+   * `@marko/compiler` keys its process-wide caches (the compile cache, the
+   * loaded-taglib map) by the translator object, so a new translator per call
+   * leaked one whole compile per call into every later test file the worker
+   * runs.
+   */
+  const markoTranslator = {
+    ...translator,
+    // Marko's finder iterates this; core's `Translator` no longer has it.
+    tagDiscoveryDirs: [] as string[],
+    translate: {
+      Program: {
+        exit(path: { node: { body: Node[] } }) {
+          if (!programExit) {
+            throw new Error(
+              "contractDefaultTag: no Program.exit handler is set",
+            );
+          }
+          programExit(path.node.body);
+          path.node.body = [];
+        },
+      },
+    },
+  };
+
   /** What the resolver is asked for each unnamed tag, in source order. */
   function asked(
     source: string,
@@ -190,33 +227,28 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
         return found ?? "div";
       },
     };
-    const compiler = createRequire(import.meta.url)("@marko/compiler");
-    compiler.compileSync(source, "/tmp/mx-cdt/a.mx", {
-      translator: {
-        ...translator,
-        // Marko's finder iterates this; core's `Translator` no longer has it.
-        tagDiscoveryDirs: [],
-        translate: {
-          Program: {
-            exit(path: { node: { body: Node[] } }) {
-              const ctx: Ctx = newCtx(
-                source,
-                () => "",
-                policy,
-                tagTable(options.bare ? bareTranslator : translator, undefined),
-                "a.mx",
-                lookup,
-              );
-              ctx.customTags = tags;
-              lower(ctx, path.node.body);
-              path.node.body = [];
-            },
-          },
-        },
-      },
-      output: "html",
-      writeVersionComment: false,
-    });
+    programExit = (body) => {
+      const ctx: Ctx = newCtx(
+        source,
+        () => "",
+        policy,
+        tagTable(options.bare ? bareTranslator : translator, undefined),
+        "a.mx",
+        lookup,
+      );
+      ctx.customTags = tags;
+      lower(ctx, body);
+    };
+    try {
+      compiler.compileSync(source, "/tmp/mx-cdt/a.mx", {
+        translator: markoTranslator,
+        output: "html",
+        writeVersionComment: false,
+        cache: new Map(),
+      });
+    } finally {
+      programExit = null;
+    }
     return answers;
   }
 
@@ -327,36 +359,30 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
       resolveDefaultTag: (_node, parents, context) =>
         context.configured ?? contractDefaultTag(parents, context) ?? "div",
     };
-    const compiler = createRequire(import.meta.url)("@marko/compiler");
+    programExit = (body) => {
+      const ctx: Ctx = newCtx(
+        source,
+        () => "",
+        policy,
+        tagTable(translator, undefined),
+        "a.mx",
+        lookup,
+      );
+      ctx.customTags = tags;
+      ctx.defaultTag = "section";
+      lower(ctx, body);
+    };
     try {
       compiler.compileSync(source, "/tmp/mx-cdt/a.mx", {
-        translator: {
-          ...translator,
-          tagDiscoveryDirs: [],
-          translate: {
-            Program: {
-              exit(path: { node: { body: Node[] } }) {
-                const ctx: Ctx = newCtx(
-                  source,
-                  () => "",
-                  policy,
-                  tagTable(translator, undefined),
-                  "a.mx",
-                  lookup,
-                );
-                ctx.customTags = tags;
-                ctx.defaultTag = "section";
-                lower(ctx, path.node.body);
-                path.node.body = [];
-              },
-            },
-          },
-        },
+        translator: markoTranslator,
         output: "html",
         writeVersionComment: false,
+        cache: new Map(),
       });
     } catch (error) {
       return (error as Error).message;
+    } finally {
+      programExit = null;
     }
     return "";
   }

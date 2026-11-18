@@ -50,6 +50,7 @@ describe("a translator not built with createTranslator", () => {
       output: "source",
       ast: true,
       translator: bare(),
+      cache: new Map(),
       // biome-ignore lint/suspicious/noExplicitAny: the compiler's options are untyped here
     } as any).ast;
     const ctx = newCtx(
