@@ -674,16 +674,6 @@ describe("the `none` tag rules: host rows and `let`, `server`, `client` are ordi
     }
   };
 
-  it.each(["server", "client"])(
-    "an authored `<%s>` compiles as the ordinary `<zzz>` does",
-    (name) => {
-      const control = JSON.parse(
-        JSON.stringify(outcome("<zzz>x</zzz>")).replaceAll("zzz", name),
-      );
-      expect(outcome(`<${name}>x</${name}>`)).toEqual(control);
-    },
-  );
-
   // The control is the same source with the name swapped for an ordinary
   // one: `<zzz>` for a tag, `<span>` for `<script>`, which is a web element.
   const asControl = (
@@ -701,6 +691,14 @@ describe("the `none` tag rules: host rows and `let`, `server`, `client` are ordi
   };
   const withBody = (name: string) => `<${name} a=1>x</${name}>`;
   const bare = (name: string) => `<${name}/>`;
+  const textBody = (name: string) => `<${name}>x</${name}>`;
+
+  it.each(["server", "client"])(
+    "an authored `<%s>` compiles as the ordinary `<zzz>` does",
+    (name) => {
+      expect(outcome(textBody(name))).toEqual(asControl(textBody, name));
+    },
+  );
 
   it.each(
     ["lifecycle", "id", "log", "debug", "await", "script"].flatMap((name) => [
