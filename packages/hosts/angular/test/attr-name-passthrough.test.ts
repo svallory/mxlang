@@ -112,3 +112,22 @@ describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
     );
   });
 });
+
+/**
+ * Core refuses, on a native element, the names Marko's `knownWrongAttrs`
+ * refuses; Angular keeps none of them.
+ */
+describe("other frameworks' attribute names (angular)", () => {
+  it("refuses `dangerouslySetInnerHTML` at the attribute", () => {
+    expect(() =>
+      emit("<div dangerouslySetInnerHTML=input.x/>", "x.ng.mx"),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "`dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`?",
+        line: 1,
+        column: 5,
+      }),
+    );
+  });
+});

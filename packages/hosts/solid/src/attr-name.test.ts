@@ -214,6 +214,10 @@ describe("other frameworks' attribute names (solid)", () => {
       "<div classList=x/>",
       "`classList` is not a valid attribute, did you mean `class`?",
     ],
+    [
+      "<div dangerouslySetInnerHTML=x/>",
+      "`dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`?",
+    ],
   ])("refuses %s at the attribute", (source, message) => {
     expect(failure(source)).toEqual({ message, line: 1, column: 5 });
   });

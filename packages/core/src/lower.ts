@@ -2488,7 +2488,7 @@ interface TagHint {
  * to another framework's template syntax (Marko 6.4.4 `knownWrongAttrs`), each
  * with Marko's hint toward the Marko form. A host whose output language gives
  * a name a meaning on an element lists it in `acceptsReservedAttrNames`.
- * `dangerouslySetInnerHTML` is left to the hosts, which refuse it themselves.
+ * The table is stock's whole list.
  */
 const KNOWN_WRONG_NATIVE_ATTRS: Readonly<Record<string, string | TagHint>> = {
   className: "`class`",
@@ -2498,6 +2498,7 @@ const KNOWN_WRONG_NATIVE_ATTRS: Readonly<Record<string, string | TagHint>> = {
   httpEquiv: "`http-equiv`",
   defaultValue: "`value`",
   defaultChecked: "`checked`",
+  dangerouslySetInnerHTML: "`$!{html}`",
   key: { tag: "for", stock: "`<for by>`", suffix: " with `by=`" },
   ref: "`<tag/ref>`",
   "v-if": { tag: "if", stock: "`<if>`" },

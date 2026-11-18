@@ -174,3 +174,18 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
     expect(error).toMatchObject({ line: 4, column: 5 });
   });
 });
+
+/**
+ * Core refuses, on a native element, the names Marko's `knownWrongAttrs`
+ * refuses; Astro keeps none of them.
+ */
+describe("other frameworks' attribute names (astro)", () => {
+  it("refuses `dangerouslySetInnerHTML` at the attribute", () => {
+    expect(failure("<div dangerouslySetInnerHTML=x/>")).toEqual({
+      message:
+        "`dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`?",
+      line: 4,
+      column: 5,
+    });
+  });
+});
