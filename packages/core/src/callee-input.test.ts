@@ -1282,6 +1282,72 @@ describe("readCalleeInput", () => {
     } satisfies CalleeInput);
   });
 
+  it("does not parse a type import whose target is a runtime .js module", () => {
+    const source = fixtureSource("runtime-type-import.ts");
+    const { input, dependencies } = readCalleeInput(
+      namedTarget("Card"),
+      context({ imports: new Map([["Card", "./runtime-type-import"]]) }),
+    );
+    expect(input).toEqual({
+      kind: "invalid",
+      path: fixture("runtime-type-import.ts"),
+      errors: new Map([
+        [
+          "x",
+          {
+            message: "declare this attribute tag's config literally",
+            span: refSpan(source, "AttrTag<Cfg>"),
+          },
+        ],
+      ]),
+    } satisfies CalleeInput);
+    expect(dependencies).not.toContain(fixture("runtime-cfg-decl.ts"));
+  });
+
+  it("does not parse a named type re-export whose target is a runtime .js module", () => {
+    const source = fixtureSource("runtime-reexport.ts");
+    const { input, dependencies } = readCalleeInput(
+      namedTarget("Card"),
+      context({ imports: new Map([["Card", "./runtime-reexport"]]) }),
+    );
+    expect(input).toEqual({
+      kind: "invalid",
+      path: fixture("runtime-reexport.ts"),
+      errors: new Map([
+        [
+          "x",
+          {
+            message: "declare this attribute tag's config literally",
+            span: refSpan(source, "AttrTag<Cfg>"),
+          },
+        ],
+      ]),
+    } satisfies CalleeInput);
+    expect(dependencies).not.toContain(fixture("runtime-cfg-decl.ts"));
+  });
+
+  it("does not parse a star re-export whose target is a runtime .js module", () => {
+    const source = fixtureSource("runtime-star-reexport.ts");
+    const { input, dependencies } = readCalleeInput(
+      namedTarget("Card"),
+      context({ imports: new Map([["Card", "./runtime-star-reexport"]]) }),
+    );
+    expect(input).toEqual({
+      kind: "invalid",
+      path: fixture("runtime-star-reexport.ts"),
+      errors: new Map([
+        [
+          "x",
+          {
+            message: "declare this attribute tag's config literally",
+            span: refSpan(source, "AttrTag<Cfg>"),
+          },
+        ],
+      ]),
+    } satisfies CalleeInput);
+    expect(dependencies).not.toContain(fixture("runtime-cfg-decl.ts"));
+  });
+
   it("reads a static Input from an mx file with file-relative spans", () => {
     const source = fixtureSource("StaticInput.mx");
     const ctx = newCtx(

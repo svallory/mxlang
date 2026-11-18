@@ -755,6 +755,17 @@ const SCRIPT_EXTENSIONS = [
   ".cjs",
 ];
 
+/**
+ * Whether a followed type import may read and parse `path`: a TypeScript
+ * module (`.ts`, `.tsx`, `.mts`, `.cts`, so also `.d.ts`, `.d.mts`, `.d.cts`)
+ * or an `.mx` module. A followed type import never reads a runtime module
+ * (.js/.jsx/.mjs/.cjs) or a non-script file; such a target counts as
+ * unresolved.
+ */
+function isTypeDeclarationModule(path: string): boolean {
+  return /\.(?:tsx?|mts|cts|mx)$/i.test(path);
+}
+
 function probeFile(
   base: string,
   probes?: string[],
@@ -1305,9 +1316,10 @@ class InputAnalyzer {
       if (!this.dependencies.includes(probe)) this.dependencies.push(probe);
     }
     if (!resolved) return undefined;
-    // The brief pins .ts and .mx targets for followed type imports; a
-    // component's types never come from a runtime module.
-    if (!/\.(?:tsx?|jsx?|mx)$/i.test(resolved)) return undefined;
+    // A component's types never come from a runtime module: a .js/.jsx/
+    // .mjs/.cjs (or non-script) target is not read, parsed or recorded, and
+    // counts as unresolved.
+    if (!isTypeDeclarationModule(resolved)) return undefined;
 
     let source: string;
     try {
@@ -1403,6 +1415,7 @@ class InputAnalyzer {
           if (!this.dependencies.includes(probe)) this.dependencies.push(probe);
         }
         if (!next) continue;
+        if (!isTypeDeclarationModule(next)) continue;
         const nextSource = sourceSnapshot(next).source;
         this.parsedSources.set(next, nextSource);
         this.readFiles.add(next);
@@ -1422,6 +1435,7 @@ class InputAnalyzer {
           if (!this.dependencies.includes(probe)) this.dependencies.push(probe);
         }
         if (!next) continue;
+        if (!isTypeDeclarationModule(next)) continue;
         const nextSource = sourceSnapshot(next).source;
         this.parsedSources.set(next, nextSource);
         this.readFiles.add(next);
