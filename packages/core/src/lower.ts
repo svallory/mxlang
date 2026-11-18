@@ -2509,18 +2509,36 @@ const KNOWN_WRONG_NATIVE_ATTRS: Readonly<Record<string, string | TagHint>> = {
   "v-text": "`${text}`",
 };
 
+/** Marko's event-handler hint for `on:click`/`v-on:click`: `onClick`. */
+const eventAttrHint = (rest: string): string =>
+  `on${rest.charAt(0).toUpperCase()}${rest.slice(1)}`;
+
 /**
  * The colon forms Marko refuses (`getWrongAttrSuggestion`), by the part
  * before the first `:`, with the hint built from the rest. `class:`, `style:`
- * and `on:` are MX's own modifier names and go through their own branches.
+ * and `on:` are MX's own modifier names: on an element they go through the
+ * modifier branch, elsewhere through `RESERVED_COLON_ATTR_HINTS`.
  */
 const KNOWN_WRONG_NATIVE_ATTR_PREFIXES: Readonly<
   Record<string, (rest: string) => string>
 > = {
-  "v-on": (rest) => `on${rest.charAt(0).toUpperCase()}${rest.slice(1)}`,
+  "v-on": eventAttrHint,
   bind: (rest) => `${rest}:=state`,
   "v-model": (rest) => `${rest}:=state`,
   "v-bind": (rest) => rest,
+};
+
+/**
+ * Marko's hints (`getWrongAttrSuggestion`) for the colon names whose head is
+ * one of the reserved `class`, `style` and `on`, built from the rest after
+ * the first `:`.
+ */
+const RESERVED_COLON_ATTR_HINTS: Readonly<
+  Record<string, (rest: string) => string>
+> = {
+  class: (rest) => `class={ ${rest}: condition }`,
+  style: (rest) => `style={ ${rest}: value }`,
+  on: eventAttrHint,
 };
 
 /**
@@ -2562,14 +2580,38 @@ function knownWrongNativeAttr(ctx: Ctx, attr: Node): string | undefined {
 }
 
 /**
- * Marko's other-framework-names check on a tag Marko reads as native but core
+ * Marko's message for `class:x`, `style:x` or `on:x` ("`class:x` is not a
+ * valid attribute, did you mean `class={ x: condition }`?"), or nothing for
+ * any other name. Marko joins a modifier into the name before the check, but
+ * not a bound one (`class:x:=y`), whose modifier is a value conversion, so a
+ * bound attribute and a spread answer nothing.
+ */
+function reservedColonAttrMessage(ctx: Ctx, attr: Node): string | undefined {
+  if (isSpreadAttributeNode(attr) || isBoundAttr(attr)) return undefined;
+  if (attr?.modifier == null) return undefined;
+  const name = attrNameOf(attr);
+  if (typeof name !== "string") return undefined;
+  const joined = `${name}:${attr.modifier}`;
+  const colon = joined.indexOf(":");
+  const head = joined.slice(0, colon);
+  if (!Object.hasOwn(RESERVED_COLON_ATTR_HINTS, head)) return undefined;
+  const hint = RESERVED_COLON_ATTR_HINTS[head]?.(joined.slice(colon + 1));
+  return `\`${joined}\` is not a valid ${voiceOfCtx(ctx).attribute}, did you mean \`${hint}\`?`;
+}
+
+/**
+ * Marko's native attribute-name check on a tag Marko reads as native but core
  * lowers another way (a one-quasi string-literal dynamic tag whose literal
  * does not name a native element, a delegated
- * `html-script`/`html-style`): raised at the first offending attribute.
+ * `html-script`/`html-style`): another framework's names and the reserved
+ * `class:`/`style:`/`on:` colon forms, raised at the first offending
+ * attribute. No modifier hook is consulted here: these tags never reach the
+ * element path's modifier branch.
  */
 function rejectKnownWrongNativeAttrs(ctx: Ctx, node: Node): void {
   for (const attr of tagAttributesOf(node)) {
-    const message = knownWrongNativeAttr(ctx, attr);
+    const message =
+      knownWrongNativeAttr(ctx, attr) ?? reservedColonAttrMessage(ctx, attr);
     if (message) raise(INVALID_ATTRIBUTE_CODE, message, attr);
   }
 }

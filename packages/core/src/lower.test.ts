@@ -3401,7 +3401,9 @@ describe("key= on a native element (Marko parity, D171)", () => {
  * host lists the plain name in `acceptsReservedAttrNames` (D171, D184), on an
  * element, on a dynamic tag whose name is a one-quasi string literal (Marko
  * reads it as a static name) and on a delegated `html-script`/`html-style`
- * whose canonical name is an element.
+ * whose canonical name is an element. On those last two the reserved
+ * `class:`/`style:`/`on:` colon forms get Marko's message too; on an element
+ * they go through the modifier hooks instead.
  */
 describe("other knownWrongAttrs names on a native element (Marko parity, D171)", () => {
   const host = (overrides: Partial<Policy> = {}): Policy =>
@@ -3474,6 +3476,20 @@ describe("other knownWrongAttrs names on a native element (Marko parity, D171)",
     ['<${"Foo"} §ref=1/>', said("ref", "<tag/ref>")],
     ["<${`circle`} §ref=1/>", said("ref", "<tag/ref>")],
     ['<${"div"} id="a" §v-on:click=f/>', said("v-on:click", "onClick")],
+    [
+      '<${"Foo"} §class:active=c/>',
+      said("class:active", "class={ active: condition }"),
+    ],
+    ['<${"my-el"} id="a" §on:click=f/>', said("on:click", "onClick")],
+    [
+      '<${"style"} §style:color=c/>',
+      said("style:color", "style={ color: value }"),
+    ],
+    [
+      '<${"Foo"} §class:foo:bar=c/>',
+      said("class:foo:bar", "class={ foo:bar: condition }"),
+    ],
+    ['<${"Foo"} §class:/>', said("class:", "class={ : condition }")],
   ];
   const fails = (marked: string, message: string, policy: Policy) => {
     const column = marked.indexOf("§");
@@ -3504,6 +3520,10 @@ describe("other knownWrongAttrs names on a native element (Marko parity, D171)",
   it.each([
     ["<html-script §key=1/>", said("key", "<for by>")],
     ['<html-style §className="a"/>', said("className", "class")],
+    [
+      "<html-style §class:active=c/>",
+      said("class:active", "class={ active: condition }"),
+    ],
   ])(
     "refuses %s when the host claims it and reads its canonical name as an element",
     (marked, message) => fails(marked, message, claimsNative()),
@@ -3537,6 +3557,9 @@ describe("other knownWrongAttrs names on a native element (Marko parity, D171)",
     "<${input.t} ref=1/>",
     '<const/x="div"/><${x} ref=1/>',
     '<${"di" + "v"} ref=1/>',
+    "<define/Foo>x</define><Foo class:active=c/>",
+    '<div ...{"class:x": 1}/>',
+    "<${input.t} class:active=c/>",
   ])("lowers %s, which Marko compiles", (source) => {
     expect(() => lowerSource(source, host())).not.toThrow();
     expect(() => lowerSource(source, claimsDynamic())).not.toThrow();
