@@ -479,7 +479,10 @@ describe("distBuilds", () => {
       // A manifest matches no bundler's inputs: only the bundles edges reach
       // vite-plugin and typescript-plugin.
       ["packages/targets/html/package.json", [HTML, VITE_PLUGIN, TS_PLUGIN]],
-      ["packages/hosts/angular/package.json", [ANGULAR, VITE_PLUGIN, TS_PLUGIN]],
+      [
+        "packages/hosts/angular/package.json",
+        [ANGULAR, VITE_PLUGIN, TS_PLUGIN],
+      ],
       ["packages/core/src/lower.ts", [CORE, VITE_PLUGIN]],
       ["packages/hosts/preact/src/emitter.ts", [VITE_PLUGIN, TS_PLUGIN]],
       [
