@@ -18,7 +18,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -29,20 +29,13 @@ const simulateMissingDist = process.argv.includes("--simulate-missing-dist");
 /**
  * Every external step runs under a hard wall-clock timeout (a
  * script must be able to fail, and a hang is a silent, unbounded pass).
- * `bun pm pack` hung: first observed inside `packages/parser` (before
- * `core-extract` removed the translator's dependency on it), then again
- * on `packages/targets/html` and `packages/core` with bun 1.3.14 on macOS,
- * spinning at 100% CPU (`kevent64`/`unlinkat` in `sample`), both when
- * spawned from a bun parent and from a plain shell. Root cause not
- * determined; this script packs with `npm pack` instead (PR #51), which
- * produces the same tarball for these packages. `npm pack` stays from that
- * hang: `bun pm pack` no longer hangs on bun 1.4.4 (macOS, 2026-11-18, 6/6
- * packs of these two packages), and switching packers is a follow-up. The
- * timeout stays as a standing guard against the same class of hang recurring
- * on any future dependency. Wrapped in the POSIX `timeout` command rather than
- * `AbortSignal.timeout` so a killed child's descendants are actually reaped
- * (`execFileSync` has no portable way to kill a process *tree*, and a
- * package-manager subcommand may spawn its own children).
+ * The timeout is a standing guard against a packer or installer hang: `bun
+ * pm pack` hung on macOS with bun 1.3.14 (spinning at 100% CPU, root cause
+ * not determined) and no longer does on bun 1.4.4. Wrapped in the POSIX
+ * `timeout` command rather than `AbortSignal.timeout` so a killed child's
+ * descendants are actually reaped (`execFileSync` has no portable way to
+ * kill a process *tree*, and a package-manager subcommand may spawn its own
+ * children).
  */
 const STEP_TIMEOUT_SECONDS = 120;
 
@@ -86,11 +79,14 @@ if (simulateMissingDist) {
   );
 }
 
+/** `bun pm pack` a package into `/tmp`; returns the tarball path. */
 function packTarball(dir: string): string {
-  const output = run(["npm", "pack", "--pack-destination", "/tmp"], dir);
-  const match = output.match(/([\w.@-]+\.tgz)/);
+  const dest = "/tmp";
+  // bun prints the tarball path on stdout, on a line of its own.
+  const output = run(["bun", "pm", "pack", "--destination", dest], dir);
+  const match = output.match(/^(\S+\.tgz)$/m);
   if (!match) fail(`could not find tarball name in pack output: ${output}`);
-  const tarballPath = join("/tmp", match[1] as string);
+  const tarballPath = join(dest, basename(match[1] as string));
   if (!existsSync(tarballPath))
     fail(`packed tarball not found at ${tarballPath}`);
   return tarballPath;
@@ -124,8 +120,8 @@ console.log(`[consumer-check] scratch project: ${scratchDir}`);
 
 try {
   // `@mxlang/core` is a transitive dependency (declared by the translator
-  // tarball's own `package.json`, rewritten from `workspace:*` to its literal
-  // version at pack time), so a plain `bun add <tarball>` still resolves it
+  // tarball's own `package.json`, which `bun pm pack` rewrote from
+  // `workspace:*` to its literal version), so a plain `bun add <tarball>` still resolves it
   // against the registry, 404s, and fails — passing the core tarball as a
   // second top-level `add` argument does not change how the *transitive*
   // reference resolves. `overrides` pins it to the local tarball by file:

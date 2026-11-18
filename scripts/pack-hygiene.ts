@@ -30,6 +30,8 @@ export interface PackageJson {
   exports?: unknown;
   files?: string[];
   dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 }
@@ -63,7 +65,7 @@ export interface PackedPackage {
      * Gitignored files `prepack` builds into the tarball. The unit lane lists
      * the tarball with `--ignore-scripts` (a prepack is a wasm toolchain and a
      * git clone), so these are added to the list; `pack-probe` runs the real
-     * `npm pack` and proves they are there.
+     * `bun pm pack`, which runs `prepack`, and proves they are there.
      */
     built: string[];
   };
@@ -309,6 +311,30 @@ export function partitionPinned(
     (read(dir).private === true ? stub : pack).push(name);
   }
   return { pack, stub };
+}
+
+/** The dependency fields a consumer's install resolves. */
+const INSTALLED_DEP_FIELDS = [
+  "dependencies",
+  "optionalDependencies",
+  "peerDependencies",
+] as const;
+
+/**
+ * `"<field>.<name>: <range>"` for every `workspace:` range a packed manifest
+ * still carries in a field a consumer installs. `bun pm pack` rewrites them to
+ * the dependency's version; one left behind is uninstallable outside the
+ * workspace. `devDependencies` are not checked: a consumer never installs them.
+ */
+export function unrewrittenWorkspaceRanges(pkg: PackageJson): string[] {
+  const out: string[] = [];
+  for (const field of INSTALLED_DEP_FIELDS) {
+    for (const [name, range] of Object.entries(pkg[field] ?? {})) {
+      if (range.startsWith("workspace:"))
+        out.push(`${field}.${name}: ${range}`);
+    }
+  }
+  return out;
 }
 
 /** The paths `bun pm pack` would put in the tarball, without writing one. */

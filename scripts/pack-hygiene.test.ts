@@ -31,6 +31,7 @@ import {
   repoRoot,
   runtimeSpecifiers,
   undeclaredRuntimeImports,
+  unrewrittenWorkspaceRanges,
   workspacePrivacy,
 } from "./pack-hygiene.ts";
 import {
@@ -129,6 +130,42 @@ describe("partitionPinned", () => {
         read,
       ),
     ).toThrow("pinned workspace dependency @mxlang/gone has no workspace dir");
+  });
+});
+
+describe("unrewrittenWorkspaceRanges", () => {
+  it("reports each workspace: range a consumer installs, one entry per range", () => {
+    expect(
+      unrewrittenWorkspaceRanges({
+        name: "@mxlang/a",
+        dependencies: {
+          "@mxlang/core": "workspace:*",
+          "@babel/parser": "7.29.8",
+        },
+        optionalDependencies: { "@mxlang/opt": "workspace:~" },
+        peerDependencies: {
+          "@mxlang/x": "workspace:^",
+          "@types/bun": ">=1.3",
+        },
+      }),
+    ).toEqual([
+      "dependencies.@mxlang/core: workspace:*",
+      "optionalDependencies.@mxlang/opt: workspace:~",
+      "peerDependencies.@mxlang/x: workspace:^",
+    ]);
+  });
+
+  it("passes a rewritten manifest, ignoring devDependencies and file: ranges", () => {
+    expect(
+      unrewrittenWorkspaceRanges({
+        name: "@mxlang/b",
+        dependencies: {
+          "@mxlang/core": "0.1.0-alpha.38",
+          "@mxlang/web-elements": "file:../web-elements",
+        },
+        devDependencies: { "@mxlang/babel": "workspace:*" },
+      }),
+    ).toEqual([]);
   });
 });
 

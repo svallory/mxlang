@@ -24,11 +24,12 @@
 // `flock /tmp/mac-heavy.lock`. Needs a prior `bun run build`.
 //   bun run scripts/pack-probe.ts [--keep] [--only <name>]
 //
-// `npm pack`, not `bun pm pack`, for the same reason as
-// `packages/targets/html/scripts/consumer-check.ts`: bun 1.3.14 hung on macOS;
-// bun 1.4.4 no longer does (macOS, 2026-11-18, 6/6), switching is a follow-up.
-// npm does NOT rewrite `workspace:*` in the packed manifest, so private
-// workspace deps are pinned to tarballs/stubs with `overrides`, as consumer-check does.
+// Packs with `bun pm pack` (the packer `bun publish` uses; it replaced
+// `npm pack` once bun 1.4.4 stopped hanging on macOS). It rewrites
+// `workspace:*` to the dependency's version, and the probe fails on any
+// `workspace:` range left in a packed manifest's installed dependency fields.
+// Deps the registry lacks are still pinned to the local tarballs or stubs with
+// `overrides`, so the consumer installs what this checkout packs.
 
 import { spawnSync } from "node:child_process";
 import {
@@ -41,7 +42,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   exportSpecifiers,
   PACKED_PACKAGES,
@@ -50,6 +51,7 @@ import {
   pkgDirOf,
   readPackageJson,
   repoRoot,
+  unrewrittenWorkspaceRanges,
 } from "./pack-hygiene.ts";
 
 const keep = process.argv.includes("--keep");
@@ -117,7 +119,7 @@ function run(
   cmd: string,
   args: string[],
   cwd: string,
-): { status: number; out: string; stdout: string } {
+): { status: number; out: string } {
   console.log(`[pack-probe] $ ${cmd} ${args.join(" ")}  (cwd: ${cwd})`);
   const r = spawnSync(cmd, args, {
     cwd,
@@ -130,14 +132,16 @@ function run(
   return {
     status: r.status ?? 1,
     out: `${r.stdout ?? ""}${r.stderr ?? ""}`,
-    stdout: r.stdout ?? "",
   };
 }
 
 const work = mkdtempSync(join(tmpdir(), "pack-probe-"));
 console.log(`[pack-probe] scratch: ${work}`);
 
-/** `npm pack` a workspace dir into `work/tarballs`; returns the tarball path. */
+/**
+ * `bun pm pack` a workspace dir into `work/tarballs`; returns the tarball path.
+ * Fails when the packed manifest keeps a `workspace:` range a consumer installs.
+ */
 const tarballs = new Map<string, string>();
 function tarballOf(name: string, dir: string): string {
   const cached = tarballs.get(name);
@@ -149,16 +153,30 @@ function tarballOf(name: string, dir: string): string {
   }
   const dest = join(work, "tarballs");
   mkdirSync(dest, { recursive: true });
-  const { status, out, stdout } = run(
-    "npm",
-    ["pack", "--pack-destination", dest],
+  const { status, out } = run(
+    "bun",
+    ["pm", "pack", "--destination", dest],
     dir,
   );
-  if (status !== 0) fail(`npm pack failed in ${dir}:\n${out}`);
-  const file = stdout.trim().split("\n").pop()?.trim() ?? "";
-  const path = join(dest, file);
-  if (!file.endsWith(".tgz") || !existsSync(path)) {
-    fail(`could not find the tarball in npm pack output:\n${out}`);
+  if (status !== 0) fail(`bun pm pack failed in ${dir}:\n${out}`);
+  const file = out.match(/^(\S+\.tgz)$/m)?.[1];
+  const path = file ? join(dest, basename(file)) : "";
+  if (!file || !existsSync(path)) {
+    fail(`could not find the tarball in bun pm pack output:\n${out}`);
+  }
+  const manifest = spawnSync("tar", ["-xzOf", path, "package/package.json"], {
+    encoding: "utf8",
+  });
+  if (manifest.status !== 0) {
+    fail(`tar could not read package/package.json from ${path}`);
+  }
+  const unrewritten = unrewrittenWorkspaceRanges(
+    JSON.parse(manifest.stdout) as PackageJson,
+  );
+  if (unrewritten.length > 0) {
+    fail(
+      `${name}'s packed manifest keeps workspace: ranges a consumer cannot install:\n  ${unrewritten.join("\n  ")}`,
+    );
   }
   tarballs.set(name, path);
   return path;
