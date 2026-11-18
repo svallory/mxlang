@@ -67,7 +67,7 @@ languages = ["MX", "Solid", "ReactMX", "PreactMX", "HonoMX"]
 # the split-off `tree-sitter-solid` repo's real GitHub URL and drop `path`
 # (that repo's root will already be the grammar root).
 repository = "https://github.com/svallory/mxlang"
-rev = "2e2de0dbfd8c6996f1986fbebbcc469bfdd174a1"
+rev = "dfc56904a5266a4e91259809a0aab773e9654f36"
 path = "packages/editors/tree-sitter-solid"
 
 [grammars.astromx]
