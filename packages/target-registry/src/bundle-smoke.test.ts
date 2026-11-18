@@ -4,16 +4,17 @@
  *
  * A host whose `src/index.ts` imports its own `./descriptor.ts` while the
  * descriptor reaches the compile entry back through the index creates an
- * entry-point cycle. Bun's multi-entry `bun build` then *silently omits a
- * required JS artifact with exit 0* — measured on Bun 1.3.14: html
- * intermittently lost `dist/index.js`, react and solid lost it on every
- * build. A package whose `main`/`exports` point at a file the bundler
- * dropped installs fine and fails on first import.
+ * entry-point cycle. Bun 1.3.14's multi-entry `bun build` then *silently
+ * omitted a required JS artifact with exit 0*: html intermittently lost
+ * `dist/index.js`, react and solid lost it on every build. That drop no
+ * longer reproduces on Bun 1.4.4 (cycle probe: react's descriptor requiring
+ * `./index.ts`, 3/3 builds kept every entry). A package whose `main`/`exports`
+ * point at a file the bundler dropped installs fine and fails on first import.
  *
  * These pins build each host's real entry set, with the real externals, into
- * a temp dir and assert every entry artifact exists. They are the RED half
- * of the cycle break: descriptors lazily require descriptor-free compiler
- * leaves instead of the public index, so the bundler keeps every entry.
+ * a temp dir and assert every entry artifact exists. The graph stays acyclic
+ * because the descriptor is a bundled leaf: descriptors lazily require
+ * descriptor-free compiler leaves instead of the public index.
  */
 
 import { execFileSync } from "node:child_process";
