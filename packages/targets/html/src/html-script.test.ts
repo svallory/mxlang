@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { loadMx } from "./helpers.ts";
-import { compile } from "./index.ts";
+import { compile, TranslateError } from "./index.ts";
 
 /**
  * `<html-script>` is the tag for a native html `<script>` element (the bare
@@ -266,5 +266,64 @@ describe("<html-style> keeps its attributes and escapes its body for style conte
         v: "</style>",
       }),
     ).toBe("<style>a\\3C/STYLE>\\3C/style></style>");
+  });
+});
+
+/**
+ * The core `<style>` refuses every attribute, a spread included, at the first
+ * one (stock Marko 6.4.4's `assertNoStyleAttributes`); this target writes
+ * `<style>` without them, so one would be dropped silently. The parser's
+ * extension shorthand (`<style.less>`) is not an attribute.
+ */
+describe("<style> refuses attributes, as stock Marko does", () => {
+  const message =
+    "The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.";
+  const refusal = (source: string) => {
+    try {
+      compile(source, "/fixtures/test.mx");
+    } catch (error) {
+      expect(error).toBeInstanceOf(TranslateError);
+      const { diagnosticCode, line, column } = error as TranslateError;
+      return {
+        message: (error as Error).message,
+        diagnosticCode,
+        line,
+        column,
+      };
+    }
+    throw new Error(`${source} compiled`);
+  };
+
+  it.each([
+    ['<style media="print">a{}</style>', 7],
+    ["<style ...input.a>a{}</style>", 7],
+    ["<style scoped>a{}</style>", 7],
+    ["<style a=1 b=2>a{}</style>", 7],
+    ["<style#a>a{}</style>", 7],
+    ['<style.a class="b">a{}</style>', 9],
+  ])("%s is refused at the first attribute", (source, column) => {
+    expect(refusal(source)).toEqual({
+      message,
+      diagnosticCode: "MX_INVALID_ATTRIBUTE",
+      line: 1,
+      column,
+    });
+  });
+
+  it.each(["<style.less>a{}</style>", "<style.module.css>a{}</style>"])(
+    "%s is an extension, not an attribute",
+    (source) => {
+      expect(compile(source, "/fixtures/test.mx").code).toContain(
+        "<style>a{}</style>",
+      );
+    },
+  );
+
+  it("a `style` contract turns the refusal off", () => {
+    expect(() =>
+      compile('<style nonce="abc">a{}</style>', "/fixtures/test.mx", {
+        customTags: { style: { attributes: { nonce: { type: "string" } } } },
+      }),
+    ).not.toThrow();
   });
 });
