@@ -84,10 +84,6 @@ const CASES: Record<string, Case> = {
     fragment: "<div textContent=input.o/>",
     setup: "const input = { o: { a: 1 } };",
   },
-  classList: {
-    fragment: "<div classList=input.o/>",
-    setup: "const input = { o: { x: true } };",
-  },
   attrNamespace: {
     fragment: "<div attr:x=input.o/>",
     setup: "const input = { o: { a: 1 } };",
@@ -460,12 +456,7 @@ describe.each(["ssr", "dom"] as const)(
       expect(get("attributeBeforeSpread").html).toContain('data-x="ok"');
     });
     it("validates textContent, classList and colon names", () => {
-      for (const name of [
-        "textContent",
-        "classList",
-        "classListSpread",
-        "colonName",
-      ]) {
+      for (const name of ["textContent", "classListSpread", "colonName"]) {
         const error = get(name).error;
         expect(error ?? `${name} did not throw`).toMatch(
           /^The `[^`]+` attribute cannot be a plain object \(it would render as `\[object Object\]`\)\.$/,

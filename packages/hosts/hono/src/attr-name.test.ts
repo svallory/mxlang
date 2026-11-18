@@ -124,3 +124,40 @@ describe("`:modifier` is the attribute `value:modifier` (hono)", () => {
     });
   });
 });
+
+/**
+ * Core refuses, on a native element, the names Marko's `knownWrongAttrs`
+ * refuses, unless the host's framework gives the name a meaning there. Hono
+ * maps `className`, `htmlFor` and `httpEquiv`; the other DOM property names
+ * would render as literal attributes, so they stay refused.
+ */
+describe("other frameworks' attribute names (hono)", () => {
+  it.each([
+    "<div ref=x/>",
+    '<div className="a"/>',
+    '<label htmlFor="a"/>',
+    '<meta httpEquiv="refresh"/>',
+  ])("compiles %s, which Hono gives a meaning", (source) => {
+    expect(() => compileHonoMx(source, "/fixtures/test.mx")).not.toThrow();
+  });
+
+  it.each([
+    [
+      '<form acceptCharset="utf-8"/>',
+      6,
+      "`acceptCharset` is not a valid attribute, did you mean `accept-charset`?",
+    ],
+    [
+      '<input defaultValue="a"/>',
+      7,
+      "`defaultValue` is not a valid attribute, did you mean `value`?",
+    ],
+    [
+      "<input defaultChecked/>",
+      7,
+      "`defaultChecked` is not a valid attribute, did you mean `checked`?",
+    ],
+  ])("refuses %s at the attribute", (source, column, message) => {
+    expect(failure(source)).toEqual({ message, line: 1, column });
+  });
+});

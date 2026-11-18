@@ -192,3 +192,29 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
     });
   });
 });
+
+/**
+ * Core refuses, on a native element, the names Marko's `knownWrongAttrs`
+ * refuses, unless the host's framework gives the name a meaning there. Solid
+ * keeps only its own `ref`.
+ */
+describe("other frameworks' attribute names (solid)", () => {
+  it("compiles `ref`, Solid's own", () => {
+    expect(() =>
+      compileSolidMx("<div ref=el/>", { filename: "fixture.solid.mx" }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    [
+      '<div className="a"/>',
+      "`className` is not a valid attribute, did you mean `class`?",
+    ],
+    [
+      "<div classList=x/>",
+      "`classList` is not a valid attribute, did you mean `class`?",
+    ],
+  ])("refuses %s at the attribute", (source, message) => {
+    expect(failure(source)).toEqual({ message, line: 1, column: 5 });
+  });
+});

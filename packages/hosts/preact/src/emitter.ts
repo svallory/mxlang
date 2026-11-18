@@ -631,6 +631,35 @@ export interface JsxDeclarationsOptions {
   region?: boolean;
 }
 
+/**
+ * The attribute names stock Marko refuses on a native element that Preact and
+ * React give a meaning (the JSX key and ref, and the DOM property names their
+ * types declare and their renderers map).
+ */
+const JSX_ELEMENT_NAMES: readonly string[] = [
+  "key",
+  "ref",
+  "className",
+  "htmlFor",
+  "acceptCharset",
+  "httpEquiv",
+  "defaultValue",
+  "defaultChecked",
+];
+
+/**
+ * The names Hono's JSX gives a meaning on an element: it maps `className`,
+ * `htmlFor` and `httpEquiv`, and renders `acceptCharset`, `defaultValue` and
+ * `defaultChecked` as literal attributes, so those stay refused.
+ */
+const HONO_ELEMENT_NAMES: readonly string[] = [
+  "key",
+  "ref",
+  "className",
+  "htmlFor",
+  "httpEquiv",
+];
+
 export function createJsxDeclarations(
   dialectName: string,
   options: JsxDeclarationsOptions = {},
@@ -649,9 +678,10 @@ export function createJsxDeclarations(
     hostName: dialectName,
     nativeTags: WEB_ELEMENTS,
     attributeArgs: "refuse",
-    // `key=` on a native element is the JSX reconciliation key here (a
-    // recorded divergence, divergences.md); core refuses it on other hosts.
-    acceptsReservedAttrNames: ["key"],
+    // The names this framework gives a meaning on an element, so core's
+    // other-framework-names rule lets them through (divergences.md).
+    acceptsReservedAttrNames:
+      dialectName === "Hono" ? HONO_ELEMENT_NAMES : JSX_ELEMENT_NAMES,
     defineCallPassesAttrs: true,
     // The render-path model on this host: the compiled unit exposes `.render`,
     // and the dynamic dispatch (`__mxDynamicPair`) reaches it, so a `/var` on

@@ -187,3 +187,33 @@ describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
     });
   });
 });
+
+/**
+ * Core refuses, on a native element, the names Marko's `knownWrongAttrs`
+ * refuses, unless the host's framework gives the name a meaning there. Preact
+ * keeps the JSX key and ref and the DOM property names its types declare.
+ */
+describe("other frameworks' attribute names (preact)", () => {
+  it.each([
+    "<div key=x/>",
+    "<div ref=x/>",
+    '<div className="a"/>',
+    '<label htmlFor="a"/>',
+    '<form acceptCharset="utf-8"/>',
+    '<meta httpEquiv="refresh"/>',
+    '<input defaultValue="a"/>',
+    "<input defaultChecked/>",
+  ])("compiles %s, which Preact gives a meaning", (source) => {
+    expect(() => compilePreactMx(source, "/fixtures/test.mx")).not.toThrow();
+  });
+
+  it.each([
+    [
+      "<div classList=x/>",
+      "`classList` is not a valid attribute, did you mean `class`?",
+    ],
+    ["<div v-if=x/>", "`v-if` is not a valid attribute, did you mean `<if>`?"],
+  ])("refuses %s at the attribute", (source, message) => {
+    expect(failure(source)).toEqual({ message, line: 1, column: 5 });
+  });
+});

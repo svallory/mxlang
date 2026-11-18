@@ -300,9 +300,10 @@ let attrGuardUse: {
 
 /**
  * Native props with genuine non-attribute semantics on Solid. Everything else
- * is validated like Marko, which exempts no name: `innerHTML`, `textContent`,
- * `classList` (not a Solid prop, so a plain attribute) and `:foo` (`value:foo`)
- * all render `[object Object]` unguarded.
+ * is validated like Marko, which exempts no name: `innerHTML`, `textContent`
+ * and `:foo` (`value:foo`) all render `[object Object]` unguarded. An authored
+ * `classList` (not a Solid 2 prop) is refused by core as another framework's
+ * name; only a spread key reaches this guard.
  */
 const UNGUARDED_ATTRS = new Set(["class", "style", "ref", "children"]);
 
@@ -747,6 +748,10 @@ export const solidDeclarations: HostDeclarations = {
   hostName: "Solid",
   nativeTags: WEB_ELEMENTS,
   attributeArgs: "refuse",
+  // The name this framework gives a meaning on an element (Solid's own
+  // `ref`), so core's other-framework-names rule lets it through
+  // (divergences.md).
+  acceptsReservedAttrNames: ["ref"],
   defineCallPassesAttrs: true,
   // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
