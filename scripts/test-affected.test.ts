@@ -443,6 +443,11 @@ const PARSER_DIST = ["packages/parser/dist/babel.js"];
 const WEB_ELEMENTS_DIST = ["packages/web-elements/dist/index.js"];
 const CORE_DIST = ["packages/core/dist/index.js"];
 const TSX_BRIDGE_DIST = ["packages/tsx-bridge/dist/index.js"];
+const HTML_DIST = [
+  "packages/targets/html/dist/index.js",
+  "packages/targets/html/dist/descriptor.js",
+  "packages/targets/html/dist/runtime.js",
+];
 const ANGULAR_DIST = [
   "packages/hosts/angular/dist/index.js",
   "packages/hosts/angular/dist/descriptor.js",
@@ -468,6 +473,13 @@ describe("distBuilds", () => {
         [PARSER, CORE, TSX_BRIDGE, ANGULAR, VITE_PLUGIN, TS_PLUGIN],
       ],
       ["packages/parser/src/frontend/babel.ts", [PARSER, CORE]],
+      // typescript-plugin's inputs miss targets/*/src: only its bundles edge
+      // reaches it from html's sources.
+      ["packages/targets/html/src/index.ts", [HTML, VITE_PLUGIN, TS_PLUGIN]],
+      // A manifest matches no bundler's inputs: only the bundles edges reach
+      // vite-plugin and typescript-plugin.
+      ["packages/targets/html/package.json", [HTML, VITE_PLUGIN, TS_PLUGIN]],
+      ["packages/hosts/angular/package.json", [ANGULAR, VITE_PLUGIN, TS_PLUGIN]],
       ["packages/core/src/lower.ts", [CORE, VITE_PLUGIN]],
       ["packages/hosts/preact/src/emitter.ts", [VITE_PLUGIN, TS_PLUGIN]],
       [
@@ -1016,15 +1028,14 @@ describe("Markdown selection", () => {
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
     ]);
-    expect(
-      relatedSources(["packages/core/src/custom-tags.ts"]).slice(-2),
-    ).toEqual([...CORE_DIST, ...VITE_PLUGIN_DIST]);
+    expect(distTail("packages/targets/html/src/index.ts")).toEqual([
+      ...HTML_DIST,
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
+    ]);
     expect(
       relatedSources(["packages/parser/src/template/index.ts"]).at(-1),
     ).toBe(CORE_DIST[0]);
-    expect(distTail("packages/parser/src/template/index.ts")).toEqual(
-      CORE_DIST,
-    );
     expect(distTail("scripts/bundled-build.ts")).toEqual([
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
