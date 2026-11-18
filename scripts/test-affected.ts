@@ -361,10 +361,6 @@ export const FIXTURE_CONSUMERS: readonly {
     consumers: ["packages/editors/vscode/scripts/bundled-entries.test.ts"],
   },
   {
-    path: /^biome\.json$/,
-    consumers: ["scripts/biome-plugins/no-declare-call-statement.test.ts"],
-  },
-  {
     path: /^bun\.lock$/,
     consumers: ["packages/stock-marko/src/vendor.test.ts"],
   },

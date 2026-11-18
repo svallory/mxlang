@@ -38,7 +38,6 @@
       "!packages/editors/tree-sitter-mx/tools"
     ]
   },
-  "plugins": ["./scripts/biome-plugins/no-declare-call-statement.grit"],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

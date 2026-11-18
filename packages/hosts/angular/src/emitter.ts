@@ -1977,9 +1977,6 @@ function lowerConstPattern(
  */
 function declaredNameCounts(body: IrNode[]): Map<string, number> {
   const counts = new Map<string, number>();
-  // Not named `declare`: Bun 1.3.14's TypeScript transpiler erases a statement
-  // `declare(x);` as an ambient declaration (under `bun run`, `bun test` and
-  // `bun build`), so the call would vanish from `dist`.
   const countName = (text: unknown): void => {
     if (typeof text !== "string") return;
     for (const token of text.match(TOKEN) ?? []) {
