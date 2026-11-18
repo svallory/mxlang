@@ -3663,7 +3663,8 @@ describe("a bare <style> refuses attributes, as stock Marko does", () => {
       }),
     ).toThrow(
       expect.objectContaining({
-        message: "The `style` does not support html attributes. Use a stylesheet.",
+        message:
+          "The `style` does not support html attributes. Use a stylesheet.",
         diagnosticCode: "MX_INVALID_ATTRIBUTE",
         line: 1,
         column: 7,
