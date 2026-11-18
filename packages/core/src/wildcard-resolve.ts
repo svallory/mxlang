@@ -17,10 +17,12 @@ import type {
   CustomTagAttributeTag,
   WildcardChildEntry,
 } from "./custom-tags.ts";
+import { hostTagRow } from "./declarations.ts";
 import { handleNode } from "./host-handle.ts";
 import { mxNodeOf } from "./marko-view.ts";
 import { MX_VOICE, triggerOfNode, type Voice } from "./message-vocabulary.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
+import { RESERVED_NAMES } from "./tag-names.ts";
 import {
   attributeTagDeclarationFor,
   explicitChildEntries,
@@ -84,17 +86,35 @@ export type WildcardContext = Pick<Ctx, "customTags" | "tagTable"> &
   Partial<Pick<Ctx, "declarations">>;
 
 /**
+ * What eligibility reads: `WildcardContext` plus the file's tag rules, which
+ * core's own callers carry (a whole `Ctx`, or the IR entry's preset).
+ * Internal to core.
+ */
+export type EligibilityContext = WildcardContext &
+  Partial<Pick<Ctx, "tagRules">>;
+
+const RESERVED = new Set<string>(RESERVED_NAMES);
+
+/**
  * Whether `name` is a built-in of the target, which no wildcard entry may
  * claim: (a) an entry of core's own taglib (`let`, `effect`, `script`,
  * `style`, ...), on every target; (b) a name the host declares a disposition
  * for; (c) a name the target's tag table holds as a non-element; (d) a name
  * the target's declarations list in `builtinTags` (the IR entry's anonymous `object`):
- * one concept, shared with the `defaultTag` check. A native
- * element (`title`, `div`) is not a built-in, so a contract can claim it.
+ * one concept, shared with the `defaultTag` check. Under the `none` tag rules
+ * only the reserved names are core (spec §13.7.3), so (a) and (b) hold there
+ * for a reserved name only. A native element (`title`, `div`) is not a
+ * built-in, so a contract can claim it.
  */
-function isBuiltin(name: string, ctx: WildcardContext): boolean {
-  if (CORE_TAG_NAMES.has(name)) return true;
-  if (ctx.declarations && Object.hasOwn(ctx.declarations.tags, name)) {
+function isBuiltin(name: string, ctx: EligibilityContext): boolean {
+  if (ctx.tagRules === "none" ? RESERVED.has(name) : CORE_TAG_NAMES.has(name)) {
+    return true;
+  }
+  const declarations = ctx.declarations;
+  if (
+    declarations &&
+    hostTagRow({ declarations, tagRules: ctx.tagRules }, name)
+  ) {
     return true;
   }
   if (ctx.declarations?.builtinTags?.includes(name)) return true;
@@ -111,7 +131,7 @@ function isBuiltin(name: string, ctx: WildcardContext): boolean {
  */
 export function wildcardIneligibility(
   name: string,
-  ctx: WildcardContext,
+  ctx: EligibilityContext,
 ): "built-in" | "registered" | undefined {
   if (name === "" || name.startsWith("@") || CORE_NAMES.has(name)) {
     return "built-in";
@@ -159,7 +179,8 @@ function entryDefinition(
 /**
  * Matches one authored tag against the contract in force at its position and
  * records the result; a tag matched once keeps its match under that contract
- * (the walk can run more than once over one tree).
+ * (the walk can run more than once over one tree). Eligibility follows the
+ * file's tag rules when `ctx` carries `tagRules` (core's own callers do).
  *
  * @unstable plumbing for the IR entry's parse-only scan (`ir-entry/authored-tags.ts`).
  */

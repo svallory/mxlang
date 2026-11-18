@@ -142,3 +142,40 @@ describe("builtinTags and the wildcard", () => {
     expect(messages("<holder>\n  <thing value='a'/>\n</holder>\n")).toEqual([]);
   });
 });
+
+/**
+ * Under the `none` tag rules only the reserved names are core (spec
+ * §13.7.3): core's taglib names are ordinary tags there, so a catch-all
+ * `"*"` claims them as it claims any other name.
+ */
+describe("the wildcard under the `none` tag rules", () => {
+  const holders: Record<string, CustomTag> = {
+    entry: { attributes: { value: { type: "string" } } },
+    holder: {
+      parents: ["#root"],
+      children: { "*": [{ contract: "entry" }] },
+    },
+  };
+
+  const messages = (name: string) =>
+    lowerSource(`<holder>\n  <${name} value='a'/>\n</holder>\n`, "/u.mx", {
+      customTags: holders,
+      tagRules: "none",
+    }).diagnostics.map((d) => d.message);
+
+  it("claims core's taglib names as it claims `<zzz>`", () => {
+    expect(messages("zzz")).toEqual([]);
+    for (const name of ["let", "lifecycle", "await", "id", "log", "effect"]) {
+      expect(messages(name), name).toEqual([]);
+    }
+  });
+
+  it("still does not claim a reserved name or the entry's `<object>`", () => {
+    expect(messages("try")).toEqual([
+      "`<try>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
+    ]);
+    expect(messages("object")).toEqual([
+      "`<holder>`: `<object>` is not allowed here; names must not already be a tag (`<object>` is a built-in tag, so the wildcard does not apply to it)",
+    ]);
+  });
+});

@@ -649,6 +649,16 @@ describe("explainUnknownTag: the same view on both paths", () => {
     return rest;
   }
 
+  // Under `none` (as `run` lowers) `lifecycle` is an ordinary name, so the
+  // catch-all claims it and its inline contract's `defaultTag` reaches `<:x>`.
+  const LIFECYCLE_SOURCE =
+    "<wild>\n  <lifecycle>\n    <:x/>\n  </lifecycle>\n</wild>\n";
+  const LIFECYCLE_TAGS: Record<string, CustomTag> = {
+    ...contracts,
+    wild: { children: { "*": { pattern: "^[a-z]+$", defaultTag: "cell" } } },
+    cell: {},
+  };
+
   const cases: Array<[string, string, Record<string, CustomTag>]> = [
     [
       "a nested tag, with its ancestors' contracts and a `defaultTag`",
@@ -680,6 +690,11 @@ describe("explainUnknownTag: the same view on both paths", () => {
         cell: {},
       },
     ],
+    [
+      "a tag under a core taglib name the wildcard claims under `none`",
+      LIFECYCLE_SOURCE,
+      LIFECYCLE_TAGS,
+    ],
   ];
 
   for (const [name, source, tags] of cases) {
@@ -706,6 +721,12 @@ describe("explainUnknownTag: the same view on both paths", () => {
     });
     expect(success.calls[0]?.ancestors[0]?.contract?.defaultTag).toBe("setter");
     expect(failure.calls[0]?.ancestors[0]?.contract?.defaultTag).toBe("setter");
+  });
+
+  it("a claimed `<lifecycle>` carries its inline contract on both paths under `none`", () => {
+    const { success, failure } = both(LIFECYCLE_SOURCE, LIFECYCLE_TAGS);
+    expect(success.calls[0]?.ancestors[1]?.contract?.defaultTag).toBe("cell");
+    expect(failure.calls[0]?.ancestors[1]?.contract?.defaultTag).toBe("cell");
   });
 });
 

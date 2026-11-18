@@ -25,7 +25,11 @@ import type { CustomTag } from "../custom-tags.ts";
 import { validateDefaultTag } from "../default-tag-validate.ts";
 import type { Dialect, SyntaxTable } from "../syntax-table.ts";
 import { type TagRules, taglibsOfRules } from "../tag-presets.ts";
-import { type ContractScope, matchWildcardChild } from "../wildcard-resolve.ts";
+import {
+  type ContractScope,
+  type EligibilityContext,
+  matchWildcardChild,
+} from "../wildcard-resolve.ts";
 import { DEFAULT_TAG, RESERVED_NAMES } from "./declarations.ts";
 import { lineStartsOf, positionAt } from "./diagnostics.ts";
 import {
@@ -168,6 +172,12 @@ export function scanAuthoredTags(
   if (!document) return null;
   const lineStarts = lineStartsOf(source);
   const tags: AuthoredTag[] = [];
+  // What a `children["*"]` may claim follows the file's tag rules, as in
+  // lowering: under `none`, core's taglib names are ordinary tags.
+  const eligibility: EligibilityContext = {
+    customTags,
+    tagRules: rules.preset,
+  };
   // What an unnamed tag (`<#a>`, `.x`) stands for: the nearest authored
   // parent's contract `defaultTag` when it is a valid one, else the caller's.
   // The lowering resolves it the same way (`resolveDefaultTag`), so the scan
@@ -205,7 +215,7 @@ export function scanAuthoredTags(
       // it would hold are RESERVED already.
       const claimed =
         name !== undefined && !unnamed
-          ? matchWildcardChild(node, name, scope, { customTags })
+          ? matchWildcardChild(node, name, scope, eligibility)
           : undefined;
       // The IR's name span of an attribute tag leaves out its `@`, so this
       // one does too: the hook gets one span whichever path finds the tag.
@@ -273,7 +283,7 @@ export function scanAuthoredTags(
     };
     if (!explain) {
       return {
-        scope: scopeInside(customTags, frame.scope, entered),
+        scope: scopeInside(customTags, frame.scope, entered, rules.preset),
         ancestors: frame.ancestors,
       };
     }
@@ -282,7 +292,7 @@ export function scanAuthoredTags(
     // force around it.
     if (name !== undefined && RESERVED.has(name)) {
       return {
-        scope: scopeInside(customTags, frame.scope, entered),
+        scope: scopeInside(customTags, frame.scope, entered, rules.preset),
         ancestors: frame.ancestors,
       };
     }

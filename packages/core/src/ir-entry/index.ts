@@ -487,6 +487,7 @@ function explainerOf(
   filename: string,
   source: string,
   lineStarts: number[],
+  tagRules: TagRulesPreset | undefined,
 ): Explainer | undefined {
   try {
     const dialect = dialectOnce();
@@ -501,6 +502,7 @@ function explainerOf(
         customTags: registrationView(customTags, claimed),
         tagFields: claimed.tag,
         memo: new WeakMap(),
+        tagRules,
       },
     });
   } catch {
@@ -620,6 +622,7 @@ function lowerResolved(
         filename,
         source,
         lineStarts,
+        rules?.preset,
       );
       const checkErrors = checkIr(
         lowered,
@@ -767,6 +770,7 @@ function lowerResolved(
       filename,
       source,
       lineStarts,
+      rules?.preset,
     );
     if (!reject && !explainer) return failed([error]);
     try {
@@ -872,6 +876,7 @@ function lowerResolved(
     filename,
     source,
     lineStarts,
+    rules?.preset,
   );
   const errors = checkIr(lowered, source, {
     ...modes,

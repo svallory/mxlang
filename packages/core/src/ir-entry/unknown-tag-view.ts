@@ -27,8 +27,10 @@ import type {
   UnknownTagAncestor,
   UnknownTagExplanation,
 } from "../syntax-table.ts";
+import type { TagRulesPreset } from "../tag-presets.ts";
 import {
   type ContractScope,
+  type EligibilityContext,
   matchWildcardChild,
   scopeForChildren,
 } from "../wildcard-resolve.ts";
@@ -42,6 +44,8 @@ export interface ViewEnv {
   readonly tagFields: ReadonlySet<string>;
   /** One copy per registered object across the call's hook calls. */
   readonly memo: WeakMap<object, unknown>;
+  /** The file's tag rules, which decide what a `children["*"]` may claim. */
+  readonly tagRules?: TagRulesPreset | undefined;
 }
 
 /** Where a walk is: the contract in force and the authored tags around it. */
@@ -73,17 +77,17 @@ export interface EnteredTag {
  * The contract in force for what is written inside `tag`: the one core checks
  * its children against (a wildcard child's matched contract, an attribute
  * tag's declaration in its owner, a registered tag's own), `undefined` for a
- * tag with none.
+ * tag with none. `tagRules` is the file's, as lowering read it.
  */
 export function scopeInside(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
   scope: ContractScope | undefined,
   tag: EnteredTag,
+  tagRules?: TagRulesPreset,
 ): ContractScope | undefined {
+  const eligibility: EligibilityContext = { customTags, tagRules };
   const claimed = tag.claimed
-    ? matchWildcardChild(tag.node, tag.written, scope, {
-        customTags,
-      } as Parameters<typeof matchWildcardChild>[3])
+    ? matchWildcardChild(tag.node, tag.written, scope, eligibility)
     : undefined;
   return scopeForChildren(
     tag.node,
@@ -102,7 +106,7 @@ export function enterTag(
   frame: ViewFrame,
   tag: EnteredTag,
 ): ViewFrame {
-  const scope = scopeInside(env.customTags, frame.scope, tag);
+  const scope = scopeInside(env.customTags, frame.scope, tag, env.tagRules);
   const ancestor: UnknownTagAncestor = Object.freeze({
     tag: tag.written,
     ...(tag.nameSpan ? { nameSpan: tag.nameSpan } : {}),

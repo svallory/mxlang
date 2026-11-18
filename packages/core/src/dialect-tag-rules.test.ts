@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import { type Ctx, newCtx, TranslateError } from "./core.ts";
+import type { CustomTag } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Ir, IrNode } from "./ir.ts";
@@ -34,6 +35,13 @@ const host: HostDeclarations = {
 // under `none`.
 const VOID_CHILD = "<input><child/></input>\n";
 const VOID_ERROR = 'The closing "input" tag was not expected';
+
+// A catch-all `"*"` parent. The `transform`s let both tags lower on a host
+// that claims no tag, so only the wildcard check decides the outcome.
+const WILDCARD_HOLDER: Record<string, CustomTag> = {
+  holder: { children: { "*": [{ contract: "entry" }] }, transform: () => [] },
+  entry: { transform: () => [] },
+};
 
 let dir: string;
 beforeEach(() => {
@@ -200,7 +208,7 @@ describe("the host's tag rows under the `none` tag rules", () => {
   const compileWithRows = (
     source: string,
     filename: string,
-    options: { dialect?: Dialect } = {},
+    options: { dialect?: Dialect; customTags?: Record<string, CustomTag> } = {},
   ) =>
     messageOf(() =>
       compileSource(source, filename, rows, {
@@ -224,6 +232,29 @@ describe("the host's tag rows under the `none` tag rules", () => {
 
   it("outside `none` the row applies", () => {
     expect(compileWithRows("<probe/>\n", "/page.mx")).toBe("R");
+  });
+
+  it("a row for a name that is not reserved does not keep a wildcard from claiming it", () => {
+    const customTags = WILDCARD_HOLDER;
+    expect(
+      compileWithRows("<holder><zzz/></holder>\n", "/page.mx", {
+        dialect: none,
+        customTags,
+      }),
+    ).toBeUndefined();
+    expect(
+      compileWithRows("<holder><probe/></holder>\n", "/page.mx", {
+        dialect: none,
+        customTags,
+      }),
+    ).toBeUndefined();
+    expect(
+      compileWithRows("<holder><probe/></holder>\n", "/page.mx", {
+        customTags,
+      }),
+    ).toBe(
+      "`<holder>`: `<probe>` is not allowed here; names must not already be a tag (`<probe>` is a built-in tag, so the wildcard does not apply to it)",
+    );
   });
 });
 
@@ -310,6 +341,22 @@ describe("lowering a fragment adopts the file's tag rules", () => {
       },
     });
     expect(messageOf(() => lower(ctx, body))).toBeUndefined();
+  });
+
+  it("a host row for a name that is not reserved does not keep a wildcard from claiming it", () => {
+    const claimed = (source: string) => {
+      const { body, ctx } = fragmentCtx(source, "/page.mx", {
+        dialect: none,
+        declarations: {
+          ...host,
+          tags: { probe: { kind: "error", reason: "R" } },
+        },
+      });
+      ctx.customTags = WILDCARD_HOLDER;
+      return messageOf(() => lower(ctx, body));
+    };
+    expect(claimed("<holder><zzz/></holder>\n")).toBeUndefined();
+    expect(claimed("<holder><probe/></holder>\n")).toBeUndefined();
   });
 });
 
