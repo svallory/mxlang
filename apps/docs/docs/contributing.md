@@ -94,7 +94,7 @@ A fixture for the Marko-parity oracle lives in its own directory alongside a pla
 
 ## Consumer Check
 
-The verification chain includes a consumer smoke check. This step simulates how an end-user would consume the package, building and packing a tarball (via `npm pack`) and running a minimal test project against it. This proves the published artifact is structurally sound.
+The verification chain includes a consumer smoke check. This step simulates how an end-user would consume the package, building and packing a tarball (via `bun pm pack`) and running a minimal test project against it. This proves the published artifact is structurally sound.
 
 ## Adding a Host to the Shared JSX Emitter
 
