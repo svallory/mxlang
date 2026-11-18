@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 import { SourceMap } from "@volar/language-core";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -56,6 +57,21 @@ describe.each(HOSTS)("handler positions on %s", (host) => {
       "<button onClick=((a: string) => a.length)>x</button>",
     );
     expect(toSource(generated.indexOf("satisfies"))).toBe(17);
+  });
+
+  it("gives a literal dynamic tag naming an element the element's wrapper and mismatch position", () => {
+    // Core lowers `<${"button"}>` as `<button>`, so the editor projection
+    // types it as the native element: same wrapper, mismatch on the handler.
+    for (const source of [
+      '<${"button"} onClick=((a: string) => a.length)>x</>',
+      "<${'button'} onClick=((a: string) => a.length)>x</>",
+    ]) {
+      const { generated, toSource } = virtual(host, source);
+      expect(generated).toContain(
+        '<button onClick={((a: string) => a.length) satisfies __MxH<"button", "click"> as any}>x</button>',
+      );
+      expect(toSource(generated.indexOf("satisfies"))).toBe(22);
+    }
   });
 
   it("maps a shorthand handler's keyword to the attribute name and its body to the authored body", () => {

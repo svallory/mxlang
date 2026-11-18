@@ -5,6 +5,7 @@
  * the regions with its own kind's `compileRegion`.
  */
 import type { HostFileKind, HostRegionInput } from "@mxlang/core";
+import { SourceMap } from "@volar/language-core";
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { fileKindForPipeline } from "./file-kinds.ts";
@@ -183,6 +184,39 @@ describe(".preact.mx: the Preact region kind's own plugin", () => {
     const text = virtual?.snapshot.getText(0, virtual.snapshot.getLength());
     expect(text).toContain("for=");
     expect(text).toContain("class=");
+  });
+
+  it("lowers a literal dynamic tag naming an element as that element, the handler mapped to its start", () => {
+    // `<${"button"}>` is `<button>` after core's pre-pass. The dynamic name's
+    // `"button"` range is a host-recorded mapping, so the handler's own
+    // mapping is not pushed past it.
+    const project = (source: string) => {
+      const virtual = preact?.createVirtualCode?.(
+        "/a/Button.preact.mx",
+        "preactmx",
+        snapshot(source),
+        noScript,
+      );
+      if (!virtual) throw new Error("Expected region virtual code");
+      const text = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+      const map = new SourceMap(virtual.mappings as never);
+      const handler = [
+        ...map.toSourceLocation(text.indexOf("(a: string) => a.length")),
+      ][0]?.[0];
+      return { text, handler };
+    };
+    const literal = project(
+      'export const view = <${"button"} onClick=((a: string) => a.length)>x</>;\n',
+    );
+    const element = project(
+      "export const view = <button onClick=((a: string) => a.length)>x</button>;\n",
+    );
+    expect(literal.text).toContain(
+      "export const view = <><button onClick={(a: string) => a.length}>x</button></>;",
+    );
+    expect(literal.text).toBe(element.text);
+    expect(literal.handler).toBe(42);
+    expect(element.handler).toBe(37);
   });
 });
 
