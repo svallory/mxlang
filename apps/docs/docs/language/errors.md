@@ -295,11 +295,11 @@ The parser reads the colon form as a name and a modifier. What happens next depe
 
 A host that keeps a modifier as syntax of its own may accept it instead; see [Policy and hooks](/architecture/policy-and-hooks/).
 
-**On a dynamic tag named by a plain string literal that stays dynamic** (`<${"Foo"}>`, `<${"my-el"}>`, `<${"style"}>`) and on `<html-script>` or `<html-style>` read as an element, MX refuses it before the host's own refusal runs, with Marko's message and code `MX_INVALID_ATTRIBUTE`, at the attribute: `` `class:active` is not a valid attribute, did you mean `class={ active: condition }`? `` (`style={ color: value }` for `style:color`).
+**On a dynamic tag named by a plain string literal that stays dynamic** (`<${"Foo"}>`, `<${"my-el"}>`, `<${"style"}>`) and on `<html-script>` or `<html-style>` read as an element, MX refuses it itself, with Marko's message and code `MX_INVALID_ATTRIBUTE`, at the attribute (no host modifier hook is consulted): `` `class:active` is not a valid attribute, did you mean `class={ active: condition }`? `` (`style={ color: value }` for `style:color`).
 
 **On a component call, an attribute tag and a dynamic tag with any other name** (`<${input.t}>`) it is an ordinary attribute named `class:active`: it compiles, and the component receives the prop under that whole name. A bound `class:x:=y` and a spread key (`...{"class:x": 1}`) are never refused.
 
-`on:click` takes the same paths with an event fix-it; see [Attributes](/language/attributes/).
+`on:click` takes the same paths; see [Attributes](/language/attributes/).
 
 ## A tag shorthand where the dialect turned them off
 
