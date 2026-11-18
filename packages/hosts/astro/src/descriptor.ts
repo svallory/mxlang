@@ -53,9 +53,9 @@ const descriptor: TargetDescriptor = {
   declarations: htmlDescriptor.declarations,
   load() {
     // Bare-name require: html's compile entry is cross-package, so a relative
-    // path is not possible. Probe-verified to inline into the VSIX bundle
-    // under `scripts/bundled-build.ts` on Bun 1.3.14 (rev-230 §3); the real
-    // gate is `check-vsix` in registration PR 5.
+    // path is not possible. CI gates the shipped bundles: `check-vsix` asserts
+    // every bare `require` in the VSIX's `dist/*.cjs` resolves, and `ls-smoke`
+    // loads the VSIX's language server with `host: "astro"`.
     const { compile } =
       require("@mxlang/target-html") as typeof import("@mxlang/target-html");
     return {
