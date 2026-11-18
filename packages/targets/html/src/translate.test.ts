@@ -2273,9 +2273,14 @@ describe("a component body with tag params (`<List|item, i|>`) binds them (execu
   });
 
   it("accepts a literal string target without params", () => {
-    expect(() =>
-      compile(src('<${"div"}><b>x</b></>'), "/tmp/mx-translator-test/ok.mx"),
-    ).not.toThrow();
+    for (const target of ['"my-el"', "'my-el'", "`my-el`"]) {
+      expect(() =>
+        compile(
+          src(`<\${${target}}><b>x</b></>`),
+          "/tmp/mx-translator-test/ok.mx",
+        ),
+      ).not.toThrow();
+    }
   });
 
   it.each([
