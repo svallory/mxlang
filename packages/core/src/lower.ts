@@ -3845,9 +3845,12 @@ function rejectHtmlCommentAttributes(ctx: Ctx, node: Node): void {
  * extension); beside an authored `class` the head merges into that positioned
  * attribute, which is refused, as stock refuses it.
  *
- * Only a tag on the native element path reaches this: a `style` contract or
- * a host that claims `style` lowers it elsewhere. Skipped under the `none`
- * tag-rules preset, as {@link rejectHtmlCommentAttributes} is.
+ * Two callers reach this: the native element path, after the attributes are
+ * lowered, and {@link lowerDelegatedTag} for a host that claims `style` and
+ * reads it as an element, right after the host's resolve (so the host's own
+ * refusals, its arguments and parameters among them, report first). A
+ * `style` contract lowers the tag elsewhere and reaches neither. Skipped
+ * under the `none` tag-rules preset, as {@link rejectHtmlCommentAttributes} is.
  */
 function rejectBareStyleAttributes(ctx: Ctx, node: Node): void {
   if (ctx.tagRules === "none") return;
@@ -5909,6 +5912,15 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   // contract-only delegated path does; only a comment resolves early.
   const early = name === "html-comment";
   const commentData = early ? resolve() : undefined;
+  // A claimed `style` the host reads as an element is the core `<style>`:
+  // its attribute refusal runs once the host's resolve has had its say.
+  const resolveStyle = () => {
+    const data = resolve();
+    rejectBareStyleAttributes(ctx, node);
+    return data;
+  };
+  const styleElement =
+    name === "style" && ctx.declarations.isElement("style", ctx);
   if (early && (!ctx.customTags || !Object.hasOwn(ctx.customTags, name))) {
     rejectHtmlCommentAttributes(ctx, node);
   }
@@ -5953,7 +5965,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       params: paramsOf(ctx, node),
       bindings,
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
-      data: early ? commentData : resolve(),
+      data: early ? commentData : styleElement ? resolveStyle() : resolve(),
       loc,
     },
     loc,
@@ -7931,8 +7943,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     );
   }
   const attrs = lowerAttrs(ctx, node, name, "element", true);
-  // After the attributes, as the html target's claimed `<style>`: an attribute
-  // core refuses on its own (an invalid name, a modifier) reports first.
+  // After the attributes, as on the claimed path: an attribute core refuses
+  // on its own (an invalid name, a modifier) reports first.
   if (name === "style") rejectBareStyleAttributes(ctx, node);
   // An element's body is its own scope for every binding it declares (Marko
   // 6.4.4 scopes a `<define>`, a `<const>` and a `<let>` to the body that

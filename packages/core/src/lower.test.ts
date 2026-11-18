@@ -3540,10 +3540,20 @@ describe("other knownWrongAttrs names on a native element (Marko parity, D171)",
     ).not.toThrow();
   });
 
-  it("lowers a claimed `<style>` with `ref` as today (not this check)", () => {
+  // Not this check: a claimed `<style>` read as an element takes the bare
+  // `<style>` refusal of every attribute, in stock's words.
+  it("refuses a claimed `<style>` with `ref` as a bare `<style>`", () => {
     expect(() =>
       lowerSource("<style ref=x>a{}</style>", claimsNative()),
-    ).not.toThrow();
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.",
+        diagnosticCode: "MX_INVALID_ATTRIBUTE",
+        line: 1,
+        column: 7,
+      }),
+    );
   });
 
   it.each([
@@ -3615,9 +3625,12 @@ describe("a bare <style> refuses attributes, as stock Marko does", () => {
     "The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.";
   const compileStyle = (
     source: string,
-    options: { dialect?: Dialect } = {},
+    {
+      declarations = fakeDeclarations(),
+      ...options
+    }: { dialect?: Dialect; declarations?: Policy } = {},
   ): string =>
-    compileSource(source, "/tmp/mx-core-test/style.mx", fakeDeclarations(), {
+    compileSource(source, "/tmp/mx-core-test/style.mx", declarations, {
       targets: lookup,
       emitIr: (ir) => ir.body[0]?.kind ?? "missing",
       ...options,
@@ -3673,6 +3686,51 @@ describe("a bare <style> refuses attributes, as stock Marko does", () => {
         column: 7,
       }),
     );
+  });
+
+  // A host may claim `style` (its own resolve picks the output) and still
+  // read it as an element: the refusal follows the element, after the host's
+  // resolve. A host that reads no tag as an element (the IR entry's shape)
+  // keeps every attribute.
+  const claims = (overrides: Partial<Policy> = {}): Policy =>
+    fakeDeclarations({
+      isDelegatedTag: (name) => name === "style",
+      resolveDelegatedTag: () => ({}),
+      ...overrides,
+    });
+
+  it.each(['<style media="print">a{}</style>', "<style#a>a{}</style>"])(
+    "refuses %s when the host claims `style` as an element",
+    (source) => {
+      expect(() => compileStyle(source, { declarations: claims() })).toThrow(
+        expect.objectContaining({
+          message,
+          diagnosticCode: "MX_INVALID_ATTRIBUTE",
+          line: 1,
+          column: 7,
+        }),
+      );
+    },
+  );
+
+  it("keeps the attributes of a claimed `style` the host does not read as an element", () => {
+    expect(
+      compileStyle('<style media="print">a{}</style>', {
+        declarations: claims({ isElement: () => false }),
+      }),
+    ).toBe("DelegatedTag");
+  });
+
+  it("reports the host's own resolve error first", () => {
+    expect(() =>
+      compileStyle('<style media="print">a{}</style>', {
+        declarations: claims({
+          resolveDelegatedTag: () => {
+            throw new Error("host says no");
+          },
+        }),
+      }),
+    ).toThrow("host says no");
   });
 });
 

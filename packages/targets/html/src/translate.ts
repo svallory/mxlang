@@ -1186,8 +1186,9 @@ export type DelegatedTagData =
   | { kind: "raw-element"; tag: string }
   /**
    * `writeAttrs`: a `style` contract accepted the attributes, so the emitter
-   * writes them on the open tag; without one they were refused (or, under the
-   * `none` preset or as `<style.less>`'s extension shorthand, are dropped).
+   * writes them on the open tag; without one core's bare `<style>` check
+   * refused them after this host's resolve (or, under the `none` preset or as
+   * `<style.less>`'s extension shorthand, they are dropped).
    */
   | { kind: "style"; writeAttrs: boolean }
   | { kind: "try" }
@@ -1222,44 +1223,6 @@ function isDelegatedTag(name: string): boolean {
 /** Whether `customTags` (or `mx.contracts`) registers a `style` contract. */
 function hasStyleContract(ctx: Ctx): boolean {
   return ctx.customTags !== undefined && Object.hasOwn(ctx.customTags, "style");
-}
-
-/**
- * Stock Marko 6.4.4's `assertNoStyleAttributes`: the core `<style>` refuses
- * every attribute, a spread included, at the first one. This target writes
- * `<style>` without them, so accepting one would drop it silently.
- *
- * The one exemption is stock's own: the positionless `class` with a string
- * value that the head shorthand builds for `<style.less>` (`less`) or
- * `<style.module.css>` (`module css`), the stylesheet's file extension rather
- * than an authored attribute. Beside an authored `class` the head merges into
- * that positioned attribute, which is refused, as stock refuses it.
- *
- * Skipped where `<style>` has a contract (as core skips `<html-comment>`'s
- * refusal) and under the `none` tag-rules preset, as core's `<html-comment>`
- * attribute refusal is.
- */
-function rejectStyleAttributes(ctx: Ctx, node: Node): void {
-  if (ctx.tagRules === "none") return;
-  if (hasStyleContract(ctx)) return;
-  const attr = (node.attributes ?? []).find(
-    (attr: Node) =>
-      !(
-        attr.type === "MarkoAttribute" &&
-        attr.name === "class" &&
-        attr.start == null &&
-        attr.value?.type === "StringLiteral"
-      ),
-  );
-  if (!attr) return;
-  fail(
-    `The \`style\` does not support html ${voiceOfCtx(ctx).attributes}. For a native html [\`<style>\` tag](https://markojs.com/docs/reference/core-tag#style) use the \`html-style\` core tag instead.`,
-    // A shorthand's record (`<style#a>`'s `id`) has no position of its own:
-    // its value, the word after the sigil, has one.
-    attr.loc ? attr : attr.value,
-    undefined,
-    { code: "MX_INVALID_ATTRIBUTE" },
-  );
 }
 
 /**
@@ -1376,7 +1339,6 @@ function resolveDelegatedTag(
 
   if (name === "style") {
     rejectUnsupportedFields(ctx, node, "`<style>`");
-    rejectStyleAttributes(ctx, node);
     return { kind: "style", writeAttrs: hasStyleContract(ctx) };
   }
 

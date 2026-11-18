@@ -310,6 +310,30 @@ describe("<style> refuses attributes, as stock Marko does", () => {
     });
   });
 
+  it("refuses the arguments before the attributes, as stock does", () => {
+    expect(refusal('<style(x) media="print">a{}</style>')).toEqual({
+      message: "Tag does not support arguments.",
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      line: 1,
+      column: 7,
+    });
+  });
+
+  it("a custom tag's own attributes are not the `<style>` it emits", () => {
+    expect(
+      mx('<widget a="1"/>', {
+        customTags: {
+          widget: {
+            attributes: { a: { type: "string" } },
+            transform: (_call, ctx) => [
+              ctx.build.delegatedTag("style", [], []),
+            ],
+          },
+        },
+      })({}),
+    ).toBe("<style></style>");
+  });
+
   it.each(["<style.less>a{}</style>", "<style.module.css>a{}</style>"])(
     "%s is an extension, not an attribute",
     (source) => {
