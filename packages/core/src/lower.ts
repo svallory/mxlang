@@ -2648,7 +2648,7 @@ function rejectNativeLiteralFields(ctx: Ctx, node: Node): void {
   if (attributeTag) {
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      "Tag does not support nested attribute tags.",
+      `Tag does not support nested ${voiceOfCtx(ctx).attributeTags}.`,
       attributeTag,
     );
   }
