@@ -1,7 +1,8 @@
 /**
  * The `HostDeclarations` the IR entry point (`lowerSource`) lowers under:
- * delegate everything, so every non-structural tag arrives in the IR as a
- * `DelegatedTag` and the checks (`checks.ts`) read it.
+ * delegate every name but the few listed below, so every other non-structural
+ * tag arrives in the IR as a `DelegatedTag` and the checks (`checks.ts`) read
+ * it.
  *
  * What the declarations intercept *before* delegation:
  *
@@ -19,6 +20,11 @@
  *   one) are *not* claimed (`DYNAMIC_TAG` excluded), so core lowers them to a
  *   dynamic `Component` and `checks.ts` rejects them: a static tree needs a
  *   name.
+ * - **`try`, and `effect` outside the `none` tag rules,** are not claimed
+ *   either: their authored forms are refused before delegation (the `try`
+ *   disposition above, core's `<effect>` refusal), so a custom tag's hook
+ *   cannot build them through `ctx.build.delegatedTag` either. Every other
+ *   name is claimed.
  * - **Component calls** (a capitalized import call, a template-bearing
  *   `customTags` entry) are refused through `rejectComponentTag` where core
  *   offers it and rejected in `checks.ts` for the paths that bypass that hook.
@@ -151,7 +157,10 @@ export function entryDeclarations(
       },
       isElement: () => false,
       isComponent: () => false,
-      isDelegatedTag: (name) => name !== DYNAMIC_TAG,
+      isDelegatedTag: (name, ctx) =>
+        name !== DYNAMIC_TAG &&
+        name !== "try" &&
+        !(name === "effect" && ctx.tagRules !== "none"),
       resolveDelegatedTag: () => undefined,
       resolveAttributeMethod: () => true,
       rejectComponentTag: (name, node) => {

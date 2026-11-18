@@ -128,3 +128,50 @@ describe("transform output through lowerSource", () => {
     });
   });
 });
+
+describe("built tags the IR entry does not claim", () => {
+  // The call is the built tag's `from`, so a claimed one carries spans.
+  const builds = (name: string): CustomTag => ({
+    transform: (call, ctx) => [ctx.build.delegatedTag(name, [], [], [], call)],
+  });
+  const unclaimed = (name: string) =>
+    expect.objectContaining({
+      message: `\`<widget>\`: this host does not claim \`<${name}>\`, so a custom tag cannot emit one`,
+      code: "MX_TAG_HOOK_ERROR",
+      line: 1,
+      column: 0,
+    });
+
+  it.each(["html", "none"] as const)(
+    "refuses a built `<try>` under the `%s` tag rules",
+    (tagRules) => {
+      const { ir, diagnostics } = lowerSource("<widget/>\n", "/u.mx", {
+        customTags: { widget: builds("try") },
+        tagRules,
+      });
+      expect(ir).toBeUndefined();
+      expect(diagnostics[0]).toEqual(unclaimed("try"));
+    },
+  );
+
+  it("refuses a built `<effect>` under the `html` tag rules", () => {
+    const { ir, diagnostics } = lowerSource("<widget/>\n", "/u.mx", {
+      customTags: { widget: builds("effect") },
+      tagRules: "html",
+    });
+    expect(ir).toBeUndefined();
+    expect(diagnostics[0]).toEqual(unclaimed("effect"));
+  });
+
+  it("builds `<effect>` as an ordinary name under the `none` tag rules", () => {
+    const { ir, diagnostics } = lowerSource("<widget/>\n", "/u.mx", {
+      customTags: { widget: builds("effect") },
+      tagRules: "none",
+    });
+    expect(diagnostics).toEqual([]);
+    expect(ir?.body[0]).toMatchObject({
+      kind: "DelegatedTag",
+      tag: { name: "effect" },
+    });
+  });
+});

@@ -2404,6 +2404,34 @@ describe("ctx.build.delegatedTag refuses what it cannot carry", () => {
       "export",
       "`<widget>`: `ctx.build.delegatedTag` cannot build `<export>`: a built tag has no statement code",
     ],
+    [
+      "if",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<if>`: a built tag has no branch chain",
+    ],
+    [
+      "else-if",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<else-if>`: a built tag has no branch chain",
+    ],
+    [
+      "else",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<else>`: a built tag has no branch chain",
+    ],
+    [
+      "for",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<for>`: a built tag has no loop head",
+    ],
+    [
+      "define",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<define>`: a built tag has no tag variable to bind",
+    ],
+    [
+      "return",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<return>`: a built tag has no return value",
+    ],
+    [
+      "class",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<class>`: a built tag has no statement code",
+    ],
   ])(
     "refuses %j on a host that claims it, before its resolve",
     (name, message) => {
@@ -2469,7 +2497,7 @@ describe("ctx.build.delegatedTag refuses what it cannot carry", () => {
     expect(message).not.toContain("\u0000");
   });
 
-  it.each(["let", "server", "client"])(
+  it.each(["let", "server", "client", "class"])(
     "builds `%s` as an ordinary name under the `none` tag rules",
     (name) => {
       const resolve = vi.fn(() => ({}));
@@ -2500,6 +2528,30 @@ describe("ctx.build.delegatedTag refuses what it cannot carry", () => {
     [
       "export",
       "`<widget>`: `ctx.build.delegatedTag` cannot build `<export>`: a built tag has no statement code",
+    ],
+    [
+      "if",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<if>`: a built tag has no branch chain",
+    ],
+    [
+      "else-if",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<else-if>`: a built tag has no branch chain",
+    ],
+    [
+      "else",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<else>`: a built tag has no branch chain",
+    ],
+    [
+      "for",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<for>`: a built tag has no loop head",
+    ],
+    [
+      "define",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<define>`: a built tag has no tag variable to bind",
+    ],
+    [
+      "return",
+      "`<widget>`: `ctx.build.delegatedTag` cannot build `<return>`: a built tag has no return value",
     ],
   ])("still refuses `%s` under the `none` tag rules", (name, message) => {
     const resolve = vi.fn(() => ({}));

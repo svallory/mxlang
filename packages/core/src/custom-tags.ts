@@ -655,10 +655,11 @@ export interface IrBuilders {
    * or `try` with attributes is refused too, as the authored tags are (the
    * `html-comment` check is skipped under an `html-comment` contract and the
    * `none` tag rules). A request for `let`, `const`, `server`, `client`,
-   * `static`, `import`, `export` or a dynamic tag is refused, since the
-   * builder carries no tag variable, statement code or target expression
-   * (`let`, `server` and `client` are ordinary names under the `none` tag
-   * rules and are not refused there).
+   * `static`, `import`, `export`, `if`, `else-if`, `else`, `for`, `define`,
+   * `return`, `class` or a dynamic tag is refused, since the builder carries
+   * no tag variable, statement code, branch, loop or target expression
+   * (`let`, `server`, `client` and `class` are ordinary names under the
+   * `none` tag rules and are not refused there).
    */
   delegatedTag(
     name: string,
@@ -4215,9 +4216,9 @@ export const RAW_PRIMITIVES: ReadonlySet<string> = new Set([
 /**
  * The Marko core tags (and core's dynamic-tag sentinel) `ctx.build.delegatedTag`
  * refuses, each with what the builder has no slot for. A host resolving one
- * would read that data off the custom tag's own node instead. `let`, `server`
- * and `client` are ordinary tag names under the `none` tag rules, which do not
- * refuse them. Built on first use: `DYNAMIC_TAG` comes from `core.ts`, which
+ * would read that data off the custom tag's own node instead. `let`, `server`,
+ * `client` and `class` are ordinary tag names under the `none` tag rules, which
+ * do not refuse them. Built on first use: `DYNAMIC_TAG` comes from `core.ts`, which
  * is still evaluating when an import cycle loads this module first.
  */
 interface UnbuildablePrimitive {
@@ -4239,6 +4240,15 @@ function unbuildablePrimitive(name: string): UnbuildablePrimitive | undefined {
     ["static", { missing: "statement code", ordinaryUnderNone: false }],
     ["import", { missing: "statement code", ordinaryUnderNone: false }],
     ["export", { missing: "statement code", ordinaryUnderNone: false }],
+    // Core constructs in every preset, `none` included.
+    ["if", { missing: "branch chain", ordinaryUnderNone: false }],
+    ["else-if", { missing: "branch chain", ordinaryUnderNone: false }],
+    ["else", { missing: "branch chain", ordinaryUnderNone: false }],
+    ["for", { missing: "loop head", ordinaryUnderNone: false }],
+    ["define", { missing: "tag variable to bind", ordinaryUnderNone: false }],
+    ["return", { missing: "return value", ordinaryUnderNone: false }],
+    // A statement tag under `html`/`markup`, an ordinary name under `none`.
+    ["class", { missing: "statement code", ordinaryUnderNone: true }],
     [DYNAMIC_TAG, { missing: "tag-name expression", ordinaryUnderNone: false }],
   ]);
   return unbuildablePrimitives.get(name);
