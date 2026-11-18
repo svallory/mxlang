@@ -1,5 +1,5 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { loadMx } from "./helpers.ts";
@@ -318,6 +318,59 @@ describe("<style> refuses attributes, as stock Marko does", () => {
       );
     },
   );
+
+  // A dialect's tag rules come from its discovered package, so each preset
+  // gets its own project dir with a test dialect for `.tst` files.
+  const dialectPage = (tagRules: string) => {
+    const project = join(dir, `dialect-${tagRules}`);
+    const packageDir = join(project, "node_modules", "test-dialect");
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(
+      join(packageDir, "package.json"),
+      JSON.stringify({
+        name: "test-dialect",
+        mx: {
+          dialect: {
+            id: "test",
+            name: "Test",
+            extensions: [".tst"],
+            module: "./index.mjs",
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      join(packageDir, "index.mjs"),
+      `export default { tagRules: ${JSON.stringify(tagRules)}, table: {} };\n`,
+    );
+    writeFileSync(
+      join(project, "package.json"),
+      JSON.stringify({
+        name: "app",
+        devDependencies: { "test-dialect": "0.0.0" },
+      }),
+    );
+    return join(project, "page.tst");
+  };
+
+  it("the `none` tag rules skip the refusal, as for `<html-comment>`", () => {
+    expect(
+      compile('<style media="print">a{}</style>', dialectPage("none")).code,
+    ).toContain("<style>a{}</style>");
+  });
+
+  it("the `markup` tag rules refuse, like `html`", () => {
+    expect(() =>
+      compile('<style media="print">a{}</style>', dialectPage("markup")),
+    ).toThrow(
+      expect.objectContaining({
+        message,
+        diagnosticCode: "MX_INVALID_ATTRIBUTE",
+        line: 1,
+        column: 7,
+      }),
+    );
+  });
 
   it("a `style` contract turns the refusal off", () => {
     expect(() =>
