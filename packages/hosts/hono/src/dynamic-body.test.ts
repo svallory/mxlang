@@ -312,7 +312,7 @@ describe("a lone 0 in a scoped body that binds a /var still renders", () => {
   it("a dynamic-tag body", async () => {
     expect(
       await renderPair(
-        '<${"section"}><wrap/x v=0/>${x}</>',
+        '<const/el="section"/><${el}><wrap/x v=0/>${x}</>',
         {},
         "<return value=input.v/>",
         true,

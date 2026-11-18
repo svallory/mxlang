@@ -276,6 +276,8 @@ describe("a dynamic tag whose callee declares <return>, rendered on Preact", () 
   });
 
   it("renders a string target as its element, /var or not", async () => {
-    expect(await renderCaller('<${"em"}>i</${"em"}>')).toBe("<em>i</em>");
+    expect(await renderCaller('<const/el="em"/><${el}>i</${el}>')).toBe(
+      "<em>i</em>",
+    );
   });
 });

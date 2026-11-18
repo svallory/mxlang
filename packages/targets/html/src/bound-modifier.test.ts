@@ -23,7 +23,7 @@ describe("a refined bound attribute renders like the unrefined one (html)", () =
       "<define/Card|input|><b/></define><Card v:fn:=q/>",
       "<define/Card|input|><b/></define><Card v:=q/>",
     ],
-    ['<${"div"} v:fn:=q/>', '<${"div"} v:=q/>'],
+    ['<const/el="div"/><${el} v:fn:=q/>', '<const/el="div"/><${el} v:=q/>'],
     ["<div ...{} v:fn:=q/>", "<div ...{} v:=q/>"],
     // Marko accepts an optional-chain target, refined or not; the refinement
     // is client-only, so html renders the same `q?.a` attribute for both.
@@ -91,7 +91,7 @@ describe("html type-checks a refinement it never emits a handler for", () => {
       "a <define> component call",
       "<define/Card|input|><b/></define><Card v:fnn:=q/>",
     ],
-    ["a dynamic tag", '<${"div"} v:fnn:=q/>'],
+    ["a dynamic tag", '<const/el="div"/><${el} v:fnn:=q/>'],
     ["a tag with a spread", "<div ...{} v:fnn:=q/>"],
   ])("reports a misspelled refinement on %s", (_shape, mx) => {
     // Only the refinement's own diagnostic: the fixture's other findings

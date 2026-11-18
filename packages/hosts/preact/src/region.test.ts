@@ -65,7 +65,7 @@ describe(".preact.mx region renders what the whole-file .mx renders", () => {
     "<if=1 === 2><b>no</b></if><else-if=true><i>yes</i></else-if><else><s>never</s></else>",
     '<input type="checkbox" checked=true disabled=false/>',
     '<textarea value="ab"/>',
-    '<${"em"} title="t">dyn</>',
+    '<${"e" + "m"} title="t">dyn</>',
     '<define/Item|label: string|><li>${label}</li></define><ol><Item("one")/><Item("two")/></ol>',
     '<div innerHTML="no">${"<b>escaped</b>"}</div>',
   ];

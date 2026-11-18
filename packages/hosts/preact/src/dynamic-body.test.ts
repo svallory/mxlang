@@ -307,7 +307,7 @@ describe("a /var in a dynamic-tag body is its own scope", () => {
   it("renders the inner and the outer x independently", async () => {
     expect(
       await renderPair(
-        `<\${"section"}><wrap/x v=2/>\${x}</>\n<wrap/x v=1/>\${x}`,
+        `<const/el="section"/>\n<\${el}><wrap/x v=2/>\${x}</>\n<wrap/x v=1/>\${x}`,
         {},
         "<return value=input.v/>",
         true,

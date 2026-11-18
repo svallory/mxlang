@@ -12,8 +12,10 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
-import type { TranslateError } from "./core.ts";
+import { DYNAMIC_TAG, type TranslateError } from "./core.ts";
+import type { CustomTag } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import type { Ir, IrNode } from "./ir.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import { lookup } from "./test-targets.ts";
 
@@ -167,4 +169,143 @@ describe("a <define> in a native element body is declared in the body around it"
       expect(duplicates(source)).toEqual([]);
     });
   }
+});
+
+/**
+ * The IR `compileSource` hands the emitter, with every position (`span`,
+ * `*Span`, `loc`) left out: a literal name is longer than the static one.
+ */
+function irOf(
+  source: string,
+  host: HostDeclarations = withLet,
+  customTags?: Record<string, CustomTag>,
+): IrNode[] {
+  let captured: Ir | undefined;
+  compileSource(source, "/page.mx", host, {
+    targets: lookup,
+    ...(customTags ? { customTags } : {}),
+    emitIr: (ir: Ir) => {
+      captured = ir;
+      return "";
+    },
+  } as never);
+  return JSON.parse(
+    JSON.stringify(captured?.body ?? [], (key, value) =>
+      key === "loc" || key === "span" || key.endsWith("Span")
+        ? undefined
+        : value,
+    ),
+  );
+}
+
+/** {@link withLet}, claiming every dynamic tag as a delegated tag too. */
+const claimsDynamic: HostDeclarations = {
+  ...withLet,
+  isDelegatedTag: (name) => name === "let" || name === DYNAMIC_TAG,
+};
+
+describe("a literal dynamic tag name that names a native element is that element", () => {
+  const DIV = '<div class="a">x</div>';
+  const LITERALS = [
+    '<${"div"} class="a">x</>',
+    "<${'div'} class=\"a\">x</>",
+    '<${`div`} class="a">x</>',
+  ];
+  for (const [label, host] of [
+    ["an element host", withLet],
+    ["a host claiming dynamic tags", claimsDynamic],
+  ] as const) {
+    it.each(LITERALS)(`lowers %s as <div> under ${label}`, (source) => {
+      const element = irOf(source, host);
+      expect(element[0]?.kind).toBe("Element");
+      expect(element).toEqual(irOf(DIV, host));
+    });
+  }
+
+  /** The kind each source lowers to, and a dynamic `Component`'s target kind. */
+  const kindOf = (nodes: IrNode[]) => {
+    const node = nodes[0];
+    if (node?.kind !== "Component") return node?.kind;
+    const target = node.target;
+    return target.kind === "dynamic"
+      ? `Component dynamic ${target.expr.code}`
+      : `Component ${JSON.stringify(target)}`;
+  };
+  /** Each compile setup a literal that stays dynamic is lowered under. */
+  type Setup = {
+    host: HostDeclarations;
+    customTags?: Record<string, CustomTag>;
+  };
+  const plain: Setup = { host: withLet };
+  const noSection: Setup = {
+    host: { ...withLet, isElement: (name) => name !== "section" },
+  };
+  const registersSection: Setup = {
+    host: withLet,
+    customTags: { section: {} },
+  };
+  const delegatesSection: Setup = {
+    host: {
+      ...withLet,
+      isDelegatedTag: (name) => name === "let" || name === "section",
+    },
+  };
+  it.each<[string, string, Setup, string]>([
+    ["a capitalized name", '<${"Foo"} a=1/>', plain, "`Foo`"],
+    ["a custom element name", '<${"my-el"} a=1/>', plain, "`my-el`"],
+    ["the core <style>", '<${"style"}>a{}</>', plain, "`style`"],
+    ["the core <script>", '<${"script"}>x</>', plain, "`script`"],
+    ["the core <for>", '<${"for"} of=[1]>x</>', plain, "`for`"],
+    ["an empty name", '<${""}>x</>', plain, "``"],
+    ["a concatenation", '<${"di" + "v"}>x</>', plain, '"di" + "v"'],
+    ["a name isElement rejects", '<${"section"}>x</>', noSection, "`section`"],
+    [
+      "a registered custom tag",
+      '<${"section"}>x</>',
+      registersSection,
+      "`section`",
+    ],
+    ["a delegated name", '<${"section"}>x</>', delegatesSection, "`section`"],
+  ])("keeps %s a dynamic tag: %s", (_label, source, setup, target) => {
+    expect(kindOf(irOf(source, setup.host, setup.customTags))).toBe(
+      `Component dynamic ${target}`,
+    );
+  });
+});
+
+describe("a literal naming a void element", () => {
+  const BODY =
+    "The `<br>` tag cannot have content, so it does not support a body.";
+  it.each([
+    ['<${"br"}>x</>', 9],
+    ['<${"br"}> </>', 9],
+  ])("refuses a body at its first child: %j", (source, column) => {
+    const error = attempt(source);
+    expect(error?.message).toBe(BODY);
+    expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+    expect([error?.line, error?.column]).toEqual([1, column]);
+  });
+
+  it.each(['<${"br"}/>', '<${"br"}></>', '<${"br"}>\n</>'])(
+    "lowers %j to a void <br>",
+    (source) => {
+      expect(irOf(source)).toEqual([
+        {
+          kind: "Element",
+          name: "br",
+          attrs: [],
+          children: [],
+          void: true,
+        },
+      ]);
+    },
+  );
+});
+
+describe("a literal naming an element is that element to every pre-scan", () => {
+  it("declares a <define> in its body in the body around it", () => {
+    const FOO = "<define/Foo>a</define>";
+    const error = attempt(`${FOO}<\${"div"}>${FOO}</>`);
+    expect(error?.diagnosticCode).toBe("MX_DUPLICATE_DECLARATION");
+  });
 });

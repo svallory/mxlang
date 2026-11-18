@@ -147,7 +147,8 @@ export interface Input { items: string[] }
     caller: `import Fn from "./fn.mx"
 export interface Input { items: string[] }
 <define/Row|a|><li>\${a}</li></define>
-<ul><\${"section"}><Fn/Row/><Row(2)/></></ul>`,
+<const/el="section"/>
+<ul><\${el}><Fn/Row/><Row(2)/></></ul>`,
     html: "<ul><section>local2</section></ul>",
   },
   "an unrelated <for|Row|> leaves a direct call's argument as written": {
@@ -191,7 +192,8 @@ export interface Input { items: string[] }
     caller: `import Fn from "./fn.mx"
 export interface Input { items: string[] }
 <define/Row|a|><li>\${a}</li></define>
-<ul><\${"section"}><div><Fn/Row/></div><Row(1)/></></ul>`,
+<const/el="section"/>
+<ul><\${el}><div><Fn/Row/></div><Row(1)/></></ul>`,
     html: "<ul><section><div></div>local1</section></ul>",
   },
   "an attribute-tag <for> param that shadows a define": {
@@ -316,12 +318,16 @@ export interface Input { items: string[] }
   },
 };
 
-/** Params on a body whose target is a native element have nothing to call them. */
+/**
+ * Params on a body whose target is a native element have nothing to call
+ * them. A literal naming an HTML element is that element (`<div|item|>`), so
+ * the literal here is a custom element name.
+ */
 const STRING_CASES = {
   "a literal string target": `export interface Input { items: string[] }
-<\${"div"}|item|>body \${item}</>`,
+<\${"my-el"}|item|>body \${item}</>`,
   "a literal string target with args": `export interface Input { items: string[] }
-<\${"div"}("a")|item|>body \${item}</>`,
+<\${"my-el"}("a")|item|>body \${item}</>`,
 };
 
 /** An optional render target: absent, Marko renders the body with no args. */

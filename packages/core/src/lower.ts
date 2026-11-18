@@ -2563,7 +2563,8 @@ function knownWrongNativeAttr(ctx: Ctx, attr: Node): string | undefined {
 
 /**
  * Marko's other-framework-names check on a tag Marko reads as native but core
- * lowers another way (a one-quasi string-literal dynamic tag, a delegated
+ * lowers another way (a one-quasi string-literal dynamic tag whose literal
+ * does not name a native element, a delegated
  * `html-script`/`html-style`): raised at the first offending attribute.
  */
 function rejectKnownWrongNativeAttrs(ctx: Ctx, node: Node): void {
@@ -7233,9 +7234,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (node.name && !hasStaticName(node)) {
     validateBoundAttributes(ctx, node);
     rejectArgsWithProps(ctx, node);
-    // Marko reads a one-quasi string-literal name (`<${"div"}>`) as a static
-    // name and checks its attribute names as a native tag's, whatever it
-    // names; the tag still lowers as a dynamic tag here.
+    // Marko reads a one-quasi string-literal name as a static name and checks
+    // its attribute names as a native tag's, whatever it names. A literal
+    // naming a native element (`<${"div"}>`) is already that element (the
+    // pre-pass in `default-tag.ts`); a literal that does not name a native
+    // element (`<${"Foo"}>`) still lowers as a dynamic tag here.
     const literalName = tagNameExprOf(node);
     if (
       literalName?.type === "TemplateLiteral" &&
@@ -7786,6 +7789,18 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const contentChildren = body.filter(
     (child: Node) => !isMxAttributeTag(child),
   );
+  // The parser closes a static void tag, so only a literal dynamic name
+  // (`<${"br"}>x</>`) brings a body here; stock Marko refuses it at the first
+  // child. The front end's whitespace rule already dropped a newline-only
+  // body and kept a space as text, as Marko's does.
+  const firstContent = contentChildren[0];
+  if (isVoid && firstContent !== undefined) {
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
+      `The ${tagText(ctx, name, node)} tag cannot have content, so it does not support a body.`,
+      firstContent,
+    );
+  }
   const attrs = lowerAttrs(ctx, node, name, "element", true);
   // An element's body is its own scope for every binding it declares (Marko
   // 6.4.4 scopes a `<define>`, a `<const>` and a `<let>` to the body that

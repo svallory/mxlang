@@ -88,7 +88,10 @@ describe("printed method head mappings", () => {
 
 describe("method shorthand in a dynamic tag's props and an attribute tag", () => {
   it.each([
-    ["a dynamic tag's prop", "<${'div'} onClick(e: Missing) { go() }/>"],
+    [
+      "a dynamic tag's prop",
+      '<const/el="div"/>\n<${el} onClick(e: Missing) { go() }/>',
+    ],
     [
       "an attribute-tag attribute",
       'import Foo from "./foo.mx"\n<Foo><@item onClick(e: Missing) { go() }/></Foo>',

@@ -57,6 +57,7 @@ import {
 import { type Ctx, type Node, positionAtOffset } from "./core.ts";
 import { payloadOf } from "./payload.ts";
 import {
+  hasLiteralTagName,
   tagArgsOf,
   tagAttributesOf,
   tagNameExprOf,
@@ -201,7 +202,9 @@ function tagView(ctx: Ctx, node: Node, view: Record<string, unknown>): void {
     enumerable: true,
     get() {
       if (node.type === "MxTag" || node.type === "MxReturn") {
-        if (node.name?.kind === "dynamic") {
+        // A literal naming an element (`<${"div"}>`) is that element's
+        // static name, as on Marko's normalized tree.
+        if (node.name?.kind === "dynamic" && !hasLiteralTagName(node)) {
           return memo("dynamicName", () => tagNameExprOf(node));
         }
       }

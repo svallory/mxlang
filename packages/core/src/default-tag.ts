@@ -11,10 +11,14 @@ import type { DefaultTagScope } from "./default-tag-validate.ts";
 import { INVALID_SHORTHAND_CODE } from "./diagnostic-codes.ts";
 import { markoViewOf } from "./marko-view.ts";
 import { voiceOfCtx } from "./message-vocabulary.ts";
+import { isCoreTaglibTag, isNativeElementName } from "./native-element-name.ts";
 import { rewriteShorthands } from "./shorthand.ts";
 import {
+  hasLiteralTagName,
   hasStaticName,
+  resolveLiteralTagName,
   resolveUnnamedTag,
+  tagNameExprOf,
   tagNameOf,
   tagNameSpanOf,
 } from "./tag-fields.ts";
@@ -44,6 +48,38 @@ function isUnnamedTag(node: Node): boolean {
     loc.start.line === loc.end.line &&
     loc.start.column === loc.end.column
   );
+}
+
+/**
+ * The native element a dynamic MX tag's one-quasi literal name with no
+ * placeholder (`<${"div"}>`, `<${'div'}>`, `` <${`div`}> ``) names, when it
+ * is one this compile lowers as an element: stock Marko (`normalizeTag`)
+ * makes such a tag the static `<div>`. Not a core taglib tag (`style`,
+ * `script`), a registered custom tag or a name the host delegates: those,
+ * and every other literal, stay dynamic tags.
+ */
+function literalElementName(ctx: Ctx, node: Node): string | undefined {
+  if (node?.type !== "MxTag" || node.name?.kind !== "dynamic") return;
+  const literal = tagNameExprOf(node);
+  if (
+    literal?.type !== "TemplateLiteral" ||
+    literal.expressions?.length !== 0 ||
+    literal.quasis?.length !== 1
+  ) {
+    return;
+  }
+  const name = literal.quasis[0]?.value?.cooked;
+  if (
+    typeof name !== "string" ||
+    !isNativeElementName(ctx, name) ||
+    isCoreTaglibTag(ctx, name) ||
+    !ctx.declarations.isElement(name, ctx) ||
+    (ctx.customTags !== undefined && Object.hasOwn(ctx.customTags, name)) ||
+    ctx.declarations.isDelegatedTag?.(name, ctx)
+  ) {
+    return;
+  }
+  return name;
 }
 
 const resolved = new WeakSet<Node>();
@@ -114,7 +150,9 @@ export function deferredDefaultTagProblems(
 
 /**
  * Replaces every unnamed tag's name with what the host's `resolveDefaultTag`
- * answers, so the rest of the lowerer sees an ordinary authored tag.
+ * answers, and a literal dynamic name that names a native element
+ * (`<${"div"}>`) with that element's, so the rest of the lowerer sees an
+ * ordinary authored tag.
  *
  * Runs on the parsed tree (never the source), top-down, so an unnamed
  * ancestor is already resolved when it shows up in a descendant's `parents`.
@@ -135,6 +173,13 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
       // Marko's `#id`/`.class` shorthand becomes the attributes it sets,
       // before the name is read.
       rewriteShorthands(ctx, node);
+      // A literal naming an element is that element before anything reads
+      // the name, as in stock Marko: routing, the wildcard claim below and
+      // every sibling pre-scan see `<div>`.
+      if (!hasLiteralTagName(node)) {
+        const literal = literalElementName(ctx, node);
+        if (literal !== undefined) resolveLiteralTagName(node, literal);
+      }
       const unnamed = resolved.has(node) || isUnnamedTag(node);
       if (!resolved.has(node) && isUnnamedTag(node)) {
         resolved.add(node);

@@ -22,6 +22,7 @@ import {
 } from "./core.ts";
 import { STATEMENT_TAGLIB, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import { resolveUnnamedTags } from "./default-tag.ts";
 import type { Ir } from "./ir.ts";
 import { lower } from "./lower.ts";
 import { markoCompiler } from "./marko-frontend.ts";
@@ -165,6 +166,15 @@ describe("markoViewOf on a real MX parse", () => {
     expect(view.name.loc.start).toMatchObject({ line: 7, column: 3 });
     expect(view.body.params.map((p: Node) => p.name)).toEqual(["row"]);
     expect(view.arguments.map((a: Node) => a.name)).toEqual(["one", "two"]);
+  });
+
+  it("views a literal naming an element as that element's static name", () => {
+    const { ctx, body } = parsed(`<\${"div"}/>`);
+    resolveUnnamedTags(ctx, body);
+    expect(markoViewOf(ctx, firstTag(body)).name).toMatchObject({
+      type: "StringLiteral",
+      value: "div",
+    });
   });
 
   it("is one view per node, with stable field identity", () => {

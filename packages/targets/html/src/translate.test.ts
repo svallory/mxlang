@@ -2245,12 +2245,12 @@ describe("a component body with tag params (`<List|item, i|>`) binds them (execu
     expect(code).toMatch(/content: \(\(item\) => \{/);
   });
 
-  // Measured against Marko 6.3.51 (renderStockMarko): `<${"div"}|x|>` is a
+  // Measured against Marko 6.3.51 (renderStockMarko): `<${"my-el"}|x|>` is a
   // compile error; a string that arrives at run time renders the element and
   // the body called with no arguments (`<div><b></b></div>`); a null or absent
   // target renders the body alone (`<b></b>`).
   it("rejects a literal string target with a params body, as Marko does", () => {
-    for (const target of ['"div"', "'div'", "`div`"]) {
+    for (const target of ['"my-el"', "'my-el'", "`my-el`"]) {
       expect(() =>
         compile(
           src(`<\${${target}}|x|><b>\${x}</b></>`),
@@ -2258,6 +2258,18 @@ describe("a component body with tag params (`<List|item, i|>`) binds them (execu
         ),
       ).toThrow("Tag does not support parameters.");
     }
+  });
+
+  // A literal naming an element is that element: `<div|x|>`'s refusal.
+  it("refuses params on a literal naming an element as on the element", () => {
+    expect(() =>
+      compile(
+        src('<${"div"}|x|><b>${x}</b></>'),
+        "/tmp/mx-translator-test/el.mx",
+      ),
+    ).toThrow(
+      "tag params `|...|` on `<div>` are not supported in a standalone template",
+    );
   });
 
   it("accepts a literal string target without params", () => {

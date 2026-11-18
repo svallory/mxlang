@@ -14,15 +14,34 @@ import { payloadOf } from "./payload.ts";
 import { attributesWithTriggers } from "./triggers.ts";
 
 /**
- * Default tags resolved for unnamed MX tags (`default-tag.ts`), kept beside
- * the tree: an MX pass never writes to the MX AST, where the Marko path
- * rewrites its name node in place.
+ * Static names core's pre-pass (`default-tag.ts`) resolved for MX tags, kept
+ * beside the tree: an MX pass never writes to the MX AST, where the Marko
+ * path rewrites its name node in place. An unnamed tag's default tag, or the
+ * element a one-quasi literal dynamic name (`<${"div"}>`) names.
  */
 const resolvedNames = new WeakMap<object, string>();
+
+/** The MX tags whose static name is the element their literal names. */
+const literalNames = new WeakSet<object>();
 
 /** Records the default tag an unnamed MX tag resolved to. */
 export function resolveUnnamedTag(node: Node, name: string): void {
   resolvedNames.set(node, name);
+}
+
+/**
+ * Records that the dynamic MX tag `node`'s one-quasi literal name
+ * (`<${"div"}>`) names the native element `name`: from then on the tag is
+ * `<div>` to every reader, as stock Marko's `normalizeTag` makes it.
+ */
+export function resolveLiteralTagName(node: Node, name: string): void {
+  resolvedNames.set(node, name);
+  literalNames.add(node);
+}
+
+/** Was `node`'s literal dynamic name resolved to its element? */
+export function hasLiteralTagName(node: Node): boolean {
+  return literalNames.has(node);
 }
 
 /** Is `node` an MX AST tag (`MxTag`, `MxReturn`, `MxAttributeTag`)? */
