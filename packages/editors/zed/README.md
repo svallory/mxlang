@@ -114,10 +114,12 @@ under the sandbox (always "not found," silently falling through to `bunx`).
    command that was launched, e.g. `mxlang server started with
    <path-or-bunx-command> --stdio` (exact wording is Zed's own, not this
    extension's) — confirming which of the four resolution steps fired.
-   **A live Zed check is a manual step** — this task's own verification
-   stopped at `cargo build`/the clean-clone compile-check; nobody has run the
-   extension inside Zed yet, so treat the above as the procedure to follow,
-   not a result already confirmed.
+   Steps 4-6 need a real Zed window; `cargo build`, the `zed-compile-check`
+   scripts and `bun run verify` do not exercise them. The diagnostics check
+   of steps 4-5 is part of every publish: see
+   [PUBLISHING.md §6](PUBLISHING.md#6-manual-editor-checks-every-publish),
+   "Manual editor checks (every publish)", which also says where the result
+   is recorded.
 7. If no diagnostic appears: check the logs first for a spawn failure (none
    of the four resolution paths found the server) before assuming the
    diagnostic logic itself is wrong.
