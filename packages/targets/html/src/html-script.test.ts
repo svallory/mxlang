@@ -334,6 +334,29 @@ describe("<style> refuses attributes, as stock Marko does", () => {
     ).toBe("<style></style>");
   });
 
+  it("refuses the attributes a custom tag builds on the `<style>` it emits", () => {
+    expect(() =>
+      mx('<widget media="print"/>', {
+        customTags: {
+          widget: {
+            attributes: { media: { type: "string" } },
+            transform: (call, ctx) => [
+              ctx.build.delegatedTag("style", [], [], call.attrs),
+            ],
+          },
+        },
+      })({}),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "`<widget>`: The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.",
+        diagnosticCode: "MX_TAG_HOOK_ERROR",
+        line: 1,
+        column: 8,
+      }),
+    );
+  });
+
   it.each(["<style.less>a{}</style>", "<style.module.css>a{}</style>"])(
     "%s is an extension, not an attribute",
     (source) => {

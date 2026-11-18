@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { compileSource } from "./compile.ts";
+import { compileSource, type HostOptions } from "./compile.ts";
 import { newCtx, TranslateError } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
@@ -11,6 +11,7 @@ import { parseFragment } from "./fragment.ts";
 import type { Attr, AttributeTag, Ir, IrNode } from "./ir.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import { lower } from "./lower.ts";
+import type { Dialect } from "./syntax-table.ts";
 import { resetTemplateCache, type TemplateBackedTag } from "./template-tag.ts";
 import { lookup } from "./test-targets.ts";
 
@@ -27,6 +28,7 @@ function lowerWithTags(
   source: string,
   customTags: Readonly<Record<string, CustomTag>>,
   policy = fakeDeclarations(),
+  options: Partial<HostOptions> = {},
 ): Ir {
   let ir: Ir | null = null;
   compileSource(source, "/tmp/mx-core-test/custom-tags.mx", policy, {
@@ -37,6 +39,7 @@ function lowerWithTags(
       ir = lowered;
       return "";
     },
+    ...options,
   });
   if (!ir) throw new Error("lowerer produced no IR");
   return ir;
@@ -2189,6 +2192,74 @@ describe("ctx.build.delegatedTag attributes", () => {
       "DelegatedTag",
     );
     expect(tag.attrs).toEqual([]);
+  });
+
+  // A built `style` is the core `<style>`: where the host reads it as an
+  // element, its attributes are refused as an authored `<style media=x>`'s
+  // are, with the same skips (a `style` contract, the `none` tag rules).
+  const widget: CustomTag = {
+    attributes: { media: { type: "string" } },
+    transform: (call, ctx) => [
+      ctx.build.delegatedTag("style", [], [], call.attrs),
+    ],
+  };
+  const claimsStyle = (overrides: Partial<Policy> = {}): Policy =>
+    fakeDeclarations({
+      isDelegatedTag: (name) => name === "style",
+      resolveDelegatedTag: () => ({}),
+      ...overrides,
+    });
+  const styleAttrNames = (ir: Ir): string[] =>
+    find(ir.body, "DelegatedTag").tag.attrs.map(
+      (attr) => (attr as { name: string }).name,
+    );
+
+  it("refuses a built `style`'s attributes at the first one", () => {
+    expect(() =>
+      lowerWithTags('<widget media="print"/>\n', { widget }, claimsStyle()),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "`<widget>`: The `style` does not support html attributes. For a native html [`<style>` tag](https://markojs.com/docs/reference/core-tag#style) use the `html-style` core tag instead.",
+        diagnosticCode: "MX_TAG_HOOK_ERROR",
+        line: 1,
+        column: 8,
+      }),
+    );
+  });
+
+  it("keeps them under a `style` contract", () => {
+    const ir = lowerWithTags(
+      '<widget media="print"/>\n',
+      { widget, style: { attributes: { media: { type: "string" } } } },
+      claimsStyle(),
+    );
+    expect(styleAttrNames(ir)).toEqual(["media"]);
+  });
+
+  it("carries them where the host reads no tag as an element", () => {
+    const ir = lowerWithTags(
+      '<widget media="print"/>\n',
+      { widget },
+      claimsStyle({ isElement: () => false }),
+    );
+    expect(styleAttrNames(ir)).toEqual(["media"]);
+  });
+
+  it("carries them under the `none` tag rules", () => {
+    const dialect: Dialect = Object.freeze({
+      id: "t",
+      name: "T",
+      table: {},
+      tagRules: "none",
+    });
+    const ir = lowerWithTags(
+      '<widget media="print"/>\n',
+      { widget },
+      claimsStyle(),
+      { dialect },
+    );
+    expect(styleAttrNames(ir)).toEqual(["media"]);
   });
 });
 

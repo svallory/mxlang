@@ -8,6 +8,7 @@
  */
 
 import { attrLabel } from "./attr-label.ts";
+import { bareStyleAttributesMessage } from "./bare-style.ts";
 import { callNameEnd, positionAt } from "./contract-facts.ts";
 import {
   type ClaimedFields,
@@ -644,7 +645,10 @@ export interface IrBuilders {
   block(children: IrNode[], params?: string[], from?: BuildFrom): Block;
   /**
    * Requests a primitive from the active host without exposing that host.
-   * `attrs` are carried on the node as given; omitted means none.
+   * `attrs` are carried on the node as given; omitted means none. A built
+   * `style` with attributes is refused, as an authored `<style media=x>` is,
+   * where the host reads `style` as an element and no `style` contract is
+   * registered (skipped under the `none` tag rules).
    */
   delegatedTag(
     name: string,
@@ -1289,6 +1293,33 @@ export function buildersFor(
           voiceOfCtx(ctx),
         );
       }
+      // The host resolves first, so its own refusals report before core's.
+      const data = ctx.declarations.resolveDelegatedTag?.(
+        name,
+        markoViewOf(ctx, node),
+        ctx,
+      );
+      // A built `style` is the core `<style>` an authored one is: where the
+      // host reads it as an element and no `style` contract takes the
+      // attributes, they are refused as the authored `<style media=x>` is,
+      // never dropped. Skipped under the `none` tag rules, as there.
+      const firstAttr = attrs[0];
+      if (
+        name === "style" &&
+        firstAttr !== undefined &&
+        ctx.declarations.isElement("style", ctx) &&
+        ctx.tagRules !== "none" &&
+        !(ctx.customTags && Object.hasOwn(ctx.customTags, "style"))
+      ) {
+        return failAt(
+          TAG_HOOK_ERROR_CODE,
+          tagName,
+          bareStyleAttributesMessage(ctx),
+          firstAttr.loc,
+          undefined,
+          voiceOfCtx(ctx),
+        );
+      }
       const attributeTagTree = attributeTags.map((tag) => ({
         kind: "AttributeTag" as const,
         tag,
@@ -1309,11 +1340,7 @@ export function buildersFor(
           params: [],
           bindings: [],
           var: null,
-          data: ctx.declarations.resolveDelegatedTag?.(
-            name,
-            markoViewOf(ctx, node),
-            ctx,
-          ),
+          data,
           loc: spans.loc,
         },
         loc: spans.loc,

@@ -1187,7 +1187,8 @@ export type DelegatedTagData =
   /**
    * `writeAttrs`: a `style` contract accepted the attributes, so the emitter
    * writes them on the open tag; without one core's bare `<style>` check
-   * refused them after this host's resolve (or, under the `none` preset or as
+   * refused them after this host's resolve, on an authored `<style>` and on a
+   * custom tag's built one alike (or, under the `none` preset or as
    * `<style.less>`'s extension shorthand, they are dropped).
    */
   | { kind: "style"; writeAttrs: boolean }
