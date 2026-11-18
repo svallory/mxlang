@@ -1343,7 +1343,12 @@ declaration (the `package.json` value, or the contract module or sidecar that
 declares it), never at the use site, and reads
 ``invalid `defaultTag` value: <reason>``. A contract a dialect tag file derives
 (§9.2) is read only when the tag is called, so its value gets the same check,
-with the same reasons and code, at that call. The reasons:
+with the same reasons and code, at that call. In a file under the `none` tag
+rules (§13.7.3), only the reserved names are core vocabulary for this check:
+`<let>`, `<await>` or `<script>` gets the reason any ordinary name gets, on a
+host that compiles an unknown dashed name as a native element (JSX hosts,
+Solid, Angular) `html-script` is valid as `sl-card` is, and the target is the
+compile's own. The reasons:
 
 | Reason | When |
 |---|---|
