@@ -129,7 +129,9 @@ for (const [name, file, click] of JSON.parse(process.argv[2])) {
   let received = null;
   render(h(mod.default, { r: (node) => { if (node) received = node; } }), root);
   root.querySelectorAll("button")[click].click();
-  out[name] = { html: root.innerHTML, refIsDiv: received === root.querySelector("div") };
+  out[name] = { html: root.innerHTML };
+  // Only the authored-ref case reads the \`r\` prop.
+  if (name === "authoredRef") out[name].refIsDiv = received === root.querySelector("div");
 }
 console.log(JSON.stringify(out));
 `;
@@ -161,11 +163,9 @@ console.log(JSON.stringify(out));
     expect(result).toEqual({
       base: {
         html: '<div data-hit="1"></div><button>go</button>',
-        refIsDiv: false,
       },
       rows: {
         html: '<div></div><button>go</button><div data-hit="2"></div><button>go</button>',
-        refIsDiv: false,
       },
       authoredRef: {
         html: '<div data-hit="1"></div><button>go</button>',

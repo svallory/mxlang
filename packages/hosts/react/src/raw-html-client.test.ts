@@ -45,6 +45,14 @@ for (const key of ["window", "document", "Node", "HTMLElement", "Text", "SVGElem
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const warnings = [];
 console.error = console.warn = (...args) => warnings.push(args.join(" "));
+// The running case's errors. React hands a handler's error to the global
+// \`reportError\`, which react-dom binds once, when it loads: route it (and
+// anything else reported globally) to the case that raised it.
+let current = [];
+const report = (error) => current.push(String(error && error.message));
+globalThis.reportError = report;
+process.on("uncaughtException", report);
+window.addEventListener("error", (event) => report(event.error ?? event));
 const { createElement } = await import("react");
 const { createRoot, hydrateRoot } = await import("react-dom/client");
 const { flushSync } = await import("react-dom");
@@ -52,28 +60,32 @@ const { renderToString } = await import("react-dom/server");
 const cases = JSON.parse(process.argv[2]);
 const out = [];
 for (const { file, input } of cases) {
-  const mod = await import(file);
-  const client = document.createElement("div");
-  document.body.append(client);
   const errors = [];
-  const rootOptions = { onUncaughtError: (error) => errors.push(String(error && error.message)), onRecoverableError: () => {} };
-  const attempt = (fn) => { try { fn(); } catch (error) { errors.push(String(error && error.message)); } };
-  attempt(() => flushSync(() => createRoot(client, rootOptions).render(createElement(mod.default, input))));
-  attempt(() => { for (const button of client.querySelectorAll("button")) button.click(); });
-  let server = "";
-  attempt(() => { server = renderToString(createElement(mod.default, input)); });
-  const hydrated = document.createElement("div");
-  hydrated.innerHTML = server;
-  document.body.append(hydrated);
-  attempt(() => flushSync(() => { hydrateRoot(hydrated, createElement(mod.default, input), rootOptions); }));
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  out.push({
-    client: client.innerHTML,
-    hydrated: hydrated.innerHTML,
-    elements: [...client.querySelectorAll("b"), ...hydrated.querySelectorAll("b")].length,
-    injected: [...client.querySelectorAll("img, i, [onerror]"), ...hydrated.querySelectorAll("img, i, [onerror]")].length,
-    errors,
-  });
+  current = errors;
+  const row = { client: "", hydrated: "", elements: 0, injected: 0, errors };
+  try {
+    const mod = await import(file);
+    const client = document.createElement("div");
+    document.body.append(client);
+    const rootOptions = { onUncaughtError: report, onRecoverableError: () => {} };
+    const attempt = (fn) => { try { fn(); } catch (error) { report(error); } };
+    attempt(() => flushSync(() => createRoot(client, rootOptions).render(createElement(mod.default, input))));
+    attempt(() => { for (const button of client.querySelectorAll("button")) button.click(); });
+    let server = "";
+    attempt(() => { server = renderToString(createElement(mod.default, input)); });
+    const hydrated = document.createElement("div");
+    hydrated.innerHTML = server;
+    document.body.append(hydrated);
+    attempt(() => flushSync(() => { hydrateRoot(hydrated, createElement(mod.default, input), rootOptions); }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    row.client = client.innerHTML;
+    row.hydrated = hydrated.innerHTML;
+    row.elements = [...client.querySelectorAll("b"), ...hydrated.querySelectorAll("b")].length;
+    row.injected = [...client.querySelectorAll("img, i, [onerror]"), ...hydrated.querySelectorAll("img, i, [onerror]")].length;
+  } catch (error) {
+    report(error);
+  }
+  out.push(row);
 }
 console.log(JSON.stringify(out));
 `;
@@ -93,6 +105,8 @@ const SOURCES = {
   objectChild: "<section><div>${input.x}</div></section>",
   elementRef:
     '<section><div/el/><button onClick() { el().dataset.hit = "1" }>go</button></section>',
+  throwingHandler:
+    '<section><button onClick() { throw new Error("boom") }>go</button></section>',
 } as const;
 
 let results: Record<
@@ -190,5 +204,14 @@ describe("an element reference (`<div/el>`) on React", () => {
       '<section><div data-hit="1"></div><button>go</button></section>',
     );
     expect(results.elementRef.errors).toEqual([]);
+  });
+});
+
+describe("the client script's per-case guard", () => {
+  it("records a handler's error in its own row only", () => {
+    expect(results.throwingHandler.errors).toContain("boom");
+    expect(results.throwingHandler.client).toBe(
+      "<section><button>go</button></section>",
+    );
   });
 });
