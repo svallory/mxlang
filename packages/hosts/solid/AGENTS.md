@@ -246,10 +246,13 @@ Three facts worth knowing before touching it:
   parser bridge (`packages/tsx-bridge/src/mx/hoist-imports.ts`'s
   `HoistedDefine`) writes each one into the surrounding module after the
   import block, the same channel and placement `hoistedImports` uses.
-  **Only a *direct top-level* child of the region hoists** — `define()`
-  checks the `lazyScope` flag (true once emission has entered a
-  `<for>`/`<if>`/call content/`<define>` body) and fails with a positioned
-  error naming the construct otherwise. Module scope has no per-row or
+  **A `<define>` in a lazy body does not hoist** — `define()` checks the
+  `lazyScope` flag (set by `inLazyScope`: an `<if>`/`<else>` branch, a
+  `<for>` body, an imported tag's, a dynamic tag's or a `<define>` call's
+  body, a `<define>`'s own body) and fails with a positioned error naming
+  the construct. A native element's, a `<try>` or an attribute-tag body
+  (`inVarScope`, no `lazyScope`) hoists like the region's top level, its
+  name scoped to that body. Module scope has no per-row or
   per-branch scope for a nested `<define>` to close over (§7.5-8). A `/var`
   in such a body is fine: `inLazyScope` declares the body's own `let`s in a
   function called in place, and `scopeReturnVars` treats the body as a scope

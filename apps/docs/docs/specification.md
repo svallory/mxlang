@@ -2103,8 +2103,11 @@ compiler resolves it the same way: `@mxlang/host-solid`'s emitter mints a
 gensym'd module-scope function (`__mx_DefineRowN`, never the author's own
 name — see `packages/hosts/solid/AGENTS.md`), and `@mxlang/tsx-bridge`'s bridge
 writes it into the surrounding module alongside any hoisted imports.
-A hoisted `<define>` must be a **direct top-level child of its region**
-(not nested inside `<if>`/`<for>`/an attribute tag/another `<define>`) and
+A hoisted `<define>` must **not sit in a lazy body** (an `<if>`/`<else>`
+branch, a `<for>` body, an imported tag's, a dynamic tag's or a `<define>`
+call's body, or another `<define>`; one written directly in the region or in
+a native element's, a `<try>` or an attribute-tag body is hoisted, its name
+in scope only in that body) and
 may not read a value the region itself introduced — its own params, another
 top-level `<define>`'s name, and the surrounding module's own imports are
 fine; anything else free in its body is a positioned error naming the

@@ -101,7 +101,7 @@ The handler receives the DOM event. The shared rules are in [Attributes](/langua
 |---|---|---|
 | `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `:=` | State is Solid's | `createSignal`, `createEffect`, an explicit handler, in the TypeScript around the region |
 | `<const>`, `import`, `static` in a region | A region is an expression | Write them in the module |
-| `<define>` inside `<if>`, `<for>` or an attribute tag, or one that reads a value the region introduced | It is hoisted to module scope | Make it a direct child of the region, and pass what it needs as params |
+| `<define>` inside an `<if>` or `<else>` branch, a `<for>` body, an imported tag's, a dynamic tag's or a `<define>` call's body, or another `<define>`; or one that reads a value the region introduced (an attribute tag's `\|item\|` included) | It is hoisted to module scope | Write it directly in the region, or in a native element's, a `<try>` or an attribute-tag body, where it is hoisted too and its name is in scope only in that body; pass what it needs as params |
 | `on:x` | Removed in Solid 2, and Marko rejects it too | `onX=fn` for a delegated event, or `on-x=fn` for a custom event name |
 | `<if\|u\|=cond>`, `<@name>` on an HTML element, `<fragment>` | Marko rejects them too | A TSX fragment `<>…</>` for a wrapper. See [Divergences](/divergences-and-mx-2/) |
 
