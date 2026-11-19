@@ -46,10 +46,11 @@
  * shebang and every load-bearing marker comment (`@ts-`, `biome-ignore`,
  * `__PURE__` and the rest of `COMMENT_MARKERS`) are equal. The tests that read
  * a source's text or run it in a subprocess (`SOURCE_TEXT_READERS`) run on
- * any change to a source a row matches, comment-only edits included: `relatedSources` adds them for a
- * kept source, `commentOnlySplit` for a left-out one. A file that is new,
- * renamed or untracked, a fixture, `.mx`, `.json`, `.md` or a wide file keeps
- * today's selection. The gate and CI run every test.
+ * any change to a source a row matches, comment-only edits included:
+ * `relatedSources` adds them for a kept source, `commentOnlySplit` for a
+ * left-out one. A file that is new, renamed or untracked, a fixture, `.mx`,
+ * `.json`, `.md` or a wide file keeps today's selection. The gate and CI run
+ * every test.
  *
  * A `package.json` outside fixtures-style dirs whose edit changes only
  * top-level metadata values (`MANIFEST_METADATA_KEYS`: `engines`,
@@ -146,11 +147,10 @@ export interface DistPackage {
    * The test files that read, load or spawn THIS row's dist by path
    * (`readFileSync`, `statSync`, a computed `import()` or `createRequire`, a
    * spawned `dist/bin.*`), or through a subprocess that resolves the package
-   * by name (a source a `SOURCE_TEXT_READERS` row spawns, or one it imports,
-   * that loads this package by name is listed here): the dist version of
-   * `SOURCE_TEXT_READERS`. Their import graphs
-   * hold no dist file, so `vitest related` would not select them from the
-   * entries. A reader of a dist that this dist loads at run time (an
+   * by name (the tests of a `SOURCE_TEXT_READERS` row whose spawned source,
+   * or a source it imports, loads this package by name are listed here): the
+   * dist version of `SOURCE_TEXT_READERS`. Their import graphs hold no dist
+   * file, so `vitest related` would not select them from the entries. A reader of a dist that this dist loads at run time (an
    * external) is not listed here. The "dist readers guard" in
    * `scripts/test-affected.test.ts` fails on a detected dist path read with
    * no entry here; it cannot see a path built in a helper module or inside a

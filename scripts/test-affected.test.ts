@@ -2998,6 +2998,8 @@ describe("spawned sources guard", () => {
       const text = readFileSync(resolve(ROOT, f), "utf8");
       // A spawn name, but not a RegExp's `.exec(`: a member `.exec` of
       // child_process takes a command string, never a path to a source.
+      // A file this prefilter skips never reaches the scanner: re-check the
+      // detection count before widening or narrowing it.
       if (
         /(?<![\w$.])(?:spawn|exec|fork)|\.(?:spawn|fork|execFile|execSync)/.test(
           text,
