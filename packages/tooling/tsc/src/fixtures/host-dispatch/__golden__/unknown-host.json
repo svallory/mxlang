@@ -198,6 +198,21 @@
           },
           {
             "sourceOffsets": [
+              35
+            ],
+            "generatedOffsets": [
+              3812
+            ],
+            "lengths": [
+              5
+            ],
+            "data": {
+              "navigation": true,
+              "semantic": true
+            }
+          },
+          {
+            "sourceOffsets": [
               41
             ],
             "generatedOffsets": [
