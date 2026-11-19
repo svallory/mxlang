@@ -340,6 +340,18 @@ export function createEmitter(
     state.bodyMappings.push(emitted.mappings);
   };
 
+  /**
+   * Binds an element reference (`<div/el>`, `<${"my-el"}/el>`). It is read
+   * only in a handler or a `<script>` body, which html never runs; a handler
+   * passed to a custom tag or a `<define>` call still names it, so it is
+   * bound, as stock Marko's html build binds a getter that throws when called.
+   */
+  const elementRef = (name: string): void => {
+    push(
+      `const ${name} = (): any => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
+    );
+  };
+
   /** Writes one already-rendered string expression to the current sink. */
   const write = (code: string | MappedCode): void => {
     push(concatMapped(`${state.sink}.write(`, code, ");"));
@@ -1234,15 +1246,7 @@ export function createEmitter(
     },
 
     element(node) {
-      // An element reference (`<div/el>`) is read only in a handler or a
-      // `<script>` body, which html never runs; a handler passed to a custom
-      // tag or a `<define>` call still names it, so it is bound, as stock
-      // Marko's html build binds a getter that throws when called.
-      if (node.var) {
-        push(
-          `const ${node.var} = (): any => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
-        );
-      }
+      if (node.var) elementRef(node.var);
       if (node.name === "textarea") return textarea(node);
       literal(`<${node.name}`);
       elementAttributes(node.name, node.attrs);
@@ -2002,6 +2006,9 @@ export function createEmitter(
                 loc: tag.loc,
               }
             : null;
+        // A literal dynamic tag's element reference (`<${"my-el"}/el>`) is
+        // the same getter as `<div/el>`'s, and binds no dynamic value.
+        if (tag.elementRef && tag.var) elementRef(tag.var);
         emitter.component({
           kind: "Component",
           target: { kind: "dynamic", expr: data.expr } as ComponentTarget,
@@ -2017,8 +2024,9 @@ export function createEmitter(
           // 6.4.4: attribute tags on a dynamic tag ARE forwarded).
           attributeTags: tag.attributeTags,
           // `<${Tag}/n/>` binds the callee's `render` value, as Marko 6.4.4
-          // does; dropping it here was `dynamic-tag-var-silent-drop`.
-          var: tag.var,
+          // does; dropping it here was `dynamic-tag-var-silent-drop`. An
+          // element reference (`<${"my-el"}/el>`) is bound above instead.
+          var: tag.elementRef ? null : tag.var,
           attributeTagTree: tag.attributeTagTree,
           args: tag.args ?? [],
           loc: tag.loc,

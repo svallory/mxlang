@@ -2718,6 +2718,21 @@ describe("an element reference (`<div/el>`)", () => {
       'const el = (): any => { throw new Error("Element references can only be read in scripts and event handlers."); };',
     );
   });
+
+  // A literal that names no native element is a native tag to Marko, so its
+  // `/var` is the same getter, and the dynamic tag's value is not bound.
+  it("renders and binds a literal dynamic tag's element reference", async () => {
+    const source = '<${"my-el"}/el>x</>';
+    expect(await renderModules({ "entry.mx": source }, "entry.mx")).toBe(
+      "<my-el>x</my-el>",
+    );
+    const { code } = compile(src(source), file);
+    expect(code).toContain(
+      'const el = (): any => { throw new Error("Element references can only be read in scripts and event handlers."); };',
+    );
+    expect(code).not.toContain("const el = __mxRenderDynamic(");
+    expect(code).toContain("__mxRenderDynamic(__mxOut, `my-el`, ");
+  });
 });
 
 describe("module shape", () => {
