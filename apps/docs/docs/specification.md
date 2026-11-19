@@ -3869,8 +3869,11 @@ rename from a read reach the authored name. A `.mx` file in an Astro project
 is mapped too, since it compiles through html. On Solid the declaration of an
 element reference and of a call's `/var` is mapped, in a whole file and in a
 `.solid.mx` region, and a name Solid gives a repeated `/var` of its own
-(`__mxVar0_el`) maps as a whole onto the authored name; a `<define>`'s name,
-and a `/var` inside a region `<define>` body, are not mapped. `.astro.mx`
+(`__mxVar0_el`) maps as a whole onto the authored name. In a `.solid.mx`
+region a `<define>`'s params, the `/var`s in its body and every expression in
+its body are mapped like the region's own markup. Its name maps for hover only:
+go-to-definition and rename from the name, or from a call (`<Row/>`), reach no
+authored text. A whole-file Solid unit refuses `<define>`. `.astro.mx`
 binds no tag variable, so there is nothing to map. On Angular the template
 reaches TypeScript as a string (a page has no virtual module, and a `.ng.mx`
 region is a template literal), so the editor has no navigation inside it and
