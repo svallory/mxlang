@@ -45,12 +45,12 @@
  * left out only when the ordered tokens, the line breaks between them, the
  * shebang and every load-bearing marker comment (`@ts-`, `biome-ignore`,
  * `__PURE__` and the rest of `COMMENT_MARKERS`) are equal. The tests that read
- * a source's text or run it in a subprocess (`SOURCE_TEXT_READERS`) run on
- * any change to a source a row matches, comment-only edits included:
- * `relatedSources` adds them for a kept source, `commentOnlySplit` for a
- * left-out one. A file that is new, renamed or untracked, a fixture, `.mx`,
- * `.json`, `.md` or a wide file keeps today's selection. The gate and CI run
- * every test.
+ * a source's text, run it in a subprocess or import it through a computed
+ * path (`SOURCE_TEXT_READERS`) run on any change to a source a row matches,
+ * comment-only edits included: `relatedSources` adds them for a kept source,
+ * `commentOnlySplit` for a left-out one. A file that is new, renamed or
+ * untracked, a fixture, `.mx`, `.json`, `.md` or a wide file keeps today's
+ * selection. The gate and CI run every test.
  *
  * A `package.json` outside fixtures-style dirs whose edit changes only
  * top-level metadata values (`MANIFEST_METADATA_KEYS`: `engines`,
@@ -910,19 +910,19 @@ export function splitDocs(
 
 /**
  * What `vitest related` gets: the changed related sources, for each related
- * source the tests in other projects that read it as a `FIXTURE_CONSUMERS`
- * path (the tree-sitter-mx corpus readers, say) followed by the tests that
- * read its text or run it in a subprocess (`SOURCE_TEXT_READERS`; they run on
- * any change to a source a row matches, and `commentOnlySplit` adds them for
- * a comment-only edit, which never reaches here), the consumers of every
- * readers-only file (`readersOnly`: its readers run here instead of a whole
- * project), and `DOC_READERS` when any changed file is a corpus input
- * (`CORPUS_INPUT`), the dist entries of every `DIST_PACKAGES` row a changed
- * source goes into, directly or through a bundled row (`distEntries`: their
- * importers reach them through that dist, never through the package's
- * `src`), and the `readers` of those same rows (`distReaders`: tests that
- * read, load or spawn the dist by path, which no import graph shows).
- * Deduped, in that order.
+ * source the tests in other projects that read it as a `FIXTURE_CONSUMERS` path
+ * (the tree-sitter-mx corpus readers, say) followed by the tests that read its
+ * text, run it in a subprocess or import it through a computed path
+ * (`SOURCE_TEXT_READERS`; they run on any change to a source a row matches, and
+ * `commentOnlySplit` adds them for a comment-only edit, which never reaches
+ * here), the consumers of every readers-only file (`readersOnly`: its readers
+ * run here instead of a whole project), and `DOC_READERS` when any changed file
+ * is a corpus input (`CORPUS_INPUT`), the dist entries of every `DIST_PACKAGES`
+ * row a changed source goes into, directly or through a bundled row
+ * (`distEntries`: their importers reach them through that dist, never through
+ * the package's `src`), and the `readers` of those same rows (`distReaders`:
+ * tests that read, load or spawn the dist by path, which no import graph
+ * shows). Deduped, in that order.
  */
 export function relatedSources(changed: readonly string[]): string[] {
   const related = changed.filter(isRelatedSource);
@@ -1228,27 +1228,29 @@ const SRC_HOSTS = [
 ];
 
 /**
- * Tests that read a source file's text (comments included), or run it in a
- * subprocess (spawn it, or spawn a script that imports it), rather than
- * importing it, so `vitest related` cannot select them. They run on any
- * change to a source a row matches: `relatedSources` adds them for a source
- * whose edit changes a token, `commentOnlySplit` for a comment-only edit.
- * Each row lists every consumer test file found reading a path the row
+ * Tests that read a source file's text (comments included), run it in a
+ * subprocess (spawn it, or spawn a script that imports it), or import it in
+ * process through a computed path (`import(/* @vite-ignore *\/ url)`), rather
+ * than importing it statically, so `vitest related` cannot select them. They
+ * run on any change to a source a row matches: `relatedSources` adds them for a
+ * source whose edit changes a token, `commentOnlySplit` for a comment-only
+ * edit. Each row lists every consumer test file found reading a path the row
  * matches. A spawned script's row matches the script and its value-import
  * closure: a package whose `exports` resolve to `src` is followed into its
  * whole `src` (`spawnedPath`), a `DIST_PACKAGES` package is not (its row's
  * `readers` lists the test). The "SOURCE_TEXT_READERS guard" in
  * `scripts/test-affected.test.ts` fails when a test it detects reading such a
  * source has no row and no exemption; it cannot see a path built in another
- * module or passed through a function parameter of an imported helper, so
- * such a reader adds its row by hand. The "spawned sources guard" there
- * fails on a detected spawn of a source with no row; it checks only the
- * spawned entry and cannot see a template path, a generated script, a spread
- * argument, a cwd-relative string, a script in a fixtures dir, a path handed
- * to a helper or a spawn inside a non-test module, so those rows (the
- * upstream parser suite, the registry's light-import and bundle-smoke, the
- * oracle's custom tags, the two checker workers, stock-marko's runner) are
- * listed by hand, and so is each closure.
+ * module or passed through a function parameter of an imported helper, so such
+ * a reader adds its row by hand. The "spawned sources guard" there fails on a
+ * detected spawn of a source with no row, and on a detected computed `import()`
+ * whose path or URL prefix it can evaluate; it checks only the spawned or
+ * imported entry and cannot see a template path, a generated script, a spread
+ * argument, a cwd-relative string, a script in a fixtures dir, a path handed to
+ * a helper or a spawn inside a non-test module, so those rows (the upstream
+ * parser suite, the registry's light-import and bundle-smoke, the oracle's
+ * custom tags, the two checker workers, stock-marko's runner) are listed by
+ * hand, and so is each closure.
  */
 export const SOURCE_TEXT_READERS: readonly {
   path: RegExp;
@@ -1389,6 +1391,17 @@ export const SOURCE_TEXT_READERS: readonly {
     consumers: [
       "packages/stock-marko/src/marko.test.ts",
       "packages/stock-marko/src/divergence.test.ts",
+    ],
+  },
+  // I: imported in process through a computed URL (`import(/* @vite-ignore */ url)`); react and hono import @mxlang/host-preact (src).
+  {
+    path: spawnedPath([], ["packages/hosts/react", "packages/hosts/hono"]),
+    consumers: [
+      "packages/hosts/preact/src/attr-tag-round2.test.ts",
+      "packages/hosts/preact/src/component-tag-params.test.ts",
+      "packages/hosts/preact/src/define-scope.test.ts",
+      "packages/hosts/preact/src/dynamic-emit-once.test.ts",
+      "packages/hosts/preact/src/html-script.test.ts",
     ],
   },
 ];

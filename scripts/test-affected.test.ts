@@ -470,6 +470,14 @@ const REGISTRY_LIGHT_IMPORT =
   "packages/target-registry/src/light-import.test.ts";
 const CUSTOM_TAGS = "packages/oracle/src/custom-tags.test.ts";
 const BUNDLE_SMOKE = "packages/target-registry/src/bundle-smoke.test.ts";
+/** Row I's consumers: the preact tests that import react's or hono's src through a computed URL. */
+const COMPUTED_IMPORTERS = [
+  "packages/hosts/preact/src/attr-tag-round2.test.ts",
+  "packages/hosts/preact/src/component-tag-params.test.ts",
+  "packages/hosts/preact/src/define-scope.test.ts",
+  "packages/hosts/preact/src/dynamic-emit-once.test.ts",
+  "packages/hosts/preact/src/html-script.test.ts",
+];
 const UPSTREAM_SUITE = "packages/parser/src/template/upstream-suite.test.ts";
 const VITE_DIST_DISPATCH =
   "packages/tooling/vite-plugin/src/dist-dispatch.test.ts";
@@ -949,6 +957,28 @@ describe("spawned sources", () => {
       ],
       // A test file under a matched src is no spawned source.
       ["packages/hosts/angular/src/bare-comma.test.ts", []],
+      // Rows P, R, O, B and I.
+      [
+        "packages/hosts/react/src/index.ts",
+        [
+          ...PROBE_SPAWNERS,
+          REGISTRY_LIGHT_IMPORT,
+          CUSTOM_TAGS,
+          BUNDLE_SMOKE,
+          ...COMPUTED_IMPORTERS,
+        ],
+      ],
+      [
+        "packages/hosts/hono/src/index.ts",
+        [
+          ...PROBE_SPAWNERS,
+          REGISTRY_LIGHT_IMPORT,
+          CUSTOM_TAGS,
+          BUNDLE_SMOKE,
+          ...COMPUTED_IMPORTERS,
+        ],
+      ],
+      ["packages/hosts/react/src/index.test.ts", []],
     ];
     for (const [f, want] of cases)
       expect(sourceTextReaders(f), f).toEqual(want);
