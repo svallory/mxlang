@@ -3186,7 +3186,13 @@ export class PreactEmitter implements Emitter<string> {
             temp,
             " = ",
             sharedContent
-              ? concatMapped(`((${contentRef}) => `, call, ")(", sharedContent, ")")
+              ? concatMapped(
+                  `((${contentRef}) => `,
+                  call,
+                  ")(",
+                  sharedContent,
+                  ")",
+                )
               : call,
             ";",
           ),
