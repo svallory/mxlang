@@ -3872,7 +3872,11 @@ element reference and of a call's `/var` is mapped, in a whole file and in a
 `.solid.mx` region, and a name Solid gives a repeated `/var` of its own
 (`__mxVar0_el`) maps as a whole onto the authored name. In a `.solid.mx`
 region a `<define>`'s params, the `/var`s in its body and every expression in
-its body are mapped like the region's own markup. Its name maps for hover only:
+its body are mapped like the region's own markup, including the params of a
+`<for>`, of a call's content and of an attribute tag in the body. An element
+`<for>` with `step` and an element `<for in=>` write no binder of their own,
+so their params have no declaration to reach; their reads map as before. Its
+name maps for hover only:
 go-to-definition and rename from the name, or from a call (`<Row/>`), reach no
 authored text. A whole-file Solid unit refuses `<define>`. `.astro.mx`
 binds no tag variable, so there is nothing to map. On Angular the template
