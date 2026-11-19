@@ -77,17 +77,20 @@
  * Babel bundle, web-elements, tsx-bridge, the html target, host-angular,
  * vite-plugin, angular-checker, typescript-plugin) puts only its dist file in
  * its importers' import graphs, never its `src`. `DIST_PACKAGES` lists them
- * in rebuild order, each with its `build` task's inputs, the dist entries
- * tests import and the earlier rows whose dist its bundle inlines. A kept
+ * in rebuild order, with language-server and tsc (dists no test imports by
+ * name, only reads or spawns), each with its `build` task's inputs, the dist
+ * entries tests import, the earlier rows whose dist its bundle inlines and
+ * the tests that read, load or spawn its dist by path (`readers`). A kept
  * change to a row's input (test files and fixtures excluded) first rebuilds
  * that dist and every dist that bundles it (`distBuilds`: `bun run --cwd
  * <dir> build`, in table order; under `--moon`, the `build` deps do), and a
  * JS/TS source among them that goes into a bundle also sends those rows'
  * entries to `vitest related` (`distEntries`), which then selects every test
- * whose import graph reaches one of those dists. Through a bundle every such
- * test depends on every bundled module, so any token edit to a bundled source
- * of core, web-elements, tsx-bridge or the Babel fork selects close to the
- * whole suite.
+ * whose import graph reaches one of those dists. The same JS/TS sources also
+ * send those rows' `readers` (`distReaders`), which no import graph shows.
+ * Through a bundle every such test depends on every bundled module, so any
+ * token edit to a bundled source of core, web-elements, tsx-bridge or the
+ * Babel fork selects close to the whole suite.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
@@ -156,7 +159,24 @@ export interface DistPackage {
   entries: readonly string[];
   /** Dirs of EARLIER rows whose dist this package's bundle inlines. */
   bundles: readonly string[];
+  /**
+   * The test files that read, load or spawn THIS row's dist by path
+   * (`readFileSync`, `statSync`, a computed `import()` or `createRequire`, a
+   * spawned `dist/bin.*`), or through a subprocess that resolves the package
+   * by name: the dist version of `SOURCE_TEXT_READERS`. Their import graphs
+   * hold no dist file, so `vitest related` would not select them from the
+   * entries. A reader of a dist that this dist loads at run time (an
+   * external) is not listed here. The "dist readers guard" in
+   * `scripts/test-affected.test.ts` fails on a detected dist path read with
+   * no entry here; it cannot see a path built in a helper module or inside a
+   * function body, a template path or a package-name resolution in a
+   * subprocess, so such a reader is listed by hand.
+   */
+  readers: readonly string[];
 }
+
+/** Packs each real package and checks its packed dist JS: a reader of every row but the parser. */
+const PACK_HYGIENE = "scripts/pack-hygiene.test.ts";
 
 /** Files shared by most rows' `build` inputs: the lockfile and the base tsconfig. */
 const ROOT_INPUTS: readonly RegExp[] = [
@@ -172,10 +192,11 @@ const NOTICE_INPUTS: readonly RegExp[] = [
 ];
 
 /**
- * The workspace dists tests import by name, in rebuild order (the root
- * `build` script's order without language-server and tsc, whose dists no
- * test imports by name). Keep each row's inputs in step with `build`'s
- * inputs in <dir>/moon.yml.
+ * The workspace dists tests import by name, read or spawn, in rebuild order
+ * (the root `build` script's order). language-server and tsc have no entries:
+ * no test imports them by name, only their `readers` reach them. The VS Code
+ * extension's dist has no row (no test reads it). Keep each row's inputs in
+ * step with `build`'s inputs in <dir>/moon.yml.
  */
 export const DIST_PACKAGES: readonly DistPackage[] = [
   {
@@ -190,6 +211,7 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
     ],
     entries: ["packages/parser/dist/babel.js"],
     bundles: [],
+    readers: [],
   },
   {
     dir: "packages/web-elements",
@@ -202,6 +224,7 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
     ],
     entries: ["packages/web-elements/dist/index.js"],
     bundles: [],
+    readers: [PACK_HYGIENE],
   },
   {
     dir: "packages/core",
@@ -220,6 +243,12 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
     ],
     entries: ["packages/core/dist/index.js"],
     bundles: ["packages/web-elements"],
+    readers: [
+      "packages/core/src/cold-start.test.ts",
+      "packages/tooling/tsc/src/third-party-target.test.ts",
+      "packages/hosts/solid/src/index.test.ts",
+      PACK_HYGIENE,
+    ],
   },
   {
     dir: "packages/tsx-bridge",
@@ -234,6 +263,11 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
     ],
     entries: ["packages/tsx-bridge/dist/index.js"],
     bundles: [],
+    readers: [
+      "packages/tsx-bridge/src/vendored.test.ts",
+      "packages/tsx-bridge/src/pack-contents.test.ts",
+      PACK_HYGIENE,
+    ],
   },
   {
     dir: "packages/targets/html",
@@ -250,6 +284,12 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
       "packages/targets/html/dist/runtime.js",
     ],
     bundles: [],
+    readers: [
+      "packages/targets/html/src/stock-parser.test.ts",
+      "packages/target-registry/src/parity.test.ts",
+      "packages/target-registry/src/light-import.test.ts",
+      PACK_HYGIENE,
+    ],
   },
   {
     dir: "packages/hosts/angular",
@@ -266,6 +306,13 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
       "packages/hosts/angular/dist/descriptor.js",
     ],
     bundles: ["packages/tsx-bridge"],
+    readers: [
+      "packages/hosts/angular/test/runtime.test.ts",
+      "packages/target-registry/src/parity.test.ts",
+      "packages/target-registry/src/light-import.test.ts",
+      "packages/tooling/tsc/src/angular-fix-hints.test.ts",
+      PACK_HYGIENE,
+    ],
   },
   {
     dir: "packages/tooling/vite-plugin",
@@ -292,6 +339,39 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
       "packages/targets/html",
       "packages/hosts/angular",
     ],
+    readers: [
+      "packages/tooling/vite-plugin/src/dist-dispatch.test.ts",
+      "packages/tooling/vite-plugin/src/light-import.test.ts",
+      PACK_HYGIENE,
+    ],
+  },
+  {
+    dir: "packages/tooling/language-server",
+    inputs: [
+      /^packages\/tooling\/language-server\/src\//,
+      /^packages\/target-registry\/src\//,
+      /^packages\/hosts\/[^/]+\/src\//,
+      /^packages\/babel\/src\//,
+      ...NOTICE_INPUTS,
+      /^packages\/tooling\/language-server\/tsconfig\.json$/,
+      /^packages\/tooling\/language-server\/tsconfig\.build\.json$/,
+      /^packages\/tooling\/language-server\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: [],
+    bundles: [
+      "packages/web-elements",
+      "packages/targets/html",
+      "packages/hosts/angular",
+    ],
+    readers: [
+      "packages/tooling/language-server/src/server.test.ts",
+      "packages/tooling/language-server/src/contracts.test.ts",
+      "packages/tooling/language-server/src/dialect-contracts.test.ts",
+      "packages/tooling/language-server/src/dialect-lower-options.test.ts",
+      "packages/tooling/language-server/src/dist-build.test.ts",
+      PACK_HYGIENE,
+    ],
   },
   {
     dir: "packages/tooling/angular-checker",
@@ -304,6 +384,10 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
     ],
     entries: ["packages/tooling/angular-checker/dist/index.js"],
     bundles: [],
+    readers: [
+      "packages/tooling/angular-checker/src/dist.test.ts",
+      PACK_HYGIENE,
+    ],
   },
   {
     dir: "packages/tooling/typescript-plugin",
@@ -326,6 +410,42 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
       "packages/targets/html",
       "packages/hosts/angular",
       "packages/tooling/angular-checker",
+    ],
+    readers: [
+      "packages/tooling/typescript-plugin/src/cjs-factory.test.ts",
+      "packages/tooling/typescript-plugin/src/dist-dispatch.test.ts",
+      "packages/tooling/typescript-plugin/src/ng-worker-bundle.test.ts",
+      "packages/tooling/typescript-plugin/src/strip-ng-declarations.test.ts",
+      "packages/tooling/typescript-plugin/src/tsconfig-paths-callee.test.ts",
+      "packages/tooling/typescript-plugin/src/tsserver-load.test.ts",
+      PACK_HYGIENE,
+    ],
+  },
+  {
+    dir: "packages/tooling/tsc",
+    inputs: [
+      /^packages\/tooling\/tsc\/src\//,
+      /^scripts\/bundled-build\.ts$/,
+      /^scripts\/baked-paths\.ts$/,
+      ...NOTICE_INPUTS,
+      /^packages\/tooling\/tsc\/tsconfig\.json$/,
+      /^packages\/tooling\/tsc\/package\.json$/,
+      ...ROOT_INPUTS,
+    ],
+    entries: [],
+    bundles: [],
+    readers: [
+      "packages/tooling/tsc/src/build-cache-build.test.ts",
+      "packages/tooling/tsc/src/build-uptodate.test.ts",
+      "packages/tooling/tsc/src/build-uptodate-modes.test.ts",
+      "packages/tooling/tsc/src/bun-runtime.test.ts",
+      "packages/tooling/tsc/src/contracts.test.ts",
+      "packages/tooling/tsc/src/host-policy-diagnostics.test.ts",
+      "packages/tooling/tsc/src/watch.test.ts",
+      "packages/tooling/tsc/src/watch-ambient-types.test.ts",
+      "packages/tooling/tsc/src/watch-rebuild-diagnostics.test.ts",
+      "packages/hosts/hono/src/try-typecheck.test.ts",
+      PACK_HYGIENE,
     ],
   },
 ];
@@ -392,11 +512,40 @@ export function distEntries(
   files: readonly string[],
   table: readonly DistPackage[] = DIST_PACKAGES,
 ): string[] {
-  const selecting = (f: string) =>
-    isRelatedSource(f) && !BUILD_ONLY_INPUTS.some((re) => re.test(f));
+  return selectingRows(files, table).flatMap((row) => row.entries);
+}
+
+/**
+ * The `readers` of the same rows `distEntries` selects (a changed JS/TS input
+ * that goes into the bundle, and every row that bundles one), flattened in
+ * table order and deduped: the tests that read, load or spawn those dists by path, which
+ * no import graph reaches. A manifest, tsconfig, lockfile, license file or
+ * `BUILD_ONLY_INPUTS` script rebuilds its rows but adds no reader.
+ */
+export function distReaders(
+  files: readonly string[],
+  table: readonly DistPackage[] = DIST_PACKAGES,
+): string[] {
+  return [
+    ...new Set(selectingRows(files, table).flatMap((row) => row.readers)),
+  ];
+}
+
+/** A changed file that selects its rows' entries and readers: a JS/TS input that goes into the bundle. */
+function selecting(file: string): boolean {
+  return (
+    isRelatedSource(file) && !BUILD_ONLY_INPUTS.some((re) => re.test(file))
+  );
+}
+
+/** The rows a `selecting` change reaches, directly or through `bundles`, in table order. */
+function selectingRows(
+  files: readonly string[],
+  table: readonly DistPackage[],
+): DistPackage[] {
   return cascade(table, (row) =>
     files.some((f) => selecting(f) && isDistInput(row, f)),
-  ).flatMap((row) => row.entries);
+  );
 }
 
 /**
@@ -750,10 +899,12 @@ export function splitDocs(
  * and `commentOnlySplit` adds them for a comment-only edit, which never
  * reaches here), the consumers of every readers-only file (`readersOnly`: its
  * readers run here instead of a whole project), and `DOC_READERS` when any
- * changed file is a corpus input (`CORPUS_INPUT`), and the dist entries of
+ * changed file is a corpus input (`CORPUS_INPUT`), the dist entries of
  * every `DIST_PACKAGES` row a changed source goes into, directly or through a
  * bundled row (`distEntries`: their importers reach them through that dist,
- * never through the package's `src`). Deduped, in that order.
+ * never through the package's `src`), and the `readers` of those same rows
+ * (`distReaders`: tests that read, load or spawn the dist by path, which no
+ * import graph shows). Deduped, in that order.
  */
 export function relatedSources(changed: readonly string[]): string[] {
   const related = changed.filter(isRelatedSource);
@@ -768,6 +919,7 @@ export function relatedSources(changed: readonly string[]): string[] {
       ...changed.filter((f) => readersOnly(f)).flatMap(fixtureConsumers),
       ...(changed.some((f) => CORPUS_INPUT.test(f)) ? DOC_READERS : []),
       ...distEntries(changed),
+      ...distReaders(changed),
     ]),
   ];
 }

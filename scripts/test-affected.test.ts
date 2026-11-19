@@ -14,6 +14,7 @@ import {
   DOC_READERS,
   distBuilds,
   distEntries,
+  distReaders,
   FIXTURE_CONSUMERS,
   fixtureConsumers,
   hasVitestTests,
@@ -151,6 +152,11 @@ describe("isRelatedSource (what vitest related can see)", () => {
       ...CORE_DIST,
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
+      PACK_HYGIENE,
+      ...CORE_DIST_READERS,
+      ...VITE_PLUGIN_DIST_READERS,
+      ...LANGUAGE_SERVER_DIST_READERS,
+      ...TS_PLUGIN_DIST_READERS,
     ]);
     const { byProject, unmapped } = nonSourceProjects(
       changed.filter((f) => !isRelatedSource(f)),
@@ -314,6 +320,7 @@ describe("FIXTURE_CONSUMERS (fixtures read from another project)", () => {
       ...FIXTURE_CONSUMERS.map((row) => row.consumers),
       DOC_READERS,
       ...SOURCE_TEXT_READERS.map((r) => r.consumers),
+      ...DIST_PACKAGES.map((r) => r.readers),
     ]) {
       for (const consumer of consumers) {
         expect(
@@ -437,6 +444,8 @@ const ANGULAR = "packages/hosts/angular";
 const VITE_PLUGIN = "packages/tooling/vite-plugin";
 const ANGULAR_CHECKER = "packages/tooling/angular-checker";
 const TS_PLUGIN = "packages/tooling/typescript-plugin";
+const LANGUAGE_SERVER = "packages/tooling/language-server";
+const TSC = "packages/tooling/tsc";
 
 /** Each row's dist entries, as literals. */
 const PARSER_DIST = ["packages/parser/dist/babel.js"];
@@ -455,6 +464,64 @@ const ANGULAR_DIST = [
 const VITE_PLUGIN_DIST = ["packages/tooling/vite-plugin/dist/index.js"];
 const TS_PLUGIN_DIST = ["packages/tooling/typescript-plugin/dist/index.cjs"];
 
+/** Reads every row's packed dist but the parser's; last in each row's readers. */
+const PACK_HYGIENE = "scripts/pack-hygiene.test.ts";
+/** Each row's readers before PACK_HYGIENE, as literals (the parser has none). */
+const CORE_DIST_READERS = [
+  "packages/core/src/cold-start.test.ts",
+  "packages/tooling/tsc/src/third-party-target.test.ts",
+  "packages/hosts/solid/src/index.test.ts",
+];
+const TSX_BRIDGE_DIST_READERS = [
+  "packages/tsx-bridge/src/vendored.test.ts",
+  "packages/tsx-bridge/src/pack-contents.test.ts",
+];
+const HTML_DIST_READERS = [
+  "packages/targets/html/src/stock-parser.test.ts",
+  "packages/target-registry/src/parity.test.ts",
+  "packages/target-registry/src/light-import.test.ts",
+];
+const ANGULAR_DIST_READERS = [
+  "packages/hosts/angular/test/runtime.test.ts",
+  "packages/target-registry/src/parity.test.ts",
+  "packages/target-registry/src/light-import.test.ts",
+  "packages/tooling/tsc/src/angular-fix-hints.test.ts",
+];
+const VITE_PLUGIN_DIST_READERS = [
+  "packages/tooling/vite-plugin/src/dist-dispatch.test.ts",
+  "packages/tooling/vite-plugin/src/light-import.test.ts",
+];
+const LANGUAGE_SERVER_DIST_READERS = [
+  "packages/tooling/language-server/src/server.test.ts",
+  "packages/tooling/language-server/src/contracts.test.ts",
+  "packages/tooling/language-server/src/dialect-contracts.test.ts",
+  "packages/tooling/language-server/src/dialect-lower-options.test.ts",
+  "packages/tooling/language-server/src/dist-build.test.ts",
+];
+const ANGULAR_CHECKER_DIST_READERS = [
+  "packages/tooling/angular-checker/src/dist.test.ts",
+];
+const TS_PLUGIN_DIST_READERS = [
+  "packages/tooling/typescript-plugin/src/cjs-factory.test.ts",
+  "packages/tooling/typescript-plugin/src/dist-dispatch.test.ts",
+  "packages/tooling/typescript-plugin/src/ng-worker-bundle.test.ts",
+  "packages/tooling/typescript-plugin/src/strip-ng-declarations.test.ts",
+  "packages/tooling/typescript-plugin/src/tsconfig-paths-callee.test.ts",
+  "packages/tooling/typescript-plugin/src/tsserver-load.test.ts",
+];
+const TSC_DIST_READERS = [
+  "packages/tooling/tsc/src/build-cache-build.test.ts",
+  "packages/tooling/tsc/src/build-uptodate.test.ts",
+  "packages/tooling/tsc/src/build-uptodate-modes.test.ts",
+  "packages/tooling/tsc/src/bun-runtime.test.ts",
+  "packages/tooling/tsc/src/contracts.test.ts",
+  "packages/tooling/tsc/src/host-policy-diagnostics.test.ts",
+  "packages/tooling/tsc/src/watch.test.ts",
+  "packages/tooling/tsc/src/watch-ambient-types.test.ts",
+  "packages/tooling/tsc/src/watch-rebuild-diagnostics.test.ts",
+  "packages/hosts/hono/src/try-typecheck.test.ts",
+];
+
 describe("distBuilds", () => {
   const dirs = (files: string[]) => distBuilds(files).map((r) => r.dir);
 
@@ -462,33 +529,52 @@ describe("distBuilds", () => {
     const cases: [string, string[]][] = [
       [
         "packages/web-elements/src/index.ts",
-        [WEB_ELEMENTS, CORE, VITE_PLUGIN, TS_PLUGIN],
+        [WEB_ELEMENTS, CORE, VITE_PLUGIN, LANGUAGE_SERVER, TS_PLUGIN],
       ],
       [
         "packages/tsx-bridge/src/index.ts",
-        [TSX_BRIDGE, ANGULAR, VITE_PLUGIN, TS_PLUGIN],
+        [TSX_BRIDGE, ANGULAR, VITE_PLUGIN, LANGUAGE_SERVER, TS_PLUGIN],
       ],
       [
         "packages/babel/src/tokenizer/index.ts",
-        [PARSER, CORE, TSX_BRIDGE, ANGULAR, VITE_PLUGIN, TS_PLUGIN],
+        [
+          PARSER,
+          CORE,
+          TSX_BRIDGE,
+          ANGULAR,
+          VITE_PLUGIN,
+          LANGUAGE_SERVER,
+          TS_PLUGIN,
+        ],
       ],
       ["packages/parser/src/frontend/babel.ts", [PARSER, CORE]],
-      // typescript-plugin's inputs miss targets/*/src: only its bundles edge
-      // reaches it from html's sources.
-      ["packages/targets/html/src/index.ts", [HTML, VITE_PLUGIN, TS_PLUGIN]],
+      // typescript-plugin's and language-server's inputs miss targets/*/src:
+      // only their bundles edges reach them from html's sources.
+      [
+        "packages/targets/html/src/index.ts",
+        [HTML, VITE_PLUGIN, LANGUAGE_SERVER, TS_PLUGIN],
+      ],
       // A manifest matches no bundler's inputs: only the bundles edges reach
-      // vite-plugin and typescript-plugin.
-      ["packages/targets/html/package.json", [HTML, VITE_PLUGIN, TS_PLUGIN]],
+      // vite-plugin, language-server and typescript-plugin.
+      [
+        "packages/targets/html/package.json",
+        [HTML, VITE_PLUGIN, LANGUAGE_SERVER, TS_PLUGIN],
+      ],
       [
         "packages/hosts/angular/package.json",
-        [ANGULAR, VITE_PLUGIN, TS_PLUGIN],
+        [ANGULAR, VITE_PLUGIN, LANGUAGE_SERVER, TS_PLUGIN],
       ],
       ["packages/core/src/lower.ts", [CORE, VITE_PLUGIN]],
-      ["packages/hosts/preact/src/emitter.ts", [VITE_PLUGIN, TS_PLUGIN]],
+      [
+        "packages/hosts/preact/src/emitter.ts",
+        [VITE_PLUGIN, LANGUAGE_SERVER, TS_PLUGIN],
+      ],
       [
         "packages/tooling/angular-checker/src/index.ts",
         [ANGULAR_CHECKER, TS_PLUGIN],
       ],
+      ["packages/tooling/language-server/src/server.ts", [LANGUAGE_SERVER]],
+      ["packages/tooling/tsc/src/index.ts", [TSC]],
       [
         "bun.lock",
         [
@@ -499,8 +585,10 @@ describe("distBuilds", () => {
           HTML,
           ANGULAR,
           VITE_PLUGIN,
+          LANGUAGE_SERVER,
           ANGULAR_CHECKER,
           TS_PLUGIN,
+          TSC,
         ],
       ],
     ];
@@ -511,8 +599,8 @@ describe("distBuilds", () => {
     for (const f of [
       "packages/core/src/lower.test.ts",
       "packages/core/src/fixtures/syntax/member-fixture.ts",
-      "packages/tooling/language-server/src/diagnose.ts",
-      "packages/tooling/tsc/src/index.ts",
+      "packages/tooling/language-server/src/server.test.ts",
+      "packages/editors/vscode/src/extension.ts",
       "packages/parser/moon.yml",
       "packages/hosts/angular/test/cli.test.ts",
     ])
@@ -536,8 +624,10 @@ describe("distBuilds", () => {
           HTML,
           ANGULAR,
           VITE_PLUGIN,
+          LANGUAGE_SERVER,
           ANGULAR_CHECKER,
           TS_PLUGIN,
+          TSC,
         ],
       ],
       // Former parserBuildNeeded false cases.
@@ -552,7 +642,15 @@ describe("distBuilds", () => {
       ["packages/core/package.json", [CORE]],
       [
         "scripts/third-party-notices.ts",
-        [CORE, TSX_BRIDGE, ANGULAR, VITE_PLUGIN, TS_PLUGIN],
+        [
+          CORE,
+          TSX_BRIDGE,
+          ANGULAR,
+          VITE_PLUGIN,
+          LANGUAGE_SERVER,
+          TS_PLUGIN,
+          TSC,
+        ],
       ],
       // Former coreBuildNeeded false cases.
       ["packages/core/AGENTS.md", []],
@@ -562,9 +660,27 @@ describe("distBuilds", () => {
 
   /** A; B bundles A; C bundles B. */
   const table: DistPackage[] = [
-    { dir: "a", inputs: [/^a\//], entries: ["a/dist/a.js"], bundles: [] },
-    { dir: "b", inputs: [/^b\//], entries: ["b/dist/b.js"], bundles: ["a"] },
-    { dir: "c", inputs: [/^c\//], entries: ["c/dist/c.js"], bundles: ["b"] },
+    {
+      dir: "a",
+      inputs: [/^a\//],
+      entries: ["a/dist/a.js"],
+      bundles: [],
+      readers: [],
+    },
+    {
+      dir: "b",
+      inputs: [/^b\//],
+      entries: ["b/dist/b.js"],
+      bundles: ["a"],
+      readers: [],
+    },
+    {
+      dir: "c",
+      inputs: [/^c\//],
+      entries: ["c/dist/c.js"],
+      bundles: ["b"],
+      readers: [],
+    },
   ];
 
   it("cascades through a fixture table's bundle chain, in table order", () => {
@@ -622,9 +738,124 @@ describe("distBuilds", () => {
       HTML,
       ANGULAR,
       VITE_PLUGIN,
+      LANGUAGE_SERVER,
       ANGULAR_CHECKER,
       TS_PLUGIN,
+      TSC,
     ]);
+  });
+});
+
+describe("distReaders", () => {
+  it("a source of each row selects its readers and its bundlers', deduped in table order", () => {
+    const cases: [string, string[]][] = [
+      [
+        "packages/core/src/lower.ts",
+        [...CORE_DIST_READERS, PACK_HYGIENE, ...VITE_PLUGIN_DIST_READERS],
+      ],
+      [
+        "packages/tsx-bridge/src/index.ts",
+        [
+          ...TSX_BRIDGE_DIST_READERS,
+          PACK_HYGIENE,
+          ...ANGULAR_DIST_READERS,
+          ...VITE_PLUGIN_DIST_READERS,
+          ...LANGUAGE_SERVER_DIST_READERS,
+          ...TS_PLUGIN_DIST_READERS,
+        ],
+      ],
+      [
+        "packages/targets/html/src/index.ts",
+        [
+          ...HTML_DIST_READERS,
+          PACK_HYGIENE,
+          ...VITE_PLUGIN_DIST_READERS,
+          ...LANGUAGE_SERVER_DIST_READERS,
+          ...TS_PLUGIN_DIST_READERS,
+        ],
+      ],
+      [
+        "packages/hosts/angular/src/index.ts",
+        [
+          ...ANGULAR_DIST_READERS,
+          PACK_HYGIENE,
+          ...VITE_PLUGIN_DIST_READERS,
+          ...LANGUAGE_SERVER_DIST_READERS,
+          ...TS_PLUGIN_DIST_READERS,
+        ],
+      ],
+      [
+        "packages/tooling/vite-plugin/src/index.ts",
+        [...VITE_PLUGIN_DIST_READERS, PACK_HYGIENE],
+      ],
+      [
+        "packages/tooling/language-server/src/server.ts",
+        [...LANGUAGE_SERVER_DIST_READERS, PACK_HYGIENE],
+      ],
+      [
+        "packages/tooling/angular-checker/src/index.ts",
+        [
+          ...ANGULAR_CHECKER_DIST_READERS,
+          PACK_HYGIENE,
+          ...TS_PLUGIN_DIST_READERS,
+        ],
+      ],
+      [
+        "packages/tooling/typescript-plugin/src/index.ts",
+        [...TS_PLUGIN_DIST_READERS, PACK_HYGIENE],
+      ],
+      [
+        "packages/tooling/tsc/src/index.ts",
+        [...TSC_DIST_READERS, PACK_HYGIENE],
+      ],
+      // The parser has no readers; core's inputs include packages/parser/src/.
+      [
+        "packages/parser/src/frontend/babel.ts",
+        [...CORE_DIST_READERS, PACK_HYGIENE],
+      ],
+      // A test file is no dist input.
+      ["packages/hosts/hono/src/try-typecheck.test.ts", []],
+    ];
+    for (const [f, want] of cases) expect(distReaders([f]), f).toEqual(want);
+  });
+
+  /** A with reader a; B bundles A, reader b; C, reader c. */
+  const table: DistPackage[] = [
+    {
+      dir: "a",
+      inputs: [/^a\//, /^scripts\/third-party-notices\.ts$/],
+      entries: [],
+      bundles: [],
+      readers: ["a.test.ts"],
+    },
+    {
+      dir: "b",
+      inputs: [/^b\//],
+      entries: [],
+      bundles: ["a"],
+      readers: ["b.test.ts"],
+    },
+    {
+      dir: "c",
+      inputs: [/^c\//],
+      entries: [],
+      bundles: [],
+      readers: ["c.test.ts"],
+    },
+  ];
+
+  it("follows the bundle cascade and adds no reader for a manifest or a build-only script", () => {
+    expect(distReaders(["a/x.ts"], table)).toEqual(["a.test.ts", "b.test.ts"]);
+    expect(distReaders(["c/x.ts"], table)).toEqual(["c.test.ts"]);
+    expect(distReaders(["a/package.json"], table)).toEqual([]);
+    expect(distBuilds(["a/package.json"], table).map((r) => r.dir)).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(distReaders(["scripts/third-party-notices.ts"], table)).toEqual([]);
+    expect(
+      distBuilds(["scripts/third-party-notices.ts"], table).map((r) => r.dir),
+    ).toEqual(["a", "b"]);
   });
 });
 
@@ -929,6 +1160,10 @@ describe("Markdown selection", () => {
       "packages/parser/src/frontend/boundary.test.ts",
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
+      ...VITE_PLUGIN_DIST_READERS,
+      PACK_HYGIENE,
+      ...LANGUAGE_SERVER_DIST_READERS,
+      ...TS_PLUGIN_DIST_READERS,
     ]);
   });
 
@@ -954,6 +1189,16 @@ describe("Markdown selection", () => {
     "packages/core/src/message-vocabulary-guard.test.ts",
   ];
 
+  /** A core source's dist entries, then the core and vite-plugin readers not already listed. */
+  const CORE_DIST_TAIL = [
+    ...CORE_DIST,
+    ...VITE_PLUGIN_DIST,
+    "packages/tooling/tsc/src/third-party-target.test.ts",
+    "packages/hosts/solid/src/index.test.ts",
+    PACK_HYGIENE,
+    ...VITE_PLUGIN_DIST_READERS,
+  ];
+
   it("any corpus input adds the Markdown readers; a source change adds none of them", () => {
     expect(relatedSources(["docs/a.md"])).toEqual([CORPUS]);
     expect(
@@ -962,8 +1207,7 @@ describe("Markdown selection", () => {
     expect(relatedSources(["packages/core/src/core.ts"])).toEqual([
       "packages/core/src/core.ts",
       ...CORE_READERS,
-      ...CORE_DIST,
-      ...VITE_PLUGIN_DIST,
+      ...CORE_DIST_TAIL,
     ]);
   });
 
@@ -971,8 +1215,7 @@ describe("Markdown selection", () => {
     expect(relatedSources(["packages/core/src/lower.ts"])).toEqual([
       "packages/core/src/lower.ts",
       ...CORE_READERS,
-      ...CORE_DIST,
-      ...VITE_PLUGIN_DIST,
+      ...CORE_DIST_TAIL,
     ]);
     expect(relatedSources(["packages/tsx-bridge/src/public.d.ts"])).toEqual([
       "packages/tsx-bridge/src/public.d.ts",
@@ -981,6 +1224,12 @@ describe("Markdown selection", () => {
       ...ANGULAR_DIST,
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
+      "packages/tsx-bridge/src/vendored.test.ts",
+      PACK_HYGIENE,
+      ...ANGULAR_DIST_READERS,
+      ...VITE_PLUGIN_DIST_READERS,
+      ...LANGUAGE_SERVER_DIST_READERS,
+      ...TS_PLUGIN_DIST_READERS,
     ]);
   });
 
@@ -989,8 +1238,7 @@ describe("Markdown selection", () => {
       "packages/core/src/ir-entry/index.ts",
       ...CORE_READERS,
       "packages/core/src/ir-entry/partial.test.ts",
-      ...CORE_DIST,
-      ...VITE_PLUGIN_DIST,
+      ...CORE_DIST_TAIL,
     ]);
     expect(
       relatedSources([
@@ -1001,8 +1249,7 @@ describe("Markdown selection", () => {
       "packages/core/src/lower.ts",
       "packages/core/src/core.ts",
       ...CORE_READERS,
-      ...CORE_DIST,
-      ...VITE_PLUGIN_DIST,
+      ...CORE_DIST_TAIL,
     ]);
   });
 
@@ -1036,9 +1283,13 @@ describe("Markdown selection", () => {
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
     ]);
-    expect(
-      relatedSources(["packages/parser/src/template/index.ts"]).at(-1),
-    ).toBe(CORE_DIST[0]);
+    expect(relatedSources(["packages/parser/src/template/index.ts"])).toEqual([
+      "packages/parser/src/template/index.ts",
+      "packages/parser/src/frontend/boundary.test.ts",
+      ...CORE_DIST,
+      ...CORE_DIST_READERS,
+      PACK_HYGIENE,
+    ]);
     expect(distTail("scripts/bundled-build.ts")).toEqual([
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
@@ -1056,6 +1307,24 @@ describe("Markdown selection", () => {
       "packages/tsx-bridge/scripts/emit-declarations.ts",
     ])
       expect(distTail(f), f).toEqual([]);
+  });
+
+  it("appends the dist readers after the entries; a scripts-only or build-only change adds neither", () => {
+    expect(relatedSources(["scripts/test-affected.ts"])).toEqual([
+      "scripts/test-affected.ts",
+    ]);
+    expect(relatedSources(["scripts/bundled-build.ts"])).toEqual([
+      "scripts/bundled-build.ts",
+      ...VITE_PLUGIN_DIST,
+      ...TS_PLUGIN_DIST,
+      ...VITE_PLUGIN_DIST_READERS,
+      PACK_HYGIENE,
+      ...TS_PLUGIN_DIST_READERS,
+      ...TSC_DIST_READERS,
+    ]);
+    expect(relatedSources(["scripts/third-party-notices.ts"])).toEqual([
+      "scripts/third-party-notices.ts",
+    ]);
   });
 });
 
@@ -1669,20 +1938,16 @@ function evaluatePath(
 }
 
 /**
- * The reads of `targets` by each test in `sources` (repo-relative path to
- * text), deduped per test and sorted. One program over every file;
- * `noResolve`, so an imported binding is unknown. With `imports`, a relative
- * static or dynamic import or `export ... from` specifier is a read too (the
- * fixture guard; for sources, imports are the import graph's job).
+ * One program over every file of `sources` (repo-relative path to text),
+ * served from memory; `noResolve`, so an imported binding is unknown. Shared
+ * by the source and dist scanners.
  */
-function scanSourceReads(
-  sources: ReadonlyMap<string, string>,
-  targets: ReadonlySet<string>,
-  { imports }: { imports: boolean } = { imports: false },
-): SourceRead[] {
+function scanProgram(sources: ReadonlyMap<string, string>): {
+  files: string[];
+  program: ts.Program;
+  checker: ts.TypeChecker;
+} {
   const files = [...sources.keys()].sort();
-  const sorted = [...targets].sort();
-  const under = (dir: string) => sorted.filter((t) => t.startsWith(`${dir}/`));
   const relName = (name: string) =>
     name.startsWith("/") ? name.slice(1) : name;
   const host: ts.CompilerHost = {
@@ -1706,7 +1971,24 @@ function scanSourceReads(
     { noResolve: true, noLib: true, allowJs: true, types: [], noEmit: true },
     host,
   );
-  const checker = program.getTypeChecker();
+  return { files, program, checker: program.getTypeChecker() };
+}
+
+/**
+ * The reads of `targets` by each test in `sources` (repo-relative path to
+ * text), deduped per test and sorted. One program over every file;
+ * `noResolve`, so an imported binding is unknown. With `imports`, a relative
+ * static or dynamic import or `export ... from` specifier is a read too (the
+ * fixture guard; for sources, imports are the import graph's job).
+ */
+function scanSourceReads(
+  sources: ReadonlyMap<string, string>,
+  targets: ReadonlySet<string>,
+  { imports }: { imports: boolean } = { imports: false },
+): SourceRead[] {
+  const { files, program, checker } = scanProgram(sources);
+  const sorted = [...targets].sort();
+  const under = (dir: string) => sorted.filter((t) => t.startsWith(`${dir}/`));
   const reads = new Map<string, SourceRead>();
   for (const file of files) {
     const sf = program.getSourceFile(`/${file}`);
@@ -2243,6 +2525,195 @@ describe("SOURCE_TEXT_READERS guard", () => {
           "packages/x/src/types.d.ts",
         ],
       ],
+    ]);
+  });
+});
+
+/*
+ * The dist readers guard: finds the test files that build a path at or under
+ * a `DIST_PACKAGES` row's `dist/` and checks each is on that row's `readers`.
+ * It reuses `evaluatePath`; it cannot see a path built in another module or
+ * inside a function body, a template path or a package-name resolution in a
+ * subprocess, so those readers are listed by hand.
+ */
+
+/** A test file that builds a path at or under `<dir>/dist`. */
+interface DistRead {
+  test: string;
+  dir: string;
+}
+
+const DIST_PATH_CALLS = new Set([
+  "join",
+  "resolve",
+  "dirname",
+  "fileURLToPath",
+]);
+
+/**
+ * The dist reads of each test in `sources`: every `const` initializer, every
+ * `join`/`resolve`/`dirname`/`fileURLToPath` call and every `new URL(…)` that
+ * `evaluatePath` itself turns into a path or prefix at or under `<dir>/dist`
+ * for a dir of `dirs`. A bare string literal is never a read (a message or a
+ * manifest value, not a path the test builds). Deduped and sorted.
+ */
+function scanDistReads(
+  sources: ReadonlyMap<string, string>,
+  dirs: readonly string[],
+): DistRead[] {
+  const { files, program, checker } = scanProgram(sources);
+  const reads = new Map<string, DistRead>();
+  for (const file of files) {
+    const sf = program.getSourceFile(`/${file}`);
+    if (sf === undefined) continue;
+    const ctx: EvalContext = { checker, file, dir: posix.dirname(file) };
+    const record = (node: ts.Expression) => {
+      const v = evaluatePath(node, ctx, new Set());
+      const at =
+        v.kind === "path" ? bare(v.path) : v.kind === "prefix" ? v.dir : null;
+      if (at === null) return;
+      for (const dir of dirs) {
+        const dist = `${dir}/dist`;
+        if (at === dist || at.startsWith(`${dist}/`)) {
+          reads.set(`${file}\0${dir}`, { test: file, dir });
+        }
+      }
+    };
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        node.initializer !== undefined &&
+        ts.getCombinedNodeFlags(node) & ts.NodeFlags.Const
+      ) {
+        record(node.initializer);
+      } else if (ts.isCallExpression(node)) {
+        const name = pathCallName(node.expression);
+        if (name !== undefined && DIST_PATH_CALLS.has(name)) record(node);
+      } else if (ts.isNewExpression(node)) {
+        record(node);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+  }
+  const key = (r: DistRead) => `${r.test}\0${r.dir}`;
+  return [...reads.values()].sort((a, b) =>
+    key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0,
+  );
+}
+
+/** One sorted, deduped message per read neither on its row's `readers` nor exempt. */
+function uncoveredDist(
+  reads: readonly DistRead[],
+  table: readonly DistPackage[],
+  exempt: readonly DistRead[],
+): string[] {
+  const messages = reads
+    .filter(
+      (r) =>
+        !exempt.some((e) => e.test === r.test && e.dir === r.dir) &&
+        !table.some((row) => row.dir === r.dir && row.readers.includes(r.test)),
+    )
+    .map(
+      (r) =>
+        `${r.test} reads ${r.dir}/dist with no DIST_PACKAGES readers entry`,
+    );
+  return [...new Set(messages)].sort();
+}
+
+/** Detected dist path reads whose result cannot depend on the dist's content. */
+const DIST_EXEMPT: readonly (DistRead & { reason: string })[] = [
+  // `expect(input.calleePath).toBe(resolve(PKG, "dist/index.js"))`: compares a resolved path, opens nothing.
+  {
+    test: "packages/core/src/callee-input.test.ts",
+    dir: "packages/core",
+    reason: "compares a resolved path to dist/index.js; reads no dist content",
+  },
+];
+
+describe("dist readers guard", () => {
+  let repoReads: DistRead[] | undefined;
+  /** The repository's dist path reads; computed once. */
+  const scanRepo = (): DistRead[] => {
+    if (repoReads !== undefined) return repoReads;
+    const sources = new Map<string, string>();
+    for (const f of scanInputs().listed.filter((f) =>
+      VITEST_TEST_FILE.test(f),
+    )) {
+      const text = readFileSync(resolve(ROOT, f), "utf8");
+      if (/\bdist\b/.test(text)) sources.set(f, text);
+    }
+    repoReads = scanDistReads(
+      sources,
+      DIST_PACKAGES.map((r) => r.dir),
+    );
+    return repoReads;
+  };
+
+  it("every detected dist read has a readers entry on its row or an exemption", () => {
+    expect(uncoveredDist(scanRepo(), DIST_PACKAGES, DIST_EXEMPT)).toEqual([]);
+  });
+
+  it("catches mx-3tpv's miss: tsx-bridge's vendored test without its readers entry", () => {
+    const reader = "packages/tsx-bridge/src/vendored.test.ts";
+    const table = DIST_PACKAGES.map((row) => ({
+      ...row,
+      readers: row.readers.filter((r) => r !== reader),
+    }));
+    expect(uncoveredDist(scanRepo(), table, DIST_EXEMPT)).toEqual([
+      "packages/tsx-bridge/src/vendored.test.ts reads packages/tsx-bridge/dist with no DIST_PACKAGES readers entry",
+    ]);
+  });
+
+  it("every exemption is detected and is not also a listed reader", () => {
+    const reads = scanRepo();
+    expect(
+      DIST_EXEMPT.filter(
+        (e) => !reads.some((r) => r.test === e.test && r.dir === e.dir),
+      ).map((e) => e.test),
+    ).toEqual([]);
+    expect(
+      DIST_EXEMPT.filter((e) =>
+        DIST_PACKAGES.some(
+          (row) => row.dir === e.dir && row.readers.includes(e.test),
+        ),
+      ).map((e) => e.test),
+    ).toEqual([]);
+  });
+
+  it("detects the path forms tests use to reach a dist, and not a bare string", () => {
+    const dir = "packages/x/src";
+    const sources = new Map<string, string>([
+      [
+        `${dir}/bin.test.ts`,
+        'import { join } from "node:path";\nspawnSync("node", [join(import.meta.dirname, "../dist/bin.js")]);\n',
+      ],
+      [
+        `${dir}/url.test.ts`,
+        'await import(new URL("../dist/index.js", import.meta.url).href);\n',
+      ],
+      [
+        `${dir}/const.test.ts`,
+        'import path from "node:path";\nconst PACKAGE_DIR = path.join(import.meta.dirname, "..");\nconst entry = path.join(PACKAGE_DIR, "dist", "index.js");\nawait import(entry);\n',
+      ],
+      [
+        `${dir}/repo.test.ts`,
+        'import { join } from "node:path";\nconst repo = join(import.meta.dirname, "../../..");\nstatSync(join(repo, "packages/x/dist/bin.cjs"));\n',
+      ],
+      [
+        `${dir}/message.test.ts`,
+        'const message = "packages/x/dist/index.js is missing";\nthrow new Error("packages/x/dist/index.js is missing");\n',
+      ],
+      [
+        `${dir}/other.test.ts`,
+        'import { join } from "node:path";\nreadFileSync(join(import.meta.dirname, "../src/a.ts"));\nreadFileSync(join(import.meta.dirname, "../../y/dist/a.js"));\n',
+      ],
+    ]);
+    expect(scanDistReads(sources, ["packages/x"])).toEqual([
+      { test: `${dir}/bin.test.ts`, dir: "packages/x" },
+      { test: `${dir}/const.test.ts`, dir: "packages/x" },
+      { test: `${dir}/repo.test.ts`, dir: "packages/x" },
+      { test: `${dir}/url.test.ts`, dir: "packages/x" },
     ]);
   });
 });
