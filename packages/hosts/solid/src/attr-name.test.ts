@@ -221,4 +221,30 @@ describe("other frameworks' attribute names (solid)", () => {
   ])("refuses %s at the attribute", (source, message) => {
     expect(failure(source)).toEqual({ message, line: 1, column: 5 });
   });
+
+  it.each([
+    [
+      '<div ref="x"/>',
+      5,
+      "`ref` on a native element must be a function or a variable (`ref=myRef`): Solid has no string refs, so a string or bare `ref` cannot receive the node.",
+    ],
+    [
+      "<div ref/>",
+      5,
+      "`ref` on a native element must be a function or a variable (`ref=myRef`): Solid has no string refs, so a string or bare `ref` cannot receive the node.",
+    ],
+    [
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX dynamic tag source.
+      '<${"my-el"} ref="x"/>',
+      12,
+      "`ref` on a native element must be a function or a variable (`ref=myRef`): Solid has no string refs, so a string or bare `ref` cannot receive the node.",
+    ],
+    [
+      '<div/el ref="x"/>',
+      8,
+      "`ref` beside the element reference `/el` must be a function (`ref=myRef`): Solid has no string refs, so a string or bare `ref` cannot receive the node.",
+    ],
+  ])("refuses a string or bare `ref`: %s", (source, column, message) => {
+    expect(failure(source)).toEqual({ message, line: 1, column });
+  });
 });

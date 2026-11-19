@@ -1664,6 +1664,31 @@ function hasNamedAttr(attrs: Attr[], name: string): boolean {
 }
 
 /**
+ * Marko refuses every `ref` on a native element; Solid keeps one whose value
+ * is an expression (a callback, or a variable it assigns the node to). Solid
+ * has no string refs, and `@solidjs/babel-plugin` writes a literal `ref` as a
+ * plain attribute, so a string or bare `ref` is refused at the attribute.
+ * Beside an element reference (`elementVar`) only a function is named: an
+ * authored variable there is not assigned.
+ */
+function rejectStringRef(attrs: Attr[], elementVar?: string): void {
+  for (const attr of attrs) {
+    if (
+      attr.kind === "spread" ||
+      attr.name !== "ref" ||
+      (attr.kind !== "static" && attr.kind !== "boolean")
+    )
+      continue;
+    fail(
+      elementVar === undefined
+        ? "`ref` on a native element must be a function or a variable (`ref=myRef`): Solid has no string refs, so a string or bare `ref` cannot receive the node."
+        : `\`ref\` beside the element reference \`/${elementVar}\` must be a function (\`ref=myRef\`): Solid has no string refs, so a string or bare \`ref\` cannot receive the node.`,
+      attr,
+    );
+  }
+}
+
+/**
  * A literal `innerHTML=` on a native element is refused, at the attribute,
  * the way the JSX hosts refuse `dangerouslySetInnerHTML=`: it is Solid's raw
  * HTML channel, so an authored value (`innerHTML=input.h`) was raw markup
@@ -2823,6 +2848,7 @@ export class SolidEmitter implements Emitter<string> {
    * after every other attribute.
    */
   element(element: Extract<IrNode, { kind: "Element" }>): void {
+    rejectStringRef(element.attrs, element.var);
     const bound = element.var ? elementRef(element.attrs, element.var) : null;
     const node = bound ? { ...element, attrs: bound.attrs } : element;
     const ref = bound?.ref ?? "";
@@ -3173,6 +3199,18 @@ export class SolidEmitter implements Emitter<string> {
     // as `<div/el>`'s, with its callback `ref` on each `<Dynamic>` after the
     // other attributes, and no returned value; any other `/var` binds the
     // callee's returned value.
+    // A literal name (the one-quasi test core applies to a dynamic tag name)
+    // is a native element: a string or bare `ref` is refused as on `<div>`.
+    const literal = target.node;
+    if (
+      literal?.type === "StringLiteral" ||
+      (literal?.type === "TemplateLiteral" && literal.expressions.length === 0)
+    ) {
+      rejectStringRef(
+        node.attrs,
+        node.elementRef ? (node.var ?? undefined) : undefined,
+      );
+    }
     const bound =
       node.elementRef && node.var ? elementRef(node.attrs, node.var) : null;
     const returnProp: MappedCode | string = bound
