@@ -172,16 +172,15 @@ export interface CompileSolidMxResult {
    */
   hoistedDefines: HoistedDefine[];
   /**
-   * `/var` names this region's call sites bind, for the caller to declare.
+   * `/var` names this region asks the caller to declare: always empty on
+   * Solid.
    *
-   * A region is an *expression*, so it has no statement position for the
-   * `let` a `/var` needs — the same reason `hoistedImports` exists. The
-   * callback prop assigns during the child's synchronous setup (design
-   * §2.4), so the declaration has to be somewhere the region's JSX can close
-   * over: the surrounding function. Empty for a region that binds none.
-   * An element reference (`<div/el>`) is not in it: the region declares it
-   * in place, `{(() => { let el: any; return <>…</>; })()}`, so each
-   * instance gets its own.
+   * A region declares every top-level `/var` it binds, call `/var`s and
+   * element references (`<div/el>`) alike, in place:
+   * `{(() => { let n: any, el: any; return <>…</>; })()}`. A `let` the
+   * caller declared at module scope would be shared by every instance of
+   * the component. The field stays for the bridge's generic channel, which
+   * a third-party host may still fill.
    */
   returnVars: string[];
   /** Callee declarations read while resolving this region's attribute tags. */
@@ -484,24 +483,20 @@ function emitRegion(
   // get them separately would also duplicate the mappings work, and any
   // divergence between the two passes would be silent.
   let emitted!: ReturnType<typeof emitSolidWithMappings>;
-  const {
-    vars,
-    elementVars,
-    needsEscapeImport,
-    needsAttrGuard,
-    hoistedDefines,
-  } = collectReturnVars(() => {
-    emitted = emitSolidWithMappings({ ...ir, body: scopeReturnVars(ir.body) });
-    return emitted.code;
-  });
-  // The caller declares `returnVars` once at module scope, which every
-  // instance of the component shares. A call's `/var` is read during the
-  // same render, so that is harmless there; an element reference is read
-  // later, in a handler, which would then reach the element of whichever
-  // instance rendered last. So the region declares its own, in place.
-  const returnVars = vars.filter((name) => !elementVars.includes(name));
-  if (elementVars.length > 0) {
-    emitted = declareInPlace(elementVars, emitted, "child");
+  const { vars, needsEscapeImport, needsAttrGuard, hoistedDefines } =
+    collectReturnVars(() => {
+      emitted = emitSolidWithMappings({
+        ...ir,
+        body: scopeReturnVars(ir.body),
+      });
+      return emitted.code;
+    });
+  // A `let` the caller declared at module scope would be shared by every
+  // instance of the component, so a handler of one instance would read the
+  // value or element another instance rendered last. The region declares
+  // its own `/var`s in place instead, once per instance and render.
+  if (vars.length > 0) {
+    emitted = declareInPlace(vars, emitted, "child");
   }
   if (needsEscapeImport) {
     hoistedImports.unshift({
@@ -595,7 +590,7 @@ function emitRegion(
     mappings: emitted.mappings,
     hoistedImports,
     hoistedDefines,
-    returnVars,
+    returnVars: [],
     dependencies: [...(ctx.dependencies ?? [])],
   };
 }

@@ -124,25 +124,6 @@ function bindReturnVar(node: { var: string }): void {
   returnVars?.add(node.var);
 }
 
-/**
- * The element references (`<div/el>`) among the current scope's
- * `returnVars`, scoped exactly like it: `collectReturnVars` creates it for
- * one compile and `inLazyScope` swaps it for one body. A region's top-level
- * ones are declared in place rather than handed to the caller, which
- * declares `returnVars` once at module scope (`compileSolidMx`).
- */
-let elementVars: Set<string> | null = null;
-
-/**
- * Records an element reference the current scope declares with one `let`,
- * as `bindReturnVar` records a call's `/var`, and marks it as an element
- * reference for `compileSolidMx`.
- */
-function bindElementVar(name: string): void {
-  returnVars?.add(name);
-  elementVars?.add(name);
-}
-
 /** A node whose `/var` a scope declares: a call, or an element reference. */
 type VarCall = Extract<IrNode, { kind: "Component" | "Element" }>;
 
@@ -604,11 +585,9 @@ function inLazyScope(
 ): MappedCode {
   const outer = lazyScope;
   const outerVars = returnVars;
-  const outerElementVars = elementVars;
   const own = outerVars ? new Set<string>() : null;
   lazyScope = true;
   returnVars = own;
-  elementVars = own ? new Set<string>() : null;
   try {
     const body = emit();
     if (!own || own.size === 0) return body;
@@ -616,7 +595,6 @@ function inLazyScope(
   } finally {
     lazyScope = outer;
     returnVars = outerVars;
-    elementVars = outerElementVars;
   }
 }
 
@@ -624,7 +602,7 @@ function inLazyScope(
  * `body` in an arrow called in place that declares `names` first,
  * `(() => { let n: any; return <>body</>; })()`, written `{…}` in the
  * `"child"` form: `inLazyScope`'s per-body declaration, and a region's
- * top-level element references (`compileSolidMx`).
+ * top-level `/var`s and element references (`compileSolidMx`).
  */
 export function declareInPlace(
   names: readonly string[],
@@ -662,8 +640,6 @@ export function collectReturnVars(
 ): {
   code: string;
   vars: string[];
-  /** The element references among `vars` (`<div/el>`). */
-  elementVars: string[];
   needsEscapeImport: boolean;
   needsAttrGuard: {
     value: boolean;
@@ -677,7 +653,6 @@ export function collectReturnVars(
   hoistedDefines: HoistedSolidDefine[];
 } {
   const outer = returnVars;
-  const outerElementVars = elementVars;
   const outerMappingSource = mappingSource;
   mappingSource = source;
   const outerEscapeUse = escapeUse;
@@ -686,7 +661,6 @@ export function collectReturnVars(
   const outerDefineBindings = defineBindings;
   const outerDefinePairs = definePairs;
   const collected = new Set<string>();
-  const collectedElements = new Set<string>();
   const collectedEscapeUse = { used: false };
   const collectedAttrGuardUse = {
     value: false,
@@ -699,7 +673,6 @@ export function collectReturnVars(
   };
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
-  elementVars = collectedElements;
   escapeUse = collectedEscapeUse;
   attrGuardUse = collectedAttrGuardUse;
   hoistedDefines = allowHoist ? collectedDefines : null;
@@ -709,14 +682,12 @@ export function collectReturnVars(
     return {
       code: emit(),
       vars: [...collected],
-      elementVars: [...collectedElements],
       needsEscapeImport: collectedEscapeUse.used,
       needsAttrGuard: collectedAttrGuardUse,
       hoistedDefines: collectedDefines,
     };
   } finally {
     returnVars = outer;
-    elementVars = outerElementVars;
     mappingSource = outerMappingSource;
     escapeUse = outerEscapeUse;
     attrGuardUse = outerAttrGuardUse;
@@ -2734,7 +2705,7 @@ const ELEMENT_REF_PARAM = "(__mxNode: Element)";
 
 /**
  * Binds an element reference (`<div/el>`, `<${"my-el"}/el>`): `el` joins the
- * scope's `/var` `let`s (`bindElementVar`), and a callback `ref`, written
+ * scope's `/var` `let`s (`bindReturnVar`), and a callback `ref`, written
  * after every other attribute, sets it to a getter of the node,
  * `ref={(__mxNode: Element) => { el = () => __mxNode; }}`. A callback ref
  * runs per row, per branch and per instance, with no hook. An authored
@@ -2746,7 +2717,7 @@ function elementRef(
   attrs: Attr[],
   name: string,
 ): { attrs: Attr[]; ref: MappedCode | string } {
-  bindElementVar(name);
+  bindReturnVar({ var: name });
   const callback = `${ELEMENT_REF_PARAM} => { ${name} = () => __mxNode; }`;
   const authored = [...attrs]
     .reverse()

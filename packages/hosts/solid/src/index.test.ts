@@ -1636,13 +1636,31 @@ describe("a unit that returns a value", () => {
     );
   });
 
-  it("still hands a region's call /var to the caller beside an element reference", () => {
+  // A `let` the bridge declared at module scope would be shared by every
+  // instance of the component, so the region declares its call `/var`s in
+  // place too, beside its element references.
+  it("declares a region's call /var in place beside an element reference, not in returnVars", () => {
     const result = compileSolidMx(
       "<counter/n start=1/><div/el/><button onClick() { el() }>${n}</button>",
       { filename: "fixture.solid.mx", customTags: { counter } },
     );
-    expect(result.returnVars).toEqual(["n"]);
+    expect(result.returnVars).toEqual([]);
+    expect(result.code).toBe(
+      "{(() => { let n: any, el: any; return <><$mx_Counter1 start={1} $mxReturn={(__mxV) => { n = __mxV; }} /><div ref={(__mxNode: Element) => { el = () => __mxNode; }}></div><button onClick={function () { el(); }}>{n}</button></>; })()}",
+    );
   });
+
+  it("declares a region's lone call /var in place, not in returnVars", () => {
+    const result = compileSolidMx("<counter/n start=1/><p>${n}</p>", {
+      filename: "fixture.solid.mx",
+      customTags: { counter },
+    });
+    expect(result.returnVars).toEqual([]);
+    expect(result.code).toBe(
+      "{(() => { let n: any; return <><$mx_Counter1 start={1} $mxReturn={(__mxV) => { n = __mxV; }} /><p>{n}</p></>; })()}",
+    );
+  });
+
 
   // Every `/var` is declared with one `let` at the component's head, so a
   // body that repeats a name another body binds gets a reserved name of its
