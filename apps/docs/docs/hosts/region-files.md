@@ -50,7 +50,7 @@ A `<define>` or a `/var` written directly in the region's markup sees the compon
 
 Two limits:
 
-- **A `<define>` not inside a body.** A `<define>` inside `<for>`, `<if>`, an attribute-tag body or another `<define>` is an error, because lifting it out would change its scope. Declare it directly in the region's markup. A `/var` in such a body is fine: it binds in that body's own scope, per row, branch or call, as in a whole file.
+- **A `<define>` not inside a body.** A `<define>` inside `<for>`, `<if>`, an attribute-tag body, a dynamic-tag body, a `<try>` body or another `<define>` is an error, because lifting it out would change its scope. Declare it directly in the region's markup. In an imported tag's or a `<define>` call's body a `<define>` is lifted, unless that body declares a `/var` or tag parameters, which is an error. A `/var` in such a body is fine: it binds in that body's own scope, per row, branch or call, as in a whole file.
 - **One name per region.** Two declarations of one name in a region fail with `Duplicate declaration "Row"` at the second. The same name in two regions of one file is fine.
 
 ## Imports MX adds
