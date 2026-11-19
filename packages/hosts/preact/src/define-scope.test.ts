@@ -301,9 +301,27 @@ describe("the typeCheck projection reads the public define name", () => {
       { typeCheck: true },
     ).code;
     expect(code).toMatch(
-      /const (__mxRet\d+) = \(__mxDef_Thing as typeof __mxDef_Thing\)\(.*\);[\s\S]*const double = \1\.value;[\s\S]*\{\1\.output\}/,
+      /const (__mxRet\d+) = \(__mxDef_Thing as typeof Thing extends unknown \? typeof __mxDef_Thing : never\)\(.*\);[\s\S]*const double = \1\.value;[\s\S]*\{\1\.output\}/,
     );
     expect(code).not.toContain("as typeof Thing)");
+  });
+
+  it("maps a returning define call's tag name to the public name", () => {
+    const source =
+      "<define/Twice|input: { n: number }|><return=input.n * 2/></define><Twice/v n=x/>";
+    const { code, mappings } = compilePreactMx(source, "/f/t.mx", {
+      typeCheck: true,
+    });
+    const located = mappings.map((m) => [
+      m.sourceStart,
+      source.slice(m.sourceStart, m.sourceEnd),
+      code.slice(m.generatedStart, m.generatedEnd),
+    ]);
+    expect(code).toContain(
+      "const __mxRet0 = (__mxDef_Twice as typeof Twice extends unknown ? typeof __mxDef_Twice : never)(",
+    );
+    expect(located).toContainEqual([67, "Twice", "Twice"]);
+    expect(located).not.toContainEqual([67, "Twice", "__mxDef_Twice"]);
   });
 });
 

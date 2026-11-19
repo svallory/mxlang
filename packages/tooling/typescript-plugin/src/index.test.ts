@@ -1369,11 +1369,20 @@ describe("MX language plugin", {
         ]),
     ).toEqual([[2304, 77, 8, false]]);
     // The define tag name is no expression, so only the emitter's own mapping
-    // reaches it: hover on `Twice` (67) reads the called function's type.
-    expect(service.getQuickInfoAtPosition(call, 68)?.textSpan).toEqual({
-      start: 67,
-      length: 5,
-    });
+    // reaches it: hover on `Twice` (67) reads the public define, and
+    // go-to-definition reaches the `<define/Twice>` tag through it.
+    const hover = service.getQuickInfoAtPosition(call, 68);
+    expect(hover?.textSpan).toEqual({ start: 67, length: 5 });
+    expect(
+      (hover?.displayParts ?? []).map((part) => part.text).join(""),
+    ).toMatch(/^const Twice/);
+    expect(
+      (service.getDefinitionAtPosition(call, 68) ?? []).map((location) => [
+        location.fileName,
+        location.textSpan.start,
+        location.textSpan.length,
+      ]),
+    ).toEqual([[call, 8, 5]]);
   });
 
   // On Solid the `let` declaring a `/var` maps to the authored `/var` too,

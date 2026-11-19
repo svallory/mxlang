@@ -103,7 +103,11 @@ Six facts worth knowing before editing it:
   (`HostRegionInput.typeCheck`): the private function runs, as in a build, so
   `mx-tsc`'s emitted JavaScript passes `x` to the body untouched, while the
   cast types the call and maps it by the public name (`__mxDef_Row` is
-  unmapped, so a hover and `noUnusedLocals` never name it). A call whose name a
+  unmapped, so a hover and `noUnusedLocals` never name it). A call to a define
+  whose body declares `<return>` is cast to the pair function's own type, still
+  through the public name: `(__mxDef_Row as typeof Row extends unknown ? typeof
+  __mxDef_Row : never)(x)`, since the public `Row` is the output-only wrapper
+  and has no `.value`. A call whose name a
   local binding shadows keeps the authored name in both modes.
   The wrapper exists to give TypeScript a contextual type and a *mapped* place to
   report on (the recomposed prop name is deliberately unmapped); never emit it

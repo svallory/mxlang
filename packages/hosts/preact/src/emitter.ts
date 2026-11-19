@@ -3283,14 +3283,23 @@ export class PreactEmitter implements Emitter<string> {
           : node.target.params.length > 0
             ? this.#propsObject(node)
             : "";
-      const own = defineFunctionName(node.target.name);
+      const publicName = node.target.name;
+      const own = defineFunctionName(publicName);
       // A define whose body declares `<return>`: its private function returns
       // `{ value, output }`. Under `typeCheck` the cast is to that function's
-      // own type, so `.value` and `.output` type-check; the public value's
-      // type is the output-only wrapper.
+      // own type, so `.value` and `.output` type-check (the public value's
+      // type is the output-only wrapper, which has no `.value`). The
+      // conditional's check type is a concrete function type, so it resolves
+      // at once to the pair function's type, and the only mapped name in it is
+      // the public one: hover and go-to-definition on the tag name read the
+      // public define, as a non-returning call's cast does.
       const pairCallee = (): MappedCode =>
         this.#publicDefines
-          ? concatMapped(`(${own} as typeof `, mapped(own, node.nameSpan), ")")
+          ? concatMapped(
+              `(${own} as typeof `,
+              mapped(publicName, node.nameSpan),
+              ` extends unknown ? typeof ${own} : never)`,
+            )
           : mapped(own, node.nameSpan);
       if (node.returnsValue && node.var) {
         // As a returning unit's `/var` call (below): two statements above
