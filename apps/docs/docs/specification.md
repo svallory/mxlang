@@ -2614,8 +2614,10 @@ arguments (`<${"Foo"}(1)/>`: `Tag does not support arguments.`), tag params
 destructured tag variable (`<${"Foo"}/{a}/>`:
 `Tag variables on native tags cannot be destructured.`). An empty `()` or `||`
 writes nothing and compiles. An identifier tag variable (`<${"my-el"}/el/>`)
-and attribute values keep the dynamic tag's handling. A name built from an
-expression is not checked.
+binds an element reference (§10, Element references) on html, Preact, React
+and Solid; elsewhere it keeps the dynamic tag's handling. Attribute values
+keep the dynamic tag's handling. A name built from an expression is not
+checked.
 
 **A capitalized value import that isn't a `.mx` default import lowers as a
 dynamic tag, not a direct call.** Measured (TODO
@@ -3739,7 +3741,10 @@ keeps the unit a component.
 
 **Element references.** A `/var` on a native element (`<div/el>`, and
 `<${"div"}/el>`, which is that element) binds an element reference, as in
-Marko 6.4.4: `el` is a function, and `el()` returns the rendered element
+Marko 6.4.4, and so does an identifier `/var` on a string-literal dynamic tag
+that names no native element (`<${"my-el"}/el>`, `<${"Foo"}/el>`), which
+Marko reads as a native tag, on html, Preact, React and Solid: `el` is a
+function, and `el()` returns the rendered element
 (typed by its tag name on Preact and React: `HTMLDivElement` for `<div>`, the
 SVG element type for an SVG tag, `HTMLScriptElement` and `HTMLStyleElement`
 for `<html-script>` and `<html-style>`, the `<script>` and `<style>` they
@@ -3761,7 +3766,8 @@ variable gets. **html** binds `el` to a function that throws "Element
 references can only be read in scripts and event handlers." when called, as
 Marko's html build does in debug: html never runs a handler or a `<script>`
 body, and the binding is there for a handler passed to a custom tag or a
-`<define>` call. **Preact and React** declare a slot and the getter among the
+`<define>` call; on a literal dynamic tag it binds the same function and no
+dynamic-tag value. **Preact and React** declare a slot and the getter among the
 scope's `/var` statements and fill the slot through a callback `ref` written
 after every other attribute, so the reference binds per `<for>` row and per
 branch; an authored `ref=` on the same element is handed the node too (called
@@ -3771,7 +3777,9 @@ spread on that element is replaced. A string or bare `ref` beside the reference
 attribute: "`ref` beside the element reference `/el` must be a function or a
 ref object (`ref=myRef`): React has no string refs, so a string or bare `ref`
 cannot receive the node." (on Preact the message names Preact). Marko refuses
-every `ref` on a native element. **Solid** declares `let el: any` where it
+every `ref` on a native element. On a literal dynamic tag the callback is
+passed as the `ref` key of the dynamic tag's props, which reach the rendered
+element. **Solid** declares `let el: any` where it
 declares every `/var` of the scope, and fills it through a callback `ref`
 written after every other attribute, `el = () => node`, so the reference binds
 per `<for>` row, per branch and per component instance (a `.solid.mx` region
@@ -3782,9 +3790,12 @@ authored `ref=` on the same element is composed through Solid's array ref,
 lvalue `ref=` (Solid's assignment form) is not assigned there; a `ref` key in a
 spread on that element is replaced; and an element reference in a component
 call's attribute-tag body binds in the enclosing scope, so a body the callee
-renders more than once shares one reference. **Hono** refuses `<div/el>` with
-the generic tag-variable refusal at the `/var`, and so do Angular and
-`.astro.mx` (below). Marko hoists a read outside the element's body, or above
+renders more than once shares one reference. On a literal dynamic tag the
+callback `ref` (composed the same way with an authored one) is written on the
+`<Dynamic>` element, and no returned value is bound. **Hono** refuses
+`<div/el>` with the generic tag-variable refusal at the `/var`, and so do
+Angular and `.astro.mx` (below); on Hono `<${"my-el"}/el>` binds the dynamic
+tag's value, unchanged. Marko hoists a read outside the element's body, or above
 the element, into a getter; MX does not: such a read is an unbound name in the
 emitted module. A read above the element in render position is not caught at
 compile time either: on html it fails when the template renders, as Marko's
