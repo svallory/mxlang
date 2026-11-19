@@ -1,0 +1,5 @@
+---
+packages: [preact, react, hono, solid]
+kind: Fixed
+---
+A string or bare `ref` on a native element (`<div ref="x"/>`, `<div ref/>`), on `<html-script>`/`<html-style>` and on a literal dynamic tag (`<${"my-el"} ref="x"/>`) is now a compile error at the attribute on Preact, React, Hono and Solid, as Marko refuses every `ref` on a native element: "`ref` on a native element must be a function or a ref object (`ref=myRef`): Preact has no string refs, so a string or bare `ref` cannot receive the node." (Solid: "a function or a variable"). Before, it was emitted as a JSX string prop (`ref="x"`, `ref={true}`), which Preact assigns `.current` on and throws in strict mode, Hono's server renderer writes as an HTML attribute, and Solid writes as a plain attribute. On Solid a string or bare `ref` beside an element reference (`<div/el ref="x"/>`) is refused too ("`ref` beside the element reference `/el` must be a function …"); before, it was kept beside the reference's callback `ref`, giving the element two `ref` props. A `ref` whose value is an expression (`ref=myRef`) is unchanged.

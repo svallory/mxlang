@@ -1803,8 +1803,16 @@ Preact and React keep `key`, `ref`, `className`, `htmlFor`, `acceptCharset`,
 `className`, `htmlFor` and `httpEquiv`; Solid keeps `ref`; html, Angular and
 Astro keep none. `dangerouslySetInnerHTML` is refused on every host, Preact,
 React and Hono included, because `$!{html}` is MX's raw-HTML form and lowers to
-that prop there. The colon forms are refused on every host. A host declares
-its names through the generic `acceptsReservedAttrNames` hook.
+that prop there. On Preact, React, Hono and Solid a kept `ref` must be an
+expression (`ref=myRef`): a string or bare `ref` (`<div ref="x"/>`,
+`<div ref/>`), which none of those frameworks can hand the node to, is a compile
+error at the attribute on a native element, `<html-script>`/`<html-style>` and
+a literal dynamic tag (`<${"my-el"} ref="x"/>`): "`ref` on a native element
+must be a function or a ref object (`ref=myRef`): Preact has no string refs, so
+a string or bare `ref` cannot receive the node." (React and Hono name
+themselves; Solid's says "a function or a variable"). The colon forms are
+refused on every host. A host declares its names through the generic
+`acceptsReservedAttrNames` hook.
 
 A dynamic tag whose name is a string literal with no placeholder and names a
 native element (`<${"div"}>`) is that element (§7, Dynamic tags), so the check
@@ -3801,8 +3809,12 @@ declares its element references in place rather than beside its call `/var`s).
 `el()` is not typed by tag name: a `/var` binds `any` on Solid. An authored
 `ref=` on the same element is composed through Solid's array ref,
 `ref={[authored, callback]}`, which calls every function in it, so an authored
-lvalue `ref=` (Solid's assignment form) is not assigned there; a `ref` key in a
-spread on that element is replaced; and an element reference in a component
+lvalue `ref=` (Solid's assignment form) is not assigned there; a string or bare
+`ref` beside the reference (`<div/el ref="x"/>`, `<div/el ref/>`) is a compile
+error at the `ref` attribute: "`ref` beside the element reference `/el` must
+be a function (`ref=myRef`): Solid has no string refs, so a string or bare
+`ref` cannot receive the node."; a `ref` key in a spread on that element is
+replaced; and an element reference in a component
 call's attribute-tag body binds in the enclosing scope, so a body the callee
 renders more than once shares one reference. On a literal dynamic tag the
 callback `ref` (composed the same way with an authored one) is written on the
