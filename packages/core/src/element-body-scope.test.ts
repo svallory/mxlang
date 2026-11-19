@@ -656,9 +656,10 @@ describe("a read of a tag variable two nested bodies declare", () => {
     "<div><const/Map=1/></div><div><const/Map=2/></div><p>${Map}</p>",
     // A body's tag variable binds the whole body, reads above it included.
     "<div><button onClick() { el() }>a</button><div/el/></div><div><div/el/></div>",
-    // A pattern default is bound by its body's declaration, shadowed by the
-    // expression's own param, or not a read at all (an object key).
-    "<div><const/x=1/><const/{a = x}=input/></div><div><const/x=2/></div>",
+    // A pattern default is bound by its body's declaration (a later sibling,
+    // so only the open body binds it), shadowed by the expression's own
+    // param, or not a read at all (an object key).
+    "<div><const/{a = x}=input/><const/x=1/></div><div><const/x=2/></div>",
     "<div><const/x=1/></div><div><const/x=2/></div><const/{a = ((x) => x)(1)}=input/>",
     "<div><const/x=1/></div><div><const/x=2/></div><const/{x: a = 1}=input/>",
   ])("compiles %s", (source) => {
