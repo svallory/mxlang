@@ -1509,6 +1509,93 @@ describe("MX language plugin", {
     expect(rename(32)).toEqual([]);
   });
 
+  // The binders Solid writes as plain strings in a region `<define>` body (a
+  // `<for>`'s params, a call's content params) reach the editor only through
+  // the hoisted define's recorded mappings; the same `<for>` outside the
+  // define, with other names, is the control.
+  it("maps the <for> and content params inside a Solid region <define>", () => {
+    const directory = `${here}/fixtures/solid-policy`;
+    const view = `${directory}/view.solid.mx`;
+    const consumer = `${directory}/index.ts`;
+    const service = createPluginService(
+      {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
+        [view]:
+          "export const view = <ul><define/Box|input|>${input.content(1)}</define><define/Row|xs|><for|r, i| of=xs><p>${r}${i}</p></for><Box|v|>${v}</Box></define><Row([1])/><for|s, j| of=[2]><p>${s}${j}</p></for></ul>;\n",
+        [consumer]: 'import "./view.solid.mx";\n',
+      },
+      [consumer],
+    );
+    const sites = (
+      locations: readonly ts.DocumentSpan[] | undefined,
+    ): [string, number, number][] =>
+      (locations ?? [])
+        .map((location): [string, number, number] => [
+          location.fileName,
+          location.textSpan.start,
+          location.textSpan.length,
+        ])
+        .sort((left, right) => left[1] - right[1]);
+    const rename = (at: number) =>
+      sites(service.findRenameLocations(view, at, false, false, {}));
+    const definition = (at: number) =>
+      sites(service.getDefinitionAtPosition(view, at));
+
+    // Inside the define: `r` declared at 92, read at 109; `i` at 95, read
+    // at 113; the content param `v` at 130, read at 135. Outside it: `s` at
+    // 168, read at 186; `j` at 171, read at 190.
+    const both = (binder: number, read: number) => [
+      [view, binder, 1],
+      [view, read, 1],
+    ];
+    const navigation = (
+      [
+        [92, 109],
+        [95, 113],
+        [130, 135],
+        [168, 186],
+        [171, 190],
+      ] as const
+    ).map(([binder, read]) => ({
+      binder,
+      definition: definition(read),
+      renameRead: rename(read),
+      renameBinder: rename(binder),
+    }));
+    expect(navigation).toEqual([
+      {
+        binder: 92,
+        definition: [[view, 92, 1]],
+        renameRead: both(92, 109),
+        renameBinder: both(92, 109),
+      },
+      {
+        binder: 95,
+        definition: [[view, 95, 1]],
+        renameRead: both(95, 113),
+        renameBinder: both(95, 113),
+      },
+      {
+        binder: 130,
+        definition: [[view, 130, 1]],
+        renameRead: both(130, 135),
+        renameBinder: both(130, 135),
+      },
+      {
+        binder: 168,
+        definition: [[view, 168, 1]],
+        renameRead: both(168, 186),
+        renameBinder: both(168, 186),
+      },
+      {
+        binder: 171,
+        definition: [[view, 171, 1]],
+        renameRead: both(171, 190),
+        renameBinder: both(171, 190),
+      },
+    ]);
+  });
+
   describe("custom tag discovery", () => {
     const scratches: string[] = [];
 
