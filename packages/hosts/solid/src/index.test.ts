@@ -1617,6 +1617,25 @@ describe("a unit that returns a value", () => {
     ]);
   });
 
+  it("compiles a hoisted <define> body whose handler param names a type", () => {
+    const result = compileSolidMx(
+      "<define/D><button onClick(e: MouseEvent) { e }/></define><D/>",
+      { filename: "fixture.solid.mx" },
+    );
+    expect(result.hoistedDefines[0]?.code).toContain("e: MouseEvent");
+  });
+
+  it("still refuses a hoisted <define> body that reads a free name through typeof", () => {
+    expect(() =>
+      compileSolidMx(
+        "<define/D><button onClick(e: typeof missing) { e }/></define><D/>",
+        { filename: "fixture.solid.mx" },
+      ),
+    ).toThrow(
+      "`<define/D>` is hoisted to module scope and cannot close over `missing`, a value local to this region; pass it as a param instead",
+    );
+  });
+
   it("still hands a region's call /var to the caller beside an element reference", () => {
     const result = compileSolidMx(
       "<counter/n start=1/><div/el/><button onClick() { el() }>${n}</button>",

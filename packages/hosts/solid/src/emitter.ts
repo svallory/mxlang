@@ -2653,13 +2653,9 @@ function isIdentifier(text: string): boolean {
 
 /**
  * The parameter list of an element reference's callback `ref`
- * (`elementRef`). Its `Element` is a type annotation the emitter writes, not
- * a value the author reads, so the hoisted-define capture check reads the
- * body with this text replaced by `ELEMENT_REF_PARAM_UNTYPED`: a `<define>`
- * body holding `<div/el>` is not refused for "closing over" `Element`.
+ * (`elementRef`).
  */
 const ELEMENT_REF_PARAM = "(__mxNode: Element)";
-const ELEMENT_REF_PARAM_UNTYPED = "(__mxNode)";
 
 /**
  * Binds an element reference (`<div/el>`, `<${"my-el"}/el>`): `el` joins the
@@ -3574,19 +3570,15 @@ export class SolidEmitter implements Emitter<string> {
       ? new Set(defineBindings.values())
       : null;
     // Names read only as a tag (`<Show>`, `<Errored>`) are imported
-    // components, not captures; text Babel cannot parse is the emitter's own
-    // bug, read as no names.
-    // An element reference's generated `(__mxNode: Element)` is read
-    // untyped (`ELEMENT_REF_PARAM`): its `Element` is the emitter's type
-    // annotation, not a region local.
-    const checkedBody = bodyCode.replaceAll(
-      ELEMENT_REF_PARAM,
-      ELEMENT_REF_PARAM_UNTYPED,
-    );
+    // components, not captures, and a name read only in a type (`MouseEvent`
+    // in `(e: MouseEvent)`, the `Element` of an element reference's
+    // generated `(__mxNode: Element)`) is erased and names no value; a
+    // `typeof` query still reads its value. Text Babel cannot parse is the
+    // emitter's own bug, read as no names.
     const captured = [
       ...(freeIdentifiersInProgram(
-        returnCode ? `[${checkedBody}, ${returnCode}]` : checkedBody,
-        { jsxTagNames: false },
+        returnCode ? `[${bodyCode}, ${returnCode}]` : bodyCode,
+        { jsxTagNames: false, typePositions: false },
       ) ?? []),
     ].filter(
       (freeName) =>
