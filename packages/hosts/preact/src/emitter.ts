@@ -547,6 +547,15 @@ function defineFunctionName(name: string): string {
   return `__mxDef_${name}`;
 }
 
+/** The tag an element is emitted as: `<html-script>`/`<html-style>` render `<script>`/`<style>`. */
+function emittedTag(name: "html-script" | "html-style"): "script" | "style";
+function emittedTag(name: string): string;
+function emittedTag(name: string): string {
+  if (name === "html-script") return "script";
+  if (name === "html-style") return "style";
+  return name;
+}
+
 function fail(message: string, node: { loc: Position }): never {
   throw new TranslateError(message, node.loc.line, node.loc.column);
 }
@@ -2752,7 +2761,7 @@ export class PreactEmitter implements Emitter<string> {
   ): { attrs: Attr[]; ref: MappedCode } {
     this.#claimName(name, undefined, node.loc);
     const slot = this.#generatedName("El");
-    const type = `__MxElement<${JSON.stringify(node.name)}>`;
+    const type = `__MxElement<${JSON.stringify(emittedTag(node.name))}>`;
     this.#varStatements.push(
       `let ${slot}: ${type} | null = null;`,
       `const ${name} = (): ${type} => ${slot}!;`,
@@ -2794,11 +2803,7 @@ export class PreactEmitter implements Emitter<string> {
     ref: MappedCode | string = "",
   ): void {
     if (node.name === "html-script" || node.name === "html-style") {
-      this.#htmlScript(
-        node,
-        node.name === "html-script" ? "script" : "style",
-        ref,
-      );
+      this.#htmlScript(node, emittedTag(node.name), ref);
       return;
     }
     rejectMixedRaw(node.children);

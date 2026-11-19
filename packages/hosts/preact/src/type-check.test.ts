@@ -231,6 +231,20 @@ describe("an element reference (`<div/el>`) in the emitted TSX", () => {
       expect(diagnosticsOf(`${code}\n${declaration}`, name)).toEqual([]);
     },
   );
+
+  it.each([
+    [
+      "html-script",
+      "<html-script/el>x</html-script><button onClick() { el().async = true }>go</button>\n",
+    ],
+    [
+      "html-style",
+      '<html-style/el>x</html-style><button onClick() { el().media = "print" }>go</button>\n',
+    ],
+  ])("types `el()` on <%s/el> by the element it emits", (_tag, source) => {
+    const { code } = compile(source);
+    expect(diagnosticsOf(code, name)).toEqual([]);
+  });
 });
 
 /** The projection's semantic diagnostics, checked as one TSX file. */
