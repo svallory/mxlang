@@ -72,6 +72,14 @@ function programShape(code: string): unknown {
   return shape(file.program);
 }
 
+/** Two exported components, each returning one MX region on its own line. */
+const two = (a: string, b: string) =>
+  print(
+    `export function A() { return (<div>${a}</div>); }\nexport function B() { return (<div>${b}</div>); }\n`,
+    "x.solid.mx",
+    { mxRegionCompile: solidRegionCompile },
+  ).code;
+
 describe("print", () => {
   it("prints the counter fixture to the same JSX as its twin", () => {
     const source = readFileSync(`${fixtures}counter/input.solid.mx`, "utf8");
@@ -133,6 +141,54 @@ describe("print", () => {
     const { code } = print(plain, "plain.tsx");
 
     expect(programShape(code)).toEqual(programShape(plain));
+  });
+
+  it("renames a call inside the second region's other define", () => {
+    const code = two(
+      "<define/B>b1</define><define/A>x<B/></define><A/>",
+      "<define/B>b2</define><define/A>y<B/></define><A/>",
+    );
+    expect(code).toContain(
+      "function __mx_DefineA1_2() {return <>y{__mx_DefineB1_2()}</>;}",
+    );
+    expect(code).toContain("<div>{__mx_DefineA1_2()}</div>");
+  });
+
+  it("does not share identical text whose call the second region renamed", () => {
+    const code = two(
+      "<define/B>b1</define><define/A><B/></define><A/>",
+      "<define/B>b2</define><define/A><B/></define><A/>",
+    );
+    expect(code).toContain("function __mx_DefineB1() {");
+    expect(code).toContain("function __mx_DefineA1() {");
+    expect(code).toContain("function __mx_DefineB1_2() {");
+    expect(code).toContain(
+      "function __mx_DefineA1_2() {return <>{__mx_DefineB1_2()}</>;}",
+    );
+    expect(code).toContain("<div>{__mx_DefineA1()}</div>");
+    expect(code).toContain("<div>{__mx_DefineA1_2()}</div>");
+  });
+
+  it("renames a <return> define's /var wrapper and its parameter types", () => {
+    const code = two(
+      `<define/Row><return=1/>a</define><Row/v/>\${v}`,
+      `<define/Row><return=2/>b</define><Row/w/>\${w}`,
+    );
+    expect(code).toContain(
+      "function __mx_DefineRow1(...a: Parameters<typeof __mx_DefineRow2>) {return __mx_DefineRow2(...a).output;}",
+    );
+    expect(code).toContain(
+      "function __mx_DefineRow1_2(...a: Parameters<typeof __mx_DefineRow2_2>) {return __mx_DefineRow2_2(...a).output;}",
+    );
+    expect(code).toContain(
+      'function __mx_DefineRow3_2(p: {a: Parameters<typeof __mx_DefineRow2_2>;v: (value: ReturnType<typeof __mx_DefineRow2_2>["value"]) => void;}) {const r = __mx_DefineRow2_2(...p.a);',
+    );
+    expect(code).toContain(
+      "<__mx_DefineRow3 a={[]} v={(__mxV) => {v = __mxV;}} />",
+    );
+    expect(code).toContain(
+      "<__mx_DefineRow3_2 a={[]} v={(__mxV) => {w = __mxV;}} />",
+    );
   });
 
   it("forwards `mx` and `mxRegionCompile` to `parse` for a non-.solid.mx filename", () => {

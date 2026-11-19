@@ -237,11 +237,11 @@ function hoistRegionImports(file: File, filename: string): void {
   // gensym is only unique *within its own region* — a host has no
   // visibility of another region's choices — so two regions in one file
   // each declaring `<define/Row>` can independently mint the identical
-  // binding. `defineRange` pairs each entry with the region it came from,
-  // so the collision pass below can rename both the declaration and its
-  // in-region reference together.
-  const hoistedDefineNodes: HoistedDefine[] = [];
-  const defineRange = new Map<HoistedDefine, Array<[number, number]>>();
+  // binding. Each region is kept with its root node and its entries in the
+  // host's order, so the collision pass below can rename, per region, the
+  // declaration, the region's own references and the references in the
+  // region's other hoisted defines together.
+  const defineRegions: Array<{ root: unknown; defines: HoistedDefine[] }> = [];
   // A `/var` inside a region binds a value the region's own JSX has no
   // statement position for, so the module declares the `let` and the
   // region's callback prop assigns it (design §2.4). Same channel as the
@@ -273,19 +273,8 @@ function hoistRegionImports(file: File, filename: string): void {
     )?.mx;
     if (mx?.range) regions.push(mx.range);
     for (const entry of mx?.hoistedImports ?? []) hoisted.push(entry);
-    for (const entry of mx?.hoistedDefines ?? []) {
-      // A host helper shared by every region (a fixed binding with identical
-      // text) is declared once, not renamed into a copy per region.
-      const kept = hoistedDefineNodes.find(
-        (one) => one.binding === entry.binding && one.code === entry.code,
-      );
-      if (kept) {
-        // Its references still need the collision rename if `kept` is renamed.
-        if (mx?.range) defineRange.get(kept)?.push(mx.range);
-        continue;
-      }
-      hoistedDefineNodes.push(entry);
-      defineRange.set(entry, mx?.range ? [mx.range] : []);
+    if (mx?.hoistedDefines?.length) {
+      defineRegions.push({ root: record, defines: mx.hoistedDefines });
     }
     for (const name of mx?.returnVars ?? []) returnVars.add(name);
     for (const key of Object.keys(record)) {
@@ -365,67 +354,80 @@ function hoistRegionImports(file: File, filename: string): void {
     }
   }
 
-  if (hoistedDefineNodes.length === 0) return;
-
-  // Parsed up front, before any collision rename, so a rename can flip the
-  // declaration's `id.name` directly on the AST rather than pattern-matching
-  // `entry.code` as text — the latter ties this pass to the exact string
-  // `SolidEmitter.define` happens to generate today (`function <name>(`),
-  // which already broke once (`$` is a regex metacharacter that silently
-  // never matched) and would break again for any future generator shape (an
-  // arrow function, a multi-line signature) that still satisfies
-  // `HoistedDefine.code`'s contract without matching that one pattern.
-  const parsedDefines = hoistedDefineNodes.map((entry) =>
-    babelParse(entry.code, {
-      sourceType: "module",
-      plugins: MX_DEFAULT_PLUGINS,
-    }),
-  );
+  if (defineRegions.length === 0) return;
 
   // A hoisted define's gensym is only unique *within its own region* — a
   // host has no visibility of another region's choices — so two regions in
   // one file each declaring `<define/Row>` can independently mint the
   // identical binding (`__mx_DefineRow1`), which would otherwise splice two
   // functions of the same name into one module scope (a `SyntaxError`,
-  // duplicate lexical/function binding). Rename every collision but the
-  // first occurrence, against a pool seeded with every binding this module
-  // already uses (so a renamed define also can't collide with an authored
-  // name or an already-placed hoisted import).
+  // duplicate lexical/function binding). Each region is placed in document
+  // order with a map of its own renames, against a pool seeded with every
+  // binding this module already uses (so a renamed define also can't collide
+  // with an authored name or an already-placed hoisted import):
+  //
+  // - Each entry's snippet is parsed once, so a rename flips the
+  //   declaration's `id.name` on the AST rather than pattern-matching
+  //   `entry.code` as text (`function <name>(` broke once on `$`, a regex
+  //   metacharacter, and would break on any other generator shape).
+  // - The references in an entry's snippet to a define the same region
+  //   renamed earlier are renamed first: a host lists a define after every
+  //   define its body calls.
+  // - An entry is shared with an already placed one only when its binding,
+  //   its text and the renames its references took are all equal, so a host
+  //   helper every region emits identically is declared once, and a body
+  //   that calls a different region's define is never shared.
+  // - Otherwise a colliding binding is renamed `<binding>_N`.
+  // - The region's own references are renamed last, by walking its root.
   const takenBindings = new Set<string>();
   for (const entry of hoisted) takenBindings.add(entry.binding);
   for (const name of moduleBindingNames(program.body)) {
     takenBindings.add(name);
   }
-  hoistedDefineNodes.forEach((entry, index) => {
-    if (!takenBindings.has(entry.binding)) {
-      takenBindings.add(entry.binding);
-      return;
+  // Effective key -> final binding of each placed entry.
+  const placedKeys = new Map<string, string>();
+  const placed: Array<ReturnType<typeof babelParse>> = [];
+  for (const region of defineRegions) {
+    const renames = new Map<string, string>();
+    for (const entry of region.defines) {
+      const snippet = babelParse(entry.code, {
+        sourceType: "module",
+        plugins: MX_DEFAULT_PLUGINS,
+      });
+      const applied =
+        renames.size > 0
+          ? renameRegionReferences(snippet.program, renames)
+          : new Set<string>();
+      const key = JSON.stringify([
+        entry.binding,
+        entry.code,
+        [...applied].sort().map((name) => [name, renames.get(name)]),
+      ]);
+      const shared = placedKeys.get(key);
+      if (shared !== undefined) {
+        if (shared !== entry.binding) renames.set(entry.binding, shared);
+        continue;
+      }
+      let binding = entry.binding;
+      if (takenBindings.has(binding)) {
+        binding = freshDefineBinding(entry.binding, takenBindings);
+        const fn = snippet.program.body[0] as
+          | { id?: { name?: string } }
+          | undefined;
+        if (fn?.id) fn.id.name = binding;
+        renames.set(entry.binding, binding);
+      }
+      takenBindings.add(binding);
+      placedKeys.set(key, binding);
+      // Where the entry's mappings land in its printed text, measured now,
+      // after the renames and while the snippet still has its own
+      // locations, which `detachLocations` removes below (`printAst` rebases
+      // them onto the printed module).
+      recordHoistedDefineMappings(file, snippet, entry);
+      placed.push(snippet);
     }
-    const ranges = defineRange.get(entry) ?? [];
-    const fresh = freshDefineBinding(entry.binding, takenBindings);
-    takenBindings.add(fresh);
-    const fn = parsedDefines[index]?.program.body[0] as
-      | { id?: { name?: string } }
-      | undefined;
-    if (fn?.id) fn.id.name = fresh;
-    if (ranges.length > 0) {
-      renameRegionReferences(
-        program.body,
-        new Map([[entry.binding, fresh]]),
-        ranges,
-      );
-    }
-    entry.binding = fresh;
-  });
-
-  // Where each entry's mappings land in its printed text, measured now,
-  // after the collision rename and while the parsed snippet still has its
-  // own locations, which `detachLocations` removes below (`printAst` rebases
-  // them onto the printed module).
-  hoistedDefineNodes.forEach((entry, index) => {
-    const snippet = parsedDefines[index];
-    if (snippet) recordHoistedDefineMappings(file, snippet, entry);
-  });
+    if (renames.size > 0) renameRegionReferences(region.root, renames);
+  }
 
   // Placed after the module's import block (including any import this pass
   // just spliced in above, so a define calling a discovered tag closes over
@@ -438,7 +440,7 @@ function hoistRegionImports(file: File, filename: string): void {
     0,
     // A host helper may be several declarations (the attribute-tag record
     // helper declares a type, constants and functions); every one is kept.
-    ...parsedDefines.flatMap((one) =>
+    ...placed.flatMap((one) =>
       one.program.body.map((statement) => detachLocations(statement)),
     ),
   );
@@ -632,6 +634,17 @@ const BINDING_KEYS = new Set([
   "key",
 ]);
 
+/** Mints `<binding>_2`, `<binding>_3`, ... until one is not in `taken`. */
+function freshDefineBinding(
+  binding: string,
+  taken: ReadonlySet<string>,
+): string {
+  let n = 2;
+  let candidate = `${binding}_${n}`;
+  while (taken.has(candidate)) candidate = `${binding}_${++n}`;
+  return candidate;
+}
+
 /**
  * Points a dropped generated binding's references at the author's own name.
  *
@@ -651,25 +664,21 @@ const BINDING_KEYS = new Set([
  *
  * `JSXIdentifier` counts alongside `Identifier`: a region lowers to JSX, so
  * its tag reference (`<$mx_Icon1 …/>`) is the former, and that is the shape
- * this rename exists for.
+ * this rename exists for. A name inside a binding's type annotation or a
+ * parameter default is a read and is renamed.
+ *
+ * Without `regions`, every node under `root` is renamed whatever its offsets:
+ * the define pass walks one region's root, or one hoisted snippet, whole.
+ * Returns the original names it replaced.
  */
-/** Mints `<binding>_2`, `<binding>_3`, ... until one is not in `taken`. */
-function freshDefineBinding(
-  binding: string,
-  taken: ReadonlySet<string>,
-): string {
-  let n = 2;
-  let candidate = `${binding}_${n}`;
-  while (taken.has(candidate)) candidate = `${binding}_${++n}`;
-  return candidate;
-}
-
 function renameRegionReferences(
   root: unknown,
-  renames: Map<string, string>,
-  regions: ReadonlyArray<[number, number]>,
-): void {
+  renames: ReadonlyMap<string, string>,
+  regions?: ReadonlyArray<[number, number]>,
+): Set<string> {
+  const replaced = new Set<string>();
   const inRegion = (node: Record<string, unknown>): boolean => {
+    if (!regions) return true;
     const start = node.start;
     if (typeof start !== "number") return false;
     return regions.some(([from, to]) => start >= from && start < to);
@@ -688,11 +697,16 @@ function renameRegionReferences(
     const type = record.type;
 
     if (type === "Identifier" || type === "JSXIdentifier") {
+      // A declared name's type reads other names: `p: typeof X`.
+      walk(record.typeAnnotation, false);
       if (binding || !inRegion(record)) return;
       const name = record.name;
       if (typeof name !== "string") return;
       const replacement = renames.get(name);
-      if (replacement) record.name = replacement;
+      if (replacement) {
+        record.name = replacement;
+        replaced.add(name);
+      }
       return;
     }
 
@@ -714,10 +728,22 @@ function renameRegionReferences(
       ) {
         continue;
       }
+      // A type annotation (`...a: Parameters<typeof X>`), its type
+      // arguments (`<typeof X>`, `params` like a declaration's) and a
+      // parameter default (`n = X`) read names even under a binding position.
+      if (
+        key === "typeAnnotation" ||
+        (key === "params" && type === "TSTypeParameterInstantiation") ||
+        (key === "right" && type === "AssignmentPattern")
+      ) {
+        walk(record[key], false);
+        continue;
+      }
       walk(record[key], binding || BINDING_KEYS.has(key));
     }
   };
   walk(root, false);
+  return replaced;
 }
 
 /**

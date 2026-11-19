@@ -1090,10 +1090,34 @@ describe("mxRegionCompile: hoisted define mappings", () => {
             },
     });
     expect(printed.code).toContain("function __mx_DefineRow1_2(k)");
+    expect(printed.code).toContain("<i>{__mx_DefineRow1_2(2)}</i>");
     expect(rows(printed)).toEqual([
       ["__mx_DefineRow1", 50, undefined],
       ["n", 60, undefined],
       ["k", 95, undefined],
     ]);
+  });
+
+  it("renames a reference inside a region's other hoisted define and does not share it", () => {
+    const A =
+      "function __mx_DefineA1(p: typeof __mx_DefineB1) { return <u>{__mx_DefineB1()}</u>; }";
+    const region = (tag: string, text: string) => ({
+      code: `<${tag}>{__mx_DefineA1(__mx_DefineB1)}</${tag}>`,
+      hoistedDefines: [
+        {
+          code: `function __mx_DefineB1() { return "${text}"; }`,
+          binding: "__mx_DefineB1",
+        },
+        { code: A, binding: "__mx_DefineA1" },
+      ],
+    });
+    const printed = print("const a = <p/>;\nconst b = <i/>;\n", "x.solid.mx", {
+      mxRegionCompile: (input) =>
+        input.source.startsWith("<p") ? region("p", "b1") : region("i", "b2"),
+    });
+    expect(printed.code).toContain(
+      "function __mx_DefineA1_2(p: typeof __mx_DefineB1_2) {return <u>{__mx_DefineB1_2()}</u>;}",
+    );
+    expect(printed.code).toContain("<i>{__mx_DefineA1_2(__mx_DefineB1_2)}</i>");
   });
 });
