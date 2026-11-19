@@ -2996,7 +2996,15 @@ describe("spawned sources guard", () => {
     const sources = new Map<string, string>();
     for (const f of listed.filter((f) => VITEST_TEST_FILE.test(f))) {
       const text = readFileSync(resolve(ROOT, f), "utf8");
-      if (/\b(?:spawn|exec|fork)/.test(text)) sources.set(f, text);
+      // A spawn name, but not a RegExp's `.exec(`: a member `.exec` of
+      // child_process takes a command string, never a path to a source.
+      if (
+        /(?<![\w$.])(?:spawn|exec|fork)|\.(?:spawn|fork|execFile|execSync)/.test(
+          text,
+        )
+      ) {
+        sources.set(f, text);
+      }
     }
     repoReads = scanSpawnedSources(sources, new Set(sourceTargets(listed)));
     return repoReads;
