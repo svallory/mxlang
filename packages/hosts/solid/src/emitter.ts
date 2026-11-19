@@ -133,6 +133,32 @@ let renamedVars: Map<string, string> | null = null;
 const VAR_DECLARATION_USE = { navigation: true, semantic: true } as const;
 
 /**
+ * One binder (a param a `<define>`, `<for>`, call content, attribute tag or
+ * `<@catch>` declares) as Solid writes it: mapped onto its authored text as
+ * a declaration (navigation and hover, never diagnostics) when the text
+ * written is exactly the authored span's length, unmapped otherwise (a
+ * generated name, or text the emitter reshaped).
+ */
+function declaredParam(code: string, span: SourceSpan | undefined): MappedCode {
+  return span && span.sourceEnd - span.sourceStart === code.length
+    ? withUse(mapped(code, span), VAR_DECLARATION_USE)
+    : mapped(code, null);
+}
+
+/** A param list, each param through `declaredParam`, joined with `", "`. */
+function declaredParams(
+  params: readonly string[],
+  spans: readonly (SourceSpan | undefined)[] | undefined,
+): MappedCode {
+  return concatMapped(
+    ...params.flatMap((param, index) => [
+      index > 0 ? ", " : "",
+      declaredParam(param, spans?.[index]),
+    ]),
+  );
+}
+
+/**
  * Records a `/var` the current scope declares with one `let`: the
  * component's head (the module assembly), or the lazy body it sits in
  * (`inLazyScope`). A `/var` that repeats a name another body scope already
@@ -2461,7 +2487,12 @@ function attributeTagRenderable(tag: AttributeTag): MappedCode {
   if (!tag.hasBody) return concatMapped("undefined");
   const body = inVarScope(() => jsxValue(blockExpression(tag.block.children)));
   if (!tag.block.hasParams) return concatMapped("() => ", body);
-  return concatMapped(`(${tag.block.params.join(", ")}) => () => `, body);
+  return concatMapped(
+    "(",
+    declaredParams(tag.block.params, tag.block.paramSpans),
+    ") => () => ",
+    body,
+  );
 }
 
 /**
@@ -2656,23 +2687,36 @@ function attributeTagFor(
   nodes: AttributeTagNode[],
   contextual: boolean,
 ): MappedCode {
-  const [first = "item", second] = loop.params;
+  const [firstParam = "item", secondParam] = loop.params;
+  // `first` defaults to the generated `item` when no param is written; its
+  // span is then absent, so it stays unmapped.
+  const first = declaredParam(firstParam, loop.paramSpans?.[0]);
+  const second =
+    secondParam === undefined
+      ? undefined
+      : declaredParam(secondParam, loop.paramSpans?.[1]);
   const source = loop.source;
   const body = attributeTagFold(nodes, contextual);
-  const loopOver = (iterable: string, pattern: string): MappedCode =>
-    concatMapped(`for (const ${pattern} of ${iterable}) { `, body, "} ");
+  const loopOver = (
+    iterable: string,
+    pattern: string | MappedCode,
+  ): MappedCode =>
+    concatMapped("for (const ", pattern, ` of ${iterable}) { `, body, "} ");
   if (source.kind === "of") {
     const listVar = generatedName("List");
     const list = `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code})`;
     return second
-      ? loopOver(`${list}.entries()`, `[${second}, ${first}]`)
+      ? loopOver(
+          `${list}.entries()`,
+          concatMapped("[", second, ", ", first, "]"),
+        )
       : loopOver(list, first);
   }
   if (source.kind === "in") {
     const value = second ?? generatedName("Value");
     return loopOver(
       `Object.entries(${source.object.code} ?? {})`,
-      `[${first}, ${value}]`,
+      concatMapped("[", first, ", ", value, "]"),
     );
   }
 
@@ -2836,29 +2880,37 @@ function readsForParam(
  */
 function accessorParams(
   node: Extract<IrNode, { kind: "For" }>,
-  slots: readonly { param: string | undefined; accessor: boolean }[],
-): string[] {
-  const params: string[] = [];
+  slots: readonly {
+    param: string | undefined;
+    span: SourceSpan | undefined;
+    accessor: boolean;
+  }[],
+): MappedCode {
+  const params: MappedCode[] = [];
   const reads: { name: string; read: string }[] = [];
   const generated: string[] = [];
-  for (const { param, accessor } of slots) {
+  for (const { param, span, accessor } of slots) {
     if (param === undefined) continue;
     if (!accessor) {
-      params.push(param);
+      params.push(declaredParam(param, span));
       continue;
     }
     if (isIdentifier(param)) {
-      params.push(param.trim());
+      // Trimmed: `declaredParam`'s length check decides whether it maps.
+      params.push(declaredParam(param.trim(), span));
       reads.push({ name: param.trim(), read: `${param.trim()}()` });
       continue;
     }
+    // A pattern becomes a generated accessor, which maps to nothing.
     const row = generatedName("Row");
     generated.push(row);
-    params.push(row);
+    params.push(mapped(row, null));
     reads.push(...readsForParam(node, param, `${row}()`));
   }
   rewriteForBody(node, reads, generated);
-  return params;
+  return concatMapped(
+    ...params.flatMap((param, index) => [index > 0 ? ", " : "", param]),
+  );
 }
 
 function isIdentifier(text: string): boolean {
@@ -3129,7 +3181,13 @@ export class SolidEmitter implements Emitter<string> {
 
     const body = inLazyScope(() => jsxValue(blockExpression(contentNodes)));
     const children = node.content.hasParams
-      ? concatMapped(`{(${node.content.params.join(", ")}) => `, body, "}")
+      ? concatMapped(
+          "{(",
+          declaredParams(node.content.params, node.content.paramSpans),
+          ") => ",
+          body,
+          "}",
+        )
       : inLazyScope(() => renderWithNewEmitter(contentNodes), "child");
     this.#out.push(
       concatMapped(
@@ -3180,7 +3238,12 @@ export class SolidEmitter implements Emitter<string> {
     const contentValue = (): MappedCode => {
       const body = inLazyScope(() => jsxValue(blockExpression(contentNodes)));
       return node.content?.hasParams
-        ? concatMapped(`(${node.content.params.join(", ")}) => `, body)
+        ? concatMapped(
+            "(",
+            declaredParams(node.content.params, node.content.paramSpans),
+            ") => ",
+            body,
+          )
         : body;
     };
 
@@ -3522,7 +3585,13 @@ export class SolidEmitter implements Emitter<string> {
 
     const body = inLazyScope(() => jsxValue(blockExpression(contentNodes)));
     const children = node.content.hasParams
-      ? concatMapped(`{(${node.content.params.join(", ")}) => `, body, "}")
+      ? concatMapped(
+          "{(",
+          declaredParams(node.content.params, node.content.paramSpans),
+          ") => ",
+          body,
+          "}",
+        )
       : inLazyScope(() => renderWithNewEmitter(contentNodes), "child");
     // The fallback body must not itself declare tag params: those are
     // meaningful only to the resolved component/renderer, which does not
@@ -3636,8 +3705,12 @@ export class SolidEmitter implements Emitter<string> {
       // a same-key row is replaced.
       const rowIsAccessor = keyed !== "";
       const params = accessorParams(node, [
-        { param: first, accessor: rowIsAccessor },
-        { param: second, accessor: true },
+        {
+          param: first,
+          span: node.paramSpans?.[0],
+          accessor: rowIsAccessor,
+        },
+        { param: second, span: node.paramSpans?.[1], accessor: true },
       ]);
       this.#out.push(
         concatMapped(
@@ -3645,7 +3718,9 @@ export class SolidEmitter implements Emitter<string> {
           mappedExpr(node.source.list),
           "}",
           keyedAttr ?? keyed,
-          `>{(${params.join(", ")}) => `,
+          ">{(",
+          params,
+          ") => ",
           inLazyScope(() => jsxValue(blockExpression(node.children))),
           "}</For>",
         ),
@@ -3701,7 +3776,9 @@ export class SolidEmitter implements Emitter<string> {
       const fromAttr = node.source.from ? ` from={${from}}` : "";
       this.#out.push(
         concatMapped(
-          `<Repeat count={${count}}${fromAttr}>{(${node.params.join(", ")}) => `,
+          `<Repeat count={${count}}${fromAttr}>{(`,
+          declaredParams(node.params, node.paramSpans),
+          ") => ",
           body,
           "}</Repeat>",
         ),
@@ -3893,23 +3970,14 @@ export class SolidEmitter implements Emitter<string> {
     // written is exactly the authored span's length; the name maps whole
     // onto the authored name for hover only, since a call (`<Row/>`) is
     // emitted as the gensym and stays unmapped.
-    const declared = (code: string, span: SourceSpan | undefined) =>
-      span && span.sourceEnd - span.sourceStart === code.length
-        ? withUse(mapped(code, span), VAR_DECLARATION_USE)
-        : mapped(code, null);
     const typeParams = node.typeParams
       ? concatMapped(
           "<",
-          declared(node.typeParams.code, node.typeParams.span),
+          declaredParam(node.typeParams.code, node.typeParams.span),
           ">",
         )
       : "";
-    const params = concatMapped(
-      ...node.params.flatMap((param, index) => [
-        index > 0 ? ", " : "",
-        declared(param, node.paramSpans?.[index]),
-      ]),
-    );
+    const params = declaredParams(node.params, node.paramSpans);
     const name = (gensym: string) =>
       withUse(mapped(gensym, node.nameSpan ?? null), { semantic: true });
     const entry = (built: MappedCode, entryBinding: string) => ({
@@ -4059,9 +4127,9 @@ export class SolidEmitter implements Emitter<string> {
     const args = gensym("__mxArgs");
     this.#out.push(
       concatMapped(
-        `<Errored fallback={(${accessor}, ...${args}) => ((${params.join(
-          ", ",
-        )}) => `,
+        `<Errored fallback={(${accessor}, ...${args}) => ((`,
+        declaredParams(params, catchTag.block.paramSpans),
+        ") => ",
         caught,
         `)(${accessor}(), ...${args})}>`,
         loading,

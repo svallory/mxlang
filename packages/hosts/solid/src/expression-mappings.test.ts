@@ -143,6 +143,16 @@ describe("solid expression values", () => {
     }
   });
 
+  it("maps a <for>'s row and index binders", () => {
+    // The binder `i` maps as well as its read (before: only the read).
+    expect(pairs("<for|r, i| of=xs><p>${i}</p></for>")).toEqual([
+      ["xs", "xs"],
+      ["r", "r"],
+      ["i", "i"],
+      ["i", "i"],
+    ]);
+  });
+
   it("maps a method attribute's body, not its rewritten head", () => {
     const result = pairs(`${IMPORT}<Field onPick() { go(); }/>`);
     expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
@@ -500,5 +510,125 @@ describe("solid hoisted define mappings", () => {
       [12, "__mx_DefineTwice1", { semantic: true }],
     ]);
     expect(varCall && "mappings" in varCall).toBe(false);
+  });
+
+  // A binder Solid writes as a plain string (a `<for>`'s params, a call's
+  // content params, a `<@catch>`'s params) maps onto its authored text as a
+  // declaration; the emitted code is what it was before the mapping.
+  it("maps a <for of>'s row and index in a define body as declarations", () => {
+    const result = compileSolidMx(
+      "<ul><define/Row|xs|><for|r, i| of=xs><p>${r}${i}</p></for></define><Row([1])/></ul>",
+      { filename: "/fixtures/view.solid.mx" },
+    );
+    expect(result.code).toBe("<ul>{__mx_DefineRow1([1])}</ul>");
+    expect(result.hoistedDefines.map((entry) => entry.code)).toEqual([
+      "function __mx_DefineRow1(xs) { return <For each={xs}>{(r, i) => <p>{r}{i()}</p>}</For>; }",
+    ]);
+    expect(rows(result.hoistedDefines[0])).toEqual([
+      [12, "__mx_DefineRow1", { semantic: true }],
+      [16, "xs", USE],
+      [34, "xs", undefined],
+      [25, "r", USE],
+      [28, "i", USE],
+      [42, "r", undefined],
+      [46, "i", undefined],
+    ]);
+  });
+
+  it("maps a range <for>'s param in a define body as a declaration", () => {
+    const result = compileSolidMx(
+      "<ul><define/Row><for|n| from=0 to=2><p>${n}</p></for></define><Row/></ul>",
+      { filename: "/fixtures/view.solid.mx" },
+    );
+    expect(result.code).toBe("<ul>{__mx_DefineRow1()}</ul>");
+    expect(result.hoistedDefines.map((entry) => entry.code)).toEqual([
+      "function __mx_DefineRow1() { return <Repeat count={3} from={0}>{(n) => <p>{n}</p>}</Repeat>; }",
+    ]);
+    expect(rows(result.hoistedDefines[0])).toEqual([
+      [12, "__mx_DefineRow1", { semantic: true }],
+      [21, "n", USE],
+      [41, "n", undefined],
+    ]);
+  });
+
+  it("maps a call's content params in a define body as declarations", () => {
+    const result = compileSolidMx(
+      "<ul><define/Box|input|>${input.content(1)}</define><define/Row><Box|v|>${v}</Box></define><Row/></ul>",
+      { filename: "/fixtures/view.solid.mx" },
+    );
+    expect(result.code).toBe("<ul>{__mx_DefineRow1()}</ul>");
+    expect(result.hoistedDefines.map((entry) => entry.code)).toEqual([
+      "function __mx_DefineBox1(input) { return <>{() => { const __mxText0 = input.content(1); const __mxEscaped0 = __mxEscape(__mxText0); return __mxEscaped0 === undefined ? __mxText0 : __mxEscaped0; }}</>; }",
+      "function __mx_DefineRow1() { return <>{__mx_DefineBox1({ content: (v) => <>{() => { const __mxText1 = v; const __mxEscaped1 = __mxEscape(__mxText1); return __mxEscaped1 === undefined ? __mxText1 : __mxEscaped1; }}</> })}</>; }",
+    ]);
+    expect(rows(result.hoistedDefines[1])).toEqual([
+      [59, "__mx_DefineRow1", { semantic: true }],
+      [64, "__mx_DefineBox1", undefined],
+      [68, "v", USE],
+      [73, "v", undefined],
+    ]);
+  });
+
+  it("maps a <@catch>'s params in a define body as declarations", () => {
+    const result = compileSolidMx(
+      "<ul><define/Row><try><p>x</p><@catch|err|>${err.message}</@catch></try></define><Row/></ul>",
+      { filename: "/fixtures/view.solid.mx" },
+    );
+    expect(result.code).toBe("<ul>{__mx_DefineRow1()}</ul>");
+    expect(result.hoistedDefines.map((entry) => entry.code)).toEqual([
+      "function __mx_DefineRow1() { return <Errored fallback={(__mxErr, ...__mxArgs) => ((err) => <>{() => { const __mxText0 = err.message; const __mxEscaped0 = __mxEscape(__mxText0); return __mxEscaped0 === undefined ? __mxText0 : __mxEscaped0; }}</>)(__mxErr(), ...__mxArgs)}><Loading><p>x</p></Loading></Errored>; }",
+    ]);
+    expect(rows(result.hoistedDefines[0])).toEqual([
+      [12, "__mx_DefineRow1", { semantic: true }],
+      [37, "err", USE],
+      [44, "err.message", undefined],
+    ]);
+  });
+
+  // An attribute tag inside a region `<define>` body does not compile (the
+  // capture check reports the region's `__mxAttrTag` helper), so its binder is
+  // pinned where it compiles, on the region's own mappings: Solid records a
+  // binder wherever it writes one.
+  const regionRows = (result: ReturnType<typeof compileSolidMx>) =>
+    result.mappings.map((m) => [
+      m.sourceStart,
+      result.code.slice(m.generatedStart, m.generatedEnd),
+      m.use,
+    ]);
+
+  it("maps an attribute tag's params as declarations", () => {
+    const source =
+      "<ul><define/Box|input|>x</define><Box><@item|v|>${v}</@item></Box></ul>";
+    const result = compileSolidMx(source, {
+      filename: "/fixtures/view.solid.mx",
+    });
+    expect(result.code).toBe(
+      '<ul>{__mx_DefineBox1({ "item": __mxAttrTag({ content: ((v) => () => <>{() => { const __mxText0 = v; const __mxEscaped0 = __mxEscape(__mxText0); return __mxEscaped0 === undefined ? __mxText0 : __mxEscaped0; }}</>) as (...args: any[]) => any }) })}</ul>',
+    );
+    expect(regionRows(result)).toEqual([
+      [34, "__mx_DefineBox1", undefined],
+      [40, "{", undefined],
+      [45, "v", USE],
+      [50, "v", undefined],
+      [40, "}", undefined],
+    ]);
+  });
+
+  it("maps an attribute-tag <for>'s param as a declaration", () => {
+    const source =
+      "<ul><define/Box|input|>x</define><Box><for|i| of=xs><@item>${i}</@item></for></Box></ul>";
+    const result = compileSolidMx(source, {
+      filename: "/fixtures/view.solid.mx",
+    });
+    expect(result.code).toBe(
+      '<ul>{__mx_DefineBox1({ "item": (() => { let __mxAttrTagAcc; for (const i of ((__mxList1) => __mxList1 ? [...__mxList1] : [])(xs)) { __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: () => <>{() => { const __mxText0 = i; const __mxEscaped0 = __mxEscape(__mxText0); return __mxEscaped0 === undefined ? __mxText0 : __mxEscaped0; }}</> }); } return __mxAttrTagAcc; })() })}</ul>',
+    );
+    expect(regionRows(result)).toEqual([
+      [34, "__mx_DefineBox1", undefined],
+      [43, "i", USE],
+      [54, "{", undefined],
+      [61, "i", undefined],
+      [54, "}", undefined],
+    ]);
   });
 });
