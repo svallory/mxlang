@@ -115,6 +115,14 @@ describe("an element reference (`<div/el>`) is the rendered element in a handler
       '<${"my-el"}/el/><button onClick() { el().dataset.hit = "1" }>go</button>',
     dynamicAuthoredRef:
       '<${"my-el"}/el ref=input.r/><button onClick() { el().dataset.hit = "1" }>go</button>',
+    // An element body is its own scope: `input` is the element inside it and
+    // the template's input outside it, also inside an `<if>` around it.
+    nestedInput:
+      '<p>${typeof input.r}</p><div><div/input/><button onClick() { input().dataset.hit = "1" }>go</button></div>',
+    nestedInputInIf:
+      '<if=true><div><div/input/><button onClick() { input().dataset.hit = "1" }>go</button></div><p>${typeof input.r}</p></if>',
+    nestedDynamicInput:
+      '<div><${"my-el"}/input/><button onClick() { input().dataset.hit = "1" }>go</button></div><p>${typeof input.r}</p>',
   } as const;
   const files = {} as Record<keyof typeof SOURCES, string>;
 
@@ -157,7 +165,7 @@ console.log(JSON.stringify(out));
     );
   });
 
-  it("a click reaches the element, per row in a <for>, with an authored ref composed", () => {
+  it("a click reaches the element, per row in a <for>, with an authored ref composed, and named input in an element body", () => {
     const result = run(
       REF_CLIENT,
       files.base,
@@ -167,6 +175,9 @@ console.log(JSON.stringify(out));
         ["authoredRef", files.authoredRef, 0],
         ["dynamic", files.dynamic, 0],
         ["dynamicAuthoredRef", files.dynamicAuthoredRef, 0],
+        ["nestedInput", files.nestedInput, 0],
+        ["nestedInputInIf", files.nestedInputInIf, 0],
+        ["nestedDynamicInput", files.nestedDynamicInput, 0],
       ]),
     );
     expect(result).toEqual({
@@ -186,6 +197,15 @@ console.log(JSON.stringify(out));
       dynamicAuthoredRef: {
         html: '<my-el data-hit="1"></my-el><button>go</button>',
         refIsMyEl: true,
+      },
+      nestedInput: {
+        html: '<p>function</p><div><div data-hit="1"></div><button>go</button></div>',
+      },
+      nestedInputInIf: {
+        html: '<div><div data-hit="1"></div><button>go</button></div><p>function</p>',
+      },
+      nestedDynamicInput: {
+        html: '<div><my-el data-hit="1"></my-el><button>go</button></div><p>function</p>',
       },
     });
   }, 30_000);

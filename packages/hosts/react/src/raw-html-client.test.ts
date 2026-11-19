@@ -109,6 +109,8 @@ const SOURCES = {
     '<section><button onClick() { throw new Error("boom") }>go</button></section>',
   dynamicElementRef:
     '<section><${"my-el"}/el/><button onClick() { el().dataset.hit = "1" }>go</button></section>',
+  nestedInputRef:
+    '<section><div><div/input/><button onClick() { input().dataset.hit = "1" }>go</button></div><p>${input.tag}</p></section>',
 } as const;
 
 let results: Record<
@@ -214,6 +216,15 @@ describe("an element reference (`<div/el>`) on React", () => {
       '<section><my-el data-hit="1"></my-el><button>go</button></section>',
     );
     expect(results.dynamicElementRef.errors).toEqual([]);
+  });
+
+  // An element body is its own scope: `input` is the element inside it and
+  // the template's input outside it.
+  it("named input in an element body, beside the template input", () => {
+    expect(results.nestedInputRef.client).toBe(
+      '<section><div><div data-hit="1"></div><button>go</button></div><p>article</p></section>',
+    );
+    expect(results.nestedInputRef.errors).toEqual([]);
   });
 });
 

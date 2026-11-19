@@ -2816,6 +2816,27 @@ export class PreactEmitter implements Emitter<string> {
     return { attrs, callback };
   }
 
+  /**
+   * Whether a whole-file compile must render this element body as its own
+   * scope (`#scoped`): a direct child binds an element reference named
+   * `input` (`<div/input/>`, `<${"my-el"}/input/>`). Its getter would
+   * otherwise join the component's `/var` statements beside the prologue's
+   * `const input`, and in Marko an element body is a scope of its own, so the
+   * template's `input` stays readable outside it. A deeper reference is
+   * checked when its own element is emitted. A region has no template
+   * `input`, and any other body keeps today's output.
+   */
+  #elementBodyBindsInput(children: readonly IrNode[]): boolean {
+    if (this.#region) return false;
+    return children.some(
+      (child) =>
+        (child.kind === "Element" && child.var === "input") ||
+        (child.kind === "Component" &&
+          child.elementRef === true &&
+          child.var === "input"),
+    );
+  }
+
   /** `ref`, an element reference's callback `ref`, is written after every other attribute. */
   #element(
     node: Extract<IrNode, { kind: "Element" }>,
@@ -2874,11 +2895,19 @@ export class PreactEmitter implements Emitter<string> {
       ? concatMapped()
       : content && this.#dialect.textareaContent === "children"
         ? concatMapped("{", content, "}")
-        : this.#render(
-            node.children,
-            undefined,
-            !RAW_TEXT_ELEMENTS.has(node.name),
-          );
+        : this.#elementBodyBindsInput(node.children)
+          ? this.#scoped(false, (scope) =>
+              scope.#render(
+                node.children,
+                undefined,
+                !RAW_TEXT_ELEMENTS.has(node.name),
+              ),
+            )
+          : this.#render(
+              node.children,
+              undefined,
+              !RAW_TEXT_ELEMENTS.has(node.name),
+            );
     if (children.code === "") {
       this.#out.push(concatMapped(`<${node.name}`, attrs, rawHtml, " />"));
       return;
