@@ -3748,59 +3748,58 @@ keeps the unit a component.
 `/var` binds a returning tag's value at the call site.
 
 **Element references.** A `/var` on a native element (`<div/el>`, and
-`<${"div"}/el>`, which is that element) binds an element reference, as in
-Marko 6.4.4, and so does an identifier `/var` on a string-literal dynamic tag
-that names no native element (`<${"my-el"}/el>`, `<${"Foo"}/el>`), which
-Marko reads as a native tag, on html, Preact, React, Hono and Solid: `el` is a
-function, and `el()` returns the rendered element
-(typed by its tag name on Preact, React and Hono, and on html in the type
-check that the TypeScript plugin and `mx-tsc` run: `HTMLDivElement` for
-`<div>`, the SVG element type for an SVG tag, `HTMLScriptElement` and
-`HTMLStyleElement` for `<html-script>` and `<html-style>` on Preact, React and
-Hono, the `<script>` and `<style>` they emit, `HTMLElement` for any other
-name). It is read
-only where the element exists: inside a `<script>` body, or inside a function
-given to an `on…` attribute of any tag or to a `<lifecycle>` hook, a function
-nested in one included. Every other read is a positioned compile error at the
-read, `MX_INVALID_TAG_VAR`: "`el` is an element reference. Element references
-can only be read in scripts and event handlers." That covers a placeholder, an
-attribute value, the element's own content and attributes, a `<log>` value, a
-dynamic tag name, and a function that is not a handler (`<const/f=() =>
-el()/>`). A write anywhere, a handler and a `<script>` body included, is
+`<${"div"}/el>`, which is that element) binds an element reference, as in Marko
+6.4.4, and so does an identifier `/var` on a string-literal dynamic tag that
+names no native element (`<${"my-el"}/el>`, `<${"Foo"}/el>`), which Marko reads
+as a native tag, on html, Preact, React, Hono and Solid: `el` is a function, and
+`el()` returns the rendered element (typed by its tag name on Preact, React and
+Hono, and on html in the type check that the TypeScript plugin and `mx-tsc` run:
+`HTMLDivElement` for `<div>`, the SVG element type for an SVG tag,
+`HTMLScriptElement` and `HTMLStyleElement` for `<html-script>` and
+`<html-style>` on Preact, React and Hono, the `<script>` and `<style>` they
+emit, `HTMLElement` for any other name). It is read only where the element
+exists: inside a `<script>` body, or inside a function given to an `on…`
+attribute of any tag or to a `<lifecycle>` hook, a function nested in one
+included. Every other read is a positioned compile error at the read,
+`MX_INVALID_TAG_VAR`: "`el` is an element reference. Element references can only
+be read in scripts and event handlers." That covers a placeholder, an attribute
+value, the element's own content and attributes, a `<log>` value, a dynamic tag
+name, and a function that is not a handler (`<const/f=() => el()/>`). A write
+anywhere, a handler and a `<script>` body included, is
 `MX_READONLY_BINDING_WRITE` at the assignment: "`el` is a tag variable on a
 native element (an element reference) and cannot be assigned to." A pattern
 (`<div/{a}/>`) is `MX_INVALID_TAG_VAR` at the `/var` on every host: "Tag
-variables on native tags cannot be destructured." A second element reference
-of the same name in one body is the duplicate-declaration error every tag
-variable gets. **html** binds `el` to a function that throws "Element
-references can only be read in scripts and event handlers." when called, as
-Marko's html build does in debug: html never runs a handler or a `<script>`
-body, and the binding is there for a handler passed to a custom tag or a
-`<define>` call; on a literal dynamic tag it binds the same function and no
-dynamic-tag value. **Preact, React and Hono** declare a slot and the getter among the
-scope's `/var` statements and fill the slot through a callback `ref` written
-after every other attribute, so the reference binds per `<for>` row and per
-branch; an authored `ref=` on the same element is handed the node too (called
-when it is a function, given it as `.current` otherwise), and a `ref` key in a
-spread on that element is replaced. A string or bare `ref` beside the reference
-(`<div/el ref="x"/>`, `<div/el ref/>`) is a compile error at the `ref`
-attribute: "`ref` beside the element reference `/el` must be a function or a
-ref object (`ref=myRef`): React has no string refs, so a string or bare `ref`
-cannot receive the node." (on Preact and Hono the message names that host). Marko refuses
-every `ref` on a native element. On a literal dynamic tag the callback is
-passed as the `ref` key of the dynamic tag's props, which reach the rendered
-element. On **Hono** the callback is passed only where a `document` exists
+variables on native tags cannot be destructured." A second element reference of
+the same name in one body is the duplicate-declaration error every tag variable
+gets. **html** binds `el` to a function that throws "Element references can only
+be read in scripts and event handlers." when called, as Marko's html build does
+in debug: html never runs a handler or a `<script>` body, and the binding is
+there for a handler passed to a custom tag or a `<define>` call; on a literal
+dynamic tag it binds the same function and no dynamic-tag value. **Preact, React
+and Hono** declare a slot and the getter among the scope's `/var` statements and
+fill the slot through a callback `ref` written after every other attribute, so
+the reference binds per `<for>` row and per branch; an authored `ref=` on the
+same element is handed the node too (called when it is a function, given it as
+`.current` otherwise), and a `ref` key in a spread on that element is replaced.
+A string or bare `ref` beside the reference (`<div/el ref="x"/>`,
+`<div/el ref/>`) is a compile error at the `ref` attribute: "`ref` beside the
+element reference `/el` must be a function or a ref object (`ref=myRef`): React
+has no string refs, so a string or bare `ref` cannot receive the node." (on
+Preact and Hono the message names that host). Marko refuses every `ref` on a
+native element. On a literal dynamic tag the callback is passed as the `ref` key
+of the dynamic tag's props, which reach the rendered element. On **Hono** the
+callback is passed only where a `document` exists
 (`typeof document === "undefined" ? undefined : callback`), because Hono's
 string renderer throws on a function `ref`: a server render skips it, with an
-authored `ref=` composed into it, and a server render in a process that
-defines a global `document` throws "Invalid prop 'ref' of type 'function'", as
-an authored function `ref=` does there. **Solid** declares `let el: any` where it
+authored `ref=` composed into it, and a server render in a process that defines
+a global `document` throws "Invalid prop 'ref' of type 'function'", as an
+authored function `ref=` does there. **Solid** declares `let el: any` where it
 declares every `/var` of the scope, and fills it through a callback `ref`
 written after every other attribute, `el = () => node`, so the reference binds
 per `<for>` row, per branch and per component instance (a `.solid.mx` region
-declares its element references in place rather than beside its call
-`/var`s). `el()` is not typed by tag name: a `/var` binds `any` on Solid. An
-authored `ref=` on the same element is composed through Solid's array ref,
+declares its element references in place rather than beside its call `/var`s).
+`el()` is not typed by tag name: a `/var` binds `any` on Solid. An authored
+`ref=` on the same element is composed through Solid's array ref,
 `ref={[authored, callback]}`, which calls every function in it, so an authored
 lvalue `ref=` (Solid's assignment form) is not assigned there; a `ref` key in a
 spread on that element is replaced; and an element reference in a component
@@ -3808,17 +3807,17 @@ call's attribute-tag body binds in the enclosing scope, so a body the callee
 renders more than once shares one reference. On a literal dynamic tag the
 callback `ref` (composed the same way with an authored one) is written on the
 `<Dynamic>` element, and no returned value is bound. Angular and `.astro.mx`
-refuse `<div/el>` with the generic tag-variable refusal at the `/var` (below). Marko hoists a read outside the element's body, or above
-the element, into a getter; MX does not: such a read is an unbound name in the
-emitted module. A read above the element in render position is not caught at
-compile time either: on html it fails when the template renders, as Marko's
-does, on Preact, React and Hono `el()` returns `null` there, and on Solid it
-throws a `TypeError`. In an editor, hover and completion on `el()` come from
-the TypeScript plugin (the language server reports diagnostics only), so
-`el().` lists the element's members where `el()` is typed by tag. The
-declaration is not mapped to the source: hover on the `/el` in the tag, and
-go-to-definition or rename from a read, reach no authored text, as for every
-`/var`.
+refuse `<div/el>` with the generic tag-variable refusal at the `/var` (below).
+Marko hoists a read outside the element's body, or above the element, into a
+getter; MX does not: such a read is an unbound name in the emitted module. A
+read above the element in render position is not caught at compile time either:
+on html it fails when the template renders, as Marko's does, on Preact, React
+and Hono `el()` returns `null` there, and on Solid it throws a `TypeError`. In
+an editor, hover and completion on `el()` come from the TypeScript plugin (the
+language server reports diagnostics only), so `el().` lists the element's
+members where `el()` is typed by tag. The declaration is not mapped to the
+source: hover on the `/el` in the tag, and go-to-definition or rename from a
+read, reach no authored text, as for every `/var`.
 
 **Lifted names are unique on preact, react and hono.** In a whole-file
 component, the identifiers declared by `<const>` patterns, `<define>` names,
