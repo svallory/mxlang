@@ -136,8 +136,8 @@ function isCompileDeclarations(
  * `contractDefaultTagDiagnostics` reports for an eager contract at its
  * declaration, worded the same, judged in this compile's scope and refused
  * when this compile's declarations forbid the rung. The target is the one
- * whose declarations this compile runs under (else the lookup's default),
- * which names the host and adds its built-in tag names.
+ * whose declarations, default or strict, this compile runs under (else the
+ * lookup's default), which names the host and adds its built-in tag names.
  */
 export function deferredDefaultTagProblems(
   ctx: Ctx,
@@ -147,9 +147,13 @@ export function deferredDefaultTagProblems(
   const targets = ctx.targets;
   const names = targets.allTargetNames?.() ?? targets.targetNames();
   const own =
-    names.find((each) =>
-      isCompileDeclarations(ctx, targets.target(each)?.declarations?.default),
-    ) ?? targets.defaultTarget();
+    names.find((each) => {
+      const declarations = targets.target(each)?.declarations;
+      return (
+        isCompileDeclarations(ctx, declarations?.default) ||
+        isCompileDeclarations(ctx, declarations?.strict)
+      );
+    }) ?? targets.defaultTarget();
   const descriptor = targets.target(own);
   const hostName = descriptor?.host?.name;
   const builtins = [

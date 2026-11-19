@@ -608,30 +608,38 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
     );
 
     // Two targets that differ in `defaultTag`; the compile runs under the
-    // second one's own declarations, so its `defaultTag` is a built-in.
+    // second one's own declarations, default or strict, so its `defaultTag`
+    // is a built-in.
     it.each([
-      ['with `tagRules: "none"`', NONE],
-      ["without `tagRules`", ""],
-    ])("the compile's own target answers, %s", (_, fields) => {
-      bothSides({ defaultTag: "bnode" }, fields);
-      const ownPolicy = policyWith({});
-      const lookup = createTargetLookup([
-        {
-          descriptorVersion: 0,
-          name: "page",
-          packageName: "@t/page",
-          defaultTag: "node",
-        },
-        {
-          descriptorVersion: 0,
-          name: "bpage",
-          packageName: "@t/bpage",
-          defaultTag: "bnode",
-          declarations: { default: ownPolicy },
-        },
-      ]);
-      expect(compileErrors("page.kit.mx", ownPolicy, lookup)).toEqual([]);
-    });
+      ['with `tagRules: "none"`', "default", NONE],
+      ["without `tagRules`", "default", ""],
+      ['with `tagRules: "none"`', "strict", NONE],
+      ["without `tagRules`", "strict", ""],
+    ])(
+      "the compile's own target answers, %s, under its %s declarations",
+      (_, variant, fields) => {
+        bothSides({ defaultTag: "bnode" }, fields);
+        const ownDefault = policyWith({});
+        const ownStrict = policyWith({});
+        const lookup = createTargetLookup([
+          {
+            descriptorVersion: 0,
+            name: "page",
+            packageName: "@t/page",
+            defaultTag: "node",
+          },
+          {
+            descriptorVersion: 0,
+            name: "bpage",
+            packageName: "@t/bpage",
+            defaultTag: "bnode",
+            declarations: { default: ownDefault, strict: ownStrict },
+          },
+        ]);
+        const policy = variant === "strict" ? ownStrict : ownDefault;
+        expect(compileErrors("page.kit.mx", policy, lookup)).toEqual([]);
+      },
+    );
 
     // Declarations whose `isElement` accepts any name: under `none`
     // `html-script` is a dashed native name, as `sl-card` is.
