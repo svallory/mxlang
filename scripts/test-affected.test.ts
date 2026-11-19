@@ -28,8 +28,6 @@ import {
   nonSourceProjects,
   ownRunnerDirs,
   ownRunnerPlan,
-  PROBE_CONSUMER,
-  probeConsumers,
   projectDirs,
   projectFor,
   projectsFor,
@@ -37,6 +35,7 @@ import {
   relatedPassWithNoTests,
   relatedSources,
   SOURCE_TEXT_READERS,
+  sourceTextReaders,
   splitDocs,
   testScript,
   VITEST_TEST_FILE,
@@ -152,9 +151,11 @@ describe("isRelatedSource (what vitest related can see)", () => {
       ...CORE_DIST,
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
+      ...WEB_ELEMENTS_DIST_READERS,
       PACK_HYGIENE,
       ...CORE_DIST_READERS,
-      ...VITE_PLUGIN_DIST_READERS,
+      VITE_DIST_DISPATCH,
+      VITE_LIGHT_IMPORT,
       ...LANGUAGE_SERVER_DIST_READERS,
       ...TS_PLUGIN_DIST_READERS,
     ]);
@@ -415,26 +416,6 @@ describe("projectFor", () => {
   });
 });
 
-describe("probeConsumers", () => {
-  it("selects the oracle attribute test for a host source or the probe", () => {
-    for (const f of [
-      "packages/hosts/solid/src/emitter.ts",
-      "packages/hosts/astro/src/astro-template.ts",
-      "scripts/attribute-value-probe.ts",
-    ])
-      expect(probeConsumers([f]), f).toEqual([PROBE_CONSUMER]);
-  });
-  it("selects nothing for other files", () => {
-    expect(
-      probeConsumers([
-        "packages/hosts/angular/src/x.ts",
-        "packages/core/src/x.ts",
-        "scripts/other.ts",
-      ]),
-    ).toEqual([]);
-  });
-});
-
 const PARSER = "packages/parser";
 const WEB_ELEMENTS = "packages/web-elements";
 const CORE = "packages/core";
@@ -466,30 +447,72 @@ const TS_PLUGIN_DIST = ["packages/tooling/typescript-plugin/dist/index.cjs"];
 
 /** Reads every row's packed dist but the parser's; last in each row's readers. */
 const PACK_HYGIENE = "scripts/pack-hygiene.test.ts";
+/** Row A's consumers: the angular tests that spawn a fixture script. */
+const ANGULAR_SPAWNERS = [
+  "packages/hosts/angular/test/body-whitespace.test.ts",
+  "packages/hosts/angular/test/bound-refinement-render.test.ts",
+  "packages/hosts/angular/test/primitive-attributes.test.ts",
+];
+/** Row P's consumers outside angular (angular's `primitive-attributes` is in row A too). */
+const PROBE_OUTSIDE_ANGULAR = [
+  "packages/oracle/src/attribute-value.test.ts",
+  "packages/oracle/src/primitive-attributes.test.ts",
+  "packages/oracle/src/textarea-value.test.ts",
+  "packages/targets/html/src/attribute-value.test.ts",
+  "packages/targets/html/src/primitive-attributes.test.ts",
+];
+/** Row P's consumers: every test that spawns the attribute-value probe. */
+const PROBE_SPAWNERS = [
+  ...PROBE_OUTSIDE_ANGULAR,
+  "packages/hosts/angular/test/primitive-attributes.test.ts",
+];
+const REGISTRY_LIGHT_IMPORT =
+  "packages/target-registry/src/light-import.test.ts";
+const CUSTOM_TAGS = "packages/oracle/src/custom-tags.test.ts";
+const BUNDLE_SMOKE = "packages/target-registry/src/bundle-smoke.test.ts";
+const UPSTREAM_SUITE = "packages/parser/src/template/upstream-suite.test.ts";
+const VITE_DIST_DISPATCH =
+  "packages/tooling/vite-plugin/src/dist-dispatch.test.ts";
+const VITE_LIGHT_IMPORT =
+  "packages/tooling/vite-plugin/src/light-import.test.ts";
 /** Each row's readers before PACK_HYGIENE, as literals (the parser has none). */
+const WEB_ELEMENTS_DIST_READERS = [BUNDLE_SMOKE];
 const CORE_DIST_READERS = [
   "packages/core/src/cold-start.test.ts",
   "packages/tooling/tsc/src/third-party-target.test.ts",
   "packages/hosts/solid/src/index.test.ts",
+  ...ANGULAR_SPAWNERS,
+  ...PROBE_OUTSIDE_ANGULAR,
+  REGISTRY_LIGHT_IMPORT,
+  CUSTOM_TAGS,
 ];
 const TSX_BRIDGE_DIST_READERS = [
   "packages/tsx-bridge/src/vendored.test.ts",
   "packages/tsx-bridge/src/pack-contents.test.ts",
+  ...ANGULAR_SPAWNERS,
+  ...PROBE_OUTSIDE_ANGULAR,
+  CUSTOM_TAGS,
+  BUNDLE_SMOKE,
 ];
 const HTML_DIST_READERS = [
   "packages/targets/html/src/stock-parser.test.ts",
   "packages/target-registry/src/parity.test.ts",
-  "packages/target-registry/src/light-import.test.ts",
+  REGISTRY_LIGHT_IMPORT,
+  CUSTOM_TAGS,
+  "packages/targets/html/src/helpers.test.ts",
 ];
 const ANGULAR_DIST_READERS = [
   "packages/hosts/angular/test/runtime.test.ts",
   "packages/target-registry/src/parity.test.ts",
-  "packages/target-registry/src/light-import.test.ts",
+  REGISTRY_LIGHT_IMPORT,
   "packages/tooling/tsc/src/angular-fix-hints.test.ts",
+  "packages/tooling/angular-checker/src/worker.test.ts",
 ];
 const VITE_PLUGIN_DIST_READERS = [
-  "packages/tooling/vite-plugin/src/dist-dispatch.test.ts",
-  "packages/tooling/vite-plugin/src/light-import.test.ts",
+  VITE_DIST_DISPATCH,
+  VITE_LIGHT_IMPORT,
+  ...PROBE_SPAWNERS,
+  REGISTRY_LIGHT_IMPORT,
 ];
 const LANGUAGE_SERVER_DIST_READERS = [
   "packages/tooling/language-server/src/server.test.ts",
@@ -751,7 +774,25 @@ describe("distReaders", () => {
     const cases: [string, string[]][] = [
       [
         "packages/core/src/lower.ts",
-        [...CORE_DIST_READERS, PACK_HYGIENE, ...VITE_PLUGIN_DIST_READERS],
+        [
+          ...CORE_DIST_READERS,
+          PACK_HYGIENE,
+          VITE_DIST_DISPATCH,
+          VITE_LIGHT_IMPORT,
+        ],
+      ],
+      // Core bundles web-elements, so its readers follow; core is external to bundle-smoke's build.
+      [
+        "packages/web-elements/src/index.ts",
+        [
+          ...WEB_ELEMENTS_DIST_READERS,
+          PACK_HYGIENE,
+          ...CORE_DIST_READERS,
+          VITE_DIST_DISPATCH,
+          VITE_LIGHT_IMPORT,
+          ...LANGUAGE_SERVER_DIST_READERS,
+          ...TS_PLUGIN_DIST_READERS,
+        ],
       ],
       [
         "packages/tsx-bridge/src/index.ts",
@@ -759,7 +800,8 @@ describe("distReaders", () => {
           ...TSX_BRIDGE_DIST_READERS,
           PACK_HYGIENE,
           ...ANGULAR_DIST_READERS,
-          ...VITE_PLUGIN_DIST_READERS,
+          VITE_DIST_DISPATCH,
+          VITE_LIGHT_IMPORT,
           ...LANGUAGE_SERVER_DIST_READERS,
           ...TS_PLUGIN_DIST_READERS,
         ],
@@ -769,7 +811,9 @@ describe("distReaders", () => {
         [
           ...HTML_DIST_READERS,
           PACK_HYGIENE,
-          ...VITE_PLUGIN_DIST_READERS,
+          VITE_DIST_DISPATCH,
+          VITE_LIGHT_IMPORT,
+          ...PROBE_SPAWNERS,
           ...LANGUAGE_SERVER_DIST_READERS,
           ...TS_PLUGIN_DIST_READERS,
         ],
@@ -779,7 +823,9 @@ describe("distReaders", () => {
         [
           ...ANGULAR_DIST_READERS,
           PACK_HYGIENE,
-          ...VITE_PLUGIN_DIST_READERS,
+          VITE_DIST_DISPATCH,
+          VITE_LIGHT_IMPORT,
+          ...PROBE_SPAWNERS,
           ...LANGUAGE_SERVER_DIST_READERS,
           ...TS_PLUGIN_DIST_READERS,
         ],
@@ -856,6 +902,74 @@ describe("distReaders", () => {
     expect(
       distBuilds(["scripts/third-party-notices.ts"], table).map((r) => r.dir),
     ).toEqual(["a", "b"]);
+  });
+});
+
+describe("spawned sources", () => {
+  /** The core row's readers, in row order. */
+  const CORE_ROW = [
+    "packages/core/src/diagnostic-code-sites.test.ts",
+    "packages/core/src/cold-start.test.ts",
+    "packages/tooling/language-server/src/bundled-deps.test.ts",
+    "packages/tooling/typescript-plugin/src/bundled-deps.test.ts",
+    "packages/core/src/message-vocabulary-guard.test.ts",
+  ];
+
+  it("a spawned script or a source in its closure selects the tests that spawn it", () => {
+    const cases: [string, string[]][] = [
+      [
+        "packages/hosts/angular/test/body-whitespace-fixture.ts",
+        ANGULAR_SPAWNERS,
+      ],
+      ["packages/hosts/angular/src/emitter.ts", ANGULAR_SPAWNERS],
+      // Rows P, R, O and B.
+      [
+        "packages/hosts/solid/src/emitter.ts",
+        [...PROBE_SPAWNERS, REGISTRY_LIGHT_IMPORT, CUSTOM_TAGS, BUNDLE_SMOKE],
+      ],
+      // Rows P and B.
+      ["packages/targets/html/src/index.ts", [...PROBE_SPAWNERS, BUNDLE_SMOKE]],
+      ["packages/target-registry/src/index.ts", [REGISTRY_LIGHT_IMPORT]],
+      [
+        "packages/core/src/target-loader.ts",
+        [...CORE_ROW, "packages/core/src/target-loader-resolve.test.ts"],
+      ],
+      ["packages/core/src/lower.ts", CORE_ROW],
+      [
+        "packages/parser/src/template/index.ts",
+        ["packages/parser/src/frontend/boundary.test.ts", UPSTREAM_SUITE],
+      ],
+      [
+        "packages/tooling/angular-checker/src/checker.ts",
+        ["packages/tooling/angular-checker/src/worker.test.ts"],
+      ],
+      [
+        "packages/tooling/typescript-plugin/src/ng-worker.ts",
+        ["packages/tooling/typescript-plugin/src/ng-editor-path.test.ts"],
+      ],
+      // A test file under a matched src is no spawned source.
+      ["packages/hosts/angular/src/bare-comma.test.ts", []],
+    ];
+    for (const [f, want] of cases)
+      expect(sourceTextReaders(f), f).toEqual(want);
+  });
+
+  it("a spawned entry's own edit selects exactly its spawners", () => {
+    expect(relatedSources(["scripts/attribute-value-probe.ts"])).toEqual([
+      "scripts/attribute-value-probe.ts",
+      ...PROBE_SPAWNERS,
+    ]);
+    expect(relatedSources(["packages/oracle/src/normalize-html.ts"])).toEqual([
+      "packages/oracle/src/normalize-html.ts",
+      CUSTOM_TAGS,
+    ]);
+    expect(
+      relatedSources(["packages/stock-marko/src/run-stock-marko.cjs"]),
+    ).toEqual([
+      "packages/stock-marko/src/run-stock-marko.cjs",
+      "packages/stock-marko/src/marko.test.ts",
+      "packages/stock-marko/src/divergence.test.ts",
+    ]);
   });
 });
 
@@ -1156,11 +1270,16 @@ describe("Markdown selection", () => {
     ).toEqual([
       "packages/hosts/solid/src/emitter.ts",
       CORPUS,
-      PROBE_CONSUMER,
+      ...PROBE_SPAWNERS,
+      REGISTRY_LIGHT_IMPORT,
+      CUSTOM_TAGS,
+      BUNDLE_SMOKE,
       "packages/parser/src/frontend/boundary.test.ts",
+      UPSTREAM_SUITE,
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
-      ...VITE_PLUGIN_DIST_READERS,
+      VITE_DIST_DISPATCH,
+      VITE_LIGHT_IMPORT,
       PACK_HYGIENE,
       ...LANGUAGE_SERVER_DIST_READERS,
       ...TS_PLUGIN_DIST_READERS,
@@ -1195,8 +1314,13 @@ describe("Markdown selection", () => {
     ...VITE_PLUGIN_DIST,
     "packages/tooling/tsc/src/third-party-target.test.ts",
     "packages/hosts/solid/src/index.test.ts",
+    ...ANGULAR_SPAWNERS,
+    ...PROBE_OUTSIDE_ANGULAR,
+    REGISTRY_LIGHT_IMPORT,
+    CUSTOM_TAGS,
     PACK_HYGIENE,
-    ...VITE_PLUGIN_DIST_READERS,
+    VITE_DIST_DISPATCH,
+    VITE_LIGHT_IMPORT,
   ];
 
   it("any corpus input adds the Markdown readers; a source change adds none of them", () => {
@@ -1225,9 +1349,14 @@ describe("Markdown selection", () => {
       ...VITE_PLUGIN_DIST,
       ...TS_PLUGIN_DIST,
       "packages/tsx-bridge/src/vendored.test.ts",
+      ...ANGULAR_SPAWNERS,
+      ...PROBE_OUTSIDE_ANGULAR,
+      CUSTOM_TAGS,
+      BUNDLE_SMOKE,
       PACK_HYGIENE,
       ...ANGULAR_DIST_READERS,
-      ...VITE_PLUGIN_DIST_READERS,
+      VITE_DIST_DISPATCH,
+      VITE_LIGHT_IMPORT,
       ...LANGUAGE_SERVER_DIST_READERS,
       ...TS_PLUGIN_DIST_READERS,
     ]);
@@ -1286,6 +1415,7 @@ describe("Markdown selection", () => {
     expect(relatedSources(["packages/parser/src/template/index.ts"])).toEqual([
       "packages/parser/src/template/index.ts",
       "packages/parser/src/frontend/boundary.test.ts",
+      UPSTREAM_SUITE,
       ...CORE_DIST,
       ...CORE_DIST_READERS,
       PACK_HYGIENE,

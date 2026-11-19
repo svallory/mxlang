@@ -45,8 +45,8 @@
  * left out only when the ordered tokens, the line breaks between them, the
  * shebang and every load-bearing marker comment (`@ts-`, `biome-ignore`,
  * `__PURE__` and the rest of `COMMENT_MARKERS`) are equal. The tests that read
- * a source's text (`SOURCE_TEXT_READERS`) run on any change to a source a row
- * matches, comment-only edits included: `relatedSources` adds them for a
+ * a source's text or run it in a subprocess (`SOURCE_TEXT_READERS`) run on
+ * any change to a source a row matches, comment-only edits included: `relatedSources` adds them for a
  * kept source, `commentOnlySplit` for a left-out one. A file that is new,
  * renamed or untracked, a fixture, `.mx`, `.json`, `.md` or a wide file keeps
  * today's selection. The gate and CI run every test.
@@ -132,23 +132,6 @@ export function laneFor(changed: readonly string[]): string[] {
   );
 }
 
-/** The oracle test that renders every host in a probe subprocess. */
-export const PROBE_CONSUMER = "packages/oracle/src/attribute-value.test.ts";
-
-/**
- * Tests that depend on files through a subprocess, which the import graph
- * cannot see: the attribute-value probe renders each host's `src/**` and the
- * oracle test spawns it, so a change to either selects that test.
- */
-export function probeConsumers(changed: readonly string[]): string[] {
-  const hit = changed.some(
-    (f) =>
-      f === "scripts/attribute-value-probe.ts" ||
-      /^packages\/hosts\/(?:preact|react|hono|solid|astro)\/src\//.test(f),
-  );
-  return hit ? [PROBE_CONSUMER] : [];
-}
-
 /** A workspace package whose tests' importers resolve it through `dist/`. */
 export interface DistPackage {
   /** Workspace-relative package dir. */
@@ -163,7 +146,9 @@ export interface DistPackage {
    * The test files that read, load or spawn THIS row's dist by path
    * (`readFileSync`, `statSync`, a computed `import()` or `createRequire`, a
    * spawned `dist/bin.*`), or through a subprocess that resolves the package
-   * by name: the dist version of `SOURCE_TEXT_READERS`. Their import graphs
+   * by name (a source a `SOURCE_TEXT_READERS` row spawns, or one it imports,
+   * that loads this package by name is listed here): the dist version of
+   * `SOURCE_TEXT_READERS`. Their import graphs
    * hold no dist file, so `vitest related` would not select them from the
    * entries. A reader of a dist that this dist loads at run time (an
    * external) is not listed here. The "dist readers guard" in
@@ -224,7 +209,10 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
     ],
     entries: ["packages/web-elements/dist/index.js"],
     bundles: [],
-    readers: [PACK_HYGIENE],
+    readers: [
+      "packages/target-registry/src/bundle-smoke.test.ts",
+      PACK_HYGIENE,
+    ],
   },
   {
     dir: "packages/core",
@@ -247,6 +235,16 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
       "packages/core/src/cold-start.test.ts",
       "packages/tooling/tsc/src/third-party-target.test.ts",
       "packages/hosts/solid/src/index.test.ts",
+      "packages/hosts/angular/test/body-whitespace.test.ts",
+      "packages/hosts/angular/test/bound-refinement-render.test.ts",
+      "packages/hosts/angular/test/primitive-attributes.test.ts",
+      "packages/oracle/src/attribute-value.test.ts",
+      "packages/oracle/src/primitive-attributes.test.ts",
+      "packages/oracle/src/textarea-value.test.ts",
+      "packages/targets/html/src/attribute-value.test.ts",
+      "packages/targets/html/src/primitive-attributes.test.ts",
+      "packages/target-registry/src/light-import.test.ts",
+      "packages/oracle/src/custom-tags.test.ts",
       PACK_HYGIENE,
     ],
   },
@@ -266,6 +264,16 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
     readers: [
       "packages/tsx-bridge/src/vendored.test.ts",
       "packages/tsx-bridge/src/pack-contents.test.ts",
+      "packages/hosts/angular/test/body-whitespace.test.ts",
+      "packages/hosts/angular/test/bound-refinement-render.test.ts",
+      "packages/hosts/angular/test/primitive-attributes.test.ts",
+      "packages/oracle/src/attribute-value.test.ts",
+      "packages/oracle/src/primitive-attributes.test.ts",
+      "packages/oracle/src/textarea-value.test.ts",
+      "packages/targets/html/src/attribute-value.test.ts",
+      "packages/targets/html/src/primitive-attributes.test.ts",
+      "packages/oracle/src/custom-tags.test.ts",
+      "packages/target-registry/src/bundle-smoke.test.ts",
       PACK_HYGIENE,
     ],
   },
@@ -288,6 +296,8 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
       "packages/targets/html/src/stock-parser.test.ts",
       "packages/target-registry/src/parity.test.ts",
       "packages/target-registry/src/light-import.test.ts",
+      "packages/oracle/src/custom-tags.test.ts",
+      "packages/targets/html/src/helpers.test.ts",
       PACK_HYGIENE,
     ],
   },
@@ -311,6 +321,7 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
       "packages/target-registry/src/parity.test.ts",
       "packages/target-registry/src/light-import.test.ts",
       "packages/tooling/tsc/src/angular-fix-hints.test.ts",
+      "packages/tooling/angular-checker/src/worker.test.ts",
       PACK_HYGIENE,
     ],
   },
@@ -342,6 +353,13 @@ export const DIST_PACKAGES: readonly DistPackage[] = [
     readers: [
       "packages/tooling/vite-plugin/src/dist-dispatch.test.ts",
       "packages/tooling/vite-plugin/src/light-import.test.ts",
+      "packages/oracle/src/attribute-value.test.ts",
+      "packages/oracle/src/primitive-attributes.test.ts",
+      "packages/oracle/src/textarea-value.test.ts",
+      "packages/targets/html/src/attribute-value.test.ts",
+      "packages/targets/html/src/primitive-attributes.test.ts",
+      "packages/hosts/angular/test/primitive-attributes.test.ts",
+      "packages/target-registry/src/light-import.test.ts",
       PACK_HYGIENE,
     ],
   },
@@ -891,27 +909,26 @@ export function splitDocs(
 }
 
 /**
- * What `vitest related` gets: the changed related sources, the subprocess
- * probe's consumer (`probeConsumers`), for each related source the tests in
- * other projects that read it as a `FIXTURE_CONSUMERS` path (the tree-sitter-mx
- * corpus readers, say) followed by the tests that read its text
- * (`SOURCE_TEXT_READERS`; they run on any change to a source a row matches,
- * and `commentOnlySplit` adds them for a comment-only edit, which never
- * reaches here), the consumers of every readers-only file (`readersOnly`: its
- * readers run here instead of a whole project), and `DOC_READERS` when any
- * changed file is a corpus input (`CORPUS_INPUT`), the dist entries of
- * every `DIST_PACKAGES` row a changed source goes into, directly or through a
- * bundled row (`distEntries`: their importers reach them through that dist,
- * never through the package's `src`), and the `readers` of those same rows
- * (`distReaders`: tests that read, load or spawn the dist by path, which no
- * import graph shows). Deduped, in that order.
+ * What `vitest related` gets: the changed related sources, for each related
+ * source the tests in other projects that read it as a `FIXTURE_CONSUMERS`
+ * path (the tree-sitter-mx corpus readers, say) followed by the tests that
+ * read its text or run it in a subprocess (`SOURCE_TEXT_READERS`; they run on
+ * any change to a source a row matches, and `commentOnlySplit` adds them for
+ * a comment-only edit, which never reaches here), the consumers of every
+ * readers-only file (`readersOnly`: its readers run here instead of a whole
+ * project), and `DOC_READERS` when any changed file is a corpus input
+ * (`CORPUS_INPUT`), the dist entries of every `DIST_PACKAGES` row a changed
+ * source goes into, directly or through a bundled row (`distEntries`: their
+ * importers reach them through that dist, never through the package's
+ * `src`), and the `readers` of those same rows (`distReaders`: tests that
+ * read, load or spawn the dist by path, which no import graph shows).
+ * Deduped, in that order.
  */
 export function relatedSources(changed: readonly string[]): string[] {
   const related = changed.filter(isRelatedSource);
   return [
     ...new Set([
       ...related,
-      ...probeConsumers(changed),
       ...related.flatMap((f) => [
         ...fixtureConsumers(f),
         ...sourceTextReaders(f),
@@ -1182,16 +1199,56 @@ export function commentOnly(
 }
 
 /**
- * Tests that read a source file's text (comments included) rather than
+ * The non-test, non-fixture `src` files of the package dirs `dirs`, plus the
+ * exact repo-relative paths `files`, as one row path (the core row's
+ * lookarounds). A spawned script's closure that enters a package's `src`
+ * matches that whole `src`.
+ */
+function spawnedPath(
+  files: readonly string[],
+  dirs: readonly string[] = [],
+): RegExp {
+  const quote = (p: string) => p.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+  const alternatives = files.map(quote);
+  if (dirs.length > 0) {
+    alternatives.push(
+      `(?:${dirs.map(quote).join("|")})\\/src\\/(?!(?:.*\\/)?fixtures\\/).*(?<!\\.test)\\.tsx?`,
+    );
+  }
+  return new RegExp(`^(?:${alternatives.join("|")})$`);
+}
+
+/** The hosts whose `exports` resolve to `src` and that the probe and the registry load. */
+const SRC_HOSTS = [
+  "packages/hosts/preact",
+  "packages/hosts/react",
+  "packages/hosts/hono",
+  "packages/hosts/solid",
+  "packages/hosts/astro",
+];
+
+/**
+ * Tests that read a source file's text (comments included), or run it in a
+ * subprocess (spawn it, or spawn a script that imports it), rather than
  * importing it, so `vitest related` cannot select them. They run on any
  * change to a source a row matches: `relatedSources` adds them for a source
  * whose edit changes a token, `commentOnlySplit` for a comment-only edit.
  * Each row lists every consumer test file found reading a path the row
- * matches. The "SOURCE_TEXT_READERS guard" in `scripts/test-affected.test.ts`
- * fails when a test it detects reading such a source has no row and no
- * exemption; it cannot see a path built in another module or passed through
- * a function parameter of an imported helper, so such a reader adds its row
- * by hand.
+ * matches. A spawned script's row matches the script and its value-import
+ * closure: a package whose `exports` resolve to `src` is followed into its
+ * whole `src` (`spawnedPath`), a `DIST_PACKAGES` package is not (its row's
+ * `readers` lists the test). The "SOURCE_TEXT_READERS guard" in
+ * `scripts/test-affected.test.ts` fails when a test it detects reading such a
+ * source has no row and no exemption; it cannot see a path built in another
+ * module or passed through a function parameter of an imported helper, so
+ * such a reader adds its row by hand. The "spawned sources guard" there
+ * fails on a detected spawn of a source with no row; it checks only the
+ * spawned entry and cannot see a template path, a generated script, a spread
+ * argument, a cwd-relative string, a script in a fixtures dir, a path handed
+ * to a helper or a spawn inside a non-test module, so those rows (the
+ * upstream parser suite, the registry's light-import and bundle-smoke, the
+ * oracle's custom tags, the two checker workers, stock-marko's runner) are
+ * listed by hand, and so is each closure.
  */
 export const SOURCE_TEXT_READERS: readonly {
   path: RegExp;
@@ -1213,7 +1270,11 @@ export const SOURCE_TEXT_READERS: readonly {
   },
   {
     path: /^packages\/parser\/src\/template\/.*\.ts$/,
-    consumers: ["packages/parser/src/frontend/boundary.test.ts"],
+    consumers: [
+      "packages/parser/src/frontend/boundary.test.ts",
+      // Runs `node --test src/template/__tests__/*.test.ts`, which import ../index.ts and ../internal.ts.
+      "packages/parser/src/template/upstream-suite.test.ts",
+    ],
   },
   {
     path: /^packages\/babel\/src\/mx-ast\.ts$/,
@@ -1240,6 +1301,95 @@ export const SOURCE_TEXT_READERS: readonly {
   {
     path: /^packages\/tsx-bridge\/src\/public\.d\.ts$/,
     consumers: ["packages/tsx-bridge/src/pack-contents.test.ts"],
+  },
+  // A: the angular fixture scripts the tests spawn with `bun run`; they import angular's src.
+  {
+    path: spawnedPath(
+      [
+        "packages/hosts/angular/test/body-whitespace-fixture.ts",
+        "packages/hosts/angular/test/bound-refinement-fixture.ts",
+        "packages/hosts/angular/test/primitive-attribute-fixture.ts",
+        "packages/hosts/angular/test/primitive-attribute-rescued.ts",
+      ],
+      ["packages/hosts/angular"],
+    ),
+    consumers: [
+      "packages/hosts/angular/test/body-whitespace.test.ts",
+      "packages/hosts/angular/test/bound-refinement-render.test.ts",
+      "packages/hosts/angular/test/primitive-attributes.test.ts",
+    ],
+  },
+  // P: the attribute-value probe renders the html target and each src host.
+  {
+    path: spawnedPath(
+      ["scripts/attribute-value-probe.ts"],
+      ["packages/targets/html", ...SRC_HOSTS],
+    ),
+    consumers: [
+      "packages/oracle/src/attribute-value.test.ts",
+      "packages/oracle/src/primitive-attributes.test.ts",
+      "packages/oracle/src/textarea-value.test.ts",
+      "packages/targets/html/src/attribute-value.test.ts",
+      "packages/targets/html/src/primitive-attributes.test.ts",
+      "packages/hosts/angular/test/primitive-attributes.test.ts",
+    ],
+  },
+  // R: a generated probe imports the registry, which imports each host's `/descriptor` by name.
+  {
+    path: spawnedPath([], ["packages/target-registry", ...SRC_HOSTS]),
+    consumers: ["packages/target-registry/src/light-import.test.ts"],
+  },
+  // L: spawned as `loader`; it value-imports only resolve-after-miss.ts and target-descriptor.ts.
+  {
+    path: /^packages\/core\/src\/(?:target-loader|resolve-after-miss|target-descriptor)\.ts$/,
+    consumers: ["packages/core/src/target-loader-resolve.test.ts"],
+  },
+  // O: fixtures-custom-tags/run.ts imports normalize-html.ts and the src hosts by name.
+  {
+    path: spawnedPath(
+      ["packages/oracle/src/normalize-html.ts"],
+      [
+        "packages/hosts/hono",
+        "packages/hosts/preact",
+        "packages/hosts/react",
+        "packages/hosts/solid",
+      ],
+    ),
+    consumers: ["packages/oracle/src/custom-tags.test.ts"],
+  },
+  // B: `bun build` of each host's src entries (`HOST_BUILDS`).
+  {
+    path: spawnedPath(
+      [],
+      [
+        "packages/targets/html",
+        "packages/hosts/hono",
+        "packages/hosts/react",
+        "packages/hosts/preact",
+        "packages/hosts/solid",
+      ],
+    ),
+    consumers: ["packages/target-registry/src/bundle-smoke.test.ts"],
+  },
+  // W: worker-client.ts forks worker-main.ts, passed as `workerPath`.
+  {
+    path: spawnedPath([], ["packages/tooling/angular-checker"]),
+    consumers: ["packages/tooling/angular-checker/src/worker.test.ts"],
+  },
+  // N: passed as `workerPath`; it imports only @mxlang/angular-checker (dist).
+  {
+    path: /^packages\/tooling\/typescript-plugin\/src\/ng-worker\.ts$/,
+    consumers: [
+      "packages/tooling/typescript-plugin/src/ng-editor-path.test.ts",
+    ],
+  },
+  // M: marko.ts's `run()` spawns it with process.execPath.
+  {
+    path: /^packages\/stock-marko\/src\/run-stock-marko\.cjs$/,
+    consumers: [
+      "packages/stock-marko/src/marko.test.ts",
+      "packages/stock-marko/src/divergence.test.ts",
+    ],
   },
 ];
 
@@ -1483,7 +1633,7 @@ export function cacheArgs(
 /**
  * The log line for a vitest command `main()` runs, printed in full so a log
  * shows every file the selection added (DOC_READERS, FIXTURE_CONSUMERS
- * consumers, PROBE_CONSUMER) and the trailing flags. With `lane`, the line
+ * consumers, SOURCE_TEXT_READERS consumers) and the trailing flags. With `lane`, the line
  * names the MX_TEST_LANE the command runs under.
  */
 export function commandLog(cmd: readonly string[], lane?: string): string {
