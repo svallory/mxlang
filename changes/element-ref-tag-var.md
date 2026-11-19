@@ -1,0 +1,5 @@
+---
+packages: [core, html, preact, react]
+kind: Added
+---
+A tag variable on a native element (`<div/el>`, and `<${"div"}/el>`) binds an element reference on html, Preact and React, as in Marko 6.4.4: `el()` returns the rendered element in a `<script>` body or a handler (a function given to an `on…` attribute or a `<lifecycle>` hook). Core refuses every other read at the read (`MX_INVALID_TAG_VAR`, "`el` is an element reference. Element references can only be read in scripts and event handlers."), every write (`MX_READONLY_BINDING_WRITE`), and a destructured variable on every host ("Tag variables on native tags cannot be destructured."). Preact and React fill a per-scope slot through a callback `ref` (an authored `ref=` on the same element still receives the node), and type `el()` by the tag name; html binds a getter that throws when called. A host opts in with the new `HostDeclarations.bindsElementVar`; the IR's `Element` gains `var`, and `IR_VERSION` is 18. Hono, Solid, Angular and `.astro.mx` keep refusing `<div/el>`.

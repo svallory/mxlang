@@ -3720,6 +3720,41 @@ keeps the unit a component.
 
 `/var` binds a returning tag's value at the call site.
 
+**Element references.** A `/var` on a native element (`<div/el>`, and
+`<${"div"}/el>`, which is that element) binds an element reference, as in
+Marko 6.4.4: `el` is a function, and `el()` returns the rendered element
+(typed by its tag name on the JSX hosts: `HTMLDivElement` for `<div>`, the SVG
+element type for an SVG tag, `HTMLElement` for any other name). It is read
+only where the element exists: inside a `<script>` body, or inside a function
+given to an `on…` attribute of any tag or to a `<lifecycle>` hook, a function
+nested in one included. Every other read is a positioned compile error at the
+read, `MX_INVALID_TAG_VAR`: "`el` is an element reference. Element references
+can only be read in scripts and event handlers." That covers a placeholder, an
+attribute value, the element's own content and attributes, a `<log>` value, a
+dynamic tag name, and a function that is not a handler (`<const/f=() =>
+el()/>`). A write anywhere, a handler and a `<script>` body included, is
+`MX_READONLY_BINDING_WRITE` at the assignment: "`el` is a tag variable on a
+native element (an element reference) and cannot be assigned to." A pattern
+(`<div/{a}/>`) is `MX_INVALID_TAG_VAR` at the `/var` on every host: "Tag
+variables on native tags cannot be destructured." A second element reference
+of the same name in one body is the duplicate-declaration error every tag
+variable gets. **html** binds `el` to a function that throws "Element
+references can only be read in scripts and event handlers." when called, as
+Marko's html build does in debug: html never runs a handler or a `<script>`
+body, and the binding is there for a handler passed to a custom tag or a
+`<define>` call. **Preact and React** declare a slot and the getter among the
+scope's `/var` statements and fill the slot through a callback `ref` written
+after every other attribute, so the reference binds per `<for>` row and per
+branch; an authored `ref=` on the same element is handed the node too (called
+when it is a function, given it as `.current` otherwise), and a `ref` key in a
+spread on that element is replaced. **Hono and Solid** refuse `<div/el>` with
+the generic tag-variable refusal at the `/var`, and so do Angular and
+`.astro.mx` (below). Marko hoists a read outside the element's body, or above
+the element, into a getter; MX does not: such a read is an unbound name in the
+emitted module. A read above the element in render position is not caught at
+compile time either: on html it fails when the template renders, as Marko's
+does, and on Preact and React `el()` returns `null` there.
+
 **Lifted names are unique on preact, react and hono.** In a whole-file
 component, the identifiers declared by `<const>` patterns, `<define>` names,
 and the identifiers declared by static or dynamic `/var` patterns share one
@@ -3775,9 +3810,10 @@ the component's head `let`. A dynamic-tag or `<try>` body inside a `<for>` is
 its own scope too. A returning unit's call on the JSX hosts runs when the
 markup around it is built, so a `/var` call in an attribute-tag body without
 parameters runs once at the call site, even when the callee never renders that
-body. **Angular** rejects `/var` entirely.
+body. **Angular** rejects `/var` entirely, an element reference (`<div/el>`)
+included.
 
-**`.astro.mx` rejects `/var` entirely too, and for a different, structural reason**
+**`.astro.mx` rejects `/var` entirely too, an element reference (`<div/el>`) included, and for a different, structural reason**
 (host-cannot, ruled 2026-09-28 on TODO `amx-tag-var`): Astro runs the `---`
 fence to completion *before* Astro's own compiler ever lowers or calls the
 template's tags, so by the time a returning tag is actually called there is no
@@ -4250,6 +4286,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `try` | **error** (no `<@catch>`; §6) | same | `<Loading>` | body inline | **error** | **error** |
 | `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React/Hono; Hono's wraps `hono/jsx`'s `ErrorBoundary`), body passed as a thunk | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
+| `/var` on an element (`<div/el>`) | `el` is a getter that throws when called; reads outside a handler or `<script>` body are refused in core (§10) | same | **error** (generic tag-variable refusal) | Preact / React: a `let` slot and a getter, filled by a callback `ref`; Hono: **error** (generic tag-variable refusal) | **error** | **error** |
 | `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | a generated `$mxReturn` callback prop the unit calls during setup; one-shot (§10) | `.render(props)` returns `{ value, output }` (§13.3); `/var` in any scope, dynamic tags included | renders through Astro's renderer, which unwraps the pair (§10) | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
 
 ### 13.2 Markup and attributes
