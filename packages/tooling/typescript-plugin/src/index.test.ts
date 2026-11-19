@@ -1942,10 +1942,11 @@ describe("MX language plugin", {
   // depend on the unit's own body locals, so no type-only declaration beside
   // the component can name it either). This is the `.solid.mx` *region*
   // counterpart of the whole-file test above: a `/var` bound from a
-  // discovered `<counter/n .../>` inside a region is `let n;`, untyped, the
-  // surrounding TypeScript module declares it (`@mxlang/tsx-bridge`'s
-  // `hoistRegionImports`), and the region's `$mxReturn={...}` callback prop
-  // assigns it — same shape and same limitation as the whole-file case.
+  // discovered `<counter/n .../>` inside a region is declared in place as
+  // `let n: any;` inside the region's own arrow, called where the region
+  // sits (`{(() => { let n: any; return <>…</>; })()}`; nothing goes to the
+  // surrounding module), and the region's `$mxReturn={...}` callback prop
+  // assigns it — the same `any` limitation as the whole-file case.
   it("types a .solid.mx region's <return> unit /var as any (KNOWN LIMIT, tag-var-type-from-return)", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-solid-region-return-"));
     try {
@@ -2005,9 +2006,10 @@ describe("MX language plugin", {
       const ok = diagnose(good);
       expect(ok.compile).toEqual([]);
       expect(realTypeErrors(ok.semantic)).toEqual([]);
-      // KNOWN LIMIT, not asserted as desired: `let n;` is untyped, assigned
-      // in the region's `$mxReturn={...}` callback, so `n.toUpperCase()` on
-      // a number does not error. A future fix for tag-var-type-from-return
+      // KNOWN LIMIT, not asserted as desired: `n` is `let n: any;`, declared
+      // inside the region's arrow called in place and assigned in its
+      // `$mxReturn={...}` callback, so `n.toUpperCase()` on a number does
+      // not error. A future fix for tag-var-type-from-return
       // flips this to a real TS2339.
       const wrong = diagnose(wrongType);
       expect(wrong.compile).toEqual([]);
