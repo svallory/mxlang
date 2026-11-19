@@ -324,3 +324,126 @@ describe("html type-check projection", () => {
     );
   });
 });
+
+describe("html tag variable declarations", () => {
+  const COUNTER = 'import Counter from "./counter.mx"\n';
+  // Each row: the source, the `[start, end)` of its authored `/var`, the
+  // mappings expected from inside that range as `[sourceStart, generated
+  // text, use]`, and the declaration as the build writes it.
+  it.each([
+    [
+      "an element reference",
+      "<div/el/>",
+      [5, 7],
+      [[5, "el"]],
+      "const el = (): any => {",
+    ],
+    [
+      "a literal dynamic tag's element reference",
+      '<${"my-el"}/el/>',
+      [12, 14],
+      [[12, "el"]],
+      "const el = (): any => {",
+    ],
+    ["a <let>", "<let/count=0/>", [5, 10], [[5, "count"]], "const count = 0;"],
+    [
+      "a destructuring <const>",
+      "<const/{ a, b: c }={ a: 1, b: 2 }/>",
+      [7, 18],
+      [
+        [9, "a"],
+        [15, "c"],
+      ],
+      "const { a, b: c } = { a: 1, b: 2 };",
+    ],
+    [
+      "a <define>",
+      "<define/Row>x</define>",
+      [8, 11],
+      [[8, "Row"]],
+      "const Row = ",
+    ],
+    [
+      "a <define> with attributes",
+      "<define/Row a=1>x</define>",
+      [8, 11],
+      [[8, "Row"]],
+      "const Row = ",
+    ],
+    [
+      "a dynamic tag's destructuring /var",
+      "<${input.tag}/{ a, b: c }/>",
+      [14, 25],
+      [
+        [16, "a"],
+        [22, "c"],
+      ],
+      "const { a, b: c } = __mxRenderDynamic(",
+    ],
+    [
+      "a returning <define> call's /var",
+      "<define/Twice><return=1/></define><Twice/v/>",
+      [41, 42],
+      [[41, "v"]],
+      "const v = __mxRet0.value;",
+    ],
+  ] as const)(
+    "maps %s at the authored name",
+    (_name, source, [start, end], expected, declaration) => {
+      const { code, mappings } = compile(source, "/fixtures/vars.mx");
+      expect(
+        mappings
+          .filter((m) => m.sourceStart >= start && m.sourceEnd <= end)
+          .map((m) => [
+            m.sourceStart,
+            code.slice(m.generatedStart, m.generatedEnd),
+            m.use,
+          ]),
+      ).toEqual(
+        expected.map(([at, name]) => [
+          at,
+          name,
+          { navigation: true, semantic: true },
+        ]),
+      );
+      expect(code).toContain(declaration);
+    },
+  );
+
+  it.each([
+    [
+      "an imported unit that returns",
+      `${COUNTER}<Counter/n/>`,
+      44,
+      "const n = Counter.render(",
+    ],
+    [
+      "a discovered tag that returns",
+      "<counter/n/>",
+      9,
+      "const n = $mx_Counter1.render(",
+    ],
+  ])("maps a .render call's /var on %s", (_name, source, at, declaration) => {
+    writeFileSync(join(dir, "counter.mx"), "<return=1/>");
+    const { code, mappings } = compile(source, join(dir, "vars.mx"), {
+      customTags: {
+        counter: {
+          template: {
+            filename: join(dir, "counter.mx"),
+            source: "<return=1/>",
+          },
+        },
+      },
+    } as never);
+    expect(
+      mappings
+        .filter((m) => m.sourceStart === at)
+        .map((m) => [
+          m.sourceStart,
+          code.slice(m.generatedStart, m.generatedEnd),
+          m.use,
+        ]),
+    ).toEqual([[at, "n", { navigation: true, semantic: true }]]);
+    expect(code).toContain(declaration);
+  });
+});

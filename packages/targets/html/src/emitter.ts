@@ -62,6 +62,7 @@ import {
   type ModuleStatementNames,
   mapped,
   mappedExpr,
+  mappedVar,
   moduleExportName,
   propKey,
   quote,
@@ -350,13 +351,21 @@ export function createEmitter(
    * element's members; the build keeps `any`, its output unchanged, and so
    * does a tag whose name is not known (`tagName` undefined).
    */
-  const elementRef = (name: string, tagName: string | undefined): void => {
+  const elementRef = (
+    name: string,
+    tagName: string | undefined,
+    varSpan: SourceSpan | undefined,
+  ): void => {
     const type =
       options.typeCheck && tagName !== undefined
         ? `__MxElement<${JSON.stringify(tagName)}>`
         : "any";
     push(
-      `const ${name} = (): ${type} => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
+      concatMapped(
+        "const ",
+        mappedVar(name, varSpan),
+        ` = (): ${type} => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
+      ),
     );
   };
 
@@ -1254,7 +1263,7 @@ export function createEmitter(
     },
 
     element(node) {
-      if (node.var) elementRef(node.var, node.name);
+      if (node.var) elementRef(node.var, node.name, node.varSpan);
       if (node.name === "textarea") return textarea(node);
       literal(`<${node.name}`);
       elementAttributes(node.name, node.attrs);
@@ -1342,7 +1351,7 @@ export function createEmitter(
         // value, which is what a `/var` on the dynamic tag binds.
         push(
           concatMapped(
-            node.var ? `const ${node.var} = ` : "",
+            ...declareVar(node),
             `__mxRenderDynamic(${state.sink}, ${target.expr.code}, `,
             propsObject,
             // With call args the callee's first parameter is an arg, not the
@@ -1437,7 +1446,13 @@ export function createEmitter(
               ");",
             ),
           );
-          push(`const ${node.var} = ${pair}.value;`);
+          push(
+            concatMapped(
+              "const ",
+              mappedVar(node.var, node.varSpan, node.varBindings),
+              ` = ${pair}.value;`,
+            ),
+          );
           write(`${pair}.output`);
           return;
         }
@@ -1470,7 +1485,7 @@ export function createEmitter(
       if (node.returnsValue || target.binding || callee === selfName) {
         push(
           concatMapped(
-            node.var ? `const ${node.var} = ` : "",
+            ...declareVar(node),
             mapped(callee, node.nameSpan),
             ".render(",
             input,
@@ -1605,13 +1620,20 @@ export function createEmitter(
       // (`<V/x/>`, `<${V}/x/>`) binds the `<return>` value through
       // `__mxRenderDynamic`, as Marko 6.4.4's `_dynamic_tag` does.
       const pair = node.returnValue ? defineFunctionName(node.name) : null;
+      // `<define/Row>`'s public name is a tag variable: it maps for
+      // navigation and hover, as every other `/var` declaration does. The
+      // private pair name stays unmapped.
+      const defineName = withUse(mapped(node.name, node.nameSpan ?? null), {
+        navigation: true,
+        semantic: true,
+      });
       if (pair) push(concatMapped(`const ${pair} = `, fn, ";"));
       const value: string | MappedCode = pair
         ? `(Object.defineProperty((...a: Parameters<typeof ${pair}>) => ${pair}(...a).output, "__mxDefinePair", { value: ${pair} }) as ((...a: Parameters<typeof ${pair}>) => string) & { readonly __mxDefinePair: typeof ${pair} })`
         : fn;
       const tree = node.attributeTagTree ?? [];
       if (node.attrs.length === 0 && tree.length === 0) {
-        push(concatMapped(`const ${node.name} = `, value, ";"));
+        push(concatMapped("const ", defineName, " = ", value, ";"));
         return;
       }
       // Marko: the tag's attributes, then its body's attribute tags, are
@@ -1626,7 +1648,9 @@ export function createEmitter(
       const { parts } = propsOf(node.attrs, tree, null, true, null);
       push(
         concatMapped(
-          `const ${node.name} = ${open}`,
+          "const ",
+          defineName,
+          ` = ${open}`,
           value,
           between,
           "{ ",
@@ -1637,7 +1661,13 @@ export function createEmitter(
     },
 
     constant(node) {
-      push(bindingStatement(node.name, node.varType, mappedExpr(node.init)));
+      push(
+        bindingStatement(
+          mappedVar(node.name, node.varSpan, node.varBindings),
+          node.varType,
+          mappedExpr(node.init),
+        ),
+      );
     },
 
     hoisted(node) {
@@ -1735,7 +1765,7 @@ export function createEmitter(
         // `const` reproduces Marko's output exactly.
         push(
           bindingStatement(
-            tag.var ?? "",
+            mappedVar(tag.var ?? "", tag.varSpan, tag.varBindings),
             data.varType,
             data.init ? mappedExpr(data.init) : "undefined",
           ),
@@ -2025,6 +2055,7 @@ export function createEmitter(
             literal?.type === "TemplateLiteral"
               ? (literal.quasis[0]?.value.cooked ?? undefined)
               : undefined,
+            tag.varSpan,
           );
         }
         emitter.component({
@@ -2045,6 +2076,10 @@ export function createEmitter(
           // does; dropping it here was `dynamic-tag-var-silent-drop`. An
           // element reference (`<${"my-el"}/el>`) is bound above instead.
           var: tag.elementRef ? null : tag.var,
+          ...(!tag.elementRef && tag.varSpan ? { varSpan: tag.varSpan } : {}),
+          ...(!tag.elementRef && tag.varBindings
+            ? { varBindings: tag.varBindings }
+            : {}),
           attributeTagTree: tag.attributeTagTree,
           args: tag.args ?? [],
           loc: tag.loc,
@@ -2212,17 +2247,32 @@ function loopHead(
  * text the author wrote. The annotation exists only under `typeCheck`.
  */
 function bindingStatement(
-  name: string,
+  name: string | MappedCode,
   varType: { code: string; span?: SourceSpan } | undefined,
   init: string | MappedCode,
 ): MappedCode {
   return concatMapped(
-    `const ${name}`,
+    "const ",
+    name,
     ...(varType ? [": ", mapped(varType.code, varType.span ?? null)] : []),
     " = ",
     init,
     ";",
   );
+}
+
+/**
+ * `const <var> = ` for a call whose `/var` binds its result, the declared
+ * names mapped to the authored `/var`; nothing without one.
+ */
+function declareVar(node: {
+  var?: string | null;
+  varSpan?: SourceSpan;
+  varBindings?: Array<{ name: string; span?: SourceSpan }>;
+}): Array<string | MappedCode> {
+  return node.var
+    ? ["const ", mappedVar(node.var, node.varSpan, node.varBindings), " = "]
+    : [];
 }
 
 /** One slice of a `client` statement's code, mapped to where the author wrote it. */
