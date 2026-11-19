@@ -3857,12 +3857,15 @@ reference, a `<let>` or `<const>` pattern's names, a call's `/var` and a
 `<define>`'s name), in a whole file and in a `.preact.mx` or `.react.mx`
 region: hover on the `/el` in the tag reads its type, and go-to-definition and
 rename from a read reach the authored name. A `.mx` file in an Astro project
-is mapped too, since it compiles through html. `.astro.mx` binds no tag
-variable, so there is nothing to map. On Angular the template reaches TypeScript as a
-string (a page has no virtual module, and a `.ng.mx` region is a template
-literal), so the editor has no navigation inside it and the declaration is not
-mapped. On Solid the declaration is not mapped yet, so there it reaches no
-authored text.
+is mapped too, since it compiles through html. On Solid the declaration of an
+element reference and of a call's `/var` is mapped, in a whole file and in a
+`.solid.mx` region, and a name Solid gives a repeated `/var` of its own
+(`__mxVar0_el`) maps as a whole onto the authored name; a `<define>`'s name,
+and a `/var` inside a region `<define>` body, are not mapped. `.astro.mx`
+binds no tag variable, so there is nothing to map. On Angular the template
+reaches TypeScript as a string (a page has no virtual module, and a `.ng.mx`
+region is a template literal), so the editor has no navigation inside it and
+the declaration is not mapped.
 
 **Lifted names are unique on preact, react and hono.** In a whole-file
 component, the identifiers declared by `<const>` patterns, `<define>` names,
