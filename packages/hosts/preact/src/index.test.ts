@@ -2067,4 +2067,23 @@ describe("an element reference's callback `ref` (Preact)", () => {
     expect(code).toContain("ref={(__mxNode");
     expect(code).not.toContain('typeof document === "undefined" ? undefined');
   });
+
+  // As in Marko, a nested attribute tag is a field of its parent tag, not
+  // part of the parent's body: the `<@inner>` record is built outside the
+  // `<@tab>` body's callback scope, so its handler reads the call scope's
+  // `el` getter, not the one the `<@tab>` body declares.
+  it("reads the call scope's getter from a nested attribute tag's body", () => {
+    const code = compile(
+      'import Layout from "./Layout.mx"\n<div/el/><Layout><@tab><div/el/><@inner><button onClick() { el() }/></@inner></@tab></Layout>',
+    );
+    expect(code).toContain(
+      'let __mxEl0: __MxElement<"div"> | null = null;\n  const el = (): __MxElement<"div"> => __mxEl0!;\n  return (<><div ref={(__mxNode: __MxElement<"div"> | null) => { __mxEl0 = __mxNode; }} /><Layout ',
+    );
+    expect(code).toContain(
+      '"inner": __mxAttrTag({ content: <button onClick={function () { el(); }} /> })',
+    );
+    expect(code).toContain(
+      'content: (() => { let __mxEl1: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl1!; return (<div ref={(__mxNode: __MxElement<"div"> | null) => { __mxEl1 = __mxNode; }} />); })()',
+    );
+  });
 });

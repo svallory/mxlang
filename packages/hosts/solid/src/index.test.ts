@@ -1716,6 +1716,31 @@ describe("a unit that returns a value", () => {
     );
   });
 
+  // As in Marko, a nested attribute tag is a field of its parent tag, not
+  // part of the parent's body: its body sees the scope around the call. The
+  // outer body's `el` is renamed inside its accessor, and the `<@inner>`
+  // record, built outside that accessor, reads the call scope's `el`.
+  it("scopes a nested attribute tag's body beside its parent's body, in the call's scope", () => {
+    const result = compileSolidMx(
+      "<div/el/><Layout><@tab><div/el/><@inner><button onClick() { el() }/></@inner></@tab></Layout>",
+      {
+        filename: "fixture.solid.mx",
+        importSpecifiers: new Map([["Layout", "./Layout.mx"]]),
+        importDefaultFromMarkoOrMx: new Set(["Layout"]),
+      },
+    );
+    expect(result.returnVars).toEqual([]);
+    expect(result.code).toContain(
+      "{(() => { let el: any; return <><div ref={(__mxNode: Element) => { el = () => __mxNode; }}></div><Layout ",
+    );
+    expect(result.code).toContain(
+      '"inner": __mxAttrTag({ content: () => <button onClick={function () { el(); }}></button> })',
+    );
+    expect(result.code).toContain(
+      "content: () => (() => { let __mxVar0_el: any; return <><div ref={(__mxNode: Element) => { __mxVar0_el = () => __mxNode; }}></div></>; })()",
+    );
+  });
+
   // Every `/var` is declared with one `let` at the component's head, so a
   // body that repeats a name another body binds gets a reserved name of its
   // own (the render rows are in `discovered-tag-render.test.ts`).
