@@ -2098,9 +2098,17 @@ function evaluatePath(
 }
 
 /**
+ * The parsed files of every `scanProgram` call, by file name. Every call uses
+ * the same compiler options, so a later program reuses an earlier one's parsed
+ * and bound `SourceFile` (the binder skips a bound file), as the language
+ * service's DocumentRegistry does; an entry is served only for the same text.
+ */
+const parsedFiles = new Map<string, ts.SourceFile>();
+
+/**
  * One program over every file of `sources` (repo-relative path to text),
  * served from memory; `noResolve`, so an imported binding is unknown. Shared
- * by the source and dist scanners.
+ * by the source, dist and spawned-sources scanners, through `parsedFiles`.
  */
 function scanProgram(sources: ReadonlyMap<string, string>): {
   files: string[];
@@ -2113,9 +2121,12 @@ function scanProgram(sources: ReadonlyMap<string, string>): {
   const host: ts.CompilerHost = {
     getSourceFile: (name, language) => {
       const text = sources.get(relName(name));
-      return text === undefined
-        ? undefined
-        : ts.createSourceFile(name, text, language, true);
+      if (text === undefined) return undefined;
+      const cached = parsedFiles.get(name);
+      if (cached?.text === text) return cached;
+      const sf = ts.createSourceFile(name, text, language, true);
+      parsedFiles.set(name, sf);
+      return sf;
     },
     getDefaultLibFileName: () => "/lib.d.ts",
     writeFile: () => {},
@@ -2416,10 +2427,25 @@ const FIXTURE_EXEMPT: readonly (Exemption & { reason: string })[] = [
 ];
 
 const ROOT = resolve(import.meta.dirname, "..");
-let repoFiles: { listed: string[]; tests: Map<string, string> } | undefined;
+
+/** The entries of `texts` whose text passes `keep`. */
+function filterTexts(
+  texts: ReadonlyMap<string, string>,
+  keep: (text: string) => boolean,
+): Map<string, string> {
+  return new Map([...texts].filter(([, text]) => keep(text)));
+}
+let repoFiles:
+  | {
+      listed: string[];
+      texts: Map<string, string>;
+      tests: Map<string, string>;
+    }
+  | undefined;
 /**
- * The repository: git's file list (sorted) and the text of every vitest test
- * file that may read a file (the prefilter); computed once for both guards.
+ * The repository: git's file list (sorted), the text of every vitest test file
+ * (`texts`, read once for every guard) and those that may read a file
+ * (`tests`, the prefilter); computed once.
  */
 const scanInputs = () => {
   if (repoFiles !== undefined) return repoFiles;
@@ -2432,14 +2458,14 @@ const scanInputs = () => {
   const listed = [...new Set(out.stdout.split("\n").filter(Boolean))]
     .filter((f) => existsSync(resolve(ROOT, f)))
     .sort();
-  const tests = new Map<string, string>();
+  const texts = new Map<string, string>();
   for (const f of listed.filter((f) => VITEST_TEST_FILE.test(f))) {
-    const text = readFileSync(resolve(ROOT, f), "utf8");
-    if (/readFileSync|readFile\b|Bun\.file|\?raw|["'`]\.\.\//.test(text)) {
-      tests.set(f, text);
-    }
+    texts.set(f, readFileSync(resolve(ROOT, f), "utf8"));
   }
-  repoFiles = { listed, tests };
+  const tests = filterTexts(texts, (text) =>
+    /readFileSync|readFile\b|Bun\.file|\?raw|["'`]\.\.\//.test(text),
+  );
+  repoFiles = { listed, texts, tests };
   return repoFiles;
 };
 
@@ -2801,13 +2827,9 @@ describe("dist readers guard", () => {
   /** The repository's dist path reads; computed once. */
   const scanRepo = (): DistRead[] => {
     if (repoReads !== undefined) return repoReads;
-    const sources = new Map<string, string>();
-    for (const f of scanInputs().listed.filter((f) =>
-      VITEST_TEST_FILE.test(f),
-    )) {
-      const text = readFileSync(resolve(ROOT, f), "utf8");
-      if (/\bdist\b/.test(text)) sources.set(f, text);
-    }
+    const sources = filterTexts(scanInputs().texts, (text) =>
+      /\bdist\b/.test(text),
+    );
     repoReads = scanDistReads(
       sources,
       DIST_PACKAGES.map((r) => r.dir),
@@ -3076,24 +3098,18 @@ describe("spawned sources guard", () => {
   /** The repository's spawns of a source; computed once. */
   const scanRepo = (): SpawnRead[] => {
     if (repoReads !== undefined) return repoReads;
-    const { listed } = scanInputs();
-    const sources = new Map<string, string>();
-    for (const f of listed.filter((f) => VITEST_TEST_FILE.test(f))) {
-      const text = readFileSync(resolve(ROOT, f), "utf8");
-      // A spawn name, but not a RegExp's `.exec(`: a member `.exec` of
-      // child_process takes a command string, never a path to a source. Or an
-      // `import(` whose argument does not start with a quote or a backtick: a
-      // string or template argument is a specifier the scanner never records.
-      // A file this prefilter skips never reaches the scanner: re-check the
-      // detection count before widening or narrowing either alternative.
-      if (
-        /(?<![\w$.])(?:spawn|exec|fork)|\.(?:spawn|fork|execFile|execSync)|\bimport\((?!\s*["'`])/.test(
-          text,
-        )
-      ) {
-        sources.set(f, text);
-      }
-    }
+    const { listed, texts } = scanInputs();
+    // A call of a spawn name, but not a RegExp's `.exec(`: a member `.exec` of
+    // child_process takes a command string, never a path to a source. Or an
+    // `import(` whose argument does not start with a quote or a backtick: a
+    // string or template argument is a specifier the scanner never records.
+    // A file this prefilter skips never reaches the scanner: re-check the
+    // detection count before widening or narrowing either alternative.
+    const sources = filterTexts(texts, (text) =>
+      /(?:(?<![\w$.])(?:spawn|exec|fork)\w*|\.(?:spawn|fork|execFile|execSync)\w*)\s*[(<]|\bimport\((?!\s*["'`])/.test(
+        text,
+      ),
+    );
     repoReads = scanSpawnedSources(sources, new Set(sourceTargets(listed)));
     return repoReads;
   };
