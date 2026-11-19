@@ -345,10 +345,18 @@ export function createEmitter(
    * only in a handler or a `<script>` body, which html never runs; a handler
    * passed to a custom tag or a `<define>` call still names it, so it is
    * bound, as stock Marko's html build binds a getter that throws when called.
+   * Under `typeCheck` the getter returns the tag's DOM type (`__MxElement`,
+   * emitted once by `moduleHelpers`), so a handler reading it gets that
+   * element's members; the build keeps `any`, its output unchanged, and so
+   * does a tag whose name is not known (`tagName` undefined).
    */
-  const elementRef = (name: string): void => {
+  const elementRef = (name: string, tagName: string | undefined): void => {
+    const type =
+      options.typeCheck && tagName !== undefined
+        ? `__MxElement<${JSON.stringify(tagName)}>`
+        : "any";
     push(
-      `const ${name} = (): any => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
+      `const ${name} = (): ${type} => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
     );
   };
 
@@ -1246,7 +1254,7 @@ export function createEmitter(
     },
 
     element(node) {
-      if (node.var) elementRef(node.var);
+      if (node.var) elementRef(node.var, node.name);
       if (node.name === "textarea") return textarea(node);
       literal(`<${node.name}`);
       elementAttributes(node.name, node.attrs);
@@ -2008,7 +2016,17 @@ export function createEmitter(
             : null;
         // A literal dynamic tag's element reference (`<${"my-el"}/el>`) is
         // the same getter as `<div/el>`'s, and binds no dynamic value.
-        if (tag.elementRef && tag.var) elementRef(tag.var);
+        if (tag.elementRef && tag.var) {
+          // Core sets `elementRef` only on a literal name (a template literal
+          // with no placeholder), so its one quasi is the tag name.
+          const literal = data.expr.node;
+          elementRef(
+            tag.var,
+            literal?.type === "TemplateLiteral"
+              ? (literal.quasis[0]?.value.cooked ?? undefined)
+              : undefined,
+          );
+        }
         emitter.component({
           kind: "Component",
           target: { kind: "dynamic", expr: data.expr } as ComponentTarget,

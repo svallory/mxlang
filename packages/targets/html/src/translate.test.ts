@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
+import { diagnosticsOf } from "./fixtures/type-check.ts";
 import { mx } from "./helpers.ts";
 import { compile } from "./index.ts";
 import { brandRender } from "./translate.ts";
@@ -2732,6 +2733,61 @@ describe("an element reference (`<div/el>`)", () => {
     );
     expect(code).not.toContain("const el = __mxRenderDynamic(");
     expect(code).toContain("__mxRenderDynamic(__mxOut, `my-el`, ");
+  });
+
+  // The type check (the TypeScript plugin, `mx-tsc`) types the getter by
+  // tag, so a handler reading `el()` gets the element's members; the build
+  // output above keeps `any` and has no alias.
+  const alias =
+    "type __MxElement<N extends string> = N extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[N] : N extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[N] : HTMLElement;";
+
+  it("types the getter by tag under typeCheck, with the alias once", () => {
+    const projection = compile(src("<div/el/><p/q/>"), "/f/t.mx", {
+      typeCheck: true,
+    }).code;
+    expect(projection).toContain(
+      'const el = (): __MxElement<"div"> => { throw new Error("Element references can only be read in scripts and event handlers."); };',
+    );
+    expect(projection).toContain(
+      'const q = (): __MxElement<"p"> => { throw new Error("Element references can only be read in scripts and event handlers."); };',
+    );
+    expect(projection.split(alias)).toHaveLength(2);
+  });
+
+  it("keeps the build output free of the alias", () => {
+    const { code } = compile(src("<div/el/>"), "/f/t.mx");
+    expect(code).not.toContain("__MxElement");
+  });
+
+  const pick =
+    "<define/Child|input: { onPick: () => void }|>x</define><div/el/>";
+
+  it("type-checks a handler's el() call against the tag's element", () => {
+    expect(
+      diagnosticsOf(`${pick}<Child onPick=(() => el().focus())/>`),
+    ).toEqual([]);
+  });
+
+  it("reports a member the tag's element lacks at the member", () => {
+    expect(diagnosticsOf(`${pick}<Child onPick=(() => el().nope())/>`)).toEqual(
+      [
+        {
+          code: 2339,
+          text: "Property 'nope' does not exist on type 'HTMLDivElement'.",
+          at: "nope",
+        },
+      ],
+    );
+  });
+
+  it("types a literal dynamic tag's getter by its literal name under typeCheck", () => {
+    const projection = compile(src('<${"my-el"}/el>x</>'), "/f/t.mx", {
+      typeCheck: true,
+    }).code;
+    expect(projection).toContain(
+      'const el = (): __MxElement<"my-el"> => { throw new Error("Element references can only be read in scripts and event handlers."); };',
+    );
+    expect(projection.split(alias)).toHaveLength(2);
   });
 });
 

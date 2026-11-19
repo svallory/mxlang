@@ -1723,6 +1723,14 @@ const RENDER_CALL = `type __MxRenderCall<F> = [F] extends [{ render: (input: inf
 const INPUT_OF = `type __MxInputOf<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? I : F extends (...args: infer P) => unknown ? P[0] : never;`;
 
 /**
+ * The element an element reference (`<div/el>`) returns in the type check, by
+ * tag name: the DOM's own element type, the SVG one, else `HTMLElement` (a
+ * custom element). Same text as Preact's `MX_ELEMENT_TYPE`
+ * (`packages/hosts/preact/src/compile.ts`); html does not depend on Preact.
+ */
+const ELEMENT_TYPE = `type __MxElement<N extends string> = N extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[N] : N extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[N] : HTMLElement;`;
+
+/**
  * The core's emitted default export, as text, for the two rewrites below.
  *
  * Both `finalizeModule`'s helper injection and `brandRender` key off this exact
@@ -1876,6 +1884,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxRenderTag("), RENDER_CALL],
     [code.includes("__mxRenderTag("), RENDER_TAG],
     [code.includes("__MxInputOf<"), INPUT_OF],
+    [code.includes("__MxElement<"), ELEMENT_TYPE],
   ];
   const helpers = candidates.flatMap(([used, source]) =>
     used ? [source] : [],
