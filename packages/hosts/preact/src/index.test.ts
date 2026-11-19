@@ -2086,4 +2086,48 @@ describe("an element reference's callback `ref` (Preact)", () => {
       'content: (() => { let __mxEl1: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl1!; return (<div ref={(__mxNode: __MxElement<"div"> | null) => { __mxEl1 = __mxNode; }} />); })()',
     );
   });
+
+  // An element body whose reference repeats a name of its scope is a scope
+  // of its own, however the other declaration is ordered.
+  it.each([
+    [
+      "a later same-level /el",
+      "<div><div/el/><button onClick() { el() }>a</button></div><div/el/>",
+    ],
+    [
+      "a later <const/el>",
+      "<div><div/el/><button onClick() { el() }>a</button></div><const/el=1/>${el}",
+    ],
+    [
+      "an earlier <const/el>",
+      "<const/el=1/><div><div/el/><button onClick() { el() }>a</button></div>${el}",
+    ],
+  ])("wraps an element body whose /el repeats %s", (_, source) => {
+    expect(compile(source)).toContain(
+      '<div>{(() => { let __mxEl0: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl0!; return (<><div ref=',
+    );
+  });
+
+  it("leaves an element body flat when its /el is declared once, so a read outside it reaches it", () => {
+    expect(
+      compile("<div><div/el/></div><button onClick() { el() }>c</button>"),
+    ).toContain(
+      '  let __mxEl0: __MxElement<"div"> | null = null;\n  const el = (): __MxElement<"div"> => __mxEl0!;\n  return (<><div><div ref=',
+    );
+  });
+
+  // Stock Marko refuses this read as ambiguous; here the two getters stay in
+  // their bodies' arrows and the read is an unbound name.
+  it("compiles a read outside two bodies binding the same /el with no component-scope `el`", () => {
+    const code = compile(
+      "<div><div/el/></div><div><div/el/></div><button onClick() { el() }>c</button>",
+    );
+    expect(code).not.toMatch(/^\s*const el = /m);
+    expect(code).toContain(
+      '<div>{(() => { let __mxEl0: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl0!;',
+    );
+    expect(code).toContain(
+      '<div>{(() => { let __mxEl1: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl1!;',
+    );
+  });
 });

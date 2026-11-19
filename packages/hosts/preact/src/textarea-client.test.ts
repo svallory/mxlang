@@ -123,6 +123,10 @@ describe("an element reference (`<div/el>`) is the rendered element in a handler
       '<if=true><div><div/input/><button onClick() { input().dataset.hit = "1" }>go</button></div><p>${typeof input.r}</p></if>',
     nestedDynamicInput:
       '<div><${"my-el"}/input/><button onClick() { input().dataset.hit = "1" }>go</button></div><p>${typeof input.r}</p>',
+    // Two element bodies each bind `el`: each body is a scope of its own, so
+    // each handler reaches its own element.
+    twoBodies:
+      '<div><div/el/><button onClick() { el().dataset.hit = "1" }>a</button></div><div><div/el/><button onClick() { el().dataset.hit = "2" }>b</button></div>',
   } as const;
   const files = {} as Record<keyof typeof SOURCES, string>;
 
@@ -165,7 +169,7 @@ console.log(JSON.stringify(out));
     );
   });
 
-  it("a click reaches the element, per row in a <for>, with an authored ref composed, and named input in an element body", () => {
+  it("a click reaches the element, per row in a <for>, with an authored ref composed, named input in an element body, and in two bodies binding the same name", () => {
     const result = run(
       REF_CLIENT,
       files.base,
@@ -178,6 +182,7 @@ console.log(JSON.stringify(out));
         ["nestedInput", files.nestedInput, 0],
         ["nestedInputInIf", files.nestedInputInIf, 0],
         ["nestedDynamicInput", files.nestedDynamicInput, 0],
+        ["twoBodies", files.twoBodies, 1],
       ]),
     );
     expect(result).toEqual({
@@ -206,6 +211,9 @@ console.log(JSON.stringify(out));
       },
       nestedDynamicInput: {
         html: '<div><my-el data-hit="1"></my-el><button>go</button></div><p>function</p>',
+      },
+      twoBodies: {
+        html: '<div><div></div><button>a</button></div><div><div data-hit="2"></div><button>b</button></div>',
       },
     });
   }, 30_000);

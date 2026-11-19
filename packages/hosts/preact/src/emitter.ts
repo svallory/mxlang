@@ -185,13 +185,26 @@ class EveryName extends Set<string> {
 const EVERY_NAME: ReadonlySet<string> = new EveryName();
 
 /**
+ * `scopeLocals`'s result: the names in scope, and `repeated`, the names the
+ * body's own declarations (not `outer`'s) bind more than once. An element
+ * body whose element reference repeats one of them is a scope of its own
+ * (`#elementBodyIsOwnScope`).
+ */
+class ScopeNames extends Set<string> {
+  readonly repeated = new Set<string>();
+}
+
+/**
  * The local names in scope inside a body: the enclosing `outer` names, the
  * body's own `bindings` (its params, from core's binding analysis) and every
  * `/var` and `<const>` the body declares directly. An element or an `<if>`
  * branch opens no scope, so their declarations count, and the emitter hoists
  * each statement to the top of its scope, so a name binds before and after
  * it. Names are read from the IR only (`bindings`, `varBindings`); a field
- * the IR leaves absent makes the body bind every name.
+ * the IR leaves absent makes the body bind every name. The names the body's
+ * own declarations bind more than once are recorded too: an element body
+ * whose element reference repeats one becomes a scope of its own
+ * (`#elementBodyIsOwnScope`).
  */
 export function scopeLocals(
   outer: ReadonlySet<string>,
@@ -199,11 +212,17 @@ export function scopeLocals(
   children: readonly IrNode[],
 ): ReadonlySet<string> {
   if (outer instanceof EveryName || bindings === undefined) return EVERY_NAME;
-  const names = new Set([...outer, ...bindings]);
+  const names = new ScopeNames([...outer, ...bindings]);
+  const seen = new Set<string>();
+  const add = (name: string): void => {
+    if (seen.has(name)) names.repeated.add(name);
+    seen.add(name);
+    names.add(name);
+  };
   const declare = (nodes: readonly IrNode[]): boolean => {
     for (const node of nodes) {
       if (node.kind === "Element") {
-        if (node.var) names.add(node.var);
+        if (node.var) add(node.var);
         if (!declare(node.children)) return false;
       } else if (node.kind === "IfChain") {
         for (const branch of node.branches) {
@@ -212,7 +231,7 @@ export function scopeLocals(
       } else if (node.kind === "Component" || node.kind === "Const") {
         if (node.kind === "Component" && !node.var) continue;
         if (!node.varBindings) return false;
-        for (const { name } of node.varBindings) names.add(name);
+        for (const { name } of node.varBindings) add(name);
       }
     }
     return true;
@@ -246,6 +265,21 @@ export function shadowedCalls(ir: Ir): WeakSet<object> {
     }
   }
   return calls;
+}
+
+/**
+ * Whether a `<define>` sits anywhere below these nodes, through element and
+ * tag bodies: the bodies a region lifts a `<define>` out of.
+ */
+function holdsDefine(nodes: readonly IrNode[]): boolean {
+  return nodes.some(
+    (node) =>
+      node.kind === "Define" ||
+      (node.kind === "Element" && holdsDefine(node.children)) ||
+      (node.kind === "Component" &&
+        node.content != null &&
+        holdsDefine(node.content.children)),
+  );
 }
 
 /**
@@ -2885,24 +2919,36 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /**
-   * Whether a whole-file compile must render this element body as its own
-   * scope (`#scoped`): a direct child binds an element reference named
-   * `input` (`<div/input/>`, `<${"my-el"}/input/>`). Its getter would
-   * otherwise join the component's `/var` statements beside the prologue's
-   * `const input`, and in Marko an element body is a scope of its own, so the
-   * template's `input` stays readable outside it. A deeper reference is
-   * checked when its own element is emitted. A region has no template
-   * `input`, and any other body keeps today's output.
+   * Whether this element body renders as its own scope (`#scoped`), as an
+   * element body is one in Marko. It does when a direct child binds an
+   * element reference (`<div/el/>`, `<${"my-el"}/el/>`) whose getter would
+   * otherwise collide in the enclosing scope's `/var` statements:
+   *
+   * - `input` in a whole-file compile, beside the prologue's `const input`,
+   *   so the template's `input` stays readable outside the body;
+   * - a name this scope's table already holds (an earlier declaration);
+   * - a name the scope declares more than once (`scopeLocals`' `repeated`),
+   *   which also covers a later body, `/var` or `<const>` not claimed yet.
+   *
+   * A name declared once keeps the flat output, so a read outside the body
+   * still reaches it. A deeper reference is checked when its own element is
+   * emitted. In a region, a body with a `<define>` below it stays flat for a
+   * repeated name: a hard scope would refuse lifting the define.
    */
-  #elementBodyBindsInput(children: readonly IrNode[]): boolean {
-    if (this.#region) return false;
-    return children.some(
-      (child) =>
-        (child.kind === "Element" && child.var === "input") ||
-        (child.kind === "Component" &&
-          child.elementRef === true &&
-          child.var === "input"),
+  #elementBodyIsOwnScope(children: readonly IrNode[]): boolean {
+    const names = children.flatMap((child) =>
+      (child.kind === "Element" && child.var) ||
+      (child.kind === "Component" && child.elementRef === true && child.var)
+        ? [child.var]
+        : [],
     );
+    if (names.length === 0) return false;
+    if (!this.#region && names.includes("input")) return true;
+    const repeated =
+      this.#locals instanceof ScopeNames ? this.#locals.repeated : new Set();
+    if (!names.some((name) => this.#bindings.has(name) || repeated.has(name)))
+      return false;
+    return !this.#region || !holdsDefine(children);
   }
 
   /** `ref`, an element reference's callback `ref`, is written after every other attribute. */
@@ -2963,7 +3009,7 @@ export class PreactEmitter implements Emitter<string> {
       ? concatMapped()
       : content && this.#dialect.textareaContent === "children"
         ? concatMapped("{", content, "}")
-        : this.#elementBodyBindsInput(node.children)
+        : this.#elementBodyIsOwnScope(node.children)
           ? this.#scoped(false, (scope) =>
               scope.#render(
                 node.children,

@@ -101,6 +101,14 @@ describe("an element reference (`<div/el>`) is the rendered element in a handler
       '<${"my-el"}/el/><button onClick() { el().dataset.hit = "1" }>go</button>',
     dynamicAuthoredRef:
       '<${"my-el"}/el ref=input.r/><button onClick() { el().dataset.hit = "1" }>go</button>',
+    // An element body is its own scope: `input` is the element inside it and
+    // the template's input outside it.
+    nestedInput:
+      '<p>${typeof input.r}</p><div><div/input/><button onClick() { input().dataset.hit = "1" }>go</button></div>',
+    // Two element bodies each bind `el`: each body is a scope of its own, so
+    // each handler reaches its own element.
+    twoBodies:
+      '<div><div/el/><button onClick() { el().dataset.hit = "1" }>a</button></div><div><div/el/><button onClick() { el().dataset.hit = "2" }>b</button></div>',
   } as const;
   const files = {} as Record<keyof typeof SOURCES, string>;
 
@@ -139,7 +147,7 @@ console.log(JSON.stringify(out));
     }
   });
 
-  it("a click reaches the element, per row in a <for>, with an authored ref composed", () => {
+  it("a click reaches the element, per row in a <for>, with an authored ref composed, named input in an element body, and in two bodies binding the same name", () => {
     const result = run(
       REF_CLIENT,
       JSON.stringify([
@@ -148,6 +156,8 @@ console.log(JSON.stringify(out));
         ["authoredRef", files.authoredRef, 0],
         ["dynamic", files.dynamic, 0],
         ["dynamicAuthoredRef", files.dynamicAuthoredRef, 0],
+        ["nestedInput", files.nestedInput, 0],
+        ["twoBodies", files.twoBodies, 1],
       ]),
     );
     expect(result).toEqual({
@@ -167,6 +177,12 @@ console.log(JSON.stringify(out));
       dynamicAuthoredRef: {
         html: '<my-el data-hit="1"></my-el><button>go</button>',
         refIsMyEl: true,
+      },
+      nestedInput: {
+        html: '<p>function</p><div><div data-hit="1"></div><button>go</button></div>',
+      },
+      twoBodies: {
+        html: '<div><div></div><button>a</button></div><div><div data-hit="2"></div><button>b</button></div>',
       },
     });
   }, 30_000);

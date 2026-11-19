@@ -456,6 +456,38 @@ describe("region rule", () => {
       });
     });
 
+    // A body with a `<define>` below it stays flat, so the define can still
+    // be lifted; the other body binding the name is a scope of its own.
+    it("refuses an element reference in two bodies that both hold a <define>, at the second element", () => {
+      expect(
+        errorOf(
+          inRegion(
+            "<div><div/el/><define/X><b/></define><X/></div><div><div/el/><define/Y><i/></define><Y/></div>",
+          ),
+        ),
+      ).toEqual({ message: dup("el"), line: 5, column: 58 });
+      expect(() =>
+        print(
+          inRegion(
+            "<div><div/el/><define/X><b/></define><X/></div><div><div/el/><i/></div>",
+          ),
+          FILE,
+          {
+            mx: true,
+            mxRegionCompile: (input) =>
+              compilePreactRegion(input.source, {
+                ...input,
+                targets,
+              }) as ReturnType<
+                NonNullable<
+                  NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"]
+                >
+              >,
+          },
+        ),
+      ).not.toThrow();
+    });
+
     it("compiles the same name in two different regions of one file", () => {
       const source = `import Counter from "./counter.mx";\nexport function A() {\n  return (\n    <div><Counter/x start=1/></div>\n  );\n}\nexport function B() {\n  return (\n    <div><Counter/x start=2/></div>\n  );\n}\n`;
       const out = print(source, file, {

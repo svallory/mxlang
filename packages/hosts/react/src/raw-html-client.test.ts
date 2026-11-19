@@ -111,6 +111,8 @@ const SOURCES = {
     '<section><${"my-el"}/el/><button onClick() { el().dataset.hit = "1" }>go</button></section>',
   nestedInputRef:
     '<section><div><div/input/><button onClick() { input().dataset.hit = "1" }>go</button></div><p>${input.tag}</p></section>',
+  twoBodiesRef:
+    '<section><div><div/el/><button onClick() { el().dataset.hit = "1" }>a</button></div><div><div/el/><button onClick() { el().dataset.hit = "2" }>b</button></div></section>',
 } as const;
 
 let results: Record<
@@ -225,6 +227,14 @@ describe("an element reference (`<div/el>`) on React", () => {
       '<section><div><div data-hit="1"></div><button>go</button></div><p>article</p></section>',
     );
     expect(results.nestedInputRef.errors).toEqual([]);
+  });
+  // Two element bodies each bind `el`: each body is a scope of its own, so
+  // each handler reaches its own element.
+  it("in two element bodies binding the same name, each its own", () => {
+    expect(results.twoBodiesRef.client).toBe(
+      '<section><div><div data-hit="1"></div><button>a</button></div><div><div data-hit="2"></div><button>b</button></div></section>',
+    );
+    expect(results.twoBodiesRef.errors).toEqual([]);
   });
 });
 

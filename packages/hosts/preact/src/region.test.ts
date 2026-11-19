@@ -68,6 +68,7 @@ describe(".preact.mx region renders what the whole-file .mx renders", () => {
     '<${"e" + "m"} title="t">dyn</>',
     '<define/Item|label: string|><li>${label}</li></define><ol><Item("one")/><Item("two")/></ol>',
     '<div innerHTML="no">${"<b>escaped</b>"}</div>',
+    "<div><div/el/><b>1</b></div><div><div/el/><b>2</b></div>",
   ];
 
   it.each(markups)("%s", async (markup) => {
