@@ -3696,6 +3696,8 @@ function lowerAttributeFor(
   node: Node,
   schema: AttrSchema,
 ): AttributeTagNode {
+  // Its type arguments and parameters are read in the body around the call.
+  checkTagHeadReads(ctx, node);
   const loop = asStructuralConstruct(ctx, node, "for", () =>
     lowerForHead(ctx, node, true),
   );
@@ -3735,6 +3737,7 @@ function lowerAttributeIf(
     const branch = siblings[cursor];
     const name = String(tagNameOf(branch) ?? "").replace(/^@/, "");
     if (cursor > index && name !== "else" && name !== "else-if") break;
+    checkTagHeadReads(ctx, branch);
     validateBoundAttributes(ctx, branch);
     rejectExtraConditionAttributes(ctx, branch, name);
     const conditionAttr =
@@ -4205,6 +4208,8 @@ function lowerIfChain(
     ) {
       break;
     }
+    // The `<if>`'s head is checked by `lowerChildList`; each later branch's here.
+    checkTagHeadReads(ctx, child);
 
     // A branch's own shape error is the chain's construct too, reported once at
     // the `if` that opens it.
@@ -8443,7 +8448,10 @@ function checkAmbiguousTagVarReads(
  * sit on the tag, in the body around it; the parameters sit on the tag's
  * body, so the body's own tag variables and params bind there too. A pattern
  * the parser could not read (`MarkoParseError`) is left to `varBindingsOf`,
- * which reports it at the parser's position.
+ * which reports it at the parser's position. Besides the tags
+ * `lowerChildList` walks and attribute tags, it runs on the heads of
+ * control-flow tags in attribute position (`<for>`, `<if>`, `<else-if>`,
+ * `<else>`) and on a child-position chain's `<else>`/`<else-if>` branches.
  */
 function checkTagHeadReads(ctx: Ctx, tag: Node): void {
   if (!ctx.ambiguousTagVars) return;
