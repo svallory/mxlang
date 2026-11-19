@@ -532,6 +532,10 @@ Its IR, `greeting.ir.json`. `Expr.node` and `For.paramNodes` are elided (section
           }
         }
       ],
+      "varSpan": {
+        "sourceStart": 70,
+        "sourceEnd": 75
+      },
       "init": {
         "code": "input.items.length",
         "shape": "other",
