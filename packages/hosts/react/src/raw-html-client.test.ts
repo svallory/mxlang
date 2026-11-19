@@ -107,6 +107,8 @@ const SOURCES = {
     '<section><div/el/><button onClick() { el().dataset.hit = "1" }>go</button></section>',
   throwingHandler:
     '<section><button onClick() { throw new Error("boom") }>go</button></section>',
+  dynamicElementRef:
+    '<section><${"my-el"}/el/><button onClick() { el().dataset.hit = "1" }>go</button></section>',
 } as const;
 
 let results: Record<
@@ -204,6 +206,14 @@ describe("an element reference (`<div/el>`) on React", () => {
       '<section><div data-hit="1"></div><button>go</button></section>',
     );
     expect(results.elementRef.errors).toEqual([]);
+  });
+
+  // A literal dynamic tag is a native tag to Marko: `el` is the element.
+  it("is the rendered element on a literal dynamic tag", () => {
+    expect(results.dynamicElementRef.client).toBe(
+      '<section><my-el data-hit="1"></my-el><button>go</button></section>',
+    );
+    expect(results.dynamicElementRef.errors).toEqual([]);
   });
 });
 

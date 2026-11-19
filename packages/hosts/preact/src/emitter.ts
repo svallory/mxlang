@@ -2569,11 +2569,14 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * The call's props object. `content`, when given, is the expression the
    * `content` key reads instead of a fresh `#contentFn` (the dynamic route
-   * binds the body once and passes it twice).
+   * binds the body once and passes it twice). `trailing`, when given, is
+   * one more entry written last (a literal dynamic tag's element-reference
+   * `ref`).
    */
   #propsObject(
     node: Extract<IrNode, { kind: "Component" }>,
     content?: string,
+    trailing?: MappedCode,
   ): MappedCode {
     const parts: Array<string | MappedCode> = [];
     parts.push(...this.#propParts(node.attrs));
@@ -2586,6 +2589,7 @@ export class PreactEmitter implements Emitter<string> {
       // unit reads `input.content`, so it is passed under that name.
       parts.push(`content: ${content ?? this.#contentFn(node).code}`);
     }
+    if (trailing) parts.push(trailing);
 
     return concatMapped(
       "{ ",
@@ -2743,8 +2747,13 @@ export class PreactEmitter implements Emitter<string> {
       this.#element(node);
       return;
     }
-    const { attrs, ref } = this.#elementRef(node, node.var);
-    this.#element({ ...node, attrs }, ref);
+    const { attrs, callback } = this.#elementRef(
+      node.attrs,
+      node.name,
+      node.var,
+      node.loc,
+    );
+    this.#element({ ...node, attrs }, concatMapped(" ref={", callback, "}"));
   }
 
   /**
@@ -2753,22 +2762,27 @@ export class PreactEmitter implements Emitter<string> {
    * its markup, filled by a callback `ref` on the element. A callback ref
    * runs in every scope, a `.map` row or a branch included, where a hook
    * could not. An authored `ref=` on the element is handed the node too: a
-   * function is called with it, an object gets it as `.current`.
+   * function is called with it, an object gets it as `.current`. Returns
+   * the attributes without the authored `ref` and the callback, which an
+   * element writes as its `ref` and a literal dynamic tag
+   * (`<${"my-el"}/el>`) passes as the `ref` key of its props.
    */
   #elementRef(
-    node: Extract<IrNode, { kind: "Element" }>,
+    nodeAttrs: Attr[],
+    tagName: string,
     name: string,
-  ): { attrs: Attr[]; ref: MappedCode } {
-    this.#claimName(name, undefined, node.loc);
+    loc: Position,
+  ): { attrs: Attr[]; callback: MappedCode } {
+    this.#claimName(name, undefined, loc);
     const slot = this.#generatedName("El");
-    const type = `__MxElement<${JSON.stringify(emittedTag(node.name))}>`;
+    const type = `__MxElement<${JSON.stringify(emittedTag(tagName))}>`;
     this.#varStatements.push(
       `let ${slot}: ${type} | null = null;`,
       `const ${name} = (): ${type} => ${slot}!;`,
     );
     // Neither framework has string refs: a string or bare `ref` cannot be
     // handed the node, so it is refused rather than composed.
-    const stringRef = node.attrs.find(
+    const stringRef = nodeAttrs.find(
       (attr) =>
         (attr.kind === "static" || attr.kind === "boolean") &&
         attr.name === "ref",
@@ -2779,22 +2793,22 @@ export class PreactEmitter implements Emitter<string> {
         stringRef,
       );
     }
-    const authored = [...node.attrs]
+    const authored = [...nodeAttrs]
       .reverse()
       .find((attr) => attr.kind === "dynamic" && attr.name === "ref");
     const attrs = authored
-      ? node.attrs.filter((attr) => attr !== authored)
-      : node.attrs;
+      ? nodeAttrs.filter((attr) => attr !== authored)
+      : nodeAttrs;
     const store = `${slot} = __mxNode;`;
-    const ref =
+    const callback =
       authored?.kind === "dynamic"
         ? concatMapped(
-            ` ref={(__mxNode: ${type} | null) => { ${store} const __mxRef: any = `,
+            `(__mxNode: ${type} | null) => { ${store} const __mxRef: any = `,
             mappedExpr(authored.value),
-            '; if (typeof __mxRef === "function") __mxRef(__mxNode); else if (__mxRef) __mxRef.current = __mxNode; }}',
+            '; if (typeof __mxRef === "function") __mxRef(__mxNode); else if (__mxRef) __mxRef.current = __mxNode; }',
           )
-        : concatMapped(` ref={(__mxNode: ${type} | null) => { ${store} }}`);
-    return { attrs, ref };
+        : concatMapped(`(__mxNode: ${type} | null) => { ${store} }`);
+    return { attrs, callback };
   }
 
   /** `ref`, an element reference's callback `ref`, is written after every other attribute. */
@@ -2896,6 +2910,40 @@ export class PreactEmitter implements Emitter<string> {
         return;
       }
       this.#runtimeImports.add("__mxDynamic");
+      // A literal dynamic tag's element reference (`<${"my-el"}/el>`): the
+      // same slot, getter and callback as `<div/el>`'s, passed as the `ref`
+      // key of the props, which `__mxDynamic` hands to the element. Core has
+      // refused arguments, params and attribute tags on a literal name.
+      if (node.elementRef && node.var) {
+        const literal = node.target.expr.node;
+        const tagName =
+          (literal?.type === "TemplateLiteral"
+            ? literal.quasis[0]?.value.cooked
+            : undefined) ?? "";
+        const { attrs, callback } = this.#elementRef(
+          node.attrs,
+          tagName,
+          node.var,
+          node.loc,
+        );
+        const props = this.#propsObject(
+          { ...node, attrs },
+          undefined,
+          concatMapped("ref: ", callback),
+        );
+        this.#out.push(
+          this.#slot(
+            concatMapped(
+              "__mxDynamic(",
+              node.target.expr.code,
+              ", ",
+              props,
+              ")",
+            ),
+          ),
+        );
+        return;
+      }
       // Marko parity: args combine with a body/attribute tag
       // (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) — only a
       // plain attribute alongside args is still rejected

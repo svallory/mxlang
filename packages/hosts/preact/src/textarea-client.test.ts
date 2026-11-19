@@ -110,6 +110,11 @@ describe("an element reference (`<div/el>`) is the rendered element in a handler
     rows: "<for|n| of=[1, 2]><div/el/><button onClick() { el().dataset.hit = String(n) }>go</button></for>",
     authoredRef:
       '<div/el ref=input.r/><button onClick() { el().dataset.hit = "1" }>go</button>',
+    // A literal dynamic tag is a native tag to Marko: `el` is the element.
+    dynamic:
+      '<${"my-el"}/el/><button onClick() { el().dataset.hit = "1" }>go</button>',
+    dynamicAuthoredRef:
+      '<${"my-el"}/el ref=input.r/><button onClick() { el().dataset.hit = "1" }>go</button>',
   } as const;
   const files = {} as Record<keyof typeof SOURCES, string>;
 
@@ -132,6 +137,8 @@ for (const [name, file, click] of JSON.parse(process.argv[2])) {
   out[name] = { html: root.innerHTML };
   // Only the authored-ref case reads the \`r\` prop.
   if (name === "authoredRef") out[name].refIsDiv = received === root.querySelector("div");
+  // The dynamic authored-ref case reads it on the literal dynamic tag's element.
+  if (name === "dynamicAuthoredRef") out[name].refIsMyEl = received === root.querySelector("my-el");
 }
 console.log(JSON.stringify(out));
 `;
@@ -158,6 +165,8 @@ console.log(JSON.stringify(out));
         ["base", files.base, 0],
         ["rows", files.rows, 1],
         ["authoredRef", files.authoredRef, 0],
+        ["dynamic", files.dynamic, 0],
+        ["dynamicAuthoredRef", files.dynamicAuthoredRef, 0],
       ]),
     );
     expect(result).toEqual({
@@ -170,6 +179,13 @@ console.log(JSON.stringify(out));
       authoredRef: {
         html: '<div data-hit="1"></div><button>go</button>',
         refIsDiv: true,
+      },
+      dynamic: {
+        html: '<my-el data-hit="1"></my-el><button>go</button>',
+      },
+      dynamicAuthoredRef: {
+        html: '<my-el data-hit="1"></my-el><button>go</button>',
+        refIsMyEl: true,
       },
     });
   }, 30_000);
