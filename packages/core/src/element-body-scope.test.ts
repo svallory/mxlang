@@ -788,6 +788,60 @@ describe("a read of a tag variable two nested bodies declare", () => {
         "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item <T extends x>|v: T|>hi</@item></C>",
         106,
       ],
+      // A control-flow tag in attribute position reads its type arguments
+      // and parameters in the body around the call: neither the loop's own
+      // params, an attribute tag's params, the call's body nor an enclosing
+      // chain binds them.
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><for<x>|i| of=[1]><@item>hi</@item></for></C>",
+        93,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><for<x>|x| of=[1]><@item>hi</@item></for></C>",
+        93,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><for <T extends x>|i: T| of=[1]><@item>hi</@item></for></C>",
+        104,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><for <T extends x>|i| of=[1]><@item|x|>hi</@item></for></C>",
+        104,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><if<x>=true><@item>hi</@item></if></C>",
+        92,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><if=false><@item>a</@item></if><else<x>><@item>b</@item></else></C>",
+        125,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><if=false><@item>a</@item></if><else-if<x>=true><@item>b</@item></else-if></C>",
+        128,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><if=true><for<x>|i| of=[1]><@item>hi</@item></for></if></C>",
+        102,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@a><for<x>|i| of=[1]><@b>hi</@b></for></@a></C>",
+        97,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><const/x=3/><for<x>|i| of=[1]><@item>hi</@item></for></C>",
+        105,
+      ],
+      // A child-position chain's later branches read theirs in the body
+      // around the chain.
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><if=false>a</if><else<x>>b</else>",
+        68,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><if=false>a</if><else-if<x>=true>b</else-if>",
+        110,
+      ],
     ])(
       "refuses the type-position read in %s at column %i",
       (source, column) => {
@@ -804,6 +858,12 @@ describe("a read of a tag variable two nested bodies declare", () => {
       "<div><div/el/></div><div><div/el/></div><const/f=(el: number) => (1 as el)/>",
       "<div><div/el/></div><div><div/el/></div><define/F<T extends el>|el|></define>",
       "<div><div/el/></div><div><div/el/></div><define/F<T extends el>|i|><div/el/></define>",
+      // An attribute-position loop's type parameters sit on its body, where
+      // its params bind; the body around the call and an enclosing tag's
+      // params bind its type arguments.
+      "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><for <T extends x>|x: T| of=[1]><@item>hi</@item></for></C>",
+      "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><span><const/x=3/><C><for<x>|i| of=[1]><@item>hi</@item></for></C></span>",
+      "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><for|x| of=[1]><C><for<x>|i| of=[1]><@item>hi</@item></for></C></for>",
     ])("compiles %s", (source) => {
       expect(compile(source)).toBeUndefined();
     });
