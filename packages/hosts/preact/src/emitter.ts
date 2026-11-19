@@ -48,6 +48,7 @@ import {
   mappedExpr,
   mappedMethod,
   mappedRewrite,
+  mappedVar,
   type Position,
   paramListBindings,
   type SourceSpan,
@@ -254,28 +255,50 @@ export function shadowedCalls(ir: Ir): WeakSet<object> {
  * and `fragmentBlock` (the same returning a fragment, a define's body).
  */
 function wrapStatements(
-  statements: string,
+  statements: MappedCode,
   code: MappedCode,
   form: "slot" | "child" | "block" | "fragmentBlock",
 ): MappedCode {
   switch (form) {
     case "slot":
-      return concatMapped(`(() => { ${statements} return (`, code, "); })()");
+      return concatMapped(
+        "(() => { ",
+        statements,
+        " return (",
+        code,
+        "); })()",
+      );
     case "child":
       return concatMapped(
-        `{(() => { ${statements} return (<>`,
+        "{(() => { ",
+        statements,
+        " return (<>",
         closeFragmentBody(code),
         "</>); })()}",
       );
     case "block":
-      return concatMapped(`{ ${statements} return `, code, "; }");
+      return concatMapped("{ ", statements, " return ", code, "; }");
     case "fragmentBlock":
       return concatMapped(
-        `{ ${statements} return (<>`,
+        "{ ",
+        statements,
+        " return (<>",
         closeFragmentBody(code),
         "</>); }",
       );
   }
+}
+
+/**
+ * A scope's `/var` statements as one fragment, `" "` between them, with the
+ * declaration mappings each one carries.
+ */
+function joinStatements(list: readonly MappedCode[]): MappedCode {
+  return concatMapped(
+    ...list.flatMap((statement, i) =>
+      i === 0 ? [statement] : [" ", statement],
+    ),
+  );
 }
 
 /** The defines a region lifted out of one soft-scoped body (and its parents). */
@@ -289,7 +312,7 @@ interface EmitterOptions {
   dialect?: JsxDialect;
   runtimeImports?: Set<string>;
   aliases?: Set<string>;
-  varStatements?: string[];
+  varStatements?: MappedCode[];
   varSerial?: { n: number };
   /** Serial for generated loop names (`#generatedName`), per emit. */
   nameSerial?: { n: number };
@@ -1153,7 +1176,7 @@ export class PreactEmitter implements Emitter<string> {
    * `<try>`'s body, a `<define>` body) starts a fresh list, and its
    * statements run inside that body (`wrapStatements`).
    */
-  readonly #varStatements: string[];
+  readonly #varStatements: MappedCode[];
   /** Serial for the temps those statements bind, per emitted module. */
   #varSerial: { n: number };
   /**
@@ -1277,7 +1300,7 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /** Statements a `/var` call site needs above the component's `return`. */
-  get varStatements(): string[] {
+  get varStatements(): MappedCode[] {
     return this.#varStatements;
   }
 
@@ -1312,7 +1335,7 @@ export class PreactEmitter implements Emitter<string> {
    * sink. Everything not overridden is inherited.
    */
   #derive(overrides: {
-    varStatements?: string[];
+    varStatements?: MappedCode[];
     varSerial?: { n: number };
     callbackScope?: boolean;
     decodeText?: boolean;
@@ -1454,7 +1477,7 @@ export class PreactEmitter implements Emitter<string> {
     options: ScopeOptions = {},
   ): MappedCode {
     const { code, statements } = this.#scopeOf(build, options);
-    if (statements === "") return code;
+    if (statements.code === "") return code;
     return wrapStatements(statements, code, slot ? "slot" : "child");
   }
 
@@ -1478,7 +1501,7 @@ export class PreactEmitter implements Emitter<string> {
     { hard = true, bindsParams = false, callback = false }: ScopeOptions = {},
   ): {
     code: MappedCode;
-    statements: string;
+    statements: MappedCode;
   } {
     // A hard scope (a dynamic tag's or `<try>`'s body) refuses a region
     // `<define>` outright. A soft one (an imported tag's or a `<define>`
@@ -1496,9 +1519,9 @@ export class PreactEmitter implements Emitter<string> {
       ...(callback ? { callbackScope: true } : {}),
     });
     const code = build(scope);
-    const statements = scope.#varStatements.join(" ");
+    const statements = joinStatements(scope.#varStatements);
     const lifted = soft?.defines[0];
-    if (lifted && (statements !== "" || bindsParams)) {
+    if (lifted && (statements.code !== "" || bindsParams)) {
       fail(
         `\`<define>\` inside the body of an imported tag or a \`<define>\` call that declares a \`/var\` or tag parameters cannot be lifted out of it in a \`.${this.#region?.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside that body`,
         lifted,
@@ -2487,7 +2510,7 @@ export class PreactEmitter implements Emitter<string> {
   defineStatement(
     node: Extract<IrNode, { kind: "Define" }>,
     rendered: MappedCode,
-    bodyVarStatements: readonly string[] = [],
+    bodyVarStatements: readonly MappedCode[] = [],
   ): DefineParts {
     const params = node.params
       .map((param, i) => {
@@ -2530,7 +2553,9 @@ export class PreactEmitter implements Emitter<string> {
       returned
         ? bodyVarStatements.length > 0
           ? concatMapped(
-              `{ ${bodyVarStatements.join(" ")} return `,
+              "{ ",
+              joinStatements(bodyVarStatements),
+              " return ",
               returned,
               "; };",
             )
@@ -2538,7 +2563,7 @@ export class PreactEmitter implements Emitter<string> {
         : bodyVarStatements.length > 0
           ? concatMapped(
               wrapStatements(
-                bodyVarStatements.join(" "),
+                joinStatements(bodyVarStatements),
                 rendered,
                 "fragmentBlock",
               ),
@@ -2788,6 +2813,7 @@ export class PreactEmitter implements Emitter<string> {
       node.attrs,
       node.name,
       node.var,
+      node.varSpan,
       node.loc,
     );
     this.#element({ ...node, attrs }, concatMapped(" ref={", callback, "}"));
@@ -2808,14 +2834,19 @@ export class PreactEmitter implements Emitter<string> {
     nodeAttrs: Attr[],
     tagName: string,
     name: string,
+    varSpan: SourceSpan | undefined,
     loc: Position,
   ): { attrs: Attr[]; callback: MappedCode } {
     this.#claimName(name, undefined, loc);
     const slot = this.#generatedName("El");
     const type = `__MxElement<${JSON.stringify(emittedTag(tagName))}>`;
     this.#varStatements.push(
-      `let ${slot}: ${type} | null = null;`,
-      `const ${name} = (): ${type} => ${slot}!;`,
+      concatMapped(`let ${slot}: ${type} | null = null;`),
+      concatMapped(
+        "const ",
+        mappedVar(name, varSpan),
+        ` = (): ${type} => ${slot}!;`,
+      ),
     );
     // Neither framework has string refs: a string or bare `ref` cannot be
     // handed the node, so it is refused rather than composed.
@@ -2995,6 +3026,7 @@ export class PreactEmitter implements Emitter<string> {
           node.attrs,
           tagName,
           node.var,
+          node.varSpan,
           node.loc,
         );
         const props = this.#propsObject(
@@ -3090,17 +3122,18 @@ export class PreactEmitter implements Emitter<string> {
         }
         this.#runtimeImports.add("__mxDynamicPair");
         const temp = `__mxRet${this.#varSerial.n++}`;
-        // `varStatements` is plain strings, while `payload` and `content` are
-        // `MappedCode` (`#propsObject` returns one). Interpolating
-        // the mapped form emitted "[object Object]" — a syntax error in the
-        // generated module — so their code text is taken explicitly.
+        // The call is written as plain text (`payload` and `content` are
+        // `MappedCode`, `#propsObject` returns one): its attribute values stay
+        // unmapped here. Only the declared name maps (`mappedVar`).
         const call = `__mxDynamicPair(${node.target.expr.code}, ${payload.code}${content}${takesParams})`;
         this.#varStatements.push(
-          sharedContent
-            ? `const ${temp} = ((${contentRef}) => ${call})(${sharedContent.code});`
-            : `const ${temp} = ${call};`,
+          concatMapped(
+            sharedContent
+              ? `const ${temp} = ((${contentRef}) => ${call})(${sharedContent.code});`
+              : `const ${temp} = ${call};`,
+          ),
         );
-        this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
+        this.#varStatements.push(this.#varDeclaration(node.var, node, temp));
         this.#out.push(this.#slot(`${temp}.output`));
         return;
       }
@@ -3221,8 +3254,8 @@ export class PreactEmitter implements Emitter<string> {
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
         const call = concatMapped(pairCallee(), "(", args, ")");
-        this.#varStatements.push(`const ${temp} = ${call.code};`);
-        this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
+        this.#varStatements.push(concatMapped(`const ${temp} = ${call.code};`));
+        this.#varStatements.push(this.#varDeclaration(node.var, node, temp));
         this.#out.push(this.#slot(`${temp}.output`));
         return;
       }
@@ -3294,9 +3327,9 @@ export class PreactEmitter implements Emitter<string> {
         // function returning the `{ value, output }` pair; the default
         // export returns only the output.
         this.#varStatements.push(
-          `const ${temp} = ${name}.render(${props.code});`,
+          concatMapped(`const ${temp} = ${name}.render(${props.code});`),
         );
-        this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
+        this.#varStatements.push(this.#varDeclaration(node.var, node, temp));
         this.#out.push(this.#slot(`${temp}.output`));
         return;
       }
@@ -3373,6 +3406,23 @@ export class PreactEmitter implements Emitter<string> {
    * call. The assertion gives them one (`any`, an honest "not checked
    * against the callee") and is a no-op for annotated or destructured params.
    */
+  /**
+   * `const <var> = <temp>.value;`, the declaration a `/var` call binds from
+   * its `{ value, output }` pair, its declared names mapped to the authored
+   * `/var` (`mappedVar`).
+   */
+  #varDeclaration(
+    name: string,
+    node: Extract<IrNode, { kind: "Component" }>,
+    temp: string,
+  ): MappedCode {
+    return concatMapped(
+      "const ",
+      mappedVar(name, node.varSpan, node.varBindings),
+      ` = ${temp}.value;`,
+    );
+  }
+
   #contentFn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
     return this.#inBlock(node.content, () => this.#contentFnIn(node));
   }
@@ -3452,7 +3502,7 @@ export class PreactEmitter implements Emitter<string> {
       ? `((${node.content.params.join(", ")}) =>`
       : "() =>";
     const close = node.content?.hasParams ? ") as (...args: any[]) => any" : "";
-    return statements === ""
+    return statements.code === ""
       ? concatMapped(`${open} `, body, close)
       : concatMapped(
           `${open} `,
@@ -3503,7 +3553,7 @@ export class PreactEmitter implements Emitter<string> {
       name,
       attrs,
       ">{",
-      statements === ""
+      statements.code === ""
         ? body
         : concatMapped(
             "(() => ",
@@ -3742,7 +3792,7 @@ export class PreactEmitter implements Emitter<string> {
         this.defineStatement(
           node,
           body.code,
-          body.statements === "" ? [] : [body.statements],
+          body.statements.code === "" ? [] : [body.statements],
         ),
       );
       return;
@@ -3787,7 +3837,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#scopeOf((scope) => scope.#render(node.tag.children)),
     );
     let inner =
-      body.statements === ""
+      body.statements.code === ""
         ? body.code
         : placeholder
           ? // Under `<@placeholder>` the body's `/var` statements run inside a

@@ -37,6 +37,7 @@ import {
   type MxWarning,
   mapped,
   mappedExpr,
+  mappedVar,
   moduleExportName,
   type TargetLookup,
   TranslateError,
@@ -659,7 +660,8 @@ export function emitModuleWithMappings(
       // the initializer maps to what the author wrote.
       statements.push(
         concatMapped(
-          `const ${node.name}`,
+          "const ",
+          mappedVar(node.name, node.varSpan, node.varBindings),
           ...(node.varType
             ? [": ", mapped(node.varType.code, node.varType.span ?? null)]
             : []),
@@ -714,9 +716,7 @@ export function emitModuleWithMappings(
   // emitter collects those while walking (see `varStatements`). Appended
   // after the author's own `<const>`/`<define>` statements, in the order the
   // calls were met, so a binding is declared before the markup that reads it.
-  for (const statement of emitter.varStatements) {
-    statements.push(concatMapped(statement));
-  }
+  statements.push(...emitter.varStatements);
 
   // Every piece of module text that can read a define's public name: the
   // markup, each statement, the core's prelude and the `<return>` value. The

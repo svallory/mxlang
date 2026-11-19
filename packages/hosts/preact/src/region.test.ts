@@ -145,6 +145,28 @@ describe("compilePreactRegion: recorded mappings", () => {
       [198, "Row.name", 96, "Row.name"],
     ]);
   });
+
+  it("maps an element reference's declaration to the authored /var", () => {
+    // `/el` is at region offset 14, file offset 41.
+    const refRegion =
+      "<section><div/el/><button onClick() { el().focus() }>go</button></section>";
+    const { code, mappings } = compilePreactRegion(refRegion, {
+      filename: join(FIXTURES, "ref.preact.mx"),
+      baseOffset: 27,
+      baseLine: 1,
+      baseColumn: 2,
+      targets,
+    });
+    expect(code).toContain('const el = (): __MxElement<"div"> => __mxEl0!;');
+    expect(
+      mappings
+        .filter((m) => m.sourceStart === 41)
+        .map((m) => [
+          code.slice(m.generatedStart, m.generatedEnd),
+          m.sourceEnd,
+        ]),
+    ).toEqual([["el", 43]]);
+  });
 });
 
 /**

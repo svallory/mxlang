@@ -314,9 +314,7 @@ function emitJsxRegion(
   drive(emitter, ir.body);
   const markupCode = emitter.result();
   // Defines first, then the `/var` calls, as a whole-file module orders them.
-  const varStatements = emitter.varStatements.map((statement) =>
-    concatMapped(statement),
-  );
+  const varStatements = emitter.varStatements;
   const statements: MappedCode[] = [
     ...defineStatements(
       emitter.liftedDefines,
