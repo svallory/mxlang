@@ -1325,6 +1325,74 @@ describe("MX language plugin", {
     }
   });
 
+  // On Solid the `let` declaring a `/var` maps to the authored `/var` too,
+  // whole file and region, and a repeated `/var` Solid renames
+  // (`__mxVar0_el`) maps as a whole onto its own authored name (spec §10
+  // `/var`).
+  it("navigates to and renames a tag variable's Solid declaration", () => {
+    const directory = `${here}/fixtures/solid-policy`;
+    const page = `${directory}/page.mx`;
+    const view = `${directory}/view.solid.mx`;
+    const consumer = `${directory}/index.ts`;
+    const service = createPluginService(
+      {
+        [page]:
+          "<div/el/><section><span/el/><button onClick() { el() }/></section><button onClick() { el().focus() }/>\n",
+        [view]: regionUse,
+        [consumer]: 'import "./page.mx";\nimport "./view.solid.mx";\n',
+      },
+      [consumer],
+    );
+    const sites = (
+      locations: readonly ts.DocumentSpan[] | undefined,
+    ): [string, number, number][] =>
+      (locations ?? [])
+        .map((location): [string, number, number] => [
+          location.fileName,
+          location.textSpan.start,
+          location.textSpan.length,
+        ])
+        .sort((left, right) => left[1] - right[1]);
+    const rename = (file: string, at: number) =>
+      sites(service.findRenameLocations(file, at, false, false, {}));
+    const definition = (file: string, at: number) =>
+      sites(service.getDefinitionAtPosition(file, at));
+    const hover = (file: string, at: number) =>
+      (service.getQuickInfoAtPosition(file, at)?.displayParts ?? [])
+        .map((part) => part.text)
+        .join("");
+
+    // Outer `el`: declared at 5 (`<div/el/>`), read at 86 (`el().focus()`).
+    expect(hover(page, 5)).toBe("let el: any");
+    expect(definition(page, 86)).toEqual([[page, 5, 2]]);
+    expect(rename(page, 86)).toEqual([
+      [page, 5, 2],
+      [page, 86, 2],
+    ]);
+    expect(rename(page, 5)).toEqual([
+      [page, 5, 2],
+      [page, 86, 2],
+    ]);
+    // Inner `el`, renamed `__mxVar0_el`: declared at 24, read at 48.
+    expect(definition(page, 48)).toEqual([[page, 24, 2]]);
+    expect(rename(page, 48)).toEqual([
+      [page, 24, 2],
+      [page, 48, 2],
+    ]);
+
+    // Region: declared at 34, read at 58.
+    expect(hover(view, 34)).toBe("let el: any");
+    expect(definition(view, 58)).toEqual([[view, 34, 2]]);
+    expect(rename(view, 58)).toEqual([
+      [view, 34, 2],
+      [view, 58, 2],
+    ]);
+    expect(rename(view, 34)).toEqual([
+      [view, 34, 2],
+      [view, 58, 2],
+    ]);
+  });
+
   describe("custom tag discovery", () => {
     const scratches: string[] = [];
 

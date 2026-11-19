@@ -8,8 +8,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { CustomTag } from "@mxlang/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { compileSolidUnit } from "./index.ts";
+import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
 /**
  * A whole-file Solid unit records the mapping of every expression value, so a
@@ -315,4 +316,117 @@ describe("solid expression values", () => {
       expect(source).toBe(generated);
     }
   });
+});
+
+describe("solid tag variable declarations", () => {
+  const counter = {
+    template: {
+      filename: "/fixtures/tags/counter.mx",
+      source: "<span>${input.start}</span>\n<return value=input.start + 1/>",
+    },
+  } as unknown as CustomTag;
+  const PAIR =
+    "<div/el/><section><span/el/><button onClick() { el() }/></section>";
+
+  /**
+   * The mappings whose source starts and ends inside `[start, end)`, as
+   * `[sourceStart, generated text, use]`.
+   */
+  function inside(
+    { code, mappings }: { code: string; mappings: readonly Mapping[] },
+    [start, end]: readonly [number, number],
+  ): unknown[][] {
+    return mappings
+      .filter((m) => m.sourceStart >= start && m.sourceEnd <= end)
+      .map((m) => [
+        m.sourceStart,
+        code.slice(m.generatedStart, m.generatedEnd),
+        m.use,
+      ]);
+  }
+  type Mapping = ReturnType<typeof compileSolidUnit>["mappings"][number];
+  const USE = { navigation: true, semantic: true };
+
+  // Each row: the source, the `[start, end)` of one authored `/var`, the
+  // mappings expected from inside that range as `[sourceStart, generated
+  // text]`, and the declaration as the emit writes it (unchanged by the
+  // mapping).
+  it.each([
+    ["an element reference", "<div/el/>", [5, 7], [[5, "el"]], "let el: any;"],
+    [
+      "a literal dynamic tag's element reference",
+      '<${"my-el"}/el/>',
+      [12, 14],
+      [[12, "el"]],
+      "let el: any;",
+    ],
+    [
+      "a call's /var",
+      "<counter/n start=1/>",
+      [9, 10],
+      [[9, "n"]],
+      "let n: any;",
+    ],
+    [
+      "a /var in a lazy body",
+      "<for|i| of=[1]><counter/n start=i/>${n}</for>",
+      [24, 25],
+      [[24, "n"]],
+      "(() => { let n: any; return <>",
+    ],
+    [
+      "the outer /var of a renamed pair",
+      PAIR,
+      [5, 7],
+      [[5, "el"]],
+      "let el: any, __mxVar0_el: any;",
+    ],
+    [
+      "the inner, renamed /var of a pair as a whole",
+      PAIR,
+      [24, 26],
+      [[24, "__mxVar0_el"]],
+      "let el: any, __mxVar0_el: any;",
+    ],
+  ] as const)(
+    "maps %s at the authored name in a unit",
+    (_name, source, range, expected, declaration) => {
+      const result = compileSolidUnit(source, {
+        filename: "/fixtures/page.mx",
+        customTags: { counter },
+      });
+      expect(inside(result, range)).toEqual(
+        expected.map(([at, name]) => [at, name, USE]),
+      );
+      expect(result.code).toContain(declaration);
+    },
+  );
+
+  it.each([
+    [
+      "an element reference",
+      "<div/el/><button onClick() { el() }/>",
+      [5, 7],
+      [[5, "el"]],
+      "{(() => { let el: any; return <>",
+    ],
+    [
+      "a returning <define> call's /var",
+      "<define/Twice><return=1/></define><Twice/v/><p>${v}</p>",
+      [41, 42],
+      [[41, "v"]],
+      "{(() => { let v: any; return <>",
+    ],
+  ] as const)(
+    "maps %s at the authored name in a region",
+    (_name, source, range, expected, declaration) => {
+      const result = compileSolidMx(source, {
+        filename: "/fixtures/view.solid.mx",
+      });
+      expect(inside(result, range)).toEqual(
+        expected.map(([at, name]) => [at, name, USE]),
+      );
+      expect(result.code).toContain(declaration);
+    },
+  );
 });

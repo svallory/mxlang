@@ -69,6 +69,7 @@ import {
   collectReturnVars,
   declareInPlace,
   emitSolidWithMappings,
+  letList,
   MX_ESCAPE_BINDING,
   MX_RETURN_PROP,
   scopeReturnVars,
@@ -800,10 +801,8 @@ export function compileSolidUnit(
     // `typeof` only accepts an identifier, never an arbitrary expression, and
     // the expression can depend on the unit's own body locals, so no
     // type-only declaration beside the component can name it either.
-    const varDecls =
-      vars.length > 0
-        ? `let ${vars.map((name) => `${name}: any`).join(", ")}; `
-        : "";
+    const varDecls: MappedCode | string =
+      vars.length > 0 ? concatMapped("let ", letList(vars), "; ") : "";
     const name = moduleExportName(ir, "@mxlang/host-solid");
     // The return callback is not part of the author's `Input`, so a unit that
     // declares `<return>` widens its parameter with it; the caller's generated
@@ -835,15 +834,17 @@ export function compileSolidUnit(
         `import { children as ${MX_CHILDREN_BINDING}, merge as ${MX_MERGE_BINDING} } from "solid-js";\n`,
       );
     }
-    const head = bodyAlias
-      ? `export default function ${name}(__mxProps: ${inputType}) { const __mxBody = ${MX_CHILDREN_BINDING}(() => (__mxProps as { content?: unknown }).content ?? (__mxProps as { children?: unknown }).children); const input = ${MX_MERGE_BINDING}(__mxProps, { get content() { const __mxValue = __mxBody() as unknown; return typeof __mxValue === "string" || typeof __mxValue === "number" ? __mxValue === "" ? undefined : <>{String(__mxValue)}</> : __mxValue; } }) as ${inputType} & { content?: unknown }; ${varDecls}`
-      : `export default function ${name}(input: ${inputType}) { ${varDecls}`;
+    const head = concatMapped(
+      bodyAlias
+        ? `export default function ${name}(__mxProps: ${inputType}) { const __mxBody = ${MX_CHILDREN_BINDING}(() => (__mxProps as { content?: unknown }).content ?? (__mxProps as { children?: unknown }).children); const input = ${MX_MERGE_BINDING}(__mxProps, { get content() { const __mxValue = __mxBody() as unknown; return typeof __mxValue === "string" || typeof __mxValue === "number" ? __mxValue === "" ? undefined : <>{String(__mxValue)}</> : __mxValue; } }) as ${inputType} & { content?: unknown }; `
+        : `export default function ${name}(input: ${inputType}) { `,
+      varDecls,
+    );
     parts.push(
+      head,
       ir.returnValue
-        ? `${head}input[${JSON.stringify(
-            MX_RETURN_PROP,
-          )}]?.(${ir.returnValue.code}); return <>`
-        : `${head}return <>`,
+        ? `input[${JSON.stringify(MX_RETURN_PROP)}]?.(${ir.returnValue.code}); return <>`
+        : "return <>",
       emittedBody,
       "</>; }",
     );

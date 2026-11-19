@@ -28,13 +28,16 @@ import {
   mappedExpr,
   mappedMethod,
   mappedRewrite,
+  mappedVar,
   type Node,
   type Position,
   type ReadRewrite,
   rewriteAccessorReads,
+  type SourceSpan,
   TranslateError,
   unresolvedCustomTagMessage,
   voiceOfCtx,
+  withUse,
 } from "@mxlang/core";
 import { parseBabelExpression, SOLID_BUILTIN_TAGS } from "@mxlang/tsx-bridge";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
@@ -102,8 +105,11 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
 export const MX_RETURN_PROP = "$mxReturn";
 
 /**
- * `/var` names the current scope must declare above the JSX that fills them:
- * the component's head, or a lazy body's own arrow (`inLazyScope`).
+ * `/var` declarations the current scope must write above the JSX that fills
+ * them: the component's head, or a lazy body's own arrow (`inLazyScope`).
+ * Keyed by the declared name; the value is that name's declaration text with
+ * its mapping to the authored `/var` (`declaredVar`), from the first `/var`
+ * the emit binds under the name.
  *
  * Module-level rather than a field on the emitter because this host builds
  * child emitters freely (`renderWithNewEmitter`) with no shared state, so a
@@ -111,17 +117,62 @@ export const MX_RETURN_PROP = "$mxReturn";
  * module assembly never sees. `collectReturnVars` scopes it to one compile
  * and `inLazyScope` to one body; nothing here is retained between compiles.
  */
-let returnVars: Set<string> | null = null;
+let returnVars: Map<string, MappedCode> | null = null;
+
+/**
+ * The names `scopeReturnVars` minted for a repeated `/var` in this compile,
+ * each mapped to the authored name it replaced (`__mxVar0_el` → `el`), so
+ * `declaredVar` maps the minted declaration onto the authored name.
+ * Module-level and scoped by `collectReturnVars`, as `returnVars` is.
+ */
+let renamedVars: Map<string, string> | null = null;
+
+/** What a `/var` declaration mapping serves: navigation and hover only. */
+const VAR_DECLARATION_USE = { navigation: true, semantic: true } as const;
 
 /**
  * Records a `/var` the current scope declares with one `let`: the
  * component's head (the module assembly), or the lazy body it sits in
  * (`inLazyScope`). A `/var` that repeats a name another body scope already
  * binds was given a name of its own by `scopeReturnVars` before the emit, so
- * every recorded name is one binding.
+ * every recorded name is one binding. The first `/var` bound under a name
+ * gives its declaration's mapping.
  */
-function bindReturnVar(node: { var: string }): void {
-  returnVars?.add(node.var);
+function bindReturnVar(node: {
+  var: string;
+  varSpan?: SourceSpan;
+  varBindings?: readonly { name: string; span?: SourceSpan }[];
+}): void {
+  if (!returnVars || returnVars.has(node.var)) return;
+  returnVars.set(node.var, declaredVar(node));
+}
+
+/**
+ * A `/var`'s declared name, mapped to the authored `/var`. A name
+ * `scopeReturnVars` minted (`__mxVar0_el`) maps as a whole onto the authored
+ * name it replaced, the shape core's `rewrittenMappings` gives its renamed
+ * reads; any other name maps through core's `mappedVar`, with the call's
+ * `varBindings` when it has them. Without `varSpan` nothing maps.
+ */
+function declaredVar(node: {
+  var: string;
+  varSpan?: SourceSpan;
+  varBindings?: readonly { name: string; span?: SourceSpan }[];
+}): MappedCode {
+  const authored = renamedVars?.get(node.var);
+  if (authored === undefined) {
+    return mappedVar(node.var, node.varSpan, node.varBindings);
+  }
+  const start = node.varSpan?.sourceStart;
+  return withUse(
+    mapped(
+      node.var,
+      start === undefined
+        ? null
+        : { sourceStart: start, sourceEnd: start + authored.length },
+    ),
+    VAR_DECLARATION_USE,
+  );
 }
 
 /** A node whose `/var` a scope declares: a call, or an element reference. */
@@ -328,6 +379,7 @@ export function scopeReturnVars(
       if (!fresh) {
         fresh = `__mxVar${serial++}_${name}`;
         renamed.set(scope, fresh);
+        renamedVars?.set(fresh, name);
         jobs.push({ scope, from: name, to: fresh, kept });
       }
       call.var = fresh;
@@ -632,12 +684,12 @@ function inVarScope(
   form: "value" | "child" = "value",
 ): MappedCode {
   const outerVars = returnVars;
-  const own = outerVars ? new Set<string>() : null;
+  const own = outerVars ? new Map<string, MappedCode>() : null;
   returnVars = own;
   try {
     const body = emit();
     if (!own || own.size === 0) return body;
-    return declareInPlace([...own], body, form);
+    return declareInPlace([...own.values()], body, form);
   } finally {
     returnVars = outerVars;
   }
@@ -650,13 +702,14 @@ function inVarScope(
  * top-level `/var`s and element references (`compileSolidMx`).
  */
 export function declareInPlace(
-  names: readonly string[],
+  names: readonly MappedCode[],
   body: MappedCode,
   form: "value" | "child",
 ): MappedCode {
-  const lets = names.map((name) => `${name}: any`).join(", ");
   const call = concatMapped(
-    `(() => { let ${lets}; return <>`,
+    "(() => { let ",
+    letList(names),
+    "; return <>",
     body,
     "</>; })()",
   );
@@ -664,7 +717,20 @@ export function declareInPlace(
 }
 
 /**
- * Runs `emit` while collecting the `/var` names its call sites declare, and
+ * The declarators of one `let` for `names`, `n: any, el: any`, each name
+ * keeping its mapping: the head's `varDecls` (`compileSolidUnit`) and
+ * `declareInPlace`.
+ */
+export function letList(names: readonly MappedCode[]): MappedCode {
+  return concatMapped(
+    ...names.flatMap((name, index) =>
+      index === 0 ? [name, ": any"] : [", ", name, ": any"],
+    ),
+  );
+}
+
+/**
+ * Runs `emit` while collecting the `/var` declarations its call sites declare, and
  * the `<define>`s it hoists to module scope.
  *
  * `allowHoist` (default `true`) gates the latter: a **region** compile
@@ -684,7 +750,7 @@ export function collectReturnVars(
   source?: string,
 ): {
   code: string;
-  vars: string[];
+  vars: MappedCode[];
   needsEscapeImport: boolean;
   needsAttrGuard: {
     value: boolean;
@@ -698,6 +764,7 @@ export function collectReturnVars(
   hoistedDefines: HoistedSolidDefine[];
 } {
   const outer = returnVars;
+  const outerRenamedVars = renamedVars;
   const outerMappingSource = mappingSource;
   mappingSource = source;
   const outerEscapeUse = escapeUse;
@@ -705,7 +772,7 @@ export function collectReturnVars(
   const outerHoistedDefines = hoistedDefines;
   const outerDefineBindings = defineBindings;
   const outerDefinePairs = definePairs;
-  const collected = new Set<string>();
+  const collected = new Map<string, MappedCode>();
   const collectedEscapeUse = { used: false };
   const collectedAttrGuardUse = {
     value: false,
@@ -718,6 +785,7 @@ export function collectReturnVars(
   };
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
+  renamedVars = new Map();
   escapeUse = collectedEscapeUse;
   attrGuardUse = collectedAttrGuardUse;
   hoistedDefines = allowHoist ? collectedDefines : null;
@@ -726,13 +794,14 @@ export function collectReturnVars(
   try {
     return {
       code: emit(),
-      vars: [...collected],
+      vars: [...collected.values()],
       needsEscapeImport: collectedEscapeUse.used,
       needsAttrGuard: collectedAttrGuardUse,
       hoistedDefines: collectedDefines,
     };
   } finally {
     returnVars = outer;
+    renamedVars = outerRenamedVars;
     mappingSource = outerMappingSource;
     escapeUse = outerEscapeUse;
     attrGuardUse = outerAttrGuardUse;
@@ -2765,8 +2834,9 @@ const ELEMENT_REF_PARAM = "(__mxNode: Element)";
 function elementRef(
   attrs: Attr[],
   name: string,
+  varSpan: SourceSpan | undefined,
 ): { attrs: Attr[]; ref: MappedCode | string } {
-  bindReturnVar({ var: name });
+  bindReturnVar({ var: name, varSpan });
   const callback = `${ELEMENT_REF_PARAM} => { ${name} = () => __mxNode; }`;
   const authored = [...attrs]
     .reverse()
@@ -2915,7 +2985,9 @@ export class SolidEmitter implements Emitter<string> {
    */
   element(element: Extract<IrNode, { kind: "Element" }>): void {
     rejectStringRef(element.attrs, element.var);
-    const bound = element.var ? elementRef(element.attrs, element.var) : null;
+    const bound = element.var
+      ? elementRef(element.attrs, element.var, element.varSpan)
+      : null;
     const node = bound ? { ...element, attrs: bound.attrs } : element;
     const ref = bound?.ref ?? "";
     if (node.name === "html-script" || node.name === "html-style") {
@@ -3278,7 +3350,9 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
     const bound =
-      node.elementRef && node.var ? elementRef(node.attrs, node.var) : null;
+      node.elementRef && node.var
+        ? elementRef(node.attrs, node.var, node.varSpan)
+        : null;
     const returnProp: MappedCode | string = bound
       ? bound.ref
       : node.var
