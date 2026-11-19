@@ -55,6 +55,7 @@ import {
   TranslateError,
   unresolvedCustomTagMessage,
   voiceOfCtx,
+  withUse,
 } from "@mxlang/core";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { decodeHTML } from "entities";
@@ -2485,7 +2486,8 @@ export class PreactEmitter implements Emitter<string> {
           // are never renamed here — the same rule `#attrName(name, true)`
           // applies.
           concatMapped(
-            `${JSON.stringify(attr.name)}: `,
+            mapped(JSON.stringify(attr.name), attr.nameSpan),
+            ": ",
             this.#mappedAttrValue(attr),
           ),
     );
@@ -2683,7 +2685,19 @@ export class PreactEmitter implements Emitter<string> {
     if (children.length > 0) {
       // Marko's `content` and JSX's `children` are the same slot; a called
       // unit reads `input.content`, so it is passed under that name.
-      parts.push(`content: ${content ?? this.#contentFn(node).code}`);
+      // The key stands for the authored body, so it maps onto the tag name
+      // (as the html target does): a callee whose input declares no
+      // `content` is reported there. `verification` only, so hover and
+      // navigation on the tag name stay the name's own.
+      parts.push(
+        concatMapped(
+          withUse(mapped("content", node.nameSpan ?? null), {
+            verification: true,
+          }),
+          ": ",
+          content ?? this.#contentFn(node),
+        ),
+      );
     }
     if (trailing) parts.push(trailing);
 
@@ -3084,7 +3098,7 @@ export class PreactEmitter implements Emitter<string> {
           this.#slot(
             concatMapped(
               "__mxDynamic(",
-              node.target.expr.code,
+              mappedExpr(node.target.expr),
               ", ",
               props,
               ")",
@@ -3120,7 +3134,7 @@ export class PreactEmitter implements Emitter<string> {
               "[",
               ...node.args.flatMap((arg, index) => [
                 index === 0 ? "" : ", ",
-                arg.code,
+                mappedExpr(arg),
               ]),
               hasTrailingProps
                 ? concatMapped(", ", this.#propsObject(node, contentRef))
@@ -3173,7 +3187,7 @@ export class PreactEmitter implements Emitter<string> {
         // shared body map as they do there.
         const call = concatMapped(
           "__mxDynamicPair(",
-          node.target.expr.code,
+          mappedExpr(node.target.expr),
           ", ",
           payload,
           content,
@@ -3204,7 +3218,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#runtimeImports.add("__mxDynamic");
       const call = concatMapped(
         "__mxDynamic(",
-        node.target.expr.code,
+        mappedExpr(node.target.expr),
         ", ",
         payload,
         content,
@@ -3248,8 +3262,8 @@ export class PreactEmitter implements Emitter<string> {
       // attribute tags and `content` travel as ONE object bound to the first
       // param, `{}` when the call carries none (measured on 6.4.4; `|p|` and
       // `|{ n }|` both read it). A define with no params ignores them.
-      const argList: Array<string | MappedCode> = node.args.map(
-        (arg: Expr) => arg.code,
+      const argList: Array<string | MappedCode> = node.args.map((arg: Expr) =>
+        mappedExpr(arg),
       );
       // A rest param is never padded: Marko leaves it `[]` when nothing
       // fills it, and an `undefined` here would make it `[undefined]`.
@@ -3400,7 +3414,15 @@ export class PreactEmitter implements Emitter<string> {
         // function returning the `{ value, output }` pair; the default
         // export returns only the output.
         this.#varStatements.push(
-          concatMapped(`const ${temp} = ${name}.render(`, props, ");"),
+          concatMapped(
+            "const ",
+            temp,
+            " = ",
+            mapped(name, node.nameSpan ?? null),
+            ".render(",
+            props,
+            ");",
+          ),
         );
         this.#varStatements.push(this.#varDeclaration(node.var, node, temp));
         this.#out.push(this.#slot(`${temp}.output`));
@@ -3408,7 +3430,9 @@ export class PreactEmitter implements Emitter<string> {
       }
       // No `/var`: only the output is wanted, and the default export already
       // returns it, so the call stays an expression.
-      this.#out.push(this.#slot(name, "(", props, ")"));
+      this.#out.push(
+        this.#slot(mapped(name, node.nameSpan ?? null), "(", props, ")"),
+      );
       return;
     }
     const rawHtml = raw ? this.#rawHtmlProp(raw.expr) : "";

@@ -1383,6 +1383,11 @@ describe("MX language plugin", {
         location.textSpan.length,
       ]),
     ).toEqual([[call, 8, 5]]);
+    // The prop key `n` (75) maps onto itself.
+    expect(service.getQuickInfoAtPosition(call, 75)?.textSpan).toEqual({
+      start: 75,
+      length: 1,
+    });
   });
 
   // On Solid the `let` declaring a `/var` maps to the authored `/var` too,

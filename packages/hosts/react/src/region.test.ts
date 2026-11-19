@@ -130,6 +130,8 @@ describe("compileReactRegion: recorded mappings", () => {
       [55, "a", 60, "a"],
       [74, "Row", 39, "Row"],
       [127, "__mxDef_Row", 77, "Row"],
+      [139, "1", 81, "1"],
+      [155, "Row", 88, "Row"],
       [167, "Row.name", 96, "Row.name"],
     ]);
   });

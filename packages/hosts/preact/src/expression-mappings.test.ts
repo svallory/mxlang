@@ -333,29 +333,32 @@ describe("jsx tag variable declarations", () => {
   });
 });
 
+const COUNTER_TAGS = () => ({
+  counter: {
+    template: { filename: join(dir, "counter.mx"), source: "<return=1/>" },
+  },
+});
+
+/** The call's mappings, and `[sourceStart, source text, generated text]` for each. */
+function rows(source: string, customTags: object = {}) {
+  const { code, mappings } = compilePreactMx(source, join(dir, "calls.mx"), {
+    customTags,
+  } as never);
+  return {
+    code,
+    mappings,
+    located: mappings.map((m) => [
+      m.sourceStart,
+      source.slice(m.sourceStart, m.sourceEnd),
+      code.slice(m.generatedStart, m.generatedEnd),
+    ]),
+  };
+}
+
 describe("jsx /var call values", () => {
   // A call carrying a `/var` maps its attribute values, its define tag name and
   // a dynamic tag's body as the same call does without the `/var`; the
   // `__mxRet<n>` statement's text is unchanged.
-  const COUNTER_TAGS = () => ({
-    counter: {
-      template: { filename: join(dir, "counter.mx"), source: "<return=1/>" },
-    },
-  });
-  function rows(source: string, customTags: object = {}) {
-    const { code, mappings } = compilePreactMx(source, join(dir, "calls.mx"), {
-      customTags,
-    } as never);
-    return {
-      code,
-      located: mappings.map((m) => [
-        m.sourceStart,
-        source.slice(m.sourceStart, m.sourceEnd),
-        code.slice(m.generatedStart, m.generatedEnd),
-      ]),
-    };
-  }
-
   it("maps a returning <define> call's tag name and attribute value", () => {
     const { code, located } = rows(
       "<define/Twice|input: { n: number }|><return=input.n * 2/></define><Twice/v n=x/>",
@@ -386,5 +389,72 @@ describe("jsx /var call values", () => {
     const { code, located } = rows(source);
     expect(located).toContainEqual(expected);
     expect(code).toContain("const __mxRet0 = ");
+  });
+});
+
+describe("jsx call parts", () => {
+  // The parts of a call html or Solid map: prop keys, a dynamic tag's target
+  // and arguments, a `<define>` call's arguments, a called unit's name and its
+  // `content` body. Each maps with and without a `/var`; the code is unchanged.
+  it.each([
+    [
+      "a returning <define> call with /var",
+      "<define/Twice|input: { n: number }|><return=input.n * 2/></define><Twice/v n=x/>",
+      [75, "n", '"n"'],
+    ],
+    [
+      "a returning <define> call",
+      "<define/Twice|input: { n: number }|><return=input.n * 2/></define><Twice n=x/>",
+      [73, "n", '"n"'],
+    ],
+  ] as const)("maps the prop key of %s", (_name, source, expected) => {
+    expect(rows(source).located).toContainEqual(expected);
+  });
+
+  it("maps a dynamic tag's target and argument with /var", () => {
+    const { located } = rows('<${input.t}("a")/n><p>${y}</p></>');
+    expect(located).toContainEqual([3, "input.t", "input.t"]);
+    expect(located).toContainEqual([12, '"a"', '"a"']);
+  });
+
+  it("maps a dynamic tag's target", () => {
+    expect(rows("<${input.tag} a=x/>").located).toContainEqual([
+      3,
+      "input.tag",
+      "input.tag",
+    ]);
+  });
+
+  it("maps a <define> call's argument", () => {
+    expect(
+      rows("<define/Row|a: number|>${a}</define><Row(x)/>").located,
+    ).toContainEqual([41, "x", "x"]);
+  });
+
+  it("maps a returning unit's /var .render call: name, prop key and body", () => {
+    writeFileSync(join(dir, "counter.mx"), "<return=1/>");
+    const { located, mappings } = rows(
+      'import Counter from "./counter.mx"\n<Counter/n count=x>${y}</Counter>',
+      COUNTER_TAGS(),
+    );
+    expect(located).toContainEqual([36, "Counter", "Counter"]);
+    expect(located).toContainEqual([46, "count", '"count"']);
+    expect(located).toContainEqual([56, "y", "y"]);
+    const contentKey = located.findIndex(
+      ([start, text, generated]) =>
+        start === 36 && text === "Counter" && generated === "content",
+    );
+    expect(contentKey).not.toBe(-1);
+    expect(mappings[contentKey]?.use).toEqual({ verification: true });
+  });
+
+  it("maps a returning unit's plain call: name and prop key", () => {
+    writeFileSync(join(dir, "counter.mx"), "<return=1/>");
+    const { located } = rows(
+      'import Counter from "./counter.mx"\n<Counter count=x/>',
+      COUNTER_TAGS(),
+    );
+    expect(located).toContainEqual([36, "Counter", "Counter"]);
+    expect(located).toContainEqual([44, "count", '"count"']);
   });
 });

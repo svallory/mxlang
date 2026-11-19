@@ -133,6 +133,8 @@ describe("compileHonoRegion: recorded mappings", () => {
       [69, "a", 60, "a"],
       [89, "Row", 39, "Row"],
       [142, "__mxDef_Row", 77, "Row"],
+      [154, "1", 81, "1"],
+      [170, "Row", 88, "Row"],
       [196, "Row.name", 96, "Row.name"],
     ]);
   });

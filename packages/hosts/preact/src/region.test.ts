@@ -143,6 +143,8 @@ describe("compilePreactRegion: recorded mappings", () => {
       [70, "a", 60, "a"],
       [90, "Row", 39, "Row"],
       [143, "__mxDef_Row", 77, "Row"],
+      [155, "1", 81, "1"],
+      [171, "Row", 88, "Row"],
       [198, "Row.name", 96, "Row.name"],
     ]);
   });
