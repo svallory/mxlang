@@ -226,7 +226,7 @@ describe("preact expression values", () => {
 
 describe("jsx tag variable declarations", () => {
   const COUNTER = 'import Counter from "./counter.mx"\n';
-  const GETTER = 'const el = (): __MxElement<"div"> => __mxEl0!;';
+  const GETTER = "const el = () => __mxEl0!;";
   // Each row: the source, the `[start, end)` of its authored `/var`, the
   // mappings expected from inside that range as `[sourceStart, generated
   // text, use]`, and the declaration as the emitter writes it.
@@ -237,7 +237,7 @@ describe("jsx tag variable declarations", () => {
       '<${"my-el"}/el/>',
       [12, 14],
       [[12, "el"]],
-      'const el = (): __MxElement<"my-el"> => __mxEl0!;',
+      "const el = () => __mxEl0!;",
     ],
     [
       "a destructuring <const>",

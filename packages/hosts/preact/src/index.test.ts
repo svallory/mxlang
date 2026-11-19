@@ -2077,13 +2077,13 @@ describe("an element reference's callback `ref` (Preact)", () => {
       'import Layout from "./Layout.mx"\n<div/el/><Layout><@tab><div/el/><@inner><button onClick() { el() }/></@inner></@tab></Layout>',
     );
     expect(code).toContain(
-      'let __mxEl0: __MxElement<"div"> | null = null;\n  const el = (): __MxElement<"div"> => __mxEl0!;\n  return (<><div ref={(__mxNode: __MxElement<"div"> | null) => { __mxEl0 = __mxNode; }} /><Layout ',
+      'let __mxEl0: __MxElement<"div"> | null = null;\n  const el = () => __mxEl0!;\n  return (<><div ref={(__mxNode: __MxElement<"div"> | null) => { __mxEl0 = __mxNode; }} /><Layout ',
     );
     expect(code).toContain(
       '"inner": __mxAttrTag({ content: <button onClick={function () { el(); }} /> })',
     );
     expect(code).toContain(
-      'content: (() => { let __mxEl1: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl1!; return (<div ref={(__mxNode: __MxElement<"div"> | null) => { __mxEl1 = __mxNode; }} />); })()',
+      'content: (() => { let __mxEl1: __MxElement<"div"> | null = null; const el = () => __mxEl1!; return (<div ref={(__mxNode: __MxElement<"div"> | null) => { __mxEl1 = __mxNode; }} />); })()',
     );
   });
 
@@ -2104,7 +2104,7 @@ describe("an element reference's callback `ref` (Preact)", () => {
     ],
   ])("wraps an element body whose /el repeats %s", (_, source) => {
     expect(compile(source)).toContain(
-      '<div>{(() => { let __mxEl0: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl0!; return (<><div ref=',
+      '<div>{(() => { let __mxEl0: __MxElement<"div"> | null = null; const el = () => __mxEl0!; return (<><div ref=',
     );
   });
 
@@ -2112,7 +2112,7 @@ describe("an element reference's callback `ref` (Preact)", () => {
     expect(
       compile("<div><div/el/></div><button onClick() { el() }>c</button>"),
     ).toContain(
-      '  let __mxEl0: __MxElement<"div"> | null = null;\n  const el = (): __MxElement<"div"> => __mxEl0!;\n  return (<><div><div ref=',
+      '  let __mxEl0: __MxElement<"div"> | null = null;\n  const el = () => __mxEl0!;\n  return (<><div><div ref=',
     );
   });
 

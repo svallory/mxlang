@@ -978,11 +978,12 @@ describe("MX language plugin", {
 
   // Element references (`<div/el>`, and `<${"my-el"}/el>` on a literal
   // dynamic tag): hover and completion on `el()` come from tsserver through
-  // this plugin, whole file and region. html, Preact and React type the
-  // getter by tag (html in the type check only; a name outside the tag maps,
-  // like `my-el`, is `HTMLElement`); Solid binds `let el: any` (spec §10
-  // `/var`, "Element references"), so it pins the hover and a clean check
-  // only. Each host's service holds both forms.
+  // this plugin, whole file and region. html, Preact, React and Hono type
+  // the getter by tag (html in the type check only; an SVG tag is its SVG
+  // element, a name outside the tag maps, like `my-el`, is `HTMLElement`),
+  // and the hover names the interface, not the generated alias; Solid binds
+  // `let el: any` (spec §10 `/var`, "Element references"), so it pins the
+  // hover and a clean check only. Each host's service holds both forms.
   // TS7026 is dropped: a fixture directory has no JSX types installed, and
   // that error names the JSX element, never the reference.
   const handlerUse =
@@ -995,8 +996,8 @@ describe("MX language plugin", {
   const dynamicRegionUse =
     // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
     'export const view = <section><${"my-el"}/el/><button onClick() { el().focus() }>go</button></section>;\n';
-  const typed = 'const el: () => __MxElement<"div">';
-  const dynamicTyped = 'const el: () => __MxElement<"my-el">';
+  const typed = "const el: () => HTMLDivElement";
+  const dynamicTyped = "const el: () => HTMLElement";
   const untyped = "let el: any";
   it.each([
     [
@@ -1013,6 +1014,11 @@ describe("MX language plugin", {
             // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
             '<define/Child|input: { onPick: () => void }|>x</define><${"my-el"}/el/><Child onPick=(() => el().focus())/>\n',
           hover: dynamicTyped,
+        },
+        "svg.mx": {
+          source:
+            "<define/Child|input: { onPick: () => void }|>x</define><svg><circle/el/><Child onPick=(() => el().focus())/></svg>\n",
+          hover: "const el: () => SVGCircleElement",
         },
       },
     ],
@@ -1034,6 +1040,14 @@ describe("MX language plugin", {
         "view.react.mx": { source: regionUse, hover: typed },
         "dyn.mx": { source: dynamicUse, hover: dynamicTyped },
         "dyn.react.mx": { source: dynamicRegionUse, hover: dynamicTyped },
+      },
+    ],
+    [
+      "hono",
+      `${here}/fixtures/hono-policy`,
+      {
+        "page.mx": { source: handlerUse, hover: typed },
+        "dyn.mx": { source: dynamicUse, hover: dynamicTyped },
       },
     ],
     [
@@ -1128,7 +1142,7 @@ describe("MX language plugin", {
       (service.getQuickInfoAtPosition(ref, 60)?.displayParts ?? [])
         .map((part) => part.text)
         .join(""),
-    ).toBe('const el: () => __MxElement<"div">');
+    ).toBe("const el: () => HTMLDivElement");
     expect(definition(ref, 85)).toEqual([[ref, 60, 2]]);
     expect(rename(ref, 85)).toEqual([
       [ref, 60, 2],
@@ -1210,7 +1224,7 @@ describe("MX language plugin", {
       (service.getQuickInfoAtPosition(ref, 60)?.displayParts ?? [])
         .map((part) => part.text)
         .join(""),
-    ).toBe('const el: () => __MxElement<"div">');
+    ).toBe("const el: () => HTMLDivElement");
     expect(definition(ref, 85)).toEqual([[ref, 60, 2]]);
     expect(rename(ref, 85)).toEqual([
       [ref, 60, 2],
@@ -1294,7 +1308,7 @@ describe("MX language plugin", {
       [view, 34, 58],
     ] as const) {
       expect(hover(file, declared), file).toBe(
-        'const el: () => __MxElement<"div">',
+        "const el: () => HTMLDivElement",
       );
       expect(definition(file, read), file).toEqual([[file, declared, 2]]);
       expect(rename(file, read), file).toEqual([

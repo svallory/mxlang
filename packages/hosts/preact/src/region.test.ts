@@ -158,7 +158,7 @@ describe("compilePreactRegion: recorded mappings", () => {
       baseColumn: 2,
       targets,
     });
-    expect(code).toContain('const el = (): __MxElement<"div"> => __mxEl0!;');
+    expect(code).toContain("const el = () => __mxEl0!;");
     expect(
       mappings
         .filter((m) => m.sourceStart === 41)

@@ -281,6 +281,8 @@ interface State {
   tryTemp: number;
   /** Serial for the `{ value, output }` pair a `/var` call of a returning `<define>` binds. */
   defineReturnTemp: number;
+  /** Under `typeCheck`, serial for the typed binding an element reference's getter returns. */
+  elementRefTemp: number;
 }
 
 export interface StringEmitter extends Emitter<string[]> {
@@ -333,6 +335,7 @@ export function createEmitter(
     sink: "__mxOut",
     tryTemp: 0,
     defineReturnTemp: 0,
+    elementRefTemp: 0,
   };
 
   const push = (line: string | MappedCode): void => {
@@ -346,25 +349,33 @@ export function createEmitter(
    * only in a handler or a `<script>` body, which html never runs; a handler
    * passed to a custom tag or a `<define>` call still names it, so it is
    * bound, as stock Marko's html build binds a getter that throws when called.
-   * Under `typeCheck` the getter returns the tag's DOM type (`__MxElement`,
-   * emitted once by `moduleHelpers`), so a handler reading it gets that
-   * element's members; the build keeps `any`, its output unchanged, and so
-   * does a tag whose name is not known (`tagName` undefined).
+   * Under `typeCheck` the getter returns a projection-only binding typed by
+   * the tag (`__MxElement`, emitted once by `moduleHelpers`), so a handler
+   * reading it gets that element's members. The getter's return type is
+   * inferred, not written: TypeScript keeps an alias's name in a written
+   * annotation, so hover would show `__MxElement<"div">`, while an inferred
+   * return resolves to the interface (`() => HTMLDivElement`). The build
+   * keeps `any`, its output unchanged, and so does a tag whose name is not
+   * known (`tagName` undefined).
    */
   const elementRef = (
     name: string,
     tagName: string | undefined,
     varSpan: SourceSpan | undefined,
   ): void => {
-    const type =
-      options.typeCheck && tagName !== undefined
-        ? `__MxElement<${JSON.stringify(tagName)}>`
-        : "any";
+    if (options.typeCheck && tagName !== undefined) {
+      const slot = `__mxEl${state.elementRefTemp++}`;
+      push(`let ${slot}!: __MxElement<${JSON.stringify(tagName)}>;`);
+      push(
+        concatMapped("const ", mappedVar(name, varSpan), ` = () => ${slot};`),
+      );
+      return;
+    }
     push(
       concatMapped(
         "const ",
         mappedVar(name, varSpan),
-        ` = (): ${type} => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
+        ` = (): any => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
       ),
     );
   };

@@ -2856,7 +2856,11 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * Binds an element reference (`<div/el>`): a `let` slot and its getter
    * (`const el = () => slot!`) among the scope's `/var` statements, ahead of
-   * its markup, filled by a callback `ref` on the element. A callback ref
+   * its markup, filled by a callback `ref` on the element. The slot is typed
+   * by the tag (`__MxElement<"div">`); the getter's return is inferred from
+   * it, not written, because TypeScript keeps an alias's name in a written
+   * annotation (hover `() => __MxElement<"div">`) and resolves an inferred
+   * one to the interface (`() => HTMLDivElement`). A callback ref
    * runs in every scope, a `.map` row or a branch included, where a hook
    * could not. An authored `ref=` on the element is handed the node too: a
    * function is called with it, an object gets it as `.current`. Returns
@@ -2876,11 +2880,7 @@ export class PreactEmitter implements Emitter<string> {
     const type = `__MxElement<${JSON.stringify(emittedTag(tagName))}>`;
     this.#varStatements.push(
       concatMapped(`let ${slot}: ${type} | null = null;`),
-      concatMapped(
-        "const ",
-        mappedVar(name, varSpan),
-        ` = (): ${type} => ${slot}!;`,
-      ),
+      concatMapped("const ", mappedVar(name, varSpan), ` = () => ${slot}!;`),
     );
     // Neither framework has string refs: a string or bare `ref` cannot be
     // handed the node, so it is refused rather than composed.

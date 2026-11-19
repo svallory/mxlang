@@ -2737,7 +2737,9 @@ describe("an element reference (`<div/el>`)", () => {
 
   // The type check (the TypeScript plugin, `mx-tsc`) types the getter by
   // tag, so a handler reading `el()` gets the element's members; the build
-  // output above keeps `any` and has no alias.
+  // output above keeps `any` and has no alias. The getter returns a typed
+  // binding and its return type is inferred, so the editor hovers the
+  // interface (`() => HTMLDivElement`), not the alias.
   const alias =
     "type __MxElement<N extends string> = N extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[N] : N extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[N] : HTMLElement;";
 
@@ -2745,18 +2747,18 @@ describe("an element reference (`<div/el>`)", () => {
     const projection = compile(src("<div/el/><p/q/>"), "/f/t.mx", {
       typeCheck: true,
     }).code;
-    expect(projection).toContain(
-      'const el = (): __MxElement<"div"> => { throw new Error("Element references can only be read in scripts and event handlers."); };',
-    );
-    expect(projection).toContain(
-      'const q = (): __MxElement<"p"> => { throw new Error("Element references can only be read in scripts and event handlers."); };',
-    );
+    expect(projection).toContain('let __mxEl0!: __MxElement<"div">;');
+    expect(projection).toContain("const el = () => __mxEl0;");
+    expect(projection).toContain('let __mxEl1!: __MxElement<"p">;');
+    expect(projection).toContain("const q = () => __mxEl1;");
     expect(projection.split(alias)).toHaveLength(2);
   });
 
   it("keeps the build output free of the alias", () => {
     const { code } = compile(src("<div/el/>"), "/f/t.mx");
     expect(code).not.toContain("__MxElement");
+    expect(code).not.toContain("HTMLElementTagNameMap");
+    expect(code).not.toContain("__mxEl0");
   });
 
   const pick =
@@ -2784,9 +2786,8 @@ describe("an element reference (`<div/el>`)", () => {
     const projection = compile(src('<${"my-el"}/el>x</>'), "/f/t.mx", {
       typeCheck: true,
     }).code;
-    expect(projection).toContain(
-      'const el = (): __MxElement<"my-el"> => { throw new Error("Element references can only be read in scripts and event handlers."); };',
-    );
+    expect(projection).toContain('let __mxEl0!: __MxElement<"my-el">;');
+    expect(projection).toContain("const el = () => __mxEl0;");
     expect(projection.split(alias)).toHaveLength(2);
   });
 });
