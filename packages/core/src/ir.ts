@@ -55,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 19;
+export const IR_VERSION = 20;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -539,6 +539,20 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
    */
   var: string | null;
   /**
+   * UTF-16 span of the whole authored `/var` pattern (`/n`, `/{ a, b }`),
+   * as `TagCall.varSpan` is. Absent without `/var` or without source (a
+   * hand-built node). A Babel identifier with an annotation spans the
+   * annotation too, so an emitter maps a declared name from the span's
+   * start (core's `mappedVar`), never its end. Added in `IR_VERSION` 20.
+   */
+  varSpan?: SourceSpan;
+  /**
+   * Each identifier `var` declares, with its authored span, as
+   * `Component.varBindings`. Filled by `lower.ts` `varBindingsOf` when the
+   * tag has a `/var`; absent otherwise. Added in `IR_VERSION` 20.
+   */
+  varBindings?: Array<{ name: string; span?: SourceSpan }>;
+  /**
    * Set with `var` on a dynamic tag whose name is a string literal that
    * does not name a native element (`<${"my-el"}/el>`), on a host that
    * declares `bindsElementVar`: `var` is then an element reference to the
@@ -772,6 +786,14 @@ export type IrNode =
        * body.
        */
       var?: string;
+      /**
+       * UTF-16 span of the whole authored `/var` pattern (`/n`, `/{ a, b }`),
+       * as `TagCall.varSpan` is. Absent without `/var` or without source (a
+       * hand-built node). A Babel identifier with an annotation spans the
+       * annotation too, so an emitter maps a declared name from the span's
+       * start (core's `mappedVar`), never its end. Added in `IR_VERSION` 20.
+       */
+      varSpan?: SourceSpan;
     } & IrBase)
   | ({
       kind: "Component";
@@ -831,6 +853,14 @@ export type IrNode =
        * ignores it needs no change.
        */
       varBindings?: Array<{ name: string; span?: SourceSpan }>;
+      /**
+       * UTF-16 span of the whole authored `/var` pattern (`/n`, `/{ a, b }`),
+       * as `TagCall.varSpan` is. Absent without `/var` or without source (a
+       * hand-built node). A Babel identifier with an annotation spans the
+       * annotation too, so an emitter maps a declared name from the span's
+       * start (core's `mappedVar`), never its end. Added in `IR_VERSION` 20.
+       */
+      varSpan?: SourceSpan;
       /**
        * This call's target returns `{ value, output }` rather than output
        * alone (design §3.3).
@@ -986,6 +1016,14 @@ export type IrNode =
        * emitter that ignores it needs no change.
        */
       varBindings?: Array<{ name: string; span?: SourceSpan }>;
+      /**
+       * UTF-16 span of the whole authored `/var` pattern (`/n`, `/{ a, b }`),
+       * as `TagCall.varSpan` is. Absent without `/var` or without source (a
+       * hand-built node). A Babel identifier with an annotation spans the
+       * annotation too, so an emitter maps a declared name from the span's
+       * start (core's `mappedVar`), never its end. Added in `IR_VERSION` 20.
+       */
+      varSpan?: SourceSpan;
       /**
        * The type the author annotated the binding with (`<const/c: string=…/>`,
        * without the colon). Set only when the host keeps TypeScript wrappers

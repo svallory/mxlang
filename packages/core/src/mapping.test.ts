@@ -12,6 +12,7 @@ import {
   mapped,
   mappedExpr,
   mappedRewrite,
+  mappedVar,
   withUse,
 } from "./mapping.ts";
 import { tagTable } from "./tag-table.ts";
@@ -253,5 +254,68 @@ describe("withUse", () => {
       },
       { sourceStart: 30, sourceEnd: 31, generatedStart: 12, generatedEnd: 13 },
     ]);
+  });
+});
+
+describe("mappedVar", () => {
+  it("maps an identifier at its authored span, for navigation and hover", () => {
+    expect(mappedVar("el", { sourceStart: 10, sourceEnd: 12 })).toEqual({
+      code: "el",
+      mappings: [
+        {
+          sourceStart: 10,
+          sourceEnd: 12,
+          generatedStart: 0,
+          generatedEnd: 2,
+          use: { navigation: true, semantic: true },
+        },
+      ],
+    });
+  });
+
+  it("maps each name a pattern declares from the span starts", () => {
+    expect(
+      mappedVar("{ a, b: c }", { sourceStart: 20, sourceEnd: 31 }, [
+        { name: "a", span: { sourceStart: 22, sourceEnd: 23 } },
+        // An annotated identifier's span covers its annotation: only the
+        // start is read.
+        { name: "c", span: { sourceStart: 28, sourceEnd: 34 } },
+      ]),
+    ).toEqual({
+      code: "{ a, b: c }",
+      mappings: [
+        {
+          sourceStart: 22,
+          sourceEnd: 23,
+          generatedStart: 2,
+          generatedEnd: 3,
+          use: { navigation: true, semantic: true },
+        },
+        {
+          sourceStart: 28,
+          sourceEnd: 29,
+          generatedStart: 8,
+          generatedEnd: 9,
+          use: { navigation: true, semantic: true },
+        },
+      ],
+    });
+  });
+
+  it("maps nothing where the text at the offset is not the name", () => {
+    expect(
+      mappedVar("{ a = 1 }", { sourceStart: 20, sourceEnd: 29 }, [
+        { name: "a", span: { sourceStart: 24, sourceEnd: 25 } },
+      ]),
+    ).toEqual({ code: "{ a = 1 }", mappings: [] });
+  });
+
+  it("maps nothing without a varSpan", () => {
+    expect(mappedVar("el", undefined)).toEqual({ code: "el", mappings: [] });
+    expect(
+      mappedVar("{ a }", undefined, [
+        { name: "a", span: { sourceStart: 2, sourceEnd: 3 } },
+      ]),
+    ).toEqual({ code: "{ a }", mappings: [] });
   });
 });

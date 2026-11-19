@@ -411,6 +411,17 @@ function varBindingsOf(ctx: Ctx, pattern: Node | null | undefined) {
 }
 
 /**
+ * The span of a tag's whole authored `/var` pattern, as an object to spread
+ * into the IR node: `{ varSpan }` when the tag has a `/var` with a source
+ * span, `{}` otherwise.
+ */
+function varSpanOf(ctx: Ctx, node: Node): { varSpan?: SourceSpan } {
+  const pattern = tagVarOf(node);
+  const varSpan = pattern ? exprSpan(ctx, pattern) : undefined;
+  return varSpan ? { varSpan } : {};
+}
+
+/**
  * Is this character one of the two sigils a shorthand class or id starts with?
  */
 function shorthandSigil(char: string | undefined): boolean {
@@ -4676,6 +4687,7 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
     name,
     ...(varType ? { varType } : {}),
     varBindings: varBindingsOf(ctx, tagVarOf(node)),
+    ...varSpanOf(ctx, node),
     init,
     span: exprSpan(ctx, node),
     loc: posOf(ctx, node),
@@ -6111,6 +6123,10 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       params: paramsOf(ctx, node),
       bindings,
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
+      ...varSpanOf(ctx, node),
+      ...(tagVarOf(node)
+        ? { varBindings: varBindingsOf(ctx, tagVarOf(node)) }
+        : {}),
       ...(elementRef ? { elementRef: true as const } : {}),
       data: early
         ? commentData
@@ -7164,6 +7180,7 @@ function lowerComponent(
     var: callVar,
     ...(elementRef ? { elementRef: true as const } : {}),
     varBindings: varBindingsOf(ctx, tagVarOf(node)),
+    ...varSpanOf(ctx, node),
     ...(returnShape === "returns" ? { returnsValue: true } : {}),
     loc: posOf(ctx, node),
   };
@@ -8141,7 +8158,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     attrs,
     children,
     void: isVoid,
-    ...(elementVar !== undefined ? { var: elementVar } : {}),
+    ...(elementVar !== undefined
+      ? { var: elementVar, ...varSpanOf(ctx, node) }
+      : {}),
     loc: posOf(ctx, node),
   };
 }

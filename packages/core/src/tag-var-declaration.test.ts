@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import type { TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import type { Ir } from "./ir.ts";
 import { lookup } from "./test-targets.ts";
 
 const host: HostDeclarations = {
@@ -309,5 +310,72 @@ describe("an outer binding read after a body that declares its own /x", () => {
     expect(() => compileMatrix("<if=input.a><counter/x/></if>${x}")).toThrow(
       "`x` is a `/var` bound inside a nested block and is not in scope here",
     );
+  });
+});
+
+describe("the authored /var span in the IR", () => {
+  function lowered(source: string, declarations: HostDeclarations = host) {
+    let captured: Ir | undefined;
+    compileSource(source, "/page.mx", declarations, {
+      targets: lookup,
+      emitIr: (ir: Ir) => {
+        captured = ir;
+        return "";
+      },
+    } as never);
+    if (!captured) throw new Error("no IR captured");
+    return captured.body;
+  }
+
+  it("is on an element reference, and absent without one", () => {
+    const [withVar, without] = lowered("<div/el/><p/>", elementHost);
+    expect(withVar).toMatchObject({ kind: "Element", var: "el" });
+    expect(withVar).toHaveProperty("varSpan", { sourceStart: 5, sourceEnd: 7 });
+    expect(without).toMatchObject({ kind: "Element", name: "p" });
+    expect(without).not.toHaveProperty("varSpan");
+  });
+
+  it("is on a call's /var, and absent on a call without one", () => {
+    const body = lowered("<define/D><return=1/></define><D/v/><D/>");
+    expect(body[1]).toMatchObject({
+      kind: "Component",
+      var: "v",
+      varSpan: { sourceStart: 33, sourceEnd: 34 },
+      varBindings: [{ name: "v", span: { sourceStart: 33, sourceEnd: 34 } }],
+    });
+    expect(body[2]).toMatchObject({ kind: "Component" });
+    expect(body[2]).not.toHaveProperty("varSpan");
+  });
+
+  it("is on a delegated tag's /var with its bindings, and absent without one", () => {
+    const [withVar, without] = lowered("<let/x=1/><id/>");
+    expect(withVar).toMatchObject({
+      kind: "DelegatedTag",
+      tag: {
+        name: "let",
+        var: "x",
+        varSpan: { sourceStart: 5, sourceEnd: 6 },
+        varBindings: [{ name: "x", span: { sourceStart: 5, sourceEnd: 6 } }],
+      },
+    });
+    expect(without).toMatchObject({
+      kind: "DelegatedTag",
+      tag: { name: "id" },
+    });
+    expect(without).not.toHaveProperty("tag.varSpan");
+    expect(without).not.toHaveProperty("tag.varBindings");
+  });
+
+  it("is on a <const>'s whole pattern", () => {
+    const [constant] = lowered("<const/{ a, b: c }={ a: 1, b: 2 }/>");
+    expect(constant).toMatchObject({
+      kind: "Const",
+      name: "{ a, b: c }",
+      varSpan: { sourceStart: 7, sourceEnd: 18 },
+      varBindings: [
+        { name: "a", span: { sourceStart: 9, sourceEnd: 10 } },
+        { name: "c", span: { sourceStart: 15, sourceEnd: 16 } },
+      ],
+    });
   });
 });

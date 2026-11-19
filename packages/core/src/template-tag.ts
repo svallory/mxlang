@@ -1160,6 +1160,7 @@ export function routeTemplateCall(
       // out how to unwrap the result, and the answer is the same on all six.
       var: call.var,
       varBindings: call.varBindings,
+      ...(call.varSpan ? { varSpan: call.varSpan } : {}),
       returnsValue: metadata.returnsValue === true,
       // The call routes to a generated binding, so a host reporting on this
       // call has to be able to name the tag as written.

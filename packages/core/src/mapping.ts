@@ -85,6 +85,51 @@ export function mapped(code: string, span: SourceSpan | null): MappedCode {
   };
 }
 
+/** What a tag variable's declaration mapping serves: navigation and hover. */
+const VAR_DECLARATION_USE: MappingUse = { navigation: true, semantic: true };
+
+/**
+ * A tag variable's declared text (`el`, `{ a, b: c }`) as written into
+ * generated code, with one mapping per identifier it declares, so
+ * definition, references, rename and hover reach the authored `/var`.
+ *
+ * `varSpan` is the whole authored pattern's span (the IR's `varSpan`);
+ * `bindings` are the identifiers the pattern declares with their spans (the
+ * IR's `varBindings`), and default to the identifier form, `code` itself at
+ * `varSpan`. Each binding's offset in `code` is its span's start minus
+ * `varSpan`'s; a binding maps only when `code` holds its name at that offset,
+ * so a pattern the generator printed rather than copied maps nothing. Only
+ * span starts are read: an annotated identifier's span covers its
+ * annotation. Without `varSpan` nothing maps. The mappings serve navigation
+ * and hover, never diagnostics or completion.
+ */
+export function mappedVar(
+  code: string,
+  varSpan: SourceSpan | undefined,
+  bindings: readonly { name: string; span?: SourceSpan }[] = [
+    { name: code, span: varSpan },
+  ],
+): MappedCode {
+  const mappings: GeneratedMapping[] = [];
+  if (varSpan) {
+    for (const { name, span } of bindings) {
+      if (!span) continue;
+      const offset = span.sourceStart - varSpan.sourceStart;
+      if (offset < 0 || code.slice(offset, offset + name.length) !== name) {
+        continue;
+      }
+      mappings.push({
+        sourceStart: span.sourceStart,
+        sourceEnd: span.sourceStart + name.length,
+        generatedStart: offset,
+        generatedEnd: offset + name.length,
+        use: VAR_DECLARATION_USE,
+      });
+    }
+  }
+  return { code, mappings };
+}
+
 /**
  * The sibling of `mapped(name, nameSpan)` for the other half of the mapped
  * population. Unmapped when the expression has no authored source (a

@@ -305,6 +305,7 @@ export {
   mappedExpr,
   mappedMethod,
   mappedRewrite,
+  mappedVar,
   replaceMapped,
   type SourceSpan,
   withUse,
