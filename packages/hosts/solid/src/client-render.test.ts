@@ -416,3 +416,22 @@ describe("Solid client render: live signal updates through the real DOM", () => 
     expect(snapshots[0]).toContain("caught: client boom");
   });
 });
+
+describe("Solid client render: element references", () => {
+  it("hands each handler its own element: top level, per <for> row, and beside an authored ref", () => {
+    const { snapshots } = renderDomApp(
+      [
+        '<div/el/><button onClick() { el().dataset.hit = "1" }>go</button>',
+        '<for|item| of=["x", "y"]><p/row>${item}</p><button onClick() { row().dataset.hit = "1" }>row</button></for>',
+        '<div/own ref=((n) => n.setAttribute("data-authored", "1"))/><button onClick() { own().dataset.hit = "1" }>own</button>',
+      ].join(""),
+      '(globalThis as any).clickAll = () => { for (const b of document.querySelectorAll("button")) (b as HTMLElement).click(); };',
+      "clickAll",
+      ["0"],
+    );
+    expect(snapshots).toEqual([
+      '<ul><div></div><button>go</button><p>x</p><button>row</button><p>y</p><button>row</button><div data-authored="1"></div><button>own</button></ul>',
+      '<ul><div data-hit="1"></div><button>go</button><p data-hit="1">x</p><button>row</button><p data-hit="1">y</p><button>row</button><div data-authored="1" data-hit="1"></div><button>own</button></ul>',
+    ]);
+  });
+});

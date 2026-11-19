@@ -67,6 +67,7 @@ import {
 } from "./attr-guard.ts";
 import {
   collectReturnVars,
+  declareInPlace,
   emitSolidWithMappings,
   MX_ESCAPE_BINDING,
   MX_RETURN_PROP,
@@ -178,6 +179,9 @@ export interface CompileSolidMxResult {
    * callback prop assigns during the child's synchronous setup (design
    * §2.4), so the declaration has to be somewhere the region's JSX can close
    * over: the surrounding function. Empty for a region that binds none.
+   * An element reference (`<div/el>`) is not in it: the region declares it
+   * in place, `{(() => { let el: any; return <>…</>; })()}`, so each
+   * instance gets its own.
    */
   returnVars: string[];
   /** Callee declarations read while resolving this region's attribute tags. */
@@ -481,7 +485,8 @@ function emitRegion(
   // divergence between the two passes would be silent.
   let emitted!: ReturnType<typeof emitSolidWithMappings>;
   const {
-    vars: returnVars,
+    vars,
+    elementVars,
     needsEscapeImport,
     needsAttrGuard,
     hoistedDefines,
@@ -489,6 +494,15 @@ function emitRegion(
     emitted = emitSolidWithMappings({ ...ir, body: scopeReturnVars(ir.body) });
     return emitted.code;
   });
+  // The caller declares `returnVars` once at module scope, which every
+  // instance of the component shares. A call's `/var` is read during the
+  // same render, so that is harmless there; an element reference is read
+  // later, in a handler, which would then reach the element of whichever
+  // instance rendered last. So the region declares its own, in place.
+  const returnVars = vars.filter((name) => !elementVars.includes(name));
+  if (elementVars.length > 0) {
+    emitted = declareInPlace(elementVars, emitted, "child");
+  }
   if (needsEscapeImport) {
     hoistedImports.unshift({
       code: `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";`,

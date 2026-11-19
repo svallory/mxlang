@@ -124,7 +124,27 @@ function bindReturnVar(node: { var: string }): void {
   returnVars?.add(node.var);
 }
 
-type VarCall = Extract<IrNode, { kind: "Component" }>;
+/**
+ * The element references (`<div/el>`) among the current scope's
+ * `returnVars`, scoped exactly like it: `collectReturnVars` creates it for
+ * one compile and `inLazyScope` swaps it for one body. A region's top-level
+ * ones are declared in place rather than handed to the caller, which
+ * declares `returnVars` once at module scope (`compileSolidMx`).
+ */
+let elementVars: Set<string> | null = null;
+
+/**
+ * Records an element reference the current scope declares with one `let`,
+ * as `bindReturnVar` records a call's `/var`, and marks it as an element
+ * reference for `compileSolidMx`.
+ */
+function bindElementVar(name: string): void {
+  returnVars?.add(name);
+  elementVars?.add(name);
+}
+
+/** A node whose `/var` a scope declares: a call, or an element reference. */
+type VarCall = Extract<IrNode, { kind: "Component" | "Element" }>;
 
 /** A body that is its own `/var` scope, for `scopeReturnVars`. */
 interface VarScope {
@@ -134,12 +154,14 @@ interface VarScope {
 }
 
 /**
- * Every `/var` scope of `body` with the `/var` calls in document order: the
- * top level, an element's children, a delegated tag's (`<try>`) body and each
- * of its attribute-tag blocks, a `<for>` body, each `<if>` branch, a call's
- * content body and a `<define>` body. The last four are the lazy bodies that
- * declare their own `let`s (`inLazyScope`); entering them here keeps an outer
- * scope's rename from rewriting the reads their own `/var` binds.
+ * Every `/var` scope of `body` with the `/var` calls and element references
+ * (`<div/el>`, recorded in the scope that contains the element) in document
+ * order: the top level, an element's children, a delegated tag's (`<try>`)
+ * body and each of its attribute-tag blocks, a `<for>` body, each `<if>`
+ * branch, a call's content body and a `<define>` body. The last four are the
+ * lazy bodies that declare their own `let`s (`inLazyScope`); entering them
+ * here keeps an outer scope's rename from rewriting the reads their own
+ * `/var` binds.
  */
 function varScopes(body: IrNode[]): Array<{ call: VarCall; scope: VarScope }> {
   const found: Array<{ call: VarCall; scope: VarScope }> = [];
@@ -151,6 +173,7 @@ function varScopes(body: IrNode[]): Array<{ call: VarCall; scope: VarScope }> {
     };
     for (const node of children) {
       if (node.kind === "Element") {
+        if (node.var) found.push({ call: node, scope });
         enter(node.children, scope);
       } else if (node.kind === "DelegatedTag") {
         enter(node.tag.children, scope);
@@ -171,8 +194,12 @@ function varScopes(body: IrNode[]): Array<{ call: VarCall; scope: VarScope }> {
   return found;
 }
 
-/** The names a `/var` binds (`varBindings`, or its text for hand-built IR). */
+/**
+ * The names a `/var` binds (`varBindings`, or its text for hand-built IR);
+ * an element reference binds its one identifier.
+ */
 function varNames(call: VarCall): string[] {
+  if (call.kind === "Element") return [call.var as string];
   return (call.varBindings ?? [{ name: call.var as string }]).map(
     (binding) => binding.name,
   );
@@ -181,7 +208,9 @@ function varNames(call: VarCall): string[] {
 /**
  * Gives a `/var` that repeats a name another body scope binds a binding of
  * its own, since this host declares every `/var` with one `let` at the
- * component's head.
+ * component's head. An element reference (`<div/el>`) counts as a `/var`
+ * here: core shadows it per body, so `<div/el/><section><span/el/></section>`
+ * is two bindings, and its callback `ref` and reads follow the rename.
  *
  * Marko scopes a tag variable to the body that declares it, so in
  * `<counter/n/><div><counter/n/>${n}</div>${n}` the inner `${n}` reads the
@@ -244,9 +273,11 @@ export function scopeReturnVars(body: IrNode[]): IrNode[] {
         jobs.push({ scope, from: name, to: fresh, kept });
       }
       call.var = fresh;
-      call.varBindings = call.varBindings?.map((binding) =>
-        binding.name === name ? { ...binding, name: fresh } : binding,
-      );
+      if (call.kind === "Component") {
+        call.varBindings = call.varBindings?.map((binding) =>
+          binding.name === name ? { ...binding, name: fresh } : binding,
+        );
+      }
     }
   }
   const inside = (scope: VarScope, outer: VarScope): boolean => {
@@ -523,23 +554,40 @@ function inLazyScope(
 ): MappedCode {
   const outer = lazyScope;
   const outerVars = returnVars;
+  const outerElementVars = elementVars;
   const own = outerVars ? new Set<string>() : null;
   lazyScope = true;
   returnVars = own;
+  elementVars = own ? new Set<string>() : null;
   try {
     const body = emit();
     if (!own || own.size === 0) return body;
-    const lets = [...own].map((name) => `${name}: any`).join(", ");
-    const call = concatMapped(
-      `(() => { let ${lets}; return <>`,
-      body,
-      "</>; })()",
-    );
-    return form === "child" ? concatMapped("{", call, "}") : call;
+    return declareInPlace([...own], body, form);
   } finally {
     lazyScope = outer;
     returnVars = outerVars;
+    elementVars = outerElementVars;
   }
+}
+
+/**
+ * `body` in an arrow called in place that declares `names` first,
+ * `(() => { let n: any; return <>body</>; })()`, written `{…}` in the
+ * `"child"` form: `inLazyScope`'s per-body declaration, and a region's
+ * top-level element references (`compileSolidMx`).
+ */
+export function declareInPlace(
+  names: readonly string[],
+  body: MappedCode,
+  form: "value" | "child",
+): MappedCode {
+  const lets = names.map((name) => `${name}: any`).join(", ");
+  const call = concatMapped(
+    `(() => { let ${lets}; return <>`,
+    body,
+    "</>; })()",
+  );
+  return form === "child" ? concatMapped("{", call, "}") : call;
 }
 
 /**
@@ -564,6 +612,8 @@ export function collectReturnVars(
 ): {
   code: string;
   vars: string[];
+  /** The element references among `vars` (`<div/el>`). */
+  elementVars: string[];
   needsEscapeImport: boolean;
   needsAttrGuard: {
     value: boolean;
@@ -577,6 +627,7 @@ export function collectReturnVars(
   hoistedDefines: HoistedSolidDefine[];
 } {
   const outer = returnVars;
+  const outerElementVars = elementVars;
   const outerMappingSource = mappingSource;
   mappingSource = source;
   const outerEscapeUse = escapeUse;
@@ -585,6 +636,7 @@ export function collectReturnVars(
   const outerDefineBindings = defineBindings;
   const outerDefinePairs = definePairs;
   const collected = new Set<string>();
+  const collectedElements = new Set<string>();
   const collectedEscapeUse = { used: false };
   const collectedAttrGuardUse = {
     value: false,
@@ -597,6 +649,7 @@ export function collectReturnVars(
   };
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
+  elementVars = collectedElements;
   escapeUse = collectedEscapeUse;
   attrGuardUse = collectedAttrGuardUse;
   hoistedDefines = allowHoist ? collectedDefines : null;
@@ -606,12 +659,14 @@ export function collectReturnVars(
     return {
       code: emit(),
       vars: [...collected],
+      elementVars: [...collectedElements],
       needsEscapeImport: collectedEscapeUse.used,
       needsAttrGuard: collectedAttrGuardUse,
       hoistedDefines: collectedDefines,
     };
   } finally {
     returnVars = outer;
+    elementVars = outerElementVars;
     mappingSource = outerMappingSource;
     escapeUse = outerEscapeUse;
     attrGuardUse = outerAttrGuardUse;
@@ -748,6 +803,8 @@ export const solidDeclarations: HostDeclarations = {
   hostName: "Solid",
   nativeTags: WEB_ELEMENTS,
   attributeArgs: "refuse",
+  // `<div/el>` binds an element reference through a callback `ref` (`element`).
+  bindsElementVar: true,
   // The name this framework gives a meaning on an element (Solid's own
   // `ref`), so core's other-framework-names rule lets it through
   // (divergences.md).
@@ -2594,6 +2651,35 @@ function isIdentifier(text: string): boolean {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(text.trim());
 }
 
+/**
+ * Binds an element reference (`<div/el>`): `el` joins the scope's `/var`
+ * `let`s (`bindElementVar`), and a callback `ref`, written after every other
+ * attribute, sets it to a getter of the node,
+ * `ref={(__mxNode: Element) => { el = () => __mxNode; }}`. A callback ref
+ * runs per row, per branch and per instance, with no hook. An authored
+ * `ref=` (the last `dynamic` one) is taken off the element and composed
+ * through Solid's array ref, `ref={[authored, callback]}`, which calls every
+ * function in it. An element with no `/var` is returned as it is.
+ */
+function elementRef(node: Extract<IrNode, { kind: "Element" }>): {
+  node: Extract<IrNode, { kind: "Element" }>;
+  ref: MappedCode | string;
+} {
+  if (!node.var) return { node, ref: "" };
+  bindElementVar(node.var);
+  const callback = `(__mxNode: Element) => { ${node.var} = () => __mxNode; }`;
+  const authored = [...node.attrs]
+    .reverse()
+    .find((attr) => attr.kind === "dynamic" && attr.name === "ref");
+  if (authored?.kind !== "dynamic") {
+    return { node, ref: ` ref={${callback}}` };
+  }
+  return {
+    node: { ...node, attrs: node.attrs.filter((attr) => attr !== authored) },
+    ref: concatMapped(" ref={[", mappedExpr(authored.value), `, ${callback}]}`),
+  };
+}
+
 /** Solid JSX text emitter over the shared core IR. */
 export class SolidEmitter implements Emitter<string> {
   readonly #out: MappedCode[] = [];
@@ -2635,6 +2721,7 @@ export class SolidEmitter implements Emitter<string> {
   #htmlScript(
     node: Extract<IrNode, { kind: "Element" }>,
     name: "script" | "style" = "script",
+    ref: MappedCode | string = "",
   ): void {
     const body: Array<Extract<IrNode, { kind: "Text" | "Interpolation" }>> = [];
     for (const child of node.children) {
@@ -2648,7 +2735,10 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
     rejectRawHtmlAttr(node.attrs, `html-${name}`);
-    const attrs = renderAttrs(node.attrs, false, { tag: JSON.stringify(name) });
+    const attrs = concatMapped(
+      renderAttrs(node.attrs, false, { tag: JSON.stringify(name) }),
+      ref,
+    );
     if (body.length === 0) {
       this.#out.push(concatMapped(`<${name}`, attrs, " />"));
       return;
@@ -2673,9 +2763,18 @@ export class SolidEmitter implements Emitter<string> {
     );
   }
 
-  element(node: Extract<IrNode, { kind: "Element" }>): void {
+  /**
+   * `ref`, an element reference's callback `ref` (`elementRef`), is written
+   * after every other attribute.
+   */
+  element(element: Extract<IrNode, { kind: "Element" }>): void {
+    const { node, ref } = elementRef(element);
     if (node.name === "html-script" || node.name === "html-style") {
-      this.#htmlScript(node, node.name === "html-script" ? "script" : "style");
+      this.#htmlScript(
+        node,
+        node.name === "html-script" ? "script" : "style",
+        ref,
+      );
       return;
     }
     const raw = rawChild(node.children);
@@ -2691,7 +2790,9 @@ export class SolidEmitter implements Emitter<string> {
       ? concatMapped(" innerHTML={", mappedExpr(raw.expr), "}")
       : concatMapped();
     if (node.void) {
-      this.#out.push(concatMapped(`<${node.name}`, attrs, innerHtml, " />"));
+      this.#out.push(
+        concatMapped(`<${node.name}`, attrs, innerHtml, ref, " />"),
+      );
       return;
     }
     const children = raw
@@ -2704,6 +2805,7 @@ export class SolidEmitter implements Emitter<string> {
         `<${node.name}`,
         attrs,
         innerHtml,
+        ref,
         ">",
         children,
         `</${node.name}>`,

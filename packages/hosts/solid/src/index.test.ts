@@ -1566,6 +1566,60 @@ describe("a unit that returns a value", () => {
     expect(code).toContain("<p>{n}</p>");
   });
 
+  // An element reference (`<div/el>`) is a `/var` filled by a callback `ref`
+  // written after every other attribute; a handler calls the getter later.
+  it("declares an element reference above the JSX and fills it from a callback ref", () => {
+    const code = compileSolidUnit(
+      "<div/el/><button onClick() { el().focus() }>go</button>",
+      { filename: "/fixtures/page.mx" },
+    ).code;
+    expect(code).toContain("let el: any;");
+    expect(code).toContain(
+      "<div ref={(__mxNode: Element) => { el = () => __mxNode; }}></div>",
+    );
+  });
+
+  it("writes an element reference's ref after the element's other attributes", () => {
+    const code = compileSolidUnit('<div/el class="a"/>', {
+      filename: "/fixtures/page.mx",
+    }).code;
+    expect(code).toContain(
+      '<div class="a" ref={(__mxNode: Element) => { el = () => __mxNode; }}></div>',
+    );
+  });
+
+  it("binds an element reference on <html-script> after its attributes", () => {
+    const code = compileSolidUnit("<html-script/el>x</html-script>", {
+      filename: "/fixtures/page.mx",
+    }).code;
+    expect(code).toContain("let el: any;");
+    expect(code).toContain(
+      '<script ref={(__mxNode: Element) => { el = () => __mxNode; }} innerHTML={__mxScriptText("x")} />',
+    );
+  });
+
+  it("declares a region's element reference in place, not in returnVars", () => {
+    const result = compileSolidMx(
+      "<div/el/><button onClick() { el().focus() }>go</button>",
+      { filename: "fixture.solid.mx" },
+    );
+    expect(result.returnVars).toEqual([]);
+    expect(result.code.startsWith("{(() => { let el: any; return <>")).toBe(
+      true,
+    );
+  });
+
+  it("still hands a region's call /var to the caller beside an element reference", () => {
+    const result = compileSolidMx(
+      "<counter/n start=1/><div/el/><button onClick() { el() }>${n}</button>",
+      { filename: "fixture.solid.mx", customTags: { counter } },
+    );
+    expect(result.returnVars).toEqual(["n"]);
+    expect(result.code.startsWith("{(() => { let el: any; return <>")).toBe(
+      true,
+    );
+  });
+
   // Every `/var` is declared with one `let` at the component's head, so a
   // body that repeats a name another body binds gets a reserved name of its
   // own (the render rows are in `discovered-tag-render.test.ts`).
@@ -1577,6 +1631,17 @@ describe("a unit that returns a value", () => {
     expect(code).toContain("let n: any, __mxVar0_n: any;");
     expect(code).toContain(
       "<div><$mx_Counter1 start={1} $mxReturn={(__mxV) => { n = __mxV; }} />{n}</div><div><$mx_Counter1 start={2} $mxReturn={(__mxV) => { __mxVar0_n = __mxV; }} />{__mxVar0_n}</div>",
+    );
+  });
+
+  it("gives a repeated element reference in a nested body a binding of its own", () => {
+    const code = compileSolidUnit(
+      "<div/el/><section><span/el/><button onClick() { el() }/></section><button onClick() { el() }/>",
+      { filename: "/fixtures/page.mx" },
+    ).code;
+    expect(code).toContain("let el: any, __mxVar0_el: any;");
+    expect(code).toContain(
+      "<div ref={(__mxNode: Element) => { el = () => __mxNode; }}></div><section><span ref={(__mxNode: Element) => { __mxVar0_el = () => __mxNode; }}></span><button onClick={function () { __mxVar0_el(); }}></button></section><button onClick={function () { el(); }}></button>",
     );
   });
 

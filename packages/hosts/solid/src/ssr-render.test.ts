@@ -1238,3 +1238,13 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
     expect(classesOf(html)).toEqual(["a xx b p k", "axx b p k"]);
   });
 });
+
+describe("Solid SSR render: element references", () => {
+  it("renders an element reference's element with no ref attribute", () => {
+    const html = renderApp(
+      "<div/el/><button onClick() { el() }>go</button>",
+      "",
+    );
+    expect(html).toBe("<ul><div></div><button>go</button></ul>");
+  });
+});
