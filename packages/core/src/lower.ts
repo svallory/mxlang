@@ -7100,6 +7100,13 @@ function lowerComponent(
 /** What an authored dynamic target is called in a diagnostic: it has no name. */
 const DYNAMIC_OWNER = "dynamic tag";
 
+/**
+ * The owner of the template body's own parameter, `input`, in
+ * `enclosingTagParams`: a whole-file compile's top-level body declares it, as
+ * stock's Program does (`params: [input]`).
+ */
+const TEMPLATE_INPUT = "template input";
+
 function targetName(target: ComponentTarget): string {
   // An authored dynamic target has no name to report, so the diagnostic
   // names the construct instead. Spelled without a `$`-brace so it is not
@@ -8498,6 +8505,13 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         );
       }
       const param = enclosingParams?.get(name);
+      if (param === TEMPLATE_INPUT) {
+        raise(
+          DUPLICATE_DECLARATION_CODE,
+          `Duplicate declaration of \`${name}\`: it is already the template's input. Rename the tag variable.`,
+          binding,
+        );
+      }
       if (param) {
         raise(
           DUPLICATE_DECLARATION_CODE,
@@ -9099,7 +9113,20 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ctx.derivedConsts = undefined;
   ctx.moduleScope = scanModuleScope(ctx, body);
 
-  const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
+  // A whole-file compile's top-level body has the template's `input` as its
+  // parameter, as stock's Program does: a tag variable `input` there is a
+  // duplicate declaration. `lowerChildList` reads and clears the map for this
+  // one body, so a nested body may still shadow `input`.
+  const [nodes, prelude] = withPrelude(ctx, () => {
+    const outerParams = ctx.enclosingTagParams;
+    if (ctx.emitsModule === true)
+      ctx.enclosingTagParams = new Map([["input", TEMPLATE_INPUT]]);
+    try {
+      return lowerChildren(ctx, body);
+    } finally {
+      ctx.enclosingTagParams = outerParams;
+    }
+  });
   // The walk recorded errors instead of throwing the first. The checks below
   // need a whole file, so none of them runs on a partial one. Partial mode
   // runs them on the tree the walk did finish — the failed subtrees are

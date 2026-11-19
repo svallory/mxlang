@@ -644,7 +644,8 @@ describe("bindingSpan", () => {
   });
 
   it("takes the Babel pattern checkBinding receives", () => {
-    const source = "<p>é</p>\n<const/{ q: input }=1/>\n";
+    // In a nested body: at the top level `input` is the template's input.
+    const source = "<p>é</p>\n<if=true><const/{ q: input }=1/></if>\n";
     const targets: Node[] = [];
     const error = compile(
       source,
@@ -653,7 +654,7 @@ describe("bindingSpan", () => {
     expect(error).toBe(undefined);
     expect(targets).toHaveLength(1);
     const span = bindingSpan(targets[0], "input");
-    expect(span && sliced(source, span)).toEqual([21, 26, "input"]);
+    expect(span && sliced(source, span)).toEqual([30, 35, "input"]);
   });
 
   it("takes a tag variable's pattern, as tagVarOf reads it off the handle", () => {

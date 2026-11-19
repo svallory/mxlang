@@ -17,8 +17,9 @@ const host: HostDeclarations = {
   resolveDelegatedTag: () => ({}),
   resolveAttributeMethod: () => true,
 };
-function compile(source: string) {
-  return compileSource(source, "/page.mx", host, {
+const elementHost: HostDeclarations = { ...host, bindsElementVar: true };
+function compile(source: string, declarations: HostDeclarations = host) {
+  return compileSource(source, "/page.mx", declarations, {
     targets: lookup,
     emitIr: () => "",
   } as never);
@@ -28,10 +29,11 @@ function refusal(
   code: string,
   needle?: string,
   offset?: number,
+  declarations: HostDeclarations = host,
 ) {
   let failure: TranslateError | undefined;
   try {
-    compile(source);
+    compile(source, declarations);
   } catch (error) {
     failure = error as TranslateError;
   }
@@ -131,18 +133,42 @@ describe("same-body tag variable declarations", () => {
     refusal(source, "MX_DUPLICATE_DECLARATION", "enclosing"),
   );
   it.each([
+    ["<const/input=1/>${input}", host],
+    ["<let/input=1/>", host],
+    ["<define/input>a</define>", host],
+    ["<id/input/>", host],
+    ["<define/Child><b/></define><Child/input/>", host],
+    ["<div/input/>", elementHost],
+    ["<input/input/>", elementHost],
+  ])(
+    "refuses a top-level tag variable named input: %s",
+    (source, declarations) =>
+      refusal(
+        source,
+        "MX_DUPLICATE_DECLARATION",
+        "Duplicate declaration of `input`: it is already the template's input. Rename the tag variable.",
+        source.indexOf("/input") + 1,
+        declarations,
+      ),
+  );
+  it.each([
     "<const/x=1/><div><let/x=2/>${x}</div>",
     "<div><const/x=1/></div><div><const/x=2/></div>",
     "<if=true><const/x=1/></if><else><const/x=2/></else>",
     "<if=true><const/x=1/></if>\n<const/x=2/>",
     "<const/x=1/>\n<script>const x = 2</script>",
     "<for|input| of=[1]>${input}</for>",
+    "<if=true><const/input=1/>${input}</if>",
     "<for|x| of=[1]><div><const/x=1/></div></for>",
     "<define/D|x|><div><const/x=1/></div></define>",
     "<define/D|x|><if=true><const/x=1/></if></define>",
   ])("keeps separate scopes: %s", (source) =>
     expect(() => compile(source)).not.toThrow(),
   );
+  it("keeps an element reference named input in a nested body", () =>
+    expect(() =>
+      compile("<if=true><div/input/></if>", elementHost),
+    ).not.toThrow());
 });
 
 describe("define reads before declaration", () => {

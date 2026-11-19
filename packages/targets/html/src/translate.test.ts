@@ -426,12 +426,14 @@ describe("bindings may not shadow the input parameter", () => {
   // The emitted module is `function (input: Input)`, so a `const input = …`
   // inside it makes the template's own input unreachable with no diagnostic.
   // Marko rejects the same thing ("Duplicate declaration of `input`").
+  // At the top level, core refuses it as stock does; html's own check still
+  // covers a nested body.
   it.each([
     ["let", "<let/input=1/>"],
     ["const", "<const/input=1/>"],
   ])("rejects <%s> binding `input`", (_name, body) => {
     expect(() => compile(src(body), file)).toThrow(
-      /collides with the template input parameter/,
+      "Duplicate declaration of `input`: it is already the template's input. Rename the tag variable.",
     );
   });
 
@@ -2896,10 +2898,10 @@ describe("the strict policy: reactive tags error by name", () => {
     // runs. <const> isn't reactive, so it isolates the shadow check.
     const body = "<const/input=1/>\n<p>x</p>";
     expect(() => compile(src(body), file)).toThrow(
-      /collides with the template input parameter/,
+      "Duplicate declaration of `input`: it is already the template's input. Rename the tag variable.",
     );
     expect(() => compile(src(body), file, { strict: true })).toThrow(
-      /collides with the template input parameter/,
+      "Duplicate declaration of `input`: it is already the template's input. Rename the tag variable.",
     );
   });
 });

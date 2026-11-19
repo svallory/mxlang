@@ -587,9 +587,9 @@ describe("compileTagModule: input read shapes (R-b)", () => {
       "@for (input of rows; track $index) { <i>{{ input.x }}</i> }",
     ],
     [
-      "a `<const/input=…>` binding",
-      "<const/input={x: 1}/><i>${input.x}</i>\n",
-      "@let input = {x: 1};<i>{{ input.x }}</i>",
+      "a nested `<const/input=…>` binding",
+      "<if=input.on><const/input={x: 1}/><i>${input.x}</i></if>\n",
+      "@if (on) { @let input = {x: 1};<i>{{ input.x }}</i> }",
     ],
     [
       "an arrow parameter",
