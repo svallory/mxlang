@@ -440,3 +440,65 @@ describe("solid tag variable declarations", () => {
     },
   );
 });
+
+/**
+ * A region `<define>` is hoisted to module scope through the string-only
+ * `hoistedDefines` channel, so its mappings ride on each entry: the name onto
+ * the gensym (hover only), each param as a declaration, and the body and
+ * `<return>` as Solid recorded them. The emitted text is unchanged.
+ */
+describe("solid hoisted define mappings", () => {
+  const USE = { navigation: true, semantic: true };
+  type Entry = ReturnType<typeof compileSolidMx>["hoistedDefines"][number];
+  /** Each mapping as `[sourceStart, generated text, use]`. */
+  const rows = (entry: Entry | undefined) =>
+    (entry?.mappings ?? []).map((m) => [
+      m.sourceStart,
+      entry?.code.slice(m.generatedStart, m.generatedEnd),
+      m.use,
+    ]);
+
+  it("maps a define's name, params, body /var and reads", () => {
+    const result = compileSolidMx(
+      "<ul><define/Row|n|><div/el/><button onClick() { el().focus() }>${n}</button></define><Row(1)/></ul>",
+      { filename: "/fixtures/view.solid.mx" },
+    );
+    expect(result.code).toBe("<ul>{__mx_DefineRow1(1)}</ul>");
+    expect(result.hoistedDefines.map((entry) => entry.code)).toEqual([
+      "function __mx_DefineRow1(n) { return (() => { let el: any; return <><><div ref={(__mxNode: Element) => { el = () => __mxNode; }}></div><button onClick={function () { el().focus(); }}>{n}</button></></>; })(); }",
+    ]);
+    expect(rows(result.hoistedDefines[0])).toEqual([
+      [12, "__mx_DefineRow1", { semantic: true }],
+      [16, "n", USE],
+      [24, "el", USE],
+      [46, "{ el().focus()", undefined],
+      [60, " }", undefined],
+      [65, "n", undefined],
+    ]);
+  });
+
+  it("puts a returning define's body on the pair and its name on the binding", () => {
+    const result = compileSolidMx(
+      "<ul><define/Twice|n|><return=n * 2/>${n}</define><Twice(1)/v/></ul>",
+      { filename: "/fixtures/view.solid.mx" },
+    );
+    expect(result.code).toBe(
+      "{(() => { let v: any; return <><ul><__mx_DefineTwice3 a={[1]} v={(__mxV) => { v = __mxV; }} /></ul></>; })()}",
+    );
+    expect(result.hoistedDefines.map((entry) => entry.code)).toEqual([
+      "function __mx_DefineTwice2(n) { return { value: (n * 2), output: <>{() => { const __mxText0 = n; const __mxEscaped0 = __mxEscape(__mxText0); return __mxEscaped0 === undefined ? __mxText0 : __mxEscaped0; }}</> }; }",
+      "function __mx_DefineTwice1(...a: Parameters<typeof __mx_DefineTwice2>) { return __mx_DefineTwice2(...a).output; }",
+      'function __mx_DefineTwice3(p: { a: Parameters<typeof __mx_DefineTwice2>; v: (value: ReturnType<typeof __mx_DefineTwice2>["value"]) => void }) { const r = __mx_DefineTwice2(...p.a); p.v(r.value); return r.output; }',
+    ]);
+    const [pair, binding, varCall] = result.hoistedDefines;
+    expect(rows(pair)).toEqual([
+      [18, "n", USE],
+      [29, "n * 2", undefined],
+      [38, "n", undefined],
+    ]);
+    expect(rows(binding)).toEqual([
+      [12, "__mx_DefineTwice1", { semantic: true }],
+    ]);
+    expect(varCall && "mappings" in varCall).toBe(false);
+  });
+});

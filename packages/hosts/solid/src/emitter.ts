@@ -20,6 +20,7 @@ import {
   fail as failAtNode,
   filterAttributeTagTree,
   freeIdentifiersInProgram,
+  type GeneratedMapping,
   type HostDeclarations,
   type Ir,
   type IrNode,
@@ -567,6 +568,11 @@ export interface HoistedSolidDefine {
   code: string;
   /** The gensym'd module-scope binding a `Component` call site now uses. */
   binding: string;
+  /**
+   * `code`'s mappings onto the authored `<define>`: generated offsets into
+   * `code`, file-absolute source offsets. Absent when there are none.
+   */
+  mappings?: GeneratedMapping[];
 }
 
 /**
@@ -3815,12 +3821,14 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
 
-    const bodyCode = inLazyScope(() =>
-      jsxValue(blockExpression(node.children)),
-    ).code;
+    const body = inLazyScope(() => jsxValue(blockExpression(node.children)));
+    const bodyCode = body.code;
     // A `<return>` in the body is evaluated inside the hoisted function too,
     // so its expression goes through the same capture check as the markup.
-    const returnCode = node.returnValue ? `(${node.returnValue.code})` : null;
+    const returnValue = node.returnValue
+      ? concatMapped("(", mappedExpr(node.returnValue), ")")
+      : null;
+    const returnCode = returnValue?.code ?? null;
     // `params` is source text, so `|{ n }, i|` is `"{ n }"` and `"i"`: the
     // names a pattern binds are core's (`bindings`); a hand-built node
     // without them falls back to the raw strings, which only under-binds (a
@@ -3880,8 +3888,36 @@ export class SolidEmitter implements Emitter<string> {
     ]);
     const binding = generatedDefineBinding(node.name, taken);
     defineBindings.set(node.name, binding);
-    const typeParams = node.typeParams ? `<${node.typeParams.code}>` : "";
-    if (returnCode) {
+    // Each param and the type params map onto their authored text as a
+    // declaration (hover and navigation, never diagnostics), when the text
+    // written is exactly the authored span's length; the name maps whole
+    // onto the authored name for hover only, since a call (`<Row/>`) is
+    // emitted as the gensym and stays unmapped.
+    const declared = (code: string, span: SourceSpan | undefined) =>
+      span && span.sourceEnd - span.sourceStart === code.length
+        ? withUse(mapped(code, span), VAR_DECLARATION_USE)
+        : mapped(code, null);
+    const typeParams = node.typeParams
+      ? concatMapped(
+          "<",
+          declared(node.typeParams.code, node.typeParams.span),
+          ">",
+        )
+      : "";
+    const params = concatMapped(
+      ...node.params.flatMap((param, index) => [
+        index > 0 ? ", " : "",
+        declared(param, node.paramSpans?.[index]),
+      ]),
+    );
+    const name = (gensym: string) =>
+      withUse(mapped(gensym, node.nameSpan ?? null), { semantic: true });
+    const entry = (built: MappedCode, entryBinding: string) => ({
+      code: built.code,
+      binding: entryBinding,
+      ...(built.mappings.length > 0 ? { mappings: built.mappings } : {}),
+    });
+    if (returnValue) {
       // A define that declares `<return>`: a second hoisted function returns
       // `{ value, output }`, which only a `/var` call reaches; the define's
       // own binding stays the output-only function every other read gets.
@@ -3889,14 +3925,28 @@ export class SolidEmitter implements Emitter<string> {
       const varCall = generatedDefineBinding(node.name, taken.add(pair));
       definePairs?.set(binding, varCall);
       hoistedDefines.push(
-        {
-          code: `function ${pair}${typeParams}(${node.params.join(", ")}) { return { value: ${returnCode}, output: ${bodyCode} }; }`,
-          binding: pair,
-        },
-        {
-          code: `function ${binding}(...a: Parameters<typeof ${pair}>) { return ${pair}(...a).output; }`,
+        entry(
+          concatMapped(
+            `function ${pair}`,
+            typeParams,
+            "(",
+            params,
+            ") { return { value: ",
+            returnValue,
+            ", output: ",
+            body,
+            " }; }",
+          ),
+          pair,
+        ),
+        entry(
+          concatMapped(
+            "function ",
+            name(binding),
+            `(...a: Parameters<typeof ${pair}>) { return ${pair}(...a).output; }`,
+          ),
           binding,
-        },
+        ),
         {
           // The component a `/var` call renders (`#defineComponent`).
           code: `function ${varCall}(p: { a: Parameters<typeof ${pair}>; v: (value: ReturnType<typeof ${pair}>["value"]) => void }) { const r = ${pair}(...p.a); p.v(r.value); return r.output; }`,
@@ -3905,11 +3955,22 @@ export class SolidEmitter implements Emitter<string> {
       );
       return;
     }
-    hoistedDefines.push({
+    hoistedDefines.push(
       // A declaration, so `<T>` cannot read as JSX: no trailing comma needed.
-      code: `function ${binding}${typeParams}(${node.params.join(", ")}) { return ${bodyCode}; }`,
-      binding,
-    });
+      entry(
+        concatMapped(
+          "function ",
+          name(binding),
+          typeParams,
+          "(",
+          params,
+          ") { return ",
+          body,
+          "; }",
+        ),
+        binding,
+      ),
+    );
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {

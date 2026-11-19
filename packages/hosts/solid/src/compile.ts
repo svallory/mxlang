@@ -213,6 +213,13 @@ export interface HoistedDefine {
   code: string;
   /** The gensym'd module-scope binding the region calls. */
   binding: string;
+  /**
+   * `code`'s mappings onto the authored `<define>`: its name, params, body
+   * and `<return>`. Generated offsets are into `code`; source offsets are
+   * file-absolute, as in `mappings`. Absent when the entry maps nothing (a
+   * host helper never does).
+   */
+  mappings?: GeneratedMapping[];
 }
 
 /** The containers whose TypeScript may hold a nested JSX/MX expression. */
