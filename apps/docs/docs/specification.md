@@ -3747,13 +3747,24 @@ scope's `/var` statements and fill the slot through a callback `ref` written
 after every other attribute, so the reference binds per `<for>` row and per
 branch; an authored `ref=` on the same element is handed the node too (called
 when it is a function, given it as `.current` otherwise), and a `ref` key in a
-spread on that element is replaced. **Hono and Solid** refuse `<div/el>` with
-the generic tag-variable refusal at the `/var`, and so do Angular and
-`.astro.mx` (below). Marko hoists a read outside the element's body, or above
+spread on that element is replaced. **Solid** declares `let el: any` where it
+declares every `/var` of the scope, and fills it through a callback `ref`
+written after every other attribute, `el = () => node`, so the reference binds
+per `<for>` row, per branch and per component instance (a `.solid.mx` region
+declares its element references in place rather than beside its call
+`/var`s). `el()` is not typed by tag name: a `/var` binds `any` on Solid. An
+authored `ref=` on the same element is composed through Solid's array ref,
+`ref={[authored, callback]}`, which calls every function in it, so an authored
+lvalue `ref=` (Solid's assignment form) is not assigned there; a `ref` key in a
+spread on that element is replaced; and an element reference in a component
+call's attribute-tag body binds in the enclosing scope, so a body the callee
+renders more than once shares one reference. **Hono** refuses `<div/el>` with the generic tag-variable refusal at
+the `/var`, and so do Angular and `.astro.mx` (below). Marko hoists a read outside the element's body, or above
 the element, into a getter; MX does not: such a read is an unbound name in the
 emitted module. A read above the element in render position is not caught at
 compile time either: on html it fails when the template renders, as Marko's
-does, and on Preact and React `el()` returns `null` there.
+does, on Preact and React `el()` returns `null` there, and on Solid it throws
+a `TypeError`.
 
 **Lifted names are unique on preact, react and hono.** In a whole-file
 component, the identifiers declared by `<const>` patterns, `<define>` names,
@@ -4286,7 +4297,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `try` | **error** (no `<@catch>`; §6) | same | `<Loading>` | body inline | **error** | **error** |
 | `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React/Hono; Hono's wraps `hono/jsx`'s `ErrorBoundary`), body passed as a thunk | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
-| `/var` on an element (`<div/el>`) | `el` is a getter that throws when called; reads outside a handler or `<script>` body are refused in core (§10) | same | **error** (generic tag-variable refusal) | Preact / React: a `let` slot and a getter, filled by a callback `ref`; Hono: **error** (generic tag-variable refusal) | **error** | **error** |
+| `/var` on an element (`<div/el>`) | `el` is a getter that throws when called; reads outside a handler or `<script>` body are refused in core (§10) | same | a `let el: any` per `/var` scope, set to a getter by a callback `ref` written last; an authored `ref=` composed through the array ref (§10) | Preact / React: a `let` slot and a getter, filled by a callback `ref`; Hono: **error** (generic tag-variable refusal) | **error** | **error** |
 | `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | a generated `$mxReturn` callback prop the unit calls during setup; one-shot (§10) | `.render(props)` returns `{ value, output }` (§13.3); `/var` in any scope, dynamic tags included | renders through Astro's renderer, which unwraps the pair (§10) | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
 
 ### 13.2 Markup and attributes
