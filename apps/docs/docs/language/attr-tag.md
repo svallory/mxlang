@@ -85,6 +85,12 @@ and body content under a control flow tag.`
 
 Nested attribute tags are records on their parent's record, by the same rule:
 `<@tab><@icon>📁</@icon>Files</@tab>` gives `input.tab.icon`, a record.
+A nested tag is not part of its parent's body, as in Marko, so its body sees
+the names around the call: in
+`<div/el/><Layout><@tab><div/el/><@inner><button onClick() { el() }/></@inner></@tab></Layout>`,
+`el` in `<@inner>` is the first `<div>`, not `<@tab>`'s (a name only the
+parent's body binds is not hoisted; see
+[specification §10](/specification/)).
 
 ## Host values and limits
 

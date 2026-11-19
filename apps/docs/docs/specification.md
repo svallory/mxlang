@@ -2904,7 +2904,12 @@ iteration (`for of`, `[...x || []]`) yields every occurrence in source order
 while a property read (`x.title`) reads the first. An absent attribute tag is
 `undefined`. Nested attribute tags are records on their parent's record, by
 the same rule. Marko-written callee code (spread, `for of`, property reads)
-therefore runs unchanged. A dynamic tag given a record renders its `content`;
+therefore runs unchanged. A nested attribute tag is not part of its parent's body: as in
+Marko, where it is a field of the parent tag beside that tag's body, its body
+sees the names of the scope around the call. A `/var` or element reference
+that only the parent's body binds is, from the nested body, a read outside its
+declaring body, which Marko hoists and MX does not (§10, Element references).
+A dynamic tag given a record renders its `content`;
 given a record with no `content` (a bodiless `<@name/>`) it renders nothing of
 its own, only the call's own body, as Marko 6.4.4's `normalizeDynamicRenderer`
 does for an object with no renderer. On html, as in that function, an object
