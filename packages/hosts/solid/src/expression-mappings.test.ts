@@ -368,6 +368,16 @@ describe("solid tag variable declarations", () => {
       "let n: any;",
     ],
     [
+      "a call's destructured /var",
+      "<counter/{ a, b: c } start=1/>",
+      [9, 20],
+      [
+        [11, "a"],
+        [17, "c"],
+      ],
+      "let a: any, c: any;",
+    ],
+    [
       "a /var in a lazy body",
       "<for|i| of=[1]><counter/n start=i/>${n}</for>",
       [24, 25],

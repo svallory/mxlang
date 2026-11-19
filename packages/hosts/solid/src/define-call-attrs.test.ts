@@ -393,6 +393,11 @@ describe("solid: a <define> that declares <return>", () => {
       "<define/D|{n}|><return=n * 2/></define><D/d n=2/><p>${d}</p>",
       "<ul><p>4</p></ul>",
     ],
+    [
+      "destructures the returned value into the call's /var",
+      "<define/Pair><return={ a: 1, b: 2 }/></define><Pair/{ a, b: c }/><i>${a}</i><b>${c}</b>",
+      "<ul><i>1</i><b>2</b></ul>",
+    ],
   ])("%s", (_what, source, html) => {
     expect(render(source)).toBe(html);
   });

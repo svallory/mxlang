@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { transformSync } from "@babel/core";
+import { parse as parseBabel } from "@babel/parser";
 import typescriptPreset from "@babel/preset-typescript";
 import { type CustomTag, readCalleeInput } from "@mxlang/core";
 import { parse as parseMxFile } from "@mxlang/tsx-bridge";
@@ -1564,6 +1565,43 @@ describe("a unit that returns a value", () => {
     // accessor call wrapped around it. A tag wanting reactivity returns an
     // accessor and the author calls it.
     expect(code).toContain("<p>{n}</p>");
+  });
+
+  // A destructuring declaration needs an initializer and a statement that
+  // starts with `{` is a block, so a destructured `/var` declares each name
+  // it binds and assigns the pattern in parentheses.
+  it("declares each name a destructured /var binds and assigns the pattern in parentheses", () => {
+    const parses = (code: string) =>
+      parseBabel(code, {
+        sourceType: "module",
+        plugins: ["typescript", "jsx"],
+      });
+    const object = compileSolidUnit("<counter/{ a, b: c } start=1/>${a}${c}", {
+      filename: "/fixtures/page.mx",
+      customTags: { counter },
+    }).code;
+    expect(object).toContain("let a: any, c: any;");
+    expect(object).toContain(
+      "$mxReturn={(__mxV) => { ({ a, b: c } = __mxV); }}",
+    );
+    expect(() => parses(object)).not.toThrow();
+
+    const array = compileSolidUnit("<counter/[x] start=1/>${x}", {
+      filename: "/fixtures/page.mx",
+      customTags: { counter },
+    }).code;
+    expect(array).toContain("let x: any;");
+    expect(array).toContain("$mxReturn={(__mxV) => { ([x] = __mxV); }}");
+    expect(() => parses(array)).not.toThrow();
+  });
+
+  it("declares each name a returning <define> call's destructured /var binds, in place", () => {
+    const code = compileSolidMx(
+      "<define/Pair><return={ a: 1, b: 2 }/></define><Pair/{ a, b: c }/><i>${a}</i><b>${c}</b>",
+      { filename: "fixture.solid.mx" },
+    ).code;
+    expect(code).toContain("let a: any, c: any;");
+    expect(code).toContain("v={(__mxV) => { ({ a, b: c } = __mxV); }}");
   });
 
   // An element reference (`<div/el>`) is a `/var` filled by a callback `ref`

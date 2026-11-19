@@ -143,8 +143,48 @@ function bindReturnVar(node: {
   varSpan?: SourceSpan;
   varBindings?: readonly { name: string; span?: SourceSpan }[];
 }): void {
-  if (!returnVars || returnVars.has(node.var)) return;
+  if (!returnVars) return;
+  const bindings = boundNames(node);
+  if (bindings) {
+    // A destructured `/var` declares each name it binds with its own `let`,
+    // mapped to that name's authored identifier: a destructuring declaration
+    // with no initializer does not parse.
+    for (const b of bindings) {
+      if (!returnVars.has(b.name)) {
+        returnVars.set(b.name, mappedVar(b.name, b.span));
+      }
+    }
+    return;
+  }
+  if (returnVars.has(node.var)) return;
   returnVars.set(node.var, declaredVar(node));
+}
+
+/**
+ * The names a destructured `/var` binds, from core's `varBindings`, or `null`
+ * for a plain identifier `/var` (one binding named `node.var`, or hand-built
+ * IR with no `varBindings`).
+ */
+function boundNames(node: {
+  var: string;
+  varBindings?: readonly { name: string; span?: SourceSpan }[];
+}): readonly { name: string; span?: SourceSpan }[] | null {
+  const bindings = node.varBindings;
+  if (!bindings) return null;
+  if (bindings.length === 1 && bindings[0]?.name === node.var) return null;
+  return bindings;
+}
+
+/**
+ * The callback statement that stores a call's returned value in its `/var`.
+ * A destructuring assignment is parenthesized, since a statement starting
+ * with `{` is a block.
+ */
+function returnVarWrite(node: {
+  var: string;
+  varBindings?: readonly { name: string; span?: SourceSpan }[];
+}): string {
+  return boundNames(node) ? `(${node.var} = __mxV);` : `${node.var} = __mxV;`;
 }
 
 /**
@@ -3066,7 +3106,7 @@ export class SolidEmitter implements Emitter<string> {
     // The `let` the callback assigns is declared by the module assembly,
     // before the JSX that runs it.
     const returnProp = node.var
-      ? ` ${MX_RETURN_PROP}={(__mxV) => { ${node.var} = __mxV; }}`
+      ? ` ${MX_RETURN_PROP}={(__mxV) => { ${returnVarWrite({ ...node, var: node.var })} }}`
       : "";
     if (node.var) bindReturnVar({ ...node, var: node.var });
     if (!node.content || raw) {
@@ -3267,7 +3307,7 @@ export class SolidEmitter implements Emitter<string> {
           mapped(varCall, node.nameSpan),
           " a={[",
           ...args.flatMap((a, i) => (i === 0 ? [a] : [", ", a])),
-          `]} v={(__mxV) => { ${node.var} = __mxV; }} />`,
+          `]} v={(__mxV) => { ${returnVarWrite({ ...node, var: node.var })} }} />`,
         ),
       );
       return;
@@ -3356,7 +3396,7 @@ export class SolidEmitter implements Emitter<string> {
     const returnProp: MappedCode | string = bound
       ? bound.ref
       : node.var
-        ? ` ${MX_RETURN_PROP}={(__mxV) => { ${node.var} = __mxV; }}`
+        ? ` ${MX_RETURN_PROP}={(__mxV) => { ${returnVarWrite({ ...node, var: node.var })} }}`
         : "";
     if (node.var && !bound) bindReturnVar({ ...node, var: node.var });
     const serial = dynSerial.n++;
