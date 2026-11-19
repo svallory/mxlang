@@ -2295,16 +2295,33 @@ A nested element or control body may shadow the param; a param itself named
 
 ### 5.6 A binding named `input`
 
-A **render-scope** binding named `input` (`<let/input=…>`, `<const/input=…>`) is
-rejected on every host: it would shadow the emitted render function's own
-parameter and make the template's input unreachable. Marko refuses it too, as a
-duplicate declaration. Core calls the host's `checkBinding` hook, passing the
-construct label verbatim (`` "`<const>`" ``).
+A template's top-level body has the template's `input` as its parameter, as in
+Marko. A **tag variable** named `input` there (`<const/input=…>`,
+`<let/input=…>`, `<define/input>`, `<id/input>`, a tag call's or a dynamic tag's
+`/input`, and an element reference `<div/input/>` on a host that binds one) is
+`MX_DUPLICATE_DECLARATION` at the name, on every host: "Duplicate declaration of
+`input`: it is already the template's input. Rename the tag variable." Core
+raises it in a whole-file compile; a region and the IR entry (§13.7) have no
+template input and do not. On a host that binds no element reference
+(Hono, Angular, Astro), `<div/input/>` keeps the generic tag-variable refusal.
 
 A **tag param** named `input` (`<for|input|>`, `<define/R|input|>`) is
 **accepted**, because it opens a genuinely nested scope where an ordinary
 JavaScript shadow is correct — and Marko renders those. Rejecting them would be
 an implementation limit stated as a language rule, which the capability test ([§11](#the-mx-language-11-stateful-tags-the-capability-test)) forbids.
+In Marko, a tag variable named `input` inside an `<if>`, `<for>` or `<define>`
+body (`<if=x><div/input/></if>`) shadows the template's `input`; core does not
+refuse it there.
+
+Known limit: in a nested body MX does not follow Marko exactly. The html target
+refuses a nested `<let>`/`<const>` named `input` through its `checkBinding` hook
+("collides with the template input parameter"), where Marko accepts one in an
+`<if>`, `<for>` or `<define>` body. Marko refuses a `<const>`/`<let>` named
+`input` in a native element's body (`<div><const/input=1/></div>`), which core
+does not. On Preact and React an element reference `/input` inside a native
+element's body (`<div><div/input/></div>`, which Marko accepts) lands in the
+component's scope beside its own `input`, so the emitted module declares
+`input` twice.
 
 This check is **not** `strict`-only: a silently-broken input is a bug under
 either policy.
@@ -3724,7 +3741,9 @@ keeps the unit a component.
 `<${"div"}/el>`, which is that element) binds an element reference, as in
 Marko 6.4.4: `el` is a function, and `el()` returns the rendered element
 (typed by its tag name on Preact and React: `HTMLDivElement` for `<div>`, the
-SVG element type for an SVG tag, `HTMLElement` for any other name). It is read
+SVG element type for an SVG tag, `HTMLScriptElement` and `HTMLStyleElement`
+for `<html-script>` and `<html-style>`, the `<script>` and `<style>` they
+emit, `HTMLElement` for any other name). It is read
 only where the element exists: inside a `<script>` body, or inside a function
 given to an `on…` attribute of any tag or to a `<lifecycle>` hook, a function
 nested in one included. Every other read is a positioned compile error at the
@@ -3747,7 +3766,12 @@ scope's `/var` statements and fill the slot through a callback `ref` written
 after every other attribute, so the reference binds per `<for>` row and per
 branch; an authored `ref=` on the same element is handed the node too (called
 when it is a function, given it as `.current` otherwise), and a `ref` key in a
-spread on that element is replaced. **Solid** declares `let el: any` where it
+spread on that element is replaced. A string or bare `ref` beside the reference
+(`<div/el ref="x"/>`, `<div/el ref/>`) is a compile error at the `ref`
+attribute: "`ref` beside the element reference `/el` must be a function or a
+ref object (`ref=myRef`): React has no string refs, so a string or bare `ref`
+cannot receive the node." (on Preact the message names Preact). Marko refuses
+every `ref` on a native element. **Solid** declares `let el: any` where it
 declares every `/var` of the scope, and fills it through a callback `ref`
 written after every other attribute, `el = () => node`, so the reference binds
 per `<for>` row, per branch and per component instance (a `.solid.mx` region
