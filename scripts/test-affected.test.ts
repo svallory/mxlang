@@ -2147,8 +2147,7 @@ function scanSourceReads(
   { imports }: { imports: boolean } = { imports: false },
 ): SourceRead[] {
   const { files, program, checker } = scanProgram(sources);
-  const sorted = [...targets].sort();
-  const under = (dir: string) => sorted.filter((t) => t.startsWith(`${dir}/`));
+  const under = targetsUnder(targets);
   const reads = new Map<string, SourceRead>();
   for (const file of files) {
     const sf = program.getSourceFile(`/${file}`);
@@ -2248,6 +2247,12 @@ function scanSourceReads(
   return [...reads.values()].sort((a, b) =>
     key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0,
   );
+}
+
+/** For a directory, the sorted targets under it. */
+function targetsUnder(targets: ReadonlySet<string>): (dir: string) => string[] {
+  const sorted = [...targets].sort();
+  return (dir) => sorted.filter((t) => t.startsWith(`${dir}/`));
 }
 
 /** A table of path rows and the tests that read what they match. */
@@ -2881,47 +2886,72 @@ describe("dist readers guard", () => {
 /**
  * The spawned-sources guard: a test that runs a repository source in a
  * subprocess (`spawn`, `exec`, `execFile`, `fork` and their `Sync`/`Async`
- * forms, `Bun.spawn`) has neither that file nor its imports in its import
- * graph, so a `SOURCE_TEXT_READERS` row must list it. Built on the same
- * evaluator as the other guards; it checks the spawned entry only, never its
- * closure, and cannot see a template path, a generated script, a spread, a
- * cwd-relative string, a script handed to a helper or a spawn inside a
- * non-test module (those rows are listed by hand).
+ * forms, `Bun.spawn`), or imports it in process through a computed path
+ * (`import(/* @vite-ignore *\/ url)`), has neither that file nor its imports
+ * in its import graph, so a `SOURCE_TEXT_READERS` row must list it. Built on
+ * the same evaluator as the other guards; it checks the spawned or imported
+ * entry only, never its closure, and cannot see a template path, a generated
+ * script, a spread, a cwd-relative string, a script handed to a helper, a
+ * spawn or import inside a non-test module, or an import of a string, a
+ * template, a `require.resolve` result or a `pathToFileURL` URL (those rows
+ * are listed by hand).
  */
 
-/** A test file that passes a repository source to a spawn call. */
+/**
+ * A test file that passes a repository source to a spawn call, or imports a
+ * source or a directory of sources (`path` ends `/`) through a computed path.
+ */
 interface SpawnRead {
   test: string;
   path: string;
+  /** The targets the read can reach: the file, or every target under the directory. */
+  files: readonly string[];
+  via: "spawn" | "import";
 }
 
 const SPAWN_CALL =
   /^(?:spawn|spawnSync|exec|execSync|execFile|execFileSync|fork)(?:Async)?$/;
 
 /**
- * The sources of `targets` each test in `sources` passes to a spawn call: an
+ * The sources of `targets` each test in `sources` passes to a spawn call (an
  * argument, or a non-spread element of an array-literal argument, that
- * `evaluatePath` turns into a target's path. A path the test also imports as
- * a value (a relative import that is not type-only) is left out: its import
- * graph holds the file and its closure. Deduped and sorted.
+ * `evaluatePath` turns into a target's path), or imports through `import()`
+ * of a non-literal argument that evaluates to a target's path or to a URL or
+ * path prefix with targets under it (a string or template argument is a
+ * module specifier, never recorded). A path the test also imports as a value
+ * (a relative import that is not type-only) is left out: its import graph
+ * holds the file and its closure. Deduped and sorted.
  */
 function scanSpawnedSources(
   sources: ReadonlyMap<string, string>,
   targets: ReadonlySet<string>,
 ): SpawnRead[] {
   const { files, program, checker } = scanProgram(sources);
+  const under = targetsUnder(targets);
   const reads = new Map<string, SpawnRead>();
   for (const file of files) {
     const sf = program.getSourceFile(`/${file}`);
     if (sf === undefined) continue;
     const ctx: EvalContext = { checker, file, dir: posix.dirname(file) };
     const imported = new Set<string>();
-    const spawned: string[] = [];
-    const record = (node: ts.Expression) => {
-      const v = asPath(evaluatePath(node, ctx, new Set()));
+    const found: Omit<SpawnRead, "test">[] = [];
+    const recordPath = (v: PathValue, via: SpawnRead["via"]) => {
       if (v.kind === "path" && targets.has(bare(v.path))) {
-        spawned.push(bare(v.path));
+        const path = bare(v.path);
+        found.push({ path, files: [path], via });
       }
+    };
+    const record = (node: ts.Expression) =>
+      recordPath(asPath(evaluatePath(node, ctx, new Set())), "spawn");
+    /** A computed `import()` argument: a path, or a prefix with targets under it. */
+    const recordImport = (node: ts.Expression) => {
+      const v = evaluatePath(node, ctx, new Set());
+      if (v.kind === "prefix") {
+        const reached = under(v.dir);
+        if (reached.length > 0) {
+          found.push({ path: `${v.dir}/`, files: reached, via: "import" });
+        }
+      } else recordPath(v, "import");
     };
     const visit = (node: ts.Node): void => {
       if (
@@ -2933,7 +2963,12 @@ function scanSpawnedSources(
         imported.add(posix.join(ctx.dir, node.moduleSpecifier.text));
       } else if (ts.isCallExpression(node)) {
         const name = lastName(node.expression);
-        if (name !== undefined && SPAWN_CALL.test(name)) {
+        const first = node.arguments[0];
+        if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+          if (first !== undefined && !ts.isStringLiteralLike(first)) {
+            recordImport(first);
+          }
+        } else if (name !== undefined && SPAWN_CALL.test(name)) {
           for (const arg of node.arguments) {
             if (ts.isArrayLiteralExpression(arg)) {
               for (const el of arg.elements) {
@@ -2946,13 +2981,16 @@ function scanSpawnedSources(
       ts.forEachChild(node, visit);
     };
     visit(sf);
-    for (const path of spawned) {
-      if (!imported.has(path)) {
-        reads.set(`${file}\0${path}`, { test: file, path });
+    for (const read of found) {
+      if (!imported.has(read.path)) {
+        reads.set(`${file}\0${read.path}\0${read.via}`, {
+          test: file,
+          ...read,
+        });
       }
     }
   }
-  const key = (r: SpawnRead) => `${r.test}\0${r.path}`;
+  const key = (r: SpawnRead) => `${r.test}\0${r.path}\0${r.via}`;
   return [...reads.values()].sort((a, b) =>
     key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0,
   );
@@ -2974,31 +3012,43 @@ function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
 }
 
 /**
- * Whether `relatedSources` adds the spawn's test for an edit to its path: a
- * row of `rows` lists the test and matches the path, or the test is a
- * `FIXTURE_CONSUMERS` consumer or a dist reader of it.
+ * Whether `relatedSources` adds the read's test for an edit to some file the
+ * read reaches (`coveredRead`'s rule for a directory): a row of `rows` lists
+ * the test and matches the file, or the test is a `FIXTURE_CONSUMERS`
+ * consumer or a dist reader of it.
  */
 function coveredSpawn(
   read: SpawnRead,
   rows: ReaderRows = SOURCE_TEXT_READERS,
 ): boolean {
-  return (
-    rows.some(
-      (row) => row.consumers.includes(read.test) && row.path.test(read.path),
-    ) ||
-    fixtureConsumers(read.path).includes(read.test) ||
-    distReaders([read.path]).includes(read.test)
+  return read.files.some(
+    (f) =>
+      rows.some(
+        (row) => row.consumers.includes(read.test) && row.path.test(f),
+      ) ||
+      fixtureConsumers(f).includes(read.test) ||
+      distReaders([f]).includes(read.test),
   );
 }
 
-/** Detected spawns of a source that need no row: the test is selected some other way. */
-const SPAWN_EXEMPT: readonly (SpawnRead & { reason: string })[] = [
+/** An exemption from the spawned-sources guard; it matches a read by `test` and `path`. */
+type SpawnExemption = { test: string; path: string; reason: string };
+
+/** Detected spawns or computed imports of a source that need no row: the test is selected some other way. */
+const SPAWN_EXEMPT: readonly SpawnExemption[] = [
   // `Bun.build` of `packages/core/src/core.ts` in a subprocess (:25-34); the test itself imports `@mxlang/core`.
   {
     test: "packages/tooling/typescript-plugin/src/target-open-set-r2.test.ts",
     path: "packages/core/src/core.ts",
     reason:
       "imports `@mxlang/core`; core's dist entry selects it on every core source edit",
+  },
+  // `import(new URL("../../../target-registry/src/index.ts", import.meta.url).href)` (:13-14).
+  {
+    test: "packages/targets/html/src/contracts.bun.test.ts",
+    path: "packages/target-registry/src/index.ts",
+    reason:
+      "excluded from html's vitest project (its vitest.config.ts `exclude`); `test:bun` runs it",
   },
 ];
 
@@ -3013,7 +3063,11 @@ function uncoveredSpawns(
         !SPAWN_EXEMPT.some((e) => e.test === r.test && e.path === r.path) &&
         !coveredSpawn(r, rows),
     )
-    .map((r) => `${r.test} spawns ${r.path} with no SOURCE_TEXT_READERS row`);
+    .map((r) =>
+      r.via === "spawn"
+        ? `${r.test} spawns ${r.path} with no SOURCE_TEXT_READERS row`
+        : `${r.test} imports ${r.path} with no SOURCE_TEXT_READERS row`,
+    );
   return [...new Set(messages)].sort();
 }
 
@@ -3027,11 +3081,13 @@ describe("spawned sources guard", () => {
     for (const f of listed.filter((f) => VITEST_TEST_FILE.test(f))) {
       const text = readFileSync(resolve(ROOT, f), "utf8");
       // A spawn name, but not a RegExp's `.exec(`: a member `.exec` of
-      // child_process takes a command string, never a path to a source.
+      // child_process takes a command string, never a path to a source. Or an
+      // `import(` whose argument does not start with a quote or a backtick: a
+      // string or template argument is a specifier the scanner never records.
       // A file this prefilter skips never reaches the scanner: re-check the
-      // detection count before widening or narrowing it.
+      // detection count before widening or narrowing either alternative.
       if (
-        /(?<![\w$.])(?:spawn|exec|fork)|\.(?:spawn|fork|execFile|execSync)/.test(
+        /(?<![\w$.])(?:spawn|exec|fork)|\.(?:spawn|fork|execFile|execSync)|\bimport\((?!\s*["'`])/.test(
           text,
         )
       ) {
@@ -3042,8 +3098,19 @@ describe("spawned sources guard", () => {
     return repoReads;
   };
 
-  it("every detected spawn of a source has a row or an exemption", () => {
+  it("every detected spawn or computed import of a source has a row or an exemption", () => {
     expect(uncoveredSpawns(scanRepo())).toEqual([]);
+  });
+
+  it("catches mx-b5qco's miss: row I without preact's attr-tag-round2 test", () => {
+    const test = "packages/hosts/preact/src/attr-tag-round2.test.ts";
+    const rows = SOURCE_TEXT_READERS.map((row) => ({
+      ...row,
+      consumers: row.consumers.filter((c) => c !== test),
+    }));
+    expect(uncoveredSpawns(scanRepo(), rows)).toEqual([
+      "packages/hosts/preact/src/attr-tag-round2.test.ts imports packages/hosts/ with no SOURCE_TEXT_READERS row",
+    ]);
   });
 
   it("catches mx-6fwg6's miss: angular's body-whitespace test without its row-A entry", () => {
@@ -3059,13 +3126,19 @@ describe("spawned sources guard", () => {
 
   it("every exemption is detected and is not covered", () => {
     const reads = scanRepo();
+    const matched = SPAWN_EXEMPT.map((e) =>
+      reads.find((r) => r.test === e.test && r.path === e.path),
+    );
     expect(
-      SPAWN_EXEMPT.filter(
-        (e) => !reads.some((r) => r.test === e.test && r.path === e.path),
-      ).map((e) => e.test),
+      SPAWN_EXEMPT.filter((_, i) => matched[i] === undefined).map(
+        (e) => e.test,
+      ),
     ).toEqual([]);
     expect(
-      SPAWN_EXEMPT.filter((e) => coveredSpawn(e)).map((e) => e.test),
+      SPAWN_EXEMPT.filter((_, i) => {
+        const read = matched[i];
+        return read !== undefined && coveredSpawn(read);
+      }).map((e) => e.test),
     ).toEqual([]);
   });
 
@@ -3075,6 +3148,7 @@ describe("spawned sources guard", () => {
       `${dir}/x-fixture.ts`,
       "packages/s.ts",
       `${dir}/dep.ts`,
+      "packages/x/b/src/index.ts",
     ]);
     const sources = new Map<string, string>([
       [
@@ -3101,12 +3175,89 @@ describe("spawned sources guard", () => {
         `${dir}/scratch.test.ts`,
         'spawnSync("node", [join(mkdtempSync(join(tmpdir(), "x-")), "run.mjs")]);\n',
       ],
+      [
+        "packages/x/a/src/computed.test.ts",
+        "const url = new URL(`../../${host}/src/index.ts`, import.meta.url).href;\nawait import(/* @vite-ignore */ url);\n",
+      ],
+      [
+        `${dir}/join-import.test.ts`,
+        'await import(join(import.meta.dirname, "dep.ts"));\n',
+      ],
+      [`${dir}/literal-import.test.ts`, 'await import("./dep.ts");\n'],
+      [
+        `${dir}/scratch-import.test.ts`,
+        'await import(`${join(mkdtempSync(join(tmpdir(), "x-")), "m.mjs")}?t=1`);\n',
+      ],
+      [
+        `${dir}/value-import-computed.test.ts`,
+        'import { a } from "./dep.ts";\nawait import(join(import.meta.dirname, "dep.ts"));\n',
+      ],
     ]);
     expect(scanSpawnedSources(sources, targets)).toEqual([
-      { test: `${dir}/fixture.test.ts`, path: `${dir}/x-fixture.ts` },
-      { test: `${dir}/type-import.test.ts`, path: `${dir}/dep.ts` },
-      { test: `${dir}/url.test.ts`, path: "packages/s.ts" },
+      {
+        test: "packages/x/a/src/computed.test.ts",
+        path: "packages/x/",
+        files: [
+          "packages/x/b/src/index.ts",
+          "packages/x/test/dep.ts",
+          "packages/x/test/x-fixture.ts",
+        ],
+        via: "import",
+      },
+      {
+        test: `${dir}/fixture.test.ts`,
+        path: `${dir}/x-fixture.ts`,
+        files: [`${dir}/x-fixture.ts`],
+        via: "spawn",
+      },
+      {
+        test: `${dir}/join-import.test.ts`,
+        path: `${dir}/dep.ts`,
+        files: [`${dir}/dep.ts`],
+        via: "import",
+      },
+      {
+        test: `${dir}/type-import.test.ts`,
+        path: `${dir}/dep.ts`,
+        files: [`${dir}/dep.ts`],
+        via: "spawn",
+      },
+      {
+        test: `${dir}/url.test.ts`,
+        path: "packages/s.ts",
+        files: ["packages/s.ts"],
+        via: "spawn",
+      },
     ]);
+  });
+
+  it("never serves a parsed file whose text changed", () => {
+    const test = "packages/x/test/cache.test.ts";
+    const targets = new Set(["packages/x/test/x-fixture.ts"]);
+    expect(
+      scanSpawnedSources(
+        new Map([
+          [
+            test,
+            'spawnSync("bun", [join(import.meta.dirname, "x-fixture.ts")]);\n',
+          ],
+        ]),
+        targets,
+      ),
+    ).toEqual([
+      {
+        test,
+        path: "packages/x/test/x-fixture.ts",
+        files: ["packages/x/test/x-fixture.ts"],
+        via: "spawn",
+      },
+    ]);
+    expect(
+      scanSpawnedSources(
+        new Map([[test, 'spawnSync("bun", ["--version"]);\n']]),
+        targets,
+      ),
+    ).toEqual([]);
   });
 });
 
