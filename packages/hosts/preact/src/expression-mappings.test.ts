@@ -332,3 +332,59 @@ describe("jsx tag variable declarations", () => {
     expect(code).toContain("const n = __mxRet0.value;");
   });
 });
+
+describe("jsx /var call values", () => {
+  // A call carrying a `/var` maps its attribute values, its define tag name and
+  // a dynamic tag's body as the same call does without the `/var`; the
+  // `__mxRet<n>` statement's text is unchanged.
+  const COUNTER_TAGS = () => ({
+    counter: {
+      template: { filename: join(dir, "counter.mx"), source: "<return=1/>" },
+    },
+  });
+  function rows(source: string, customTags: object = {}) {
+    const { code, mappings } = compilePreactMx(source, join(dir, "calls.mx"), {
+      customTags,
+    } as never);
+    return {
+      code,
+      located: mappings.map((m) => [
+        m.sourceStart,
+        source.slice(m.sourceStart, m.sourceEnd),
+        code.slice(m.generatedStart, m.generatedEnd),
+      ]),
+    };
+  }
+
+  it("maps a returning <define> call's tag name and attribute value", () => {
+    const { code, located } = rows(
+      "<define/Twice|input: { n: number }|><return=input.n * 2/></define><Twice/v n=x/>",
+    );
+    expect(located).toContainEqual([67, "Twice", "__mxDef_Twice"]);
+    expect(located).toContainEqual([77, "x", "x"]);
+    expect(code).toContain("const __mxRet0 = ");
+  });
+
+  it.each([
+    [
+      "an imported unit that returns",
+      'import Counter from "./counter.mx"\n<Counter/n count=x/>',
+      52,
+    ],
+    ["a discovered tag that returns", "<counter/n count=x/>", 17],
+  ])("maps a .render call's attribute value on %s", (_name, source, at) => {
+    writeFileSync(join(dir, "counter.mx"), "<return=1/>");
+    const { code, located } = rows(source, COUNTER_TAGS());
+    expect(located).toContainEqual([at, "x", "x"]);
+    expect(code).toContain("const __mxRet0 = ");
+  });
+
+  it.each([
+    ["an attribute value", "<${input.tag}/v a=x/>", [18, "x", "x"]],
+    ["a shared body", '<${input.t}("a")/n><p>${y}</p></>', [24, "y", "y"]],
+  ] as const)("maps a dynamic tag's %s", (_name, source, expected) => {
+    const { code, located } = rows(source);
+    expect(located).toContainEqual(expected);
+    expect(code).toContain("const __mxRet0 = ");
+  });
+});

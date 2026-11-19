@@ -3168,15 +3168,27 @@ export class PreactEmitter implements Emitter<string> {
         }
         this.#runtimeImports.add("__mxDynamicPair");
         const temp = `__mxRet${this.#varSerial.n++}`;
-        // The call is written as plain text (`payload` and `content` are
-        // `MappedCode`, `#propsObject` returns one): its attribute values stay
-        // unmapped here. Only the declared name maps (`mappedVar`).
-        const call = `__mxDynamicPair(${node.target.expr.code}, ${payload.code}${content}${takesParams})`;
+        // The call is built from the same `MappedCode` parts as the
+        // no-`/var` `__mxDynamic` call below, so its attribute values and
+        // shared body map as they do there.
+        const call = concatMapped(
+          "__mxDynamicPair(",
+          node.target.expr.code,
+          ", ",
+          payload,
+          content,
+          takesParams,
+          ")",
+        );
         this.#varStatements.push(
           concatMapped(
+            "const ",
+            temp,
+            " = ",
             sharedContent
-              ? `const ${temp} = ((${contentRef}) => ${call})(${sharedContent.code});`
-              : `const ${temp} = ${call};`,
+              ? concatMapped(`((${contentRef}) => `, call, ")(", sharedContent, ")")
+              : call,
+            ";",
           ),
         );
         this.#varStatements.push(this.#varDeclaration(node.var, node, temp));
@@ -3300,7 +3312,7 @@ export class PreactEmitter implements Emitter<string> {
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
         const call = concatMapped(pairCallee(), "(", args, ")");
-        this.#varStatements.push(concatMapped(`const ${temp} = ${call.code};`));
+        this.#varStatements.push(concatMapped(`const ${temp} = `, call, ";"));
         this.#varStatements.push(this.#varDeclaration(node.var, node, temp));
         this.#out.push(this.#slot(`${temp}.output`));
         return;
@@ -3373,7 +3385,7 @@ export class PreactEmitter implements Emitter<string> {
         // function returning the `{ value, output }` pair; the default
         // export returns only the output.
         this.#varStatements.push(
-          concatMapped(`const ${temp} = ${name}.render(${props.code});`),
+          concatMapped(`const ${temp} = ${name}.render(`, props, ");"),
         );
         this.#varStatements.push(this.#varDeclaration(node.var, node, temp));
         this.#out.push(this.#slot(`${temp}.output`));

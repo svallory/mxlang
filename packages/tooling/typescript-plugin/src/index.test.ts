@@ -1339,6 +1339,37 @@ describe("MX language plugin", {
     }
   });
 
+  // A returning define call's attribute value maps with its `/var` as without
+  // it, so the TS2304 for `missingN` lands on the authored name, not at an
+  // approximate position.
+  it("reports a preact /var call's attribute value at the authored position", () => {
+    const directory = `${here}/fixtures/preact-policy`;
+    const call = `${directory}/call-attr.mx`;
+    const consumer = `${directory}/index.ts`;
+    const service = createPluginService(
+      {
+        [call]:
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+          "<define/Twice|input: { n: number }|><return=input.n * 2/></define><Twice/v n=missingN/><p>${v}</p>\n",
+        [consumer]: 'import "./call-attr.mx";\n',
+      },
+      [consumer],
+    );
+    expect(
+      service
+        .getSemanticDiagnostics(call)
+        .filter((diagnostic) => diagnostic.code !== 7026)
+        .map((diagnostic) => [
+          diagnostic.code,
+          diagnostic.start,
+          diagnostic.length,
+          ts
+            .flattenDiagnosticMessageText(diagnostic.messageText, "\n")
+            .includes("position approximate"),
+        ]),
+    ).toEqual([[2304, 77, 8, false]]);
+  });
+
   // On Solid the `let` declaring a `/var` maps to the authored `/var` too,
   // whole file and region, and a repeated `/var` Solid renames
   // (`__mxVar0_el`) maps as a whole onto its own authored name (spec §10
