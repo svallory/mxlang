@@ -979,7 +979,8 @@ describe("MX language plugin", {
   // Element references (`<div/el>`): hover and completion on `el()` come
   // from tsserver through this plugin, whole file and region. html, Preact
   // and React type the getter by tag (html in the type check only); Solid
-  // binds `let el: any` (D250), so it pins the hover and a clean check only.
+  // binds `let el: any` (spec §10 `/var`, "Element references"), so it
+  // pins the hover and a clean check only.
   // TS7026 is dropped: a fixture directory has no JSX types installed, and
   // that error names the JSX element, never the reference.
   const handlerUse =
