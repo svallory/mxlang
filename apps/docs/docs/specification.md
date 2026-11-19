@@ -981,7 +981,7 @@ local-variable error there, as for any name:
 | `<x>` is… | Result |
 |---|---|
 | a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
-| a registered custom tag, a contract child, a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read), or a core taglib name (`<debug>`, `<log>`) | called (or disposed) as before, whatever is imported; no diagnostic, never the local-variable error |
+| a registered custom tag, a contract child, a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read), or a core taglib name (`<debug>`, `<log>`) outside the `none` tag rules (under them, only a reserved name) | called (or disposed) as before, whatever is imported; no diagnostic, never the local-variable error |
 | none of those (`import row from "./row.mx"` + `<row/>`, a `.ts` value import, a named import, a lowercase `<define>`, `<const>`, `static const`, `export const`, a lowercase `<for>` param) | a positioned **error** on every target, Marko's own message verbatim, at the tag name: "`Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`." |
 
 Marko's message capitalizes the first character whatever it is, so `_row`'s
@@ -1344,10 +1344,10 @@ declares it), never at the use site, and reads
 ``invalid `defaultTag` value: <reason>``. A contract a dialect tag file derives
 (§9.2) is read only when the tag is called, so its value gets the same check,
 with the same reasons and code, at that call. In a file under the `none` tag
-rules (§13.7.3), only the reserved names are core vocabulary for this check:
-`<let>`, `<await>` or `<script>` gets the reason any ordinary name gets, on a
+rules (§13.7.3), only the reserved names are core vocabulary for this check.
+`<let>`, `<await>` or `<script>` gets the reason any ordinary name gets. On a
 host that compiles an unknown dashed name as a native element (JSX hosts,
-Solid, Angular) `html-script` is valid as `sl-card` is, and the target is the
+Solid, Angular), `html-script` is valid as `sl-card` is. The target is the
 compile's own. The reasons:
 
 | Reason | When |
