@@ -380,8 +380,8 @@ describe("jsx /var call values", () => {
   });
 
   it.each([
-    ["an attribute value", "<${input.tag}/v a=x/>", [18, "x", "x"]],
-    ["a shared body", '<${input.t}("a")/n><p>${y}</p></>', [24, "y", "y"]],
+    ["attribute value", "<${input.tag}/v a=x/>", [18, "x", "x"]],
+    ["shared body", '<${input.t}("a")/n><p>${y}</p></>', [24, "y", "y"]],
   ] as const)("maps a dynamic tag's %s", (_name, source, expected) => {
     const { code, located } = rows(source);
     expect(located).toContainEqual(expected);
