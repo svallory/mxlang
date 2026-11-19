@@ -1588,6 +1588,23 @@ describe("a unit that returns a value", () => {
     );
   });
 
+  // A member expression is assigned the node as Solid's own `ref={X}`
+  // assigns it, unless it holds a function or an array; a bare identifier
+  // keeps the array form (it may be a `const`, which cannot be assigned).
+  it("composes an authored member-expression ref= with Solid's assignment", () => {
+    const compile = (source: string) =>
+      compileSolidUnit(source, { filename: "/fixtures/page.mx" }).code;
+    expect(compile("<div/el ref=fn/>")).toContain(
+      "<div ref={[fn, (__mxNode: Element) => { el = () => __mxNode; }]}></div>",
+    );
+    expect(compile("<div/el ref=refs.d/>")).toContain(
+      '<div ref={[((__mxRef: any) => typeof __mxRef === "function" || Array.isArray(__mxRef) ? __mxRef : (__mxNode: any) => { refs.d = __mxNode; })(refs.d), (__mxNode: Element) => { el = () => __mxNode; }]}></div>',
+    );
+    expect(compile("<div/el ref=(refs.d as any)/>")).toContain(
+      '<div ref={[((__mxRef: any) => typeof __mxRef === "function" || Array.isArray(__mxRef) ? __mxRef : (__mxNode: any) => { refs.d = __mxNode; })(refs.d as any), (__mxNode: Element) => { el = () => __mxNode; }]}></div>',
+    );
+  });
+
   it("binds an element reference on <html-script> after its attributes", () => {
     const code = compileSolidUnit("<html-script/el>x</html-script>", {
       filename: "/fixtures/page.mx",

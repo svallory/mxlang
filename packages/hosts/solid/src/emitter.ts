@@ -1684,8 +1684,8 @@ function hasNamedAttr(attrs: Attr[], name: string): boolean {
  * is an expression (a callback, or a variable it assigns the node to). Solid
  * has no string refs, and `@solidjs/babel-plugin` writes a literal `ref` as a
  * plain attribute, so a string or bare `ref` is refused at the attribute.
- * Beside an element reference (`elementVar`) only a function is named: an
- * authored variable there is not assigned.
+ * Beside an element reference (`elementVar`) only a function is named: a
+ * bare identifier there is not assigned (`elementRef`, `lvalueRef`).
  */
 function rejectStringRef(attrs: Attr[], elementVar?: string): void {
   for (const attr of attrs) {
@@ -2759,7 +2759,8 @@ const ELEMENT_REF_PARAM = "(__mxNode: Element)";
  * runs per row, per branch and per instance, with no hook. An authored
  * `ref=` (the last `dynamic` one) is taken off the attributes and composed
  * through Solid's array ref, `ref={[authored, callback]}`, which calls every
- * function in it. Returns the attributes to write and the `ref`.
+ * function in it (`lvalueRef` gives a member-expression `ref=` Solid's own
+ * assignment). Returns the attributes to write and the `ref`.
  */
 function elementRef(
   attrs: Attr[],
@@ -2773,10 +2774,56 @@ function elementRef(
   if (authored?.kind !== "dynamic") {
     return { attrs, ref: ` ref={${callback}}` };
   }
+  const target = lvalueRef(authored.value.code);
+  const first =
+    target === null
+      ? mappedExpr(authored.value)
+      : concatMapped(
+          `((__mxRef: any) => typeof __mxRef === "function" || Array.isArray(__mxRef) ? __mxRef : (__mxNode: any) => { ${target} = __mxNode; })(`,
+          mappedExpr(authored.value),
+          ")",
+        );
   return {
     attrs: attrs.filter((attr) => attr !== authored),
-    ref: concatMapped(" ref={[", mappedExpr(authored.value), `, ${callback}]}`),
+    ref: concatMapped(" ref={[", first, `, ${callback}]}`),
   };
+}
+
+/**
+ * The member expression an authored `ref=` assigns, as Solid's own compiler
+ * decides it (`@solidjs/babel-plugin` 2.0.0-rc.7): the value with its
+ * `!`/`as` wrappers stripped, when what remains is a `MemberExpression`
+ * (`refs.d`, `(refs.d as any)`), sliced from `code`; otherwise `null`. A
+ * bare identifier is `null` too: Solid assigns one only when it is not a
+ * `const`, which a region compile cannot see, and assigning a `const` or an
+ * import is a type and build error.
+ */
+function lvalueRef(code: string): string | null {
+  let node: {
+    type: string;
+    expression?: unknown;
+    start?: number | null;
+    end?: number | null;
+  };
+  try {
+    node = parseBabelExpression(code, { plugins: ["typescript"] });
+  } catch {
+    return null;
+  }
+  while (
+    node.type === "TSNonNullExpression" ||
+    node.type === "TSAsExpression"
+  ) {
+    node = node.expression as typeof node;
+  }
+  if (
+    node.type !== "MemberExpression" ||
+    typeof node.start !== "number" ||
+    typeof node.end !== "number"
+  ) {
+    return null;
+  }
+  return code.slice(node.start, node.end);
 }
 
 /** Solid JSX text emitter over the shared core IR. */
