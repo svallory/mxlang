@@ -2303,7 +2303,7 @@ Marko. A **tag variable** named `input` there (`<const/input=…>`,
 `input`: it is already the template's input. Rename the tag variable." Core
 raises it in a whole-file compile; a region and the IR entry (§13.7) have no
 template input and do not. On a host that binds no element reference
-(Hono, Angular, Astro), `<div/input/>` keeps the generic tag-variable refusal.
+(Angular, Astro), `<div/input/>` keeps the generic tag-variable refusal.
 
 A **tag param** named `input` (`<for|input|>`, `<define/R|input|>`) is
 **accepted**, because it opens a genuinely nested scope where an ordinary
@@ -3743,13 +3743,14 @@ keeps the unit a component.
 `<${"div"}/el>`, which is that element) binds an element reference, as in
 Marko 6.4.4, and so does an identifier `/var` on a string-literal dynamic tag
 that names no native element (`<${"my-el"}/el>`, `<${"Foo"}/el>`), which
-Marko reads as a native tag, on html, Preact, React and Solid: `el` is a
+Marko reads as a native tag, on html, Preact, React, Hono and Solid: `el` is a
 function, and `el()` returns the rendered element
-(typed by its tag name on Preact and React, and on html in the type check that
-the TypeScript plugin and `mx-tsc` run: `HTMLDivElement` for `<div>`, the SVG
-element type for an SVG tag, `HTMLScriptElement` and `HTMLStyleElement` for
-`<html-script>` and `<html-style>` on Preact and React, the `<script>` and
-`<style>` they emit, `HTMLElement` for any other name). It is read
+(typed by its tag name on Preact, React and Hono, and on html in the type
+check that the TypeScript plugin and `mx-tsc` run: `HTMLDivElement` for
+`<div>`, the SVG element type for an SVG tag, `HTMLScriptElement` and
+`HTMLStyleElement` for `<html-script>` and `<html-style>` on Preact, React and
+Hono, the `<script>` and `<style>` they emit, `HTMLElement` for any other
+name). It is read
 only where the element exists: inside a `<script>` body, or inside a function
 given to an `on…` attribute of any tag or to a `<lifecycle>` hook, a function
 nested in one included. Every other read is a positioned compile error at the
@@ -3768,7 +3769,7 @@ references can only be read in scripts and event handlers." when called, as
 Marko's html build does in debug: html never runs a handler or a `<script>`
 body, and the binding is there for a handler passed to a custom tag or a
 `<define>` call; on a literal dynamic tag it binds the same function and no
-dynamic-tag value. **Preact and React** declare a slot and the getter among the
+dynamic-tag value. **Preact, React and Hono** declare a slot and the getter among the
 scope's `/var` statements and fill the slot through a callback `ref` written
 after every other attribute, so the reference binds per `<for>` row and per
 branch; an authored `ref=` on the same element is handed the node too (called
@@ -3777,10 +3778,15 @@ spread on that element is replaced. A string or bare `ref` beside the reference
 (`<div/el ref="x"/>`, `<div/el ref/>`) is a compile error at the `ref`
 attribute: "`ref` beside the element reference `/el` must be a function or a
 ref object (`ref=myRef`): React has no string refs, so a string or bare `ref`
-cannot receive the node." (on Preact the message names Preact). Marko refuses
+cannot receive the node." (on Preact and Hono the message names that host). Marko refuses
 every `ref` on a native element. On a literal dynamic tag the callback is
 passed as the `ref` key of the dynamic tag's props, which reach the rendered
-element. **Solid** declares `let el: any` where it
+element. On **Hono** the callback is passed only where a `document` exists
+(`typeof document === "undefined" ? undefined : callback`), because Hono's
+string renderer throws on a function `ref`: a server render skips it, with an
+authored `ref=` composed into it, and a server render in a process that
+defines a global `document` throws "Invalid prop 'ref' of type 'function'", as
+an authored function `ref=` does there. **Solid** declares `let el: any` where it
 declares every `/var` of the scope, and fills it through a callback `ref`
 written after every other attribute, `el = () => node`, so the reference binds
 per `<for>` row, per branch and per component instance (a `.solid.mx` region
@@ -3793,16 +3799,14 @@ spread on that element is replaced; and an element reference in a component
 call's attribute-tag body binds in the enclosing scope, so a body the callee
 renders more than once shares one reference. On a literal dynamic tag the
 callback `ref` (composed the same way with an authored one) is written on the
-`<Dynamic>` element, and no returned value is bound. **Hono** refuses
-`<div/el>` with the generic tag-variable refusal at the `/var`, and so do
-Angular and `.astro.mx` (below); on Hono `<${"my-el"}/el>` binds the dynamic
-tag's value, unchanged. Marko hoists a read outside the element's body, or above
+`<Dynamic>` element, and no returned value is bound. Angular and `.astro.mx`
+refuse `<div/el>` with the generic tag-variable refusal at the `/var` (below). Marko hoists a read outside the element's body, or above
 the element, into a getter; MX does not: such a read is an unbound name in the
 emitted module. A read above the element in render position is not caught at
 compile time either: on html it fails when the template renders, as Marko's
-does, on Preact and React `el()` returns `null` there, and on Solid it throws
-a `TypeError`. In an editor, hover and completion on `el()` come from the
-TypeScript plugin (the language server reports diagnostics only), so
+does, on Preact, React and Hono `el()` returns `null` there, and on Solid it
+throws a `TypeError`. In an editor, hover and completion on `el()` come from
+the TypeScript plugin (the language server reports diagnostics only), so
 `el().` lists the element's members where `el()` is typed by tag. The
 declaration is not mapped to the source: hover on the `/el` in the tag, and
 go-to-definition or rename from a read, reach no authored text, as for every
@@ -4339,7 +4343,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `try` | **error** (no `<@catch>`; §6) | same | `<Loading>` | body inline | **error** | **error** |
 | `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React/Hono; Hono's wraps `hono/jsx`'s `ErrorBoundary`), body passed as a thunk | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
-| `/var` on an element (`<div/el>`) | `el` is a getter that throws when called; reads outside a handler or `<script>` body are refused in core (§10) | same | a `let el: any` per `/var` scope, set to a getter by a callback `ref` written last; an authored `ref=` composed through the array ref (§10) | Preact / React: a `let` slot and a getter, filled by a callback `ref`; Hono: **error** (generic tag-variable refusal) | **error** | **error** |
+| `/var` on an element (`<div/el>`) | `el` is a getter that throws when called; reads outside a handler or `<script>` body are refused in core (§10) | same | a `let el: any` per `/var` scope, set to a getter by a callback `ref` written last; an authored `ref=` composed through the array ref (§10) | Preact / React / Hono: a `let` slot and a getter, filled by a callback `ref` (on Hono passed only where a `document` exists) | **error** | **error** |
 | `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | a generated `$mxReturn` callback prop the unit calls during setup; one-shot (§10) | `.render(props)` returns `{ value, output }` (§13.3); `/var` in any scope, dynamic tags included | renders through Astro's renderer, which unwraps the pair (§10) | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
 
 ### 13.2 Markup and attributes
