@@ -198,7 +198,7 @@ export const strippedTagTypeParams = new WeakMap<object, Node>();
  * The type-argument containers (`<for<T>|…|>`, `<let<T>/x/>`) a strip walk
  * cleared from a tag, as `strippedTagTypeParams` keeps the parameters: the
  * names in them are reads to stock Marko's scope crawl, and the ambiguous
- * tag-variable read check (`checkTagTypeReads`) reads them there.
+ * tag-variable read check (`checkTagHeadReads`) reads them there.
  */
 export const strippedTagTypeArgs = new WeakMap<object, Node>();
 

@@ -609,6 +609,17 @@ describe("a read of a tag variable two nested bodies declare", () => {
     ],
   ])("refuses the read in %s at column %i", refused);
 
+  // A default in a tag variable's pattern is a read in the body around the
+  // tag; the names the pattern binds are not.
+  it.each([
+    ["<div><const/x=1/></div><div><const/x=2/></div><const/{a = x}=input/>", 58],
+    ["<div><const/x=1/></div><div><const/x=2/></div><const/[a = x]=input.list/>", 58],
+    ["<div><const/x=1/></div><div><const/x=2/></div><const/{a: { b = x }}=input/>", 63],
+    ["<div><const/x=1/></div><div><const/x=2/></div><let/{a = x}=input/>", 56],
+    ["<div><const/x=1/></div><div><const/x=2/></div><define/C><return=input/></define><C/{a = x}/>", 88],
+    ["<div><const/x=1/></div><div><const/x=2/></div><div><const/{a = x}=input/></div>", 63],
+  ])("refuses the pattern-default read in %s at column %i", refused);
+
   it("refuses a read in a <script> body", () => {
     refused(
       "<div><div/el/></div><div><div/el/></div><script>el()</script>",
@@ -630,6 +641,11 @@ describe("a read of a tag variable two nested bodies declare", () => {
     "<div><const/Map=1/></div><div><const/Map=2/></div><p>${Map}</p>",
     // A body's tag variable binds the whole body, reads above it included.
     "<div><button onClick() { el() }>a</button><div/el/></div><div><div/el/></div>",
+    // A pattern default is bound by its body's declaration, shadowed by the
+    // expression's own param, or not a read at all (an object key).
+    "<div><const/x=1/><const/{a = x}=input/></div><div><const/x=2/></div>",
+    "<div><const/x=1/></div><div><const/x=2/></div><const/{a = ((x) => x)(1)}=input/>",
+    "<div><const/x=1/></div><div><const/x=2/></div><const/{x: a = 1}=input/>",
   ])("compiles %s", (source) => {
     expect(attempt(source, host)).toBeUndefined();
   });
@@ -713,6 +729,13 @@ describe("a read of a tag variable two nested bodies declare", () => {
         "<div><div/el/></div><div><div/el/></div><define/F<T extends el>|i|></define>",
         60,
       ],
+      // An attribute tag's type arguments are read in the body around the
+      // call: neither its own body nor the call's binds them.
+      ["<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item<x>>hi</@item></C>", 95],
+      ["<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item<x>><const/x=3/>hi</@item></C>", 95],
+      ["<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><const/x=3/><@item<x>>hi</@item></C>", 107],
+      // Type parameters after whitespace sit on the attribute tag's body.
+      ["<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item <T extends x>|v: T|>hi</@item></C>", 106],
     ])(
       "refuses the type-position read in %s at column %i",
       (source, column) => {

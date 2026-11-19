@@ -3627,6 +3627,8 @@ function lowerAuthoredAttributeTag(
   const name = attrName(node);
   const voice = voiceOfCtx(ctx);
   rejectAttributeTagArguments(ctx, node, name);
+  // Its type arguments (`<@item<T>>`) are read in the body around the call.
+  checkTagHeadReads(ctx, node);
   if (schema.customTagContract) {
     rejectBadRefinements(ctx, node);
     // A registered contract skips the shape check, never the writability one.
@@ -8425,17 +8427,25 @@ function checkAmbiguousTagVarReads(
 }
 
 /**
- * `checkAmbiguousTagVarReads` over a tag's type arguments (`<for<T>…>`) and
- * type parameters (`<define/F<T extends U>|…|>`), which every compile drops
- * from the tree before lowering: stock Marko's scope crawl reads the names in
- * them all the same. The arguments sit on the tag, in the body around it; the
- * parameters sit on the tag's body, so the body's own tag variables and params
- * bind there too.
+ * `checkAmbiguousTagVarReads` over the reads in a tag's head that lowering
+ * does not reach as attribute values: its type arguments (`<for<T>…>`), the
+ * defaults in its `/var` pattern (`<const/{a = x}=…>`) and its type
+ * parameters (`<define/F<T extends U>|…|>`), in that source order. Every
+ * compile drops type arguments and parameters from the tree before lowering,
+ * and a pattern is bound, not lowered as a read: stock Marko's scope crawl
+ * reads the names in all three all the same. The arguments and the pattern
+ * sit on the tag, in the body around it; the parameters sit on the tag's
+ * body, so the body's own tag variables and params bind there too. A pattern
+ * the parser could not read (`MarkoParseError`) is left to `varBindingsOf`,
+ * which reports it at the parser's position.
  */
-function checkTagTypeReads(ctx: Ctx, tag: Node): void {
+function checkTagHeadReads(ctx: Ctx, tag: Node): void {
   if (!ctx.ambiguousTagVars) return;
   const args = (tag.typeArgs ?? strippedTagTypeArgs.get(tag))?.node;
   if (args) checkAmbiguousTagVarReads(ctx, undefined, args);
+  const pattern = tagVarOf(tag);
+  if (pattern && pattern.type !== "MarkoParseError")
+    checkAmbiguousTagVarReads(ctx, undefined, pattern, true);
   const params = (tag.typeParams ?? strippedTagTypeParams.get(tag))?.node;
   if (!params) return;
   const outer = ctx.openTagVars;
@@ -8823,7 +8833,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       if (isTagNode(child) && tagNameOf(child) === "if") {
         const lowered = recover(ctx, () =>
           voicedAt(child, () => {
-            checkTagTypeReads(ctx, child);
+            checkTagHeadReads(ctx, child);
             return insideStructural(ctx, child, "if", () =>
               lowerIfChain(ctx, children, index),
             );
@@ -8846,7 +8856,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       // subtree; the walk goes on to the next sibling.
       recover(ctx, () => {
         rejectDuplicateDeclarations(index);
-        if (isTagNode(child)) checkTagTypeReads(ctx, child);
+        if (isTagNode(child)) checkTagHeadReads(ctx, child);
         switch (child.type) {
           case "MarkoText":
           case "MxText":
