@@ -11,7 +11,7 @@ declare module "@mxlang/tsx-bridge" {
   // Type-only. `@mxlang/core` has no runtime dependency on the parser and
   // nothing in core's emitted declarations references it (the only core -> parser
   // edge is a type-only test fixture, excluded from core's build).
-  import type { CustomTag } from "@mxlang/core";
+  import type { CustomTag, GeneratedMapping } from "@mxlang/core";
 
   // Declared inline rather than re-exported through a relative import: a
   // relative import/re-export inside an ambient `declare module` block is
@@ -76,6 +76,26 @@ declare module "@mxlang/tsx-bridge" {
     code: string;
     /** The gensym'd module-scope binding the region calls. */
     binding: string;
+    /**
+     * Where `code`'s text came from: `generatedStart`/`generatedEnd` are
+     * offsets into `code`, `sourceStart`/`sourceEnd` file-absolute offsets of
+     * the authored text. `use` is what tooling may use a mapping for (a key
+     * left out or `false` withholds that use; no `use` serves every use). The
+     * bridge carries these onto the printed module (`PrintResult.mappings`).
+     * Absent when the entry maps nothing.
+     */
+    mappings?: Array<{
+      generatedStart: number;
+      generatedEnd: number;
+      sourceStart: number;
+      sourceEnd: number;
+      use?: {
+        verification?: boolean;
+        navigation?: boolean;
+        semantic?: boolean;
+        completion?: boolean;
+      };
+    }>;
   }
 
   /** The region text and its file-relative position, as the bridge found it. */
@@ -401,6 +421,15 @@ declare module "@mxlang/tsx-bridge" {
     code: string;
     map: RawSourceMap;
     dependencies: string[];
+    /**
+     * The hoisted `<define>`s' mappings (`MxRegionHoistedDefine.mappings`),
+     * rebased onto `code`: `code.slice(generatedStart, generatedEnd)` is each
+     * mapping's generated text, and `sourceStart`/`sourceEnd` are file-absolute
+     * offsets of the authored text. `map` cannot carry them, since the hoisted
+     * declarations are printed without locations. A mapping whose text the
+     * printer changed is left out. Absent when there are none.
+     */
+    mappings?: GeneratedMapping[];
   }
 
   export interface PrintOptions {

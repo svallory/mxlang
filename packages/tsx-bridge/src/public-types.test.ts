@@ -14,6 +14,7 @@ import type {
   MxRegionHoistedImport as PublicMxRegionHoistedImport,
   MxRegionPositionCheck as PublicMxRegionPositionCheck,
   PrintOptions as PublicPrintOptions,
+  PrintResult as PublicPrintResult,
   SourceImports as PublicSourceImports,
   sourceBindings as publicSourceBindings,
 } from "@mxlang/tsx-bridge";
@@ -22,6 +23,7 @@ import type {
   HoistedDefine as RealHoistedDefine,
   HoistedImport as RealHoistedImport,
 } from "./mx/hoist-imports.ts";
+import type { PrintResult as RealPrintResult } from "./mx/print.ts";
 import type {
   MxRegionContext as RealMxRegionContext,
   MxRegionPositionCheck as RealMxRegionPositionCheck,
@@ -46,6 +48,7 @@ it("keeps public.d.ts's ambient MX region types assignable both ways with the re
   expectTypeOf<PublicMxRegionPositionCheck>().toEqualTypeOf<RealMxRegionPositionCheck>();
   expectTypeOf<PublicMxRegionHoistedImport>().toEqualTypeOf<RealHoistedImport>();
   expectTypeOf<PublicMxRegionHoistedDefine>().toEqualTypeOf<RealHoistedDefine>();
+  expectTypeOf<PublicPrintResult>().toEqualTypeOf<RealPrintResult>();
   expectTypeOf<PublicMxRegionCompileInput>().toEqualTypeOf<
     RealMxRegionCompileInput<CustomTag>
   >();

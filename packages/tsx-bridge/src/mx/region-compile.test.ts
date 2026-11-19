@@ -11,6 +11,7 @@ import type { File } from "@babel/types";
 import type { MxRegionCompile, MxRegionCompileInput } from "@mxlang/babel";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse } from "../index.ts";
+import { print } from "./print.ts";
 
 /** The spliced region node of `const view = <…>;`, the shape these assert on. */
 function regionNode(file: File): {
@@ -865,5 +866,135 @@ describe("mxRegionCompile: a method shorthand's generic head", () => {
     walk(file.program);
     const at = source.indexOf("Missing");
     expect(found).toEqual([["Missing", at, at + "Missing".length]]);
+  });
+});
+
+/**
+ * A hoisted `<define>` is spliced into the module without locations, so the
+ * printed source map cannot carry it: `print` rebases the hook's own
+ * `hoistedDefines[].mappings` onto the printed module instead, and prints
+ * the module exactly as it does without them.
+ */
+describe("mxRegionCompile: hoisted define mappings", () => {
+  const USE = { navigation: true, semantic: true };
+  const ROW = "function __mx_DefineRow1(n) { return <b>{n}\nx {m}</b>; }";
+  const rowMappings = [
+    // `__mx_DefineRow1` onto the authored name, hover only.
+    {
+      generatedStart: 9,
+      generatedEnd: 24,
+      sourceStart: 50,
+      sourceEnd: 53,
+      use: { semantic: true },
+    },
+    // The param `n`, the read `n`, and the read `m` after the line break.
+    {
+      generatedStart: 25,
+      generatedEnd: 26,
+      sourceStart: 60,
+      sourceEnd: 61,
+      use: USE,
+    },
+    { generatedStart: 41, generatedEnd: 42, sourceStart: 70, sourceEnd: 71 },
+    { generatedStart: 47, generatedEnd: 48, sourceStart: 80, sourceEnd: 81 },
+  ];
+  const source = "const view = <p/>;\n";
+  const printWith = (mappings?: typeof rowMappings) =>
+    print(source, "x.solid.mx", {
+      mxRegionCompile: () => ({
+        code: "<p>{__mx_DefineRow1(1)}</p>",
+        hoistedDefines: [
+          {
+            code: ROW,
+            binding: "__mx_DefineRow1",
+            ...(mappings ? { mappings } : {}),
+          },
+        ],
+      }),
+    });
+  /** Each printed mapping as `[generated text, sourceStart, use]`. */
+  const rows = ({ code, mappings }: ReturnType<typeof print>) =>
+    (mappings ?? []).map((m) => [
+      code.slice(m.generatedStart, m.generatedEnd),
+      m.sourceStart,
+      m.use,
+    ]);
+
+  it("rebases each mapping onto the printed module, across a line break", () => {
+    const printed = printWith(rowMappings);
+    expect(rows(printed)).toEqual([
+      ["__mx_DefineRow1", 50, { semantic: true }],
+      ["n", 60, USE],
+      ["n", 70, undefined],
+      ["m", 80, undefined],
+    ]);
+    expect(printed.mappings?.map((m) => m.sourceEnd)).toEqual([53, 61, 71, 81]);
+  });
+
+  it("prints the same code and map as the hook without mappings", () => {
+    const plain = printWith();
+    const mapped = printWith(rowMappings);
+    expect(mapped.code).toBe(plain.code);
+    expect(mapped.map).toEqual(plain.map);
+    expect("mappings" in plain).toBe(false);
+  });
+
+  it("keeps a renamed define's body mappings and drops its name", () => {
+    const printed = print("const a = <p/>;\nconst b = <i/>;\n", "x.solid.mx", {
+      mxRegionCompile: (input) =>
+        input.source.startsWith("<p")
+          ? {
+              code: "<p>{__mx_DefineRow1(1)}</p>",
+              hoistedDefines: [
+                {
+                  code: "function __mx_DefineRow1(n) { return <b>{n}</b>; }",
+                  binding: "__mx_DefineRow1",
+                  mappings: [
+                    {
+                      generatedStart: 9,
+                      generatedEnd: 24,
+                      sourceStart: 50,
+                      sourceEnd: 53,
+                    },
+                    {
+                      generatedStart: 41,
+                      generatedEnd: 42,
+                      sourceStart: 60,
+                      sourceEnd: 61,
+                    },
+                  ],
+                },
+              ],
+            }
+          : {
+              code: "<i>{__mx_DefineRow1(2)}</i>",
+              hoistedDefines: [
+                {
+                  code: "function __mx_DefineRow1(k) { return <u>{k}</u>; }",
+                  binding: "__mx_DefineRow1",
+                  mappings: [
+                    {
+                      generatedStart: 9,
+                      generatedEnd: 24,
+                      sourceStart: 90,
+                      sourceEnd: 93,
+                    },
+                    {
+                      generatedStart: 41,
+                      generatedEnd: 42,
+                      sourceStart: 95,
+                      sourceEnd: 96,
+                    },
+                  ],
+                },
+              ],
+            },
+    });
+    expect(printed.code).toContain("function __mx_DefineRow1_2(k)");
+    expect(rows(printed)).toEqual([
+      ["__mx_DefineRow1", 50, undefined],
+      ["n", 60, undefined],
+      ["k", 95, undefined],
+    ]);
   });
 });

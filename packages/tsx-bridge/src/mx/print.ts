@@ -1,8 +1,12 @@
-import generate from "@babel/generator";
 import type { File } from "@babel/types";
 import type { MxRegionCompile } from "@mxlang/babel";
-import type { CustomTag } from "@mxlang/core";
+import type { CustomTag, GeneratedMapping } from "@mxlang/core";
 import { parse } from "../index.ts";
+import {
+  generator,
+  hoistedDefineMappings,
+  PRINT_OPTIONS,
+} from "./hoisted-define-mappings.ts";
 
 /**
  * A source map in the shape `@babel/generator` produces, which is also the
@@ -23,6 +27,15 @@ export interface PrintResult {
   code: string;
   map: RawSourceMap;
   dependencies: string[];
+  /**
+   * The hoisted `<define>`s' mappings (`HoistedDefine.mappings`), rebased onto
+   * `code`: `code.slice(generatedStart, generatedEnd)` is each mapping's
+   * generated text, and `sourceStart`/`sourceEnd` are file-absolute offsets
+   * of the authored text. `map` cannot carry them, since the hoisted
+   * declarations are printed without locations. A mapping whose text the
+   * printer changed is left out. Absent when there are none.
+   */
+  mappings?: GeneratedMapping[];
 }
 
 export interface PrintOptions {
@@ -50,17 +63,6 @@ export interface PrintOptions {
 }
 
 /**
- * `@babel/generator` ships as CJS with an interop default; under
- * `esModuleInterop` the namespace can arrive as either the function itself or
- * a `{ default }` wrapper depending on the loader. Normalize once.
- */
-const generator = (
-  typeof generate === "function"
-    ? generate
-    : (generate as { default: typeof generate }).default
-) as typeof generate;
-
-/**
  * Prints an already-parsed MX AST as JSX source text plus a source map.
  *
  * `print` is the entry point for the ordinary case (source in, text out).
@@ -73,26 +75,28 @@ const generator = (
  * `@solidjs/compiler`, which parses it but does not strip it, so the types
  * would reach the compiled output.
  *
- * Both entry points share the generator options below so the two can never
- * drift: whatever `print` emits for a file, `printAst` emits for that file's
- * AST.
+ * Both entry points share the generator options (`PRINT_OPTIONS`) so the two
+ * can never drift: whatever `print` emits for a file, `printAst` emits for
+ * that file's AST. The hoisted defines' mappings are measured with the same
+ * options.
  */
 export function printAst(ast: File, filename: string): PrintResult {
   const result = generator(ast, {
+    ...PRINT_OPTIONS,
     sourceMaps: true,
     sourceFileName: filename,
-    retainLines: true,
-    jsescOption: { minimal: true },
   });
 
   if (!result.map) {
     throw new Error(`@babel/generator returned no source map for ${filename}`);
   }
 
+  const mappings = hoistedDefineMappings(ast, result.code);
   return {
     code: result.code,
     map: result.map as RawSourceMap,
     dependencies: regionDependencies(ast),
+    ...(mappings.length > 0 ? { mappings } : {}),
   };
 }
 
@@ -129,10 +133,7 @@ function regionDependencies(ast: File): string[] {
  * ahead of Solid's own transform is the one integration surface that reaches
  * both the native and the Babel backend.
  *
- * `retainLines` keeps generated lines aligned with the original so the second
- * source-map hop (MX text -> JSX text -> Solid's output) stays faithful, and
- * `jsescOption.minimal` stops non-ASCII text from being escaped into `\uXXXX`
- * noise that would not match the hand-written twins.
+ * The printing options (`PRINT_OPTIONS`) say why lines are retained.
  */
 export function print(
   source: string,

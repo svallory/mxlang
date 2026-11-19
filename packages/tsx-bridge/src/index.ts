@@ -13,6 +13,7 @@ import {
   type HoistedImport,
   planHoistedImports,
 } from "./mx/hoist-imports.ts";
+import { recordHoistedDefineMappings } from "./mx/hoisted-define-mappings.ts";
 import {
   programBindings,
   programImports,
@@ -415,6 +416,15 @@ function hoistRegionImports(file: File, filename: string): void {
       );
     }
     entry.binding = fresh;
+  });
+
+  // Where each entry's mappings land in its printed text, measured now,
+  // after the collision rename and while the parsed snippet still has its
+  // own locations, which `detachLocations` removes below (`printAst` rebases
+  // them onto the printed module).
+  hoistedDefineNodes.forEach((entry, index) => {
+    const snippet = parsedDefines[index];
+    if (snippet) recordHoistedDefineMappings(file, snippet, entry);
   });
 
   // Placed after the module's import block (including any import this pass

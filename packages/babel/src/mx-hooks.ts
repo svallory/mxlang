@@ -69,6 +69,27 @@ export interface HoistedDefine {
   code: string;
   /** The gensym'd module-scope binding the region calls. */
   binding: string;
+  /**
+   * Where `code`'s text came from: `generatedStart`/`generatedEnd` are offsets
+   * into `code`, `sourceStart`/`sourceEnd` file-absolute offsets of the
+   * authored text. `use` is what tooling may use a mapping for (a key left out
+   * or `false` withholds that use; no `use` serves every use). The bridge
+   * carries these onto the printed module (`PrintResult.mappings`), since the
+   * hoisted declaration is printed without locations. Absent when the entry
+   * maps nothing.
+   */
+  mappings?: Array<{
+    generatedStart: number;
+    generatedEnd: number;
+    sourceStart: number;
+    sourceEnd: number;
+    use?: {
+      verification?: boolean;
+      navigation?: boolean;
+      semantic?: boolean;
+      completion?: boolean;
+    };
+  }>;
 }
 
 /** Where a region appeared, described without host-specific knowledge. */
