@@ -430,6 +430,81 @@ describe("a tag variable on a native element (an element reference)", () => {
     expect([error?.line, error?.column]).toEqual([1, 14]);
   });
 
+  // Marko reads a one-quasi literal as a native tag whatever it names, so
+  // its identifier `/var` is an element reference too.
+  const LITERALS = ['<${"my-el"}/el/>', '<${"Foo"}/el/>'];
+  const bindsBoth: HostDeclarations = {
+    ...bindsElement,
+    bindsDynamicTagVar: true,
+  };
+  const claimsAndBinds: HostDeclarations = {
+    ...claimsDynamic,
+    bindsElementVar: true,
+  };
+  const bindsVar: HostDeclarations = { ...withLet, bindsDynamicTagVar: true };
+
+  for (const [label, host] of [
+    ["a host that binds element references", bindsElement],
+    ["a host that binds both", bindsBoth],
+  ] as const) {
+    it.each(LITERALS)(
+      `lowers %s to a dynamic Component with an element reference on ${label}`,
+      (source) => {
+        const [node] = irOf(source, host);
+        expect(node).toMatchObject({
+          kind: "Component",
+          target: { kind: "dynamic" },
+          var: "el",
+          elementRef: true,
+        });
+      },
+    );
+  }
+
+  it.each(LITERALS)(
+    "lowers %s to a DelegatedTag with an element reference on a host claiming dynamic tags",
+    (source) => {
+      const [node] = irOf(source, claimsAndBinds);
+      expect(node).toMatchObject({
+        kind: "DelegatedTag",
+        tag: { var: "el", elementRef: true },
+      });
+    },
+  );
+
+  it.each(LITERALS)(
+    "keeps the dynamic tag's value binding for %s on a host that binds only dynamic tag variables",
+    (source) => {
+      const [node] = irOf(source, bindsVar);
+      expect(node).toMatchObject({ kind: "Component", var: "el" });
+      expect(node).not.toHaveProperty("elementRef");
+    },
+  );
+
+  it.each([
+    ['<${"my-el"}/el/>', 12],
+    ['<${"Foo"}/el/>', 10],
+  ])(
+    "keeps refusing %s at the `/var` on a host that binds neither",
+    (source, column) => {
+      const error = attempt(source);
+      expect(error?.message).toBe(
+        "tag variable `/el` on `<dynamic tag>` is not supported in a standalone template",
+      );
+      expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+      expect([error?.line, error?.column]).toEqual([1, column]);
+    },
+  );
+
+  it("refuses an element of the same name after a literal's element reference", () => {
+    const error = attempt('<${"my-el"}/el/><div/el/>', bindsElement);
+    expect(error?.message).toBe(
+      "Duplicate declaration of `el`: it is already declared in this body at 1:13. A body declares each tag variable once; rename one of them.",
+    );
+    expect(error?.diagnosticCode).toBe("MX_DUPLICATE_DECLARATION");
+    expect([error?.line, error?.column]).toEqual([1, 21]);
+  });
+
   for (const [label, host] of [
     ["a host that binds element references", bindsElement],
     ["a host that does not", withLet],

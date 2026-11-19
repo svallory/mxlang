@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
-import type { TranslateError } from "./core.ts";
+import { DYNAMIC_TAG, type TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import { getCustomTags } from "./scan-cache.ts";
@@ -1427,6 +1427,49 @@ describe("an element reference (`<div/el>`) is never written, and read only in a
     "<div/el/><lifecycle onMount() { el() }/>",
     "<div/el/><for|el| of=[1]>${el}</for>",
   ])("accepts %s", (source) => {
+    expect(attempt(source, bindsElement)).toBeUndefined();
+  });
+
+  // A literal dynamic tag (`<${"my-el"}/el>`) binds an element reference
+  // too, as a `Component` or, on a host claiming dynamic tags, a
+  // `DelegatedTag`.
+  const claimsDynamic: HostDeclarations = {
+    ...bindsElement,
+    isDelegatedTag: (name) => name === "let" || name === DYNAMIC_TAG,
+  };
+  const LITERAL_WRITE = '<${"my-el"}/el/>\n<button onClick() { el = 1 }/>\n';
+
+  it.each([
+    ["a host that binds element references", bindsElement],
+    ["a host claiming dynamic tags", claimsDynamic],
+  ] as const)(
+    "refuses a literal's element reference write on %s",
+    (_label, host) => {
+      const error = attempt(LITERAL_WRITE, host);
+      expect(error?.message).toBe(ELEMENT_WRITE);
+      expect(error?.diagnosticCode).toBe(READONLY);
+      const { start } = span(LITERAL_WRITE, "el = 1");
+      expect([error?.line, error?.column]).toEqual([start.line, start.column]);
+    },
+  );
+
+  it.each<[string, number, HostDeclarations]>([
+    ['<${"my-el"}/el/>${el()}', 18, bindsElement],
+    ['<${"my-el"}/el title=el()/>', 21, bindsElement],
+    ['<${"my-el"}/el>${el()}</>', 17, bindsElement],
+    ['<${"my-el"}/el/>${el()}', 18, claimsDynamic],
+  ])("refuses the literal's read in %s", (source, column, host) => {
+    const error = attempt(source, host);
+    expect(error?.message).toBe(ELEMENT_READ);
+    expect(error?.diagnosticCode).toBe("MX_INVALID_TAG_VAR");
+    expect([error?.line, error?.column]).toEqual([1, column]);
+  });
+
+  it.each([
+    '<${"my-el"}/el/><button onClick() { el().focus() }/>',
+    '<${"my-el"}/el onClick() { el() }/>',
+    '<${"my-el"}/el/><script>el().focus()</script>',
+  ])("accepts the literal's %s", (source) => {
     expect(attempt(source, bindsElement)).toBeUndefined();
   });
 });

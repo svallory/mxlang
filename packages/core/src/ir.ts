@@ -55,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 18;
+export const IR_VERSION = 19;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -539,6 +539,15 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
    */
   var: string | null;
   /**
+   * Set with `var` on a dynamic tag whose name is a string literal that
+   * does not name a native element (`<${"my-el"}/el>`), on a host that
+   * declares `bindsElementVar`: `var` is then an element reference to the
+   * rendered element, as `Element.var` is, not the tag's value. Core has
+   * refused every write and every read outside a handler or `<script>`
+   * body.
+   */
+  elementRef?: true;
+  /**
    * Whatever the host decided about this tag at *lower* time, from its
    * `resolveDelegatedTag` hook.
    *
@@ -797,6 +806,15 @@ export type IrNode =
        * for every other call.
        */
       var?: string | null;
+      /**
+       * Set with `var` on a dynamic tag whose name is a string literal that
+       * does not name a native element (`<${"my-el"}/el>`), on a host that
+       * declares `bindsElementVar`: `var` is then an element reference to the
+       * rendered element, as `Element.var` is, not the tag's value. Core has
+       * refused every write and every read outside a handler or `<script>`
+       * body.
+       */
+      elementRef?: true;
       /**
        * Each identifier `var` declares, with its authored span (empty without
        * `/var`). Filled by `lower.ts` `varBindingsOf` and carried through

@@ -2686,6 +2686,54 @@ function rejectKnownWrongNativeAttrs(ctx: Ctx, node: Node): void {
 }
 
 /**
+ * A dynamic tag whose name is a one-quasi string literal (`<${"my-el"}>`),
+ * which Marko reads as a native tag whatever it names.
+ */
+function isLiteralTagName(node: Node): boolean {
+  const name = tagNameExprOf(node);
+  return (
+    name?.type === "TemplateLiteral" &&
+    name.expressions?.length === 0 &&
+    name.quasis?.length === 1
+  );
+}
+
+/**
+ * A literal dynamic tag (`<${"my-el"}/el>`) whose identifier tag variable is
+ * an element reference, as Marko binds it: only on a host that declares
+ * `bindsElementVar`. A literal naming a native element is already that element
+ * (the pre-pass in `default-tag.ts`), and a pattern is already refused
+ * (`rejectNativeLiteralFields`), so only an identifier on a literal that
+ * stayed dynamic reaches this.
+ */
+function literalElementRef(ctx: Ctx, node: Node): boolean {
+  return (
+    isLiteralTagName(node) &&
+    tagVarOf(node)?.type === "Identifier" &&
+    ctx.declarations.bindsElementVar === true
+  );
+}
+
+/**
+ * Binds the tag's identifier `/var` as an element reference (`<div/el>`,
+ * `<${"my-el"}/el>`) and returns its name, or `undefined` without one. In
+ * force for the tag's own attributes, its content and the rest of the
+ * enclosing body (whose `scopeBindings` undoes it). Never written, and read
+ * only in a handler or a `<script>` body (`checkElementRefReads`).
+ */
+function bindElementRef(ctx: Ctx, node: Node): string | undefined {
+  const name = tagVarOf(node) ? declName(ctx, tagVarOf(node)) : undefined;
+  if (name !== undefined) {
+    shadowBindings(
+      ctx,
+      [name],
+      new Map([[name, { kind: "element", inFunction: true }]]),
+    );
+  }
+  return name;
+}
+
+/**
  * Marko's native-tag field rules on a one-quasi string-literal dynamic tag
  * that stays dynamic (`<${"Foo"}>`, `<${"my-el"}>`): Marko 6.4.4 sends every
  * such literal down its native-tag path, which refuses tag arguments, tag
@@ -2693,7 +2741,9 @@ function rejectKnownWrongNativeAttrs(ctx: Ctx, node: Node): void {
  * Marko reports them when several are written (arguments, params, attribute
  * tags, variable), each at the position Marko reports. An empty `()` and an
  * empty `||` write nothing and stay accepted, as in Marko; an identifier tag
- * variable keeps the dynamic tag's handling.
+ * variable binds an element reference on a host that declares
+ * `bindsElementVar` (`literalElementRef`) and keeps the dynamic tag's
+ * handling elsewhere.
  */
 function rejectNativeLiteralFields(ctx: Ctx, node: Node): void {
   const args = tagArgsOf(node) ?? [];
@@ -5970,7 +6020,10 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 
 /** A tag this host claims, with every part lowered for its emitter. */
 function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
-  if (ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
+  // A literal dynamic tag's identifier `/var` is an element reference
+  // (`literalElementRef`), read by the element-reference rule instead.
+  const elementRef = name === DYNAMIC_TAG && literalElementRef(ctx, node);
+  if (!elementRef && ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
   // Marko's `html-script`/`html-style` are its `script`/`style` elements, so
   // their attribute names get the native-element check when the host reads
   // that name as an element.
@@ -6018,6 +6071,9 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
     name === DYNAMIC_TAG
       ? { kind: "dynamic", expr: exprOf(ctx, tagNameExprOf(node)) }
       : { kind: "name", name };
+  // In force for the attributes, the body and the rest of the enclosing body,
+  // whose `scopeBindings` undoes it.
+  if (elementRef) bindElementRef(ctx, node);
   const loweredTags = lowerAttributeTags(ctx, node, {
     owner: targetName(target),
   });
@@ -6055,6 +6111,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       params: paramsOf(ctx, node),
       bindings,
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
+      ...(elementRef ? { elementRef: true as const } : {}),
       data: early
         ? commentData
         : styleElement
@@ -7027,7 +7084,14 @@ function lowerComponent(
   // bind `/var` on a dynamic tag at run time; the callee's shape is unknown
   // statically, so the IR carries the binding without
   // `returnsValue`.
+  // A literal dynamic tag's identifier `/var` is an element reference
+  // (`literalElementRef`), bound as the element path binds one.
+  const elementRef =
+    target.kind === "dynamic" &&
+    target.valueImportBinding === undefined &&
+    literalElementRef(ctx, node);
   const allowVar =
+    elementRef ||
     returnShape === "returns" ||
     (target.kind === "dynamic" && ctx.declarations.bindsDynamicTagVar === true);
   rejectUnsupportedFields(
@@ -7054,7 +7118,10 @@ function lowerComponent(
     },
   );
 
-  if (ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
+  // An element reference is read by the element-reference rule, on the tag's
+  // own attributes too, as on `<div/el title=el()/>`.
+  if (elementRef) bindElementRef(ctx, node);
+  else if (ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
   const loweredTags = lowerAttributeTags(ctx, node, {
     owner: targetName(target),
   });
@@ -7068,7 +7135,8 @@ function lowerComponent(
   // Same normalized-body presence rule as custom template tags.
   const content = hasContent(children) ? lowerBlock(ctx, node, children) : null;
   // Reaching the call makes the binding readable; see the discovered path.
-  if (callVar) {
+  // An element reference registers none, as on the element path.
+  if (callVar && !elementRef) {
     ctx.tagVars ??= new Map();
     ctx.tagVars.set(callVar, {
       block: [...(ctx.tagVarBlock ?? [])],
@@ -7091,6 +7159,7 @@ function lowerComponent(
     // back `{ value, output }`; a discovered one already says so through
     // `routeTemplateCall`, which also carries the `/var` the emitters bind.
     var: callVar,
+    ...(elementRef ? { elementRef: true as const } : {}),
     varBindings: varBindingsOf(ctx, tagVarOf(node)),
     ...(returnShape === "returns" ? { returnsValue: true } : {}),
     loc: posOf(ctx, node),
@@ -7474,17 +7543,14 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // its attribute names and fields as a native tag's, whatever it names. A
     // literal naming a native element (`<${"div"}>`) is already that element
     // (the pre-pass in `default-tag.ts`); a literal that does not name a
-    // native element (`<${"Foo"}>`) still lowers as a dynamic tag here. Ahead
+    // native element (`<${"Foo"}>`) still lowers as a dynamic tag here; an
+    // identifier tag variable on it binds an element reference on a host
+    // that declares `bindsElementVar` (`literalElementRef`). Ahead
     // of `rejectArgsWithProps`: Marko 6.4.4 reports "Tag does not support
     // arguments." for `<${"Foo"}(1) a=2/>`, not the dynamic-tag rule, and
     // for `<${"Foo"}(1) ref=x/>`, so the field rules run before the
     // attribute names are checked.
-    const literalName = tagNameExprOf(node);
-    if (
-      literalName?.type === "TemplateLiteral" &&
-      literalName.expressions?.length === 0 &&
-      literalName.quasis?.length === 1
-    ) {
+    if (isLiteralTagName(node)) {
       rejectNativeLiteralFields(ctx, node);
       rejectKnownWrongNativeAttrs(ctx, node);
     }
@@ -8028,18 +8094,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     lazyOwner(() => voicedAt(node, () => tagText(ctx, name, node))),
     { var: ctx.declarations.bindsElementVar === true },
   );
-  // An element reference (`<div/el>`) on a host that binds one: in force for
-  // the element's own attributes, its content and the rest of the enclosing
-  // body (whose `scopeBindings` undoes it). Never written, and read only in a
-  // handler or a `<script>` body (`checkElementRefReads`).
-  const elementVar = tagVarOf(node) ? declName(ctx, tagVarOf(node)) : undefined;
-  if (elementVar !== undefined) {
-    shadowBindings(
-      ctx,
-      [elementVar],
-      new Map([[elementVar, { kind: "element", inFunction: true }]]),
-    );
-  }
+  const elementVar = bindElementRef(ctx, node);
 
   // Void by the same table the parse read (the target's `nativeTags`, else
   // core's own HTML elements), so a body the parse kept is never dropped.
