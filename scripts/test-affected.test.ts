@@ -2848,6 +2848,228 @@ describe("dist readers guard", () => {
   });
 });
 
+/**
+ * The spawned-sources guard: a test that runs a repository source in a
+ * subprocess (`spawn`, `exec`, `execFile`, `fork` and their `Sync`/`Async`
+ * forms, `Bun.spawn`) has neither that file nor its imports in its import
+ * graph, so a `SOURCE_TEXT_READERS` row must list it. Built on the same
+ * evaluator as the other guards; it checks the spawned entry only, never its
+ * closure, and cannot see a template path, a generated script, a spread, a
+ * cwd-relative string, a script handed to a helper or a spawn inside a
+ * non-test module (those rows are listed by hand).
+ */
+
+/** A test file that passes a repository source to a spawn call. */
+interface SpawnRead {
+  test: string;
+  path: string;
+}
+
+const SPAWN_CALL =
+  /^(?:spawn|spawnSync|exec|execSync|execFile|execFileSync|fork)(?:Async)?$/;
+
+/**
+ * The sources of `targets` each test in `sources` passes to a spawn call: an
+ * argument, or a non-spread element of an array-literal argument, that
+ * `evaluatePath` turns into a target's path. A path the test also imports as
+ * a value (a relative import that is not type-only) is left out: its import
+ * graph holds the file and its closure. Deduped and sorted.
+ */
+function scanSpawnedSources(
+  sources: ReadonlyMap<string, string>,
+  targets: ReadonlySet<string>,
+): SpawnRead[] {
+  const { files, program, checker } = scanProgram(sources);
+  const reads = new Map<string, SpawnRead>();
+  for (const file of files) {
+    const sf = program.getSourceFile(`/${file}`);
+    if (sf === undefined) continue;
+    const ctx: EvalContext = { checker, file, dir: posix.dirname(file) };
+    const imported = new Set<string>();
+    const spawned: string[] = [];
+    const record = (node: ts.Expression) => {
+      const v = asPath(evaluatePath(node, ctx, new Set()));
+      if (v.kind === "path" && targets.has(bare(v.path))) {
+        spawned.push(bare(v.path));
+      }
+    };
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text.startsWith(".") &&
+        !isTypeOnlyImport(node)
+      ) {
+        imported.add(posix.join(ctx.dir, node.moduleSpecifier.text));
+      } else if (ts.isCallExpression(node)) {
+        const name = lastName(node.expression);
+        if (name !== undefined && SPAWN_CALL.test(name)) {
+          for (const arg of node.arguments) {
+            if (ts.isArrayLiteralExpression(arg)) {
+              for (const el of arg.elements) {
+                if (!ts.isSpreadElement(el)) record(el);
+              }
+            } else record(arg);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    for (const path of spawned) {
+      if (!imported.has(path)) {
+        reads.set(`${file}\0${path}`, { test: file, path });
+      }
+    }
+  }
+  const key = (r: SpawnRead) => `${r.test}\0${r.path}`;
+  return [...reads.values()].sort((a, b) =>
+    key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0,
+  );
+}
+
+/** Whether an import declaration brings in types only (`import type`, or only `type` specifiers). */
+function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
+  const clause = node.importClause;
+  if (clause === undefined) return false;
+  if (clause.isTypeOnly) return true;
+  const bindings = clause.namedBindings;
+  return (
+    clause.name === undefined &&
+    bindings !== undefined &&
+    ts.isNamedImports(bindings) &&
+    bindings.elements.length > 0 &&
+    bindings.elements.every((el) => el.isTypeOnly)
+  );
+}
+
+/**
+ * Whether `relatedSources` adds the spawn's test for an edit to its path: a
+ * row of `rows` lists the test and matches the path, or the test is a
+ * `FIXTURE_CONSUMERS` consumer or a dist reader of it.
+ */
+function coveredSpawn(
+  read: SpawnRead,
+  rows: ReaderRows = SOURCE_TEXT_READERS,
+): boolean {
+  return (
+    rows.some(
+      (row) => row.consumers.includes(read.test) && row.path.test(read.path),
+    ) ||
+    fixtureConsumers(read.path).includes(read.test) ||
+    distReaders([read.path]).includes(read.test)
+  );
+}
+
+/** Detected spawns of a source that need no row: the test is selected some other way. */
+const SPAWN_EXEMPT: readonly (SpawnRead & { reason: string })[] = [
+  // `Bun.build` of `packages/core/src/core.ts` in a subprocess (:25-34); the test itself imports `@mxlang/core`.
+  {
+    test: "packages/tooling/typescript-plugin/src/target-open-set-r2.test.ts",
+    path: "packages/core/src/core.ts",
+    reason:
+      "imports `@mxlang/core`; core's dist entry selects it on every core source edit",
+  },
+];
+
+/** One sorted, deduped message per spawn neither covered by `rows` nor exempt. */
+function uncoveredSpawns(
+  reads: readonly SpawnRead[],
+  rows: ReaderRows = SOURCE_TEXT_READERS,
+): string[] {
+  const messages = reads
+    .filter(
+      (r) =>
+        !SPAWN_EXEMPT.some((e) => e.test === r.test && e.path === r.path) &&
+        !coveredSpawn(r, rows),
+    )
+    .map((r) => `${r.test} spawns ${r.path} with no SOURCE_TEXT_READERS row`);
+  return [...new Set(messages)].sort();
+}
+
+describe("spawned sources guard", () => {
+  let repoReads: SpawnRead[] | undefined;
+  /** The repository's spawns of a source; computed once. */
+  const scanRepo = (): SpawnRead[] => {
+    if (repoReads !== undefined) return repoReads;
+    const { listed } = scanInputs();
+    const sources = new Map<string, string>();
+    for (const f of listed.filter((f) => VITEST_TEST_FILE.test(f))) {
+      const text = readFileSync(resolve(ROOT, f), "utf8");
+      if (/\b(?:spawn|exec|fork)/.test(text)) sources.set(f, text);
+    }
+    repoReads = scanSpawnedSources(sources, new Set(sourceTargets(listed)));
+    return repoReads;
+  };
+
+  it("every detected spawn of a source has a row or an exemption", () => {
+    expect(uncoveredSpawns(scanRepo())).toEqual([]);
+  });
+
+  it("catches mx-6fwg6's miss: angular's body-whitespace test without its row-A entry", () => {
+    const test = "packages/hosts/angular/test/body-whitespace.test.ts";
+    const rows = SOURCE_TEXT_READERS.map((row) => ({
+      ...row,
+      consumers: row.consumers.filter((c) => c !== test),
+    }));
+    expect(uncoveredSpawns(scanRepo(), rows)).toEqual([
+      "packages/hosts/angular/test/body-whitespace.test.ts spawns packages/hosts/angular/test/body-whitespace-fixture.ts with no SOURCE_TEXT_READERS row",
+    ]);
+  });
+
+  it("every exemption is detected and is not covered", () => {
+    const reads = scanRepo();
+    expect(
+      SPAWN_EXEMPT.filter(
+        (e) => !reads.some((r) => r.test === e.test && r.path === e.path),
+      ).map((e) => e.test),
+    ).toEqual([]);
+    expect(
+      SPAWN_EXEMPT.filter((e) => coveredSpawn(e)).map((e) => e.test),
+    ).toEqual([]);
+  });
+
+  it("detects a spawned source in the forms tests use, and not an import, a read or a scratch script", () => {
+    const dir = "packages/x/test";
+    const targets = new Set([
+      `${dir}/x-fixture.ts`,
+      "packages/s.ts",
+      `${dir}/dep.ts`,
+    ]);
+    const sources = new Map<string, string>([
+      [
+        `${dir}/fixture.test.ts`,
+        'import { join } from "node:path";\nexecFileSync("bun", ["run", join(import.meta.dirname, "x-fixture.ts")]);\n',
+      ],
+      [
+        `${dir}/url.test.ts`,
+        'const script = fileURLToPath(new URL("../../s.ts", import.meta.url));\nawait execFileAsync("bun", [script]);\n',
+      ],
+      [
+        `${dir}/type-import.test.ts`,
+        'import type { T } from "./dep.ts";\nspawnSync(process.execPath, [join(import.meta.dirname, "dep.ts")]);\n',
+      ],
+      [
+        `${dir}/value-import.test.ts`,
+        'import { a } from "./dep.ts";\nspawnSync(process.execPath, [join(import.meta.dirname, "dep.ts")]);\n',
+      ],
+      [
+        `${dir}/read.test.ts`,
+        'readFileSync(join(import.meta.dirname, "x-fixture.ts"), "utf8");\n',
+      ],
+      [
+        `${dir}/scratch.test.ts`,
+        'spawnSync("node", [join(mkdtempSync(join(tmpdir(), "x-")), "run.mjs")]);\n',
+      ],
+    ]);
+    expect(scanSpawnedSources(sources, targets)).toEqual([
+      { test: `${dir}/fixture.test.ts`, path: `${dir}/x-fixture.ts` },
+      { test: `${dir}/type-import.test.ts`, path: `${dir}/dep.ts` },
+      { test: `${dir}/url.test.ts`, path: "packages/s.ts" },
+    ]);
+  });
+});
+
 describe("FIXTURE_CONSUMERS guard", () => {
   let repoReads: SourceRead[] | undefined;
   /** The repository's cross-project and project-doc reads of non-source files; computed once. */
