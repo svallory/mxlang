@@ -2010,3 +2010,28 @@ describe("text with JSX-significant characters (rendered)", () => {
     );
   });
 });
+
+describe("a string or bare `ref` beside an element reference", () => {
+  it.each(['<div/el ref="x"/>', "<div/el ref/>"])(
+    "refuses %s at the `ref` attribute",
+    (source) => {
+      let failure: { message: string; line: number; column: number } | null =
+        null;
+      try {
+        compile(source);
+      } catch (error) {
+        failure = error as { message: string; line: number; column: number };
+      }
+      expect({
+        message: failure?.message,
+        line: failure?.line,
+        column: failure?.column,
+      }).toEqual({
+        message:
+          "`ref` beside the element reference `/el` must be a function or a ref object (`ref=myRef`): Preact has no string refs, so a string or bare `ref` cannot receive the node.",
+        line: 1,
+        column: 8,
+      });
+    },
+  );
+});

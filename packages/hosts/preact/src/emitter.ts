@@ -2757,6 +2757,19 @@ export class PreactEmitter implements Emitter<string> {
       `let ${slot}: ${type} | null = null;`,
       `const ${name} = (): ${type} => ${slot}!;`,
     );
+    // Neither framework has string refs: a string or bare `ref` cannot be
+    // handed the node, so it is refused rather than composed.
+    const stringRef = node.attrs.find(
+      (attr) =>
+        (attr.kind === "static" || attr.kind === "boolean") &&
+        attr.name === "ref",
+    );
+    if (stringRef) {
+      fail(
+        `\`ref\` beside the element reference \`/${name}\` must be a function or a ref object (\`ref=myRef\`): ${this.#dialect.name} has no string refs, so a string or bare \`ref\` cannot receive the node.`,
+        stringRef,
+      );
+    }
     const authored = [...node.attrs]
       .reverse()
       .find((attr) => attr.kind === "dynamic" && attr.name === "ref");

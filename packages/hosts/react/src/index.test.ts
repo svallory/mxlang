@@ -784,3 +784,25 @@ describe("text with JSX-significant characters (rendered, react runtime)", () =>
     );
   });
 });
+
+describe("a string `ref` beside an element reference", () => {
+  it('refuses <div/el ref="x"/> at the `ref` attribute', () => {
+    let failure: { message: string; line: number; column: number } | null =
+      null;
+    try {
+      compile('<div/el ref="x"/>');
+    } catch (error) {
+      failure = error as { message: string; line: number; column: number };
+    }
+    expect({
+      message: failure?.message,
+      line: failure?.line,
+      column: failure?.column,
+    }).toEqual({
+      message:
+        "`ref` beside the element reference `/el` must be a function or a ref object (`ref=myRef`): React has no string refs, so a string or bare `ref` cannot receive the node.",
+      line: 1,
+      column: 8,
+    });
+  });
+});
