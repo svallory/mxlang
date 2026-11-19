@@ -425,6 +425,14 @@ describe("jsx call parts", () => {
     ]);
   });
 
+  it("maps a literal dynamic tag's target on the element-ref path", () => {
+    expect(rows('<${"my-el"}/el/>').located).toContainEqual([
+      3,
+      '"my-el"',
+      "`my-el`",
+    ]);
+  });
+
   it("maps a <define> call's argument", () => {
     expect(
       rows("<define/Row|a: number|>${a}</define><Row(x)/>").located,
