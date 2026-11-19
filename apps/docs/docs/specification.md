@@ -3745,10 +3745,11 @@ Marko 6.4.4, and so does an identifier `/var` on a string-literal dynamic tag
 that names no native element (`<${"my-el"}/el>`, `<${"Foo"}/el>`), which
 Marko reads as a native tag, on html, Preact, React and Solid: `el` is a
 function, and `el()` returns the rendered element
-(typed by its tag name on Preact and React: `HTMLDivElement` for `<div>`, the
-SVG element type for an SVG tag, `HTMLScriptElement` and `HTMLStyleElement`
-for `<html-script>` and `<html-style>`, the `<script>` and `<style>` they
-emit, `HTMLElement` for any other name). It is read
+(typed by its tag name on Preact and React, and on html in the type check that
+the TypeScript plugin and `mx-tsc` run: `HTMLDivElement` for `<div>`, the SVG
+element type for an SVG tag, `HTMLScriptElement` and `HTMLStyleElement` for
+`<html-script>` and `<html-style>` on Preact and React, the `<script>` and
+`<style>` they emit, `HTMLElement` for any other name). It is read
 only where the element exists: inside a `<script>` body, or inside a function
 given to an `on…` attribute of any tag or to a `<lifecycle>` hook, a function
 nested in one included. Every other read is a positioned compile error at the
@@ -3800,7 +3801,12 @@ the element, into a getter; MX does not: such a read is an unbound name in the
 emitted module. A read above the element in render position is not caught at
 compile time either: on html it fails when the template renders, as Marko's
 does, on Preact and React `el()` returns `null` there, and on Solid it throws
-a `TypeError`.
+a `TypeError`. In an editor, hover and completion on `el()` come from the
+TypeScript plugin (the language server reports diagnostics only), so
+`el().` lists the element's members where `el()` is typed by tag. The
+declaration is not mapped to the source: hover on the `/el` in the tag, and
+go-to-definition or rename from a read, reach no authored text, as for every
+`/var`.
 
 **Lifted names are unique on preact, react and hono.** In a whole-file
 component, the identifiers declared by `<const>` patterns, `<define>` names,
