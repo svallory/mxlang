@@ -2652,16 +2652,6 @@ function isIdentifier(text: string): boolean {
 }
 
 /**
- * Binds an element reference (`<div/el>`): `el` joins the scope's `/var`
- * `let`s (`bindElementVar`), and a callback `ref`, written after every other
- * attribute, sets it to a getter of the node,
- * `ref={(__mxNode: Element) => { el = () => __mxNode; }}`. A callback ref
- * runs per row, per branch and per instance, with no hook. An authored
- * `ref=` (the last `dynamic` one) is taken off the element and composed
- * through Solid's array ref, `ref={[authored, callback]}`, which calls every
- * function in it. An element with no `/var` is returned as it is.
- */
-/**
  * The parameter list of an element reference's callback `ref`
  * (`elementRef`). Its `Element` is a type annotation the emitter writes, not
  * a value the author reads, so the hoisted-define capture check reads the
@@ -2671,6 +2661,16 @@ function isIdentifier(text: string): boolean {
 const ELEMENT_REF_PARAM = "(__mxNode: Element)";
 const ELEMENT_REF_PARAM_UNTYPED = "(__mxNode)";
 
+/**
+ * Binds an element reference (`<div/el>`): `el` joins the scope's `/var`
+ * `let`s (`bindElementVar`), and a callback `ref`, written after every other
+ * attribute, sets it to a getter of the node,
+ * `ref={(__mxNode: Element) => { el = () => __mxNode; }}`. A callback ref
+ * runs per row, per branch and per instance, with no hook. An authored
+ * `ref=` (the last `dynamic` one) is taken off the element and composed
+ * through Solid's array ref, `ref={[authored, callback]}`, which calls every
+ * function in it. An element with no `/var` is returned as it is.
+ */
 function elementRef(node: Extract<IrNode, { kind: "Element" }>): {
   node: Extract<IrNode, { kind: "Element" }>;
   ref: MappedCode | string;
