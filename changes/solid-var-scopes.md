@@ -1,0 +1,5 @@
+---
+packages: [solid]
+kind: Fixed
+---
+On Solid, every `/var` and element reference now binds once per component instance and once per render of the body that declares it. A `.solid.mx` region declares its call `/var`s in place, as it already did for element references, instead of handing them to the module, where every instance of the component shared one `let`: a direct `compileSolidMx` caller now always gets an empty `returnVars`, and a region that binds any `/var` comes back as `{(() => { let n: any; return <>…</>; })()}`. A component's attribute-tag body declares its own `/var`s inside its accessor, so a body the callee renders twice binds twice (`<Twice><@tab><div/el/>…</@tab></Twice>` gives each render's handler its own element), and two bodies that reuse a name get one binding each. A member-expression `ref=` beside an element reference (`<div/el ref=refs.d/>`) is now assigned the node, as Solid's own `ref={refs.d}` assigns it; a bare identifier `ref=` keeps the array composition and is not assigned.

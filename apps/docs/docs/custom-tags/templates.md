@@ -147,7 +147,7 @@ On the **JSX hosts** (Preact, React, Hono) and **Solid** too, a `/var` inside an
 </for>
 ```
 
-renders `<span>1</span><p>2</p><span>2</span><p>3</p>`. On the JSX hosts a returning tag's call runs when the markup around it is built, so a `/var` call in an attribute-tag body without parameters runs once at the call site, even when the callee never renders that body. On Solid, a component's attribute-tag bodies share the component's binding: a `/var` there that repeats a name another body binds gets a generated binding of its own, and a destructured one is refused.
+renders `<span>1</span><p>2</p><span>2</span><p>3</p>`. On the JSX hosts a returning tag's call runs when the markup around it is built, so a `/var` call in an attribute-tag body without parameters runs once at the call site, even when the callee never renders that body. On Solid, a component's attribute-tag body declares its own binding, per render of the body, so a body the callee renders twice binds twice; a `/var` that repeats a name another body of the component binds gets a generated binding of its own, and a destructured one is refused.
 
 `/var` is not supported in a `.astro.mx` (AstroMX) file at all — an Astro template has no statement position of its own. Calling a returning tag from `.astro.mx` works, and renders its output.
 

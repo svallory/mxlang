@@ -3804,20 +3804,21 @@ a global `document` throws "Invalid prop 'ref' of type 'function'", as an
 authored function `ref=` does there. **Solid** declares `let el: any` where it
 declares every `/var` of the scope, and fills it through a callback `ref`
 written after every other attribute, `el = () => node`, so the reference binds
-per `<for>` row, per branch and per component instance (a `.solid.mx` region
-declares its element references in place rather than beside its call `/var`s).
-`el()` is not typed by tag name: a `/var` binds `any` on Solid. An authored
-`ref=` on the same element is composed through Solid's array ref,
-`ref={[authored, callback]}`, which calls every function in it, so an authored
-lvalue `ref=` (Solid's assignment form) is not assigned there; a string or bare
-`ref` beside the reference (`<div/el ref="x"/>`, `<div/el ref/>`) is a compile
-error at the `ref` attribute: "`ref` beside the element reference `/el` must
-be a function (`ref=myRef`): Solid has no string refs, so a string or bare
-`ref` cannot receive the node."; a `ref` key in a spread on that element is
-replaced; and an element reference in a component
-call's attribute-tag body binds in the enclosing scope, so a body the callee
-renders more than once shares one reference. On a literal dynamic tag the
-callback `ref` (composed the same way with an authored one) is written on the
+per `<for>` row, per branch, per render of an attribute-tag body and per
+component instance (a `.solid.mx` region declares all its top-level `/var`s,
+element references and call `/var`s alike, in place, in an arrow called around
+its JSX). `el()` is not typed by tag name: a `/var` binds `any` on Solid. An
+authored `ref=` on the same element is composed through Solid's array ref,
+`ref={[authored, callback]}`, which calls every function in it. A
+member-expression `ref=` (`<div/el ref=refs.d/>`) is assigned the node there
+as Solid assigns `ref={refs.d}`, unless it holds a function or an array, which
+is applied; a bare identifier (`ref=d`) is not assigned, since it may be a
+`const`. A string or bare `ref` beside the reference (`<div/el ref="x"/>`,
+`<div/el ref/>`) is a compile error at the `ref` attribute: "`ref` beside the
+element reference `/el` must be a function (`ref=myRef`): Solid has no string
+refs, so a string or bare `ref` cannot receive the node." A `ref` key in a
+spread on that element is replaced. On a literal dynamic tag the callback
+`ref` (composed the same way with an authored one) is written on the
 `<Dynamic>` element, and no returned value is bound. Angular and `.astro.mx`
 refuse `<div/el>` with the generic tag-variable refusal at the `/var` (below).
 Marko hoists a read outside the element's body, or above the element, into a
@@ -3880,9 +3881,10 @@ an expression (a ternary, a `.map` callback, a prop), so the body's statements
 run in a function called in place in that expression, ahead of the body's
 markup; a whole-file or region `<define>` body runs them inside the define's
 function. On **Solid** a `<For>` row, a `<Show>`/`<Match>` branch, a call's
-content and a `<define>` body declare their own `let` for the binding, filled
-by the call before the reads after it; a component's attribute-tag bodies keep
-the component's head `let`. A dynamic-tag or `<try>` body inside a `<for>` is
+content, a `<define>` body and a component's attribute-tag body declare their
+own `let` for the binding, filled by the call before the reads after it; an
+attribute-tag body declares its own per render, so a body the callee renders
+twice binds twice. A dynamic-tag or `<try>` body inside a `<for>` is
 its own scope too. A returning unit's call on the JSX hosts runs when the
 markup around it is built, so a `/var` call in an attribute-tag body without
 parameters runs once at the call site, even when the callee never renders that
