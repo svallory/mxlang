@@ -239,10 +239,19 @@ export function attributeHelpers(
     });
   if (text.includes("__mxDefine("))
     helpers.push({ binding: "__mxDefine", code: MX_DEFINE });
+  if (text.includes("__MxElement<"))
+    helpers.push({ binding: "__MxElement", code: MX_ELEMENT_TYPE });
   if (text.includes("<__mxTryBody"))
     helpers.push({ binding: "__mxTryBody", code: MX_TRY_BODY });
   return helpers;
 }
+
+/**
+ * The element an element reference (`<div/el>`) returns, by tag name: the
+ * DOM's own element type, the SVG one, else `HTMLElement` (a custom element).
+ */
+const MX_ELEMENT_TYPE =
+  "type __MxElement<N extends string> = N extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[N] : N extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[N] : HTMLElement;";
 
 /**
  * A `<try>` body under `<@placeholder>` that binds a `/var`: the component

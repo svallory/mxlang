@@ -6,7 +6,9 @@
  * `innerHTML`. Stock Marko prints them as escaped attributes. The emitter
  * writes them under their lowercase name, which is no DOM property, so React
  * calls `setAttribute` and the value stays text. Run in jsdom, in a scratch
- * script (the DOM globals must exist before `react` loads).
+ * script (the DOM globals must exist before `react` loads). The same client
+ * render clicks every button once, so an element reference (`<div/el>`) read
+ * in a handler is checked here too.
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -57,6 +59,7 @@ for (const { file, input } of cases) {
   const rootOptions = { onUncaughtError: (error) => errors.push(String(error && error.message)), onRecoverableError: () => {} };
   const attempt = (fn) => { try { fn(); } catch (error) { errors.push(String(error && error.message)); } };
   attempt(() => flushSync(() => createRoot(client, rootOptions).render(createElement(mod.default, input))));
+  attempt(() => { for (const button of client.querySelectorAll("button")) button.click(); });
   let server = "";
   attempt(() => { server = renderToString(createElement(mod.default, input)); });
   const hydrated = document.createElement("div");
@@ -88,6 +91,8 @@ const SOURCES = {
   spreadCustom: "<section><my-el ...{ innerHTML: input.h }/></section>",
   rawChild: "<section><div>$!{input.h}</div></section>",
   objectChild: "<section><div>${input.x}</div></section>",
+  elementRef:
+    '<section><div/el/><button onClick() { el().dataset.hit = "1" }>go</button></section>',
 } as const;
 
 let results: Record<
@@ -176,5 +181,14 @@ describe("a plain object in a text interpolation is never a node", () => {
     expect(results.objectChild.errors.join(" ")).toContain(
       "Objects are not valid as a React child",
     );
+  });
+});
+
+describe("an element reference (`<div/el>`) on React", () => {
+  it("is the rendered element in a click handler", () => {
+    expect(results.elementRef.client).toBe(
+      '<section><div data-hit="1"></div><button>go</button></section>',
+    );
+    expect(results.elementRef.errors).toEqual([]);
   });
 });

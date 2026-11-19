@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { type CustomTag, createTargetLookup } from "@mxlang/core";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -191,31 +192,6 @@ describe("a <define>'s type parameters under typeCheck", () => {
   // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
   const REPRO = "<define/Foo<T>|{ v }: { v: T }|><p>${v}</p></define>\n";
 
-  /** The projection's semantic diagnostics, checked as one TSX file. */
-  const diagnosticsOf = (code: string): string[] => {
-    const name = "/fixtures/projection.tsx";
-    const options: ts.CompilerOptions = {
-      jsx: ts.JsxEmit.Preserve,
-      noEmit: true,
-      skipLibCheck: true,
-      strict: true,
-      types: [],
-    };
-    const host = ts.createCompilerHost(options);
-    const getSourceFile = host.getSourceFile;
-    host.getSourceFile = (file, language, ...rest) =>
-      file === name
-        ? ts.createSourceFile(file, code, language)
-        : getSourceFile.call(host, file, language, ...rest);
-    const program = ts.createProgram([name], options, host);
-    return ts
-      .getPreEmitDiagnostics(program, program.getSourceFile(name))
-      .map(
-        (d) =>
-          `TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`,
-      );
-  };
-
   it("declares them on the function head, so `T` resolves", () => {
     const { code, mappings } = compile(REPRO, true);
     expect(code).toContain("const __mxDef_Foo = <T,>({ v }: { v: T }) => (<>");
@@ -233,3 +209,53 @@ describe("a <define>'s type parameters under typeCheck", () => {
     );
   });
 });
+
+describe("an element reference (`<div/el>`) in the emitted TSX", () => {
+  // Checked beside this package, so `preact`'s JSX types resolve and the
+  // callback `ref` is checked against the element's own `ref` prop.
+  const name = join(import.meta.dirname, "fixtures", "element-ref.tsx");
+
+  // Preact's JSX knows no custom element until the app declares it.
+  const MY_EL =
+    'declare module "preact" { namespace JSX { interface IntrinsicElements { "my-el": HTMLAttributes<HTMLElement> } } }';
+
+  it.each([
+    ["div", ""],
+    ["my-el", MY_EL],
+  ])(
+    "types `el()` as the element on <%s/el>, so a handler's `el().focus()` checks",
+    (tag, declaration) => {
+      const { code } = compile(
+        `<${tag}/el/><button onClick() { el().focus() }>go</button>\n`,
+      );
+      expect(diagnosticsOf(`${code}\n${declaration}`, name)).toEqual([]);
+    },
+  );
+});
+
+/** The projection's semantic diagnostics, checked as one TSX file. */
+function diagnosticsOf(
+  code: string,
+  name = "/fixtures/projection.tsx",
+): string[] {
+  const options: ts.CompilerOptions = {
+    jsx: ts.JsxEmit.Preserve,
+    noEmit: true,
+    skipLibCheck: true,
+    strict: true,
+    types: [],
+  };
+  const host = ts.createCompilerHost(options);
+  const getSourceFile = host.getSourceFile;
+  host.getSourceFile = (file, language, ...rest) =>
+    file === name
+      ? ts.createSourceFile(file, code, language)
+      : getSourceFile.call(host, file, language, ...rest);
+  const program = ts.createProgram([name], options, host);
+  return ts
+    .getPreEmitDiagnostics(program, program.getSourceFile(name))
+    .map(
+      (d) =>
+        `TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`,
+    );
+}

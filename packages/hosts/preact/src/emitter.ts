@@ -202,6 +202,7 @@ export function scopeLocals(
   const declare = (nodes: readonly IrNode[]): boolean => {
     for (const node of nodes) {
       if (node.kind === "Element") {
+        if (node.var) names.add(node.var);
         if (!declare(node.children)) return false;
       } else if (node.kind === "IfChain") {
         for (const branch of node.branches) {
@@ -687,6 +688,10 @@ export function createJsxDeclarations(
     // and the dynamic dispatch (`__mxDynamicPair`) reaches it, so a `/var` on
     // a dynamic tag binds instead of being refused.
     bindsDynamicTagVar: true,
+    // `<div/el>` binds an element reference through a callback `ref`
+    // (`element`). Not on Hono: its server renderer throws on a function
+    // `ref` on an element.
+    bindsElementVar: dialectName !== "Hono",
     tags: statefulErrors(dialectName, region),
     // The ladder: the parent's contract `defaultTag`, then
     // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
@@ -2649,6 +2654,7 @@ export class PreactEmitter implements Emitter<string> {
   #htmlScript(
     node: Extract<IrNode, { kind: "Element" }>,
     name: "script" | "style" = "script",
+    ref: MappedCode | string = "",
   ): void {
     const body: Array<Extract<IrNode, { kind: "Text" | "Interpolation" }>> = [];
     for (const child of node.children) {
@@ -2679,7 +2685,7 @@ export class PreactEmitter implements Emitter<string> {
         attr,
       );
     }
-    const attrs = this.#attrs(node.attrs, true, false, name);
+    const attrs = concatMapped(this.#attrs(node.attrs, true, false, name), ref);
     if (body.length === 0) {
       this.#out.push(concatMapped(`<${name}`, attrs, " />"));
       return;
@@ -2724,8 +2730,62 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
+    if (!node.var) {
+      this.#element(node);
+      return;
+    }
+    const { attrs, ref } = this.#elementRef(node, node.var);
+    this.#element({ ...node, attrs }, ref);
+  }
+
+  /**
+   * Binds an element reference (`<div/el>`): a `let` slot and its getter
+   * (`const el = () => slot!`) among the scope's `/var` statements, ahead of
+   * its markup, filled by a callback `ref` on the element. A callback ref
+   * runs in every scope, a `.map` row or a branch included, where a hook
+   * could not. An authored `ref=` on the element is handed the node too: a
+   * function is called with it, an object gets it as `.current`.
+   */
+  #elementRef(
+    node: Extract<IrNode, { kind: "Element" }>,
+    name: string,
+  ): { attrs: Attr[]; ref: MappedCode } {
+    this.#claimName(name, undefined, node.loc);
+    const slot = this.#generatedName("El");
+    const type = `__MxElement<${JSON.stringify(node.name)}>`;
+    this.#varStatements.push(
+      `let ${slot}: ${type} | null = null;`,
+      `const ${name} = (): ${type} => ${slot}!;`,
+    );
+    const authored = [...node.attrs]
+      .reverse()
+      .find((attr) => attr.kind === "dynamic" && attr.name === "ref");
+    const attrs = authored
+      ? node.attrs.filter((attr) => attr !== authored)
+      : node.attrs;
+    const store = `${slot} = __mxNode;`;
+    const ref =
+      authored?.kind === "dynamic"
+        ? concatMapped(
+            ` ref={(__mxNode: ${type} | null) => { ${store} const __mxRef: any = `,
+            mappedExpr(authored.value),
+            '; if (typeof __mxRef === "function") __mxRef(__mxNode); else if (__mxRef) __mxRef.current = __mxNode; }}',
+          )
+        : concatMapped(` ref={(__mxNode: ${type} | null) => { ${store} }}`);
+    return { attrs, ref };
+  }
+
+  /** `ref`, an element reference's callback `ref`, is written after every other attribute. */
+  #element(
+    node: Extract<IrNode, { kind: "Element" }>,
+    ref: MappedCode | string = "",
+  ): void {
     if (node.name === "html-script" || node.name === "html-style") {
-      this.#htmlScript(node, node.name === "html-script" ? "script" : "style");
+      this.#htmlScript(
+        node,
+        node.name === "html-script" ? "script" : "style",
+        ref,
+      );
       return;
     }
     rejectMixedRaw(node.children);
@@ -2765,6 +2825,7 @@ export class PreactEmitter implements Emitter<string> {
     if (content && this.#dialect.textareaContent === "value") {
       attrs = concatMapped(attrs, " value={", content, "}");
     }
+    attrs = concatMapped(attrs, ref);
     const rawHtml = raw ? this.#rawHtmlProp(raw.expr) : "";
     if (node.void) {
       this.#out.push(concatMapped(`<${node.name}`, attrs, rawHtml, " />"));
