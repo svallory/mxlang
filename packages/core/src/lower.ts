@@ -7064,7 +7064,10 @@ function lowerComponent(
   // `/var` binds an imported `.mx` unit's `<return>` the way it does a
   // discovered tag's, and an in-scope `<define>`'s whose body declares one.
   // Any other target (a `.ts` module, a define without `<return>`, a dynamic
-  // tag) has no return shape the core can read, so it stays refused.
+  // tag) has no return shape the core can read, so it stays refused, except
+  // a dynamic tag on a host that binds it at run time (`bindsDynamicTagVar`)
+  // and a literal dynamic tag whose `/var` is an element reference
+  // (`literalElementRef`), both below.
   const { shape: returnShape, unreadable } = calleeReturn(target, ctx);
   if (tagVarOf(node) && returnShape === "none") {
     raise(

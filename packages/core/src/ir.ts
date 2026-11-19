@@ -800,10 +800,18 @@ export type IrNode =
        * identifier is its name; a destructuring pattern is the authored
        * text, verbatim, without a top-level annotation (`declName`).
        *
-       * Only ever set on a call to a unit or a `<define>` that declares
-       * `<return>` — the core rejects `/var` on one that does not, so an
+       * Set only where the core lets the binding through:
+       * - the target is a unit or an in-scope `<define>` that declares
+       *   `<return>` (`returnsValue` is set);
+       * - the target is `dynamic` and the host declares
+       *   `bindsDynamicTagVar`: the binding is made at run time, and
+       *   `returnsValue` is absent because the callee's shape is unknown
+       *   statically;
+       * - `elementRef` is set: `var` is an element reference.
+       *
+       * The core rejects `/var` on every other call, at the `/var`, so an
        * emitter never has to decide what an unbackable binding means. Null
-       * for every other call.
+       * or absent on a call without `/var`.
        */
       var?: string | null;
       /**
