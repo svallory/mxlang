@@ -8869,8 +8869,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             checkScriptBodyWrites(ctx, child);
             if (ctx.ambiguousTagVars && isBuiltinScript(ctx, child)) {
               const program = scriptProgramOf(ctx, child);
-              if (program)
-                checkAmbiguousTagVarReads(ctx, undefined, program);
+              if (program) checkAmbiguousTagVarReads(ctx, undefined, program);
             }
             // These checks collect multiple diagnostics without throwing. Their
             // owner still failed: omit it, not a parent with a failed child.

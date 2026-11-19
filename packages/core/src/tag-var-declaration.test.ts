@@ -308,7 +308,9 @@ describe("an outer binding read after a body that declares its own /x", () => {
 
   it("a /x two bodies declare, read outside both, is refused as stock refuses it", () => {
     expect(() =>
-      compileMatrix("<div><counter/x/></div><div><counter/x/></div><p>${x}</p>"),
+      compileMatrix(
+        "<div><counter/x/></div><div><counter/x/></div><p>${x}</p>",
+      ),
     ).toThrowError(
       expect.objectContaining({
         diagnosticCode: "MX_INVALID_TAG_VAR",
