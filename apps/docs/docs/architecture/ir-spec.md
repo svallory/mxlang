@@ -102,7 +102,7 @@ What each span covers is listed with its field. The rule throughout: slicing the
 | `AttributeTagFor.span` | The whole `<for>`. |
 | `IfChain.span` | From the `<if>`'s `<` through the last branch's closing tag, layout between branches included. |
 | `Branch.span` | That branch's own tag. |
-| `For.paramSpans`, `Define.paramSpans` | One per param, `undefined` for a param with no `loc`. |
+| `For.paramSpans`, `Define.paramSpans`, `Block.paramSpans` | One per param, `undefined` for a param with no `loc`. |
 | `Define.typeParams.span` | The type parameters written on the define, without the angle brackets (`T extends string = "a"` in `<define/Foo<T extends string = "a">>`). |
 | `Expr.parts[].span` | One authored expression inside a shorthand value core built (`y` in `.a${y}.b`), as `Expr.span` would cover it alone. |
 | `Define.nameSpan` | The define's own name (`Row`). |
@@ -341,7 +341,7 @@ Pinned overall by `lower.test.ts` › "Attr separates static, dynamic, bound and
 
 ## 7. `Block`
 
-`{ hasParams: boolean, params: string[], children, loc }`: a child list a host emits as a callable unit — a component's `content`, an attribute tag's `block`. `params` are the block's tag params as source text; `hasParams` distinguishes `<Tag||>` (true, `params: []`) from no pipes. Params shadow host bindings inside `children` only. A host with no render-prop form rejects non-empty `params` itself; core resolves the shape and does not decide whether the target can express it.
+`{ hasParams: boolean, params: string[], paramSpans?, children, loc }`: a child list a host emits as a callable unit — a component's `content`, an attribute tag's `block`. `params` are the block's tag params as source text; `hasParams` distinguishes `<Tag||>` (true, `params: []`) from no pipes. `paramSpans` holds one span per `params` entry, `undefined` for a param with no `loc` (section 3.3), and `[]` with no params; core fills it on an authored block only, and a block a custom-tag hook builds (`ctx.build.block`) has none. Added in `IR_VERSION` 21. Pinned by `lower.test.ts` › "`Block` param spans: a call's content params". Params shadow host bindings inside `children` only. A host with no render-prop form rejects non-empty `params` itself; core resolves the shape and does not decide whether the target can express it.
 
 ## 8. Attribute tags
 

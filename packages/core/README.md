@@ -957,8 +957,9 @@ with no mappings. It returns `undefined` only when `expr` has no authored body
 (`bodySpan`/`bodySource` absent), so a caller falls back to `mappedExpr(expr)`. Callers: the Preact emitter, which the React and Hono
 hosts share, and the Solid emitter, both as `mappedMethod(expr) ?? mappedExpr(expr)`.
 
-`Define.nameSpan`/`paramSpans` and `For.paramSpans` extend the same
-convention to `<define>`'s own name and params and a `<for>`'s params — the
+`Define.nameSpan`/`paramSpans`, `For.paramSpans` and `Block.paramSpans` extend the same
+convention to `<define>`'s own name and params, a `<for>`'s params and the
+params of a call's content or an attribute tag — the
 file-absolute UTF-16 code-unit spans every other source-derived IR run already carried.
 Each is `undefined` under the same rule as `Expr.span`: no span for a node
 with no authored `loc`. A component call's own tag-name span is not

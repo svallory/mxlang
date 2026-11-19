@@ -3284,6 +3284,7 @@ function lowerBlock(ctx: Ctx, node: Node, body = bodyChildren(node)): Block {
     hasParams: hasParams(ctx, node),
     params: paramsOf(ctx, node),
     bindings,
+    paramSpans: paramSpansOf(ctx, node),
     children,
     loc: posOf(ctx, node),
   };
@@ -3668,6 +3669,7 @@ function lowerAuthoredAttributeTag(
     hasParams: hasParamsAtCall,
     params: paramsOf(ctx, node),
     bindings,
+    paramSpans: paramSpansOf(ctx, node),
     children: withTagParams(ctx, node, `@${name}`, () =>
       lowerChildren(ctx, nested.contentChildren),
     ),

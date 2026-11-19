@@ -2538,6 +2538,52 @@ describe("Define/For param and name spans", () => {
     ]);
   });
 
+  it("`Block` param spans: a call's content params", () => {
+    // A body is required: a self-closed `<Box|a|/>` lowers `content: null`.
+    const source = 'import Box from "./box.mx"\n<Box|a, { b }|>x</Box>\n';
+    const ir = lowerSource(
+      source,
+      fakeDeclarations({ isComponent: (name) => name === "Box" }),
+    );
+    const component = find(ir.body, "Component");
+    expect(
+      (component.content?.paramSpans ?? []).map((s) => spanSlice(source, s)),
+    ).toEqual(["a", "{ b }"]);
+  });
+
+  it("`Block` param spans: an attribute tag's params", () => {
+    const source = 'import Box from "./box.mx"\n<Box><@item|v|/></Box>\n';
+    const ir = lowerSource(
+      source,
+      fakeDeclarations({ isComponent: (name) => name === "Box" }),
+    );
+    const component = find(ir.body, "Component");
+    const block = component.attributeTags[0]?.block;
+    expect((block?.paramSpans ?? []).map((s) => spanSlice(source, s))).toEqual([
+      "v",
+    ]);
+  });
+
+  it("`Block` param spans: a block with no params has `[]`", () => {
+    const declarations = fakeDeclarations({
+      isComponent: (name) => name === "Box",
+    });
+    const content = find(
+      lowerSource('import Box from "./box.mx"\n<Box>x</Box>\n', declarations)
+        .body,
+      "Component",
+    );
+    expect(content.content?.paramSpans).toEqual([]);
+    const tagged = find(
+      lowerSource(
+        'import Box from "./box.mx"\n<Box><@item/></Box>\n',
+        declarations,
+      ).body,
+      "Component",
+    );
+    expect(tagged.attributeTags[0]?.block.paramSpans).toEqual([]);
+  });
+
   it('component call target name span (`kind: "define"`), via `Component.nameSpan`', () => {
     // `ComponentTarget` carries no `nameSpan` of its own: `Component.nameSpan`
     // (computed from the same `node.name`) already covers the call's tag

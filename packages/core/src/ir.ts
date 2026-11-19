@@ -55,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 20;
+export const IR_VERSION = 21;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -418,6 +418,13 @@ export interface Block extends IrBase {
    * treats an absent field as unknown.
    */
   bindings?: string[];
+  /**
+   * File-absolute UTF-16 code-unit spans of each param, same convention
+   * as `Expr.span` — one per `params` entry, `undefined` for a param whose
+   * node carries no `loc`. Core fills it for authored blocks only; a
+   * hook-built block carries none. Added in `IR_VERSION` 21.
+   */
+  paramSpans?: Array<SourceSpan | undefined>;
   children: IrNode[];
 }
 

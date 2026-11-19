@@ -1220,7 +1220,7 @@ Five facts worth knowing before editing it:
   root `mx-parse.ts` records in `strippedValueRoots`; `Attr.span` ends where it
   ends); `DelegatedTag`, `Element`,
   `Component` and `AttributeTag` `nameSpan` + whole-tag `span` (opening tag,
-  body and closing tag); `For`/`Define` `paramSpans`; `Define.nameSpan`;
+  body and closing tag); `For`/`Define`/`Block` `paramSpans`; `Define.nameSpan`;
   and — added by core-ir-spans — `Text.span` (the authored text; `value` is
   the front end's, normalized by Marko's whitespace rule in a normalizing
   body), `Interpolation.span` (the whole
