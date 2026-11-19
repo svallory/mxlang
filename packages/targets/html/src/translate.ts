@@ -1407,6 +1407,10 @@ export const policy: Policy = {
   // Marko 6.4.4's `_dynamic_tag` does, instead of being refused.
   bindsDynamicTagVar: true,
   dynamicTagDelegateBindsVar: true,
+  // `<div/el>` binds an element reference, as stock Marko's html build binds a
+  // getter (`emitter.ts`, `element`); core refuses every read it could reach
+  // at render.
+  bindsElementVar: true,
   isBuiltinTag: (name) => name === "let" || name === "id",
   resolveDelegatedTag,
   // The resolver offers the host first refusal on each of these so the

@@ -2681,7 +2681,6 @@ describe("the eight-field guard", () => {
   // to write correctly.
   it.each([
     ["tag params on an element", "<div|a|>x</div>", /tag params/],
-    ["tag variable on an element", "<div/ref>x</div>", /tag variable/],
     [
       "an attribute tag on an element",
       "<div><@header>x</@header></div>",
@@ -2689,6 +2688,28 @@ describe("the eight-field guard", () => {
     ],
   ])("rejects %s", (_what, body, message) => {
     expect(() => compile(src(body), file)).toThrow(message);
+  });
+});
+
+describe("an element reference (`<div/el>`)", () => {
+  // Stock Marko's html build binds the name to a getter that throws when
+  // called; html never runs a handler or a `<script>` body, so the element
+  // renders as it would without the variable.
+  it.each([
+    ["<div/el>x</div>", "<div>x</div>"],
+    ["<div/el/><script>el().focus()</script>", "<div></div>"],
+  ])("renders %s as %s", async (source, html) => {
+    expect(await renderModules({ "entry.mx": source }, "entry.mx")).toBe(html);
+  });
+
+  it("binds the name for a handler passed to a <define> call", () => {
+    const { code } = compile(
+      src("<define/Child>x</define><div/el/><Child onPick=(() => el())/>"),
+      file,
+    );
+    expect(code).toContain(
+      'const el = (): any => { throw new Error("Element references can only be read in scripts and event handlers."); };',
+    );
   });
 });
 

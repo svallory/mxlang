@@ -1234,6 +1234,15 @@ export function createEmitter(
     },
 
     element(node) {
+      // An element reference (`<div/el>`) is read only in a handler or a
+      // `<script>` body, which html never runs; a handler passed to a custom
+      // tag or a `<define>` call still names it, so it is bound, as stock
+      // Marko's html build binds a getter that throws when called.
+      if (node.var) {
+        push(
+          `const ${node.var} = (): any => { throw new Error("Element references can only be read in scripts and event handlers."); };`,
+        );
+      }
       if (node.name === "textarea") return textarea(node);
       literal(`<${node.name}`);
       elementAttributes(node.name, node.attrs);
@@ -2032,8 +2041,9 @@ function defineFunctionName(name: string): string {
 
 /**
  * Does this node declare a name in the block it sits in? A `<const>`, a
- * `<let>`, a `<define>`, a `/var` on a tag call, or a delegated tag that binds
- * its `/var`: each is written as a `const` where the node stands.
+ * `<let>`, a `<define>`, a `/var` on a tag call or an element, or a delegated
+ * tag that binds its `/var`: each is written as a `const` where the node
+ * stands.
  */
 function declaresBinding(node: IrNode): boolean {
   switch (node.kind) {
@@ -2041,6 +2051,7 @@ function declaresBinding(node: IrNode): boolean {
     case "Define":
       return true;
     case "Component":
+    case "Element":
       return Boolean(node.var);
     case "DelegatedTag":
       return (
