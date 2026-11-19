@@ -1444,6 +1444,57 @@ describe("MX language plugin", {
     ]);
   });
 
+  it("maps a Solid region <define>'s params, body and name", () => {
+    const directory = `${here}/fixtures/solid-policy`;
+    const view = `${directory}/view.solid.mx`;
+    const consumer = `${directory}/index.ts`;
+    const service = createPluginService(
+      {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
+        [view]:
+          "export const view = <ul><define/Row|n|><div/el/><button onClick() { el().focus() }>${n}</button></define><Row(1)/></ul>;\n",
+        [consumer]: 'import "./view.solid.mx";\n',
+      },
+      [consumer],
+    );
+    const sites = (
+      locations: readonly ts.DocumentSpan[] | undefined,
+    ): [string, number, number][] =>
+      (locations ?? [])
+        .map((location): [string, number, number] => [
+          location.fileName,
+          location.textSpan.start,
+          location.textSpan.length,
+        ])
+        .sort((left, right) => left[1] - right[1]);
+    const rename = (at: number) =>
+      sites(service.findRenameLocations(view, at, false, false, {}));
+    const hover = (at: number) =>
+      (service.getQuickInfoAtPosition(view, at)?.displayParts ?? [])
+        .map((part) => part.text)
+        .join("");
+
+    // `/el` declared at 44, read at 68 (`el().focus()`); `|n|` at 36, read at
+    // 85 (`${n}`); the name `Row` at 32.
+    expect(hover(44)).toBe("let el: any");
+    expect(sites(service.getDefinitionAtPosition(view, 68))).toEqual([
+      [view, 44, 2],
+    ]);
+    expect(rename(68)).toEqual([
+      [view, 44, 2],
+      [view, 68, 2],
+    ]);
+    expect(rename(44)).toEqual([
+      [view, 44, 2],
+      [view, 68, 2],
+    ]);
+    expect(sites(service.getDefinitionAtPosition(view, 85))).toEqual([
+      [view, 36, 1],
+    ]);
+    expect(hover(32)).toMatch(/^function __mx_DefineRow1\(/);
+    expect(rename(32)).toEqual([]);
+  });
+
   describe("custom tag discovery", () => {
     const scratches: string[] = [];
 

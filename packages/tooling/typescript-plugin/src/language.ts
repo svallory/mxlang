@@ -369,6 +369,9 @@ export function createRegionLanguagePlugin(
           [
             ...attributeTagDiagnosticMappings(source, printed.code),
             ...handlerKeywordMappings(regionResults, printed.code),
+            // Hoisted `<define>`s are printed without locations, so `map`
+            // cannot carry them; the bridge rebases their own mappings.
+            ...recordedMappings(printed.mappings ?? []),
           ],
           "tsx",
           () => regionAuthoredSpans(regions, fileName, discovered),
