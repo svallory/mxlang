@@ -3840,12 +3840,12 @@ spread on that element is replaced. On a literal dynamic tag the callback
 `<Dynamic>` element, and no returned value is bound. Angular and `.astro.mx`
 refuse `<div/el>` with the generic tag-variable refusal at the `/var` (below).
 Marko hoists a read outside the element's body, or above the element, into a
-getter. On html and Solid MX does not: a read outside the element's body is an
-unbound name in the emitted module. On Preact, React and Hono a reference
+getter. On html MX does not: a read outside the element's body is an unbound
+name in the emitted module. On Preact, React, Hono and Solid a reference
 declared once in its scope is reached from outside its element's body, as
-above; when two bodies bind the name, each is a scope of its own, so a read
-outside both is an unbound name in the emitted module, where Marko refuses it
-as "Ambiguous reference". A
+above. On Preact, React and Hono, when two bodies bind the name, each is a
+scope of its own, so a read outside both is an unbound name in the emitted
+module, where Marko refuses it as "Ambiguous reference". A
 read above the element in render position is not caught at compile time either:
 on html it fails when the template renders, as Marko's does, on Preact, React
 and Hono `el()` returns `null` there, and on Solid it throws a `TypeError`. In
