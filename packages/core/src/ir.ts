@@ -55,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 17;
+export const IR_VERSION = 18;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -755,6 +755,14 @@ export type IrNode =
       children: IrNode[];
       /** True for `<br>` and friends: no children, no closing tag. */
       void: boolean;
+      /**
+       * The element reference a `/var` on this element declares
+       * (`<div/el>`): always an identifier, since core refuses a pattern.
+       * Set only for a host that declares `bindsElementVar`. Core has
+       * refused every write and every read outside a handler or `<script>`
+       * body.
+       */
+      var?: string;
     } & IrBase)
   | ({
       kind: "Component";

@@ -68,9 +68,12 @@ const withVarOnElements: HostDeclarations = {
   isDelegatedTag: (name) => name === "let" || name === "div" || name === "id",
 };
 
-function attempt(source: string): TranslateError | undefined {
+function attempt(
+  source: string,
+  host: HostDeclarations = withLet,
+): TranslateError | undefined {
   try {
-    compileSource(source, "/page.mx", withLet, {
+    compileSource(source, "/page.mx", host, {
       targets: lookup,
       emitIr: () => "",
     } as never);
@@ -1376,5 +1379,54 @@ describe("a two-way bind on a parameter with no change handler", () => {
     "<let/n=1/><for|i| of=[1]><input value:=n/></for>",
   ])("still compiles %s", (source) => {
     expect(attempt(source)).toBeUndefined();
+  });
+});
+
+describe("an element reference (`<div/el>`) is never written, and read only in a handler or a <script> body", () => {
+  const bindsElement: HostDeclarations = { ...withLet, bindsElementVar: true };
+  const ELEMENT_WRITE =
+    "`el` is a tag variable on a native element (an element reference) and cannot be assigned to.";
+  const ELEMENT_READ =
+    "`el` is an element reference. Element references can only be read in scripts and event handlers.";
+
+  it.each([
+    ["in a handler", "<div/el/>\n<button onClick() { el = 1 }/>\n", "el = 1"],
+    ["in a <script> body", "<div/el/>\n<script>el++</script>\n", "el++"],
+  ])("refuses a write %s", (_label, source, write) => {
+    const error = attempt(source, bindsElement);
+    expect(error?.message).toBe(ELEMENT_WRITE);
+    expect(error?.diagnosticCode).toBe(READONLY);
+    const { start } = span(source, write);
+    expect([error?.line, error?.column]).toEqual([start.line, start.column]);
+  });
+
+  // The column of the refused read, 0-based, on line 1.
+  it.each<[string, number]>([
+    ["<div/el/>${el()}", 11],
+    ["<div/el/><p title=el/>", 18],
+    ["<div/el title=el()/>", 14],
+    ["<div/el>${el()}</div>", 10],
+    ["<div/el/><const/f=() => el()/>", 24],
+    ["<div/el/><log=el/>", 14],
+    ["<div/el/><${el}/>", 12],
+    ["<div/el/><for|x = el()| of=[1]>${x}</for>", 18],
+  ])("refuses the read in %s", (source, column) => {
+    const error = attempt(source, bindsElement);
+    expect(error?.message).toBe(ELEMENT_READ);
+    expect(error?.diagnosticCode).toBe("MX_INVALID_TAG_VAR");
+    expect([error?.line, error?.column]).toEqual([1, column]);
+  });
+
+  it.each([
+    "<div/el/><button onClick() { el().focus() }/>",
+    "<button onClick() { el().focus() }/><div/el/>",
+    "<div/el onClick() { el() }/>",
+    "<div/el/><button onClick=(() => el())/>",
+    "<div/el/><button onClick() { [1].forEach(() => el().focus()) }/>",
+    "<div/el/><script>el().focus()</script>",
+    "<div/el/><lifecycle onMount() { el() }/>",
+    "<div/el/><for|el| of=[1]>${el}</for>",
+  ])("accepts %s", (source) => {
+    expect(attempt(source, bindsElement)).toBeUndefined();
   });
 });

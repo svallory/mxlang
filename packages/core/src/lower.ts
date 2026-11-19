@@ -264,6 +264,7 @@ import {
   bindingWriteCode,
   bindingWriteMessage,
   findBindingWrite,
+  findElementRefRead,
   type WriteRules,
 } from "./render-let-write.ts";
 import {
@@ -812,6 +813,7 @@ function checkBindingWrites(
   code: string | undefined,
   node: Node,
   inFunction = false,
+  pattern = false,
 ): void {
   const rules = writeRulesOf(ctx);
   if (!rules) return;
@@ -825,15 +827,76 @@ function checkBindingWrites(
       ...(rules.guards?.keys() ?? []),
     ];
     if (!names.some((name) => code.includes(name))) return;
-    // And a write needs an assignment, an update operator or a loop head.
-    if (!/=|\+\+|--|\bfor\b/.test(code)) return;
   }
-  const write = findBindingWrite(node, rules, inFunction);
-  if (!write) return;
+  // A write needs an assignment, an update operator or a loop head.
+  const write =
+    code === undefined || /=|\+\+|--|\bfor\b/.test(code)
+      ? findBindingWrite(node, rules, inFunction)
+      : undefined;
+  if (write) {
+    raise(
+      bindingWriteCode(write),
+      bindingWriteMessage(write, voiceOfCtx(ctx)),
+      write.node,
+    );
+  }
+  checkElementRefReads(ctx, code, node, rules, pattern);
+}
+
+/**
+ * The handler bodies an element reference may be read in (spec §10, Element
+ * references): every function given to an `on…` attribute of any tag and every
+ * `<lifecycle>` hook (`staleBodiesOf`), as the nodes a later walk of the same
+ * attribute sees. A method attribute's function is rebuilt on every read
+ * (`attrValueOf`), so its parameters and statements are what is kept; an
+ * arrow is the parser's node itself. Filled by `markHandlerBodies` before the
+ * tag's expressions are read. A `<script>` body is never walked for a read.
+ */
+const handlerBodies = new WeakSet<Node>();
+
+/**
+ * Marks `tag`'s handler bodies (`handlerBodies`) when an element reference is
+ * in effect or the tag declares one itself, ahead of the reads in them.
+ */
+function markHandlerBodies(ctx: Ctx, tag: Node): void {
+  const inEffect = [...(ctx.writeGuards?.values() ?? [])].some(
+    (guard) => guard.kind === "element",
+  );
+  if (!inEffect && !tagVarOf(tag)) return;
+  for (const { kind, body } of staleBodiesOf(ctx, tag)) {
+    if (kind === "script") continue;
+    handlerBodies.add(body);
+    for (const param of body.params ?? []) handlerBodies.add(param);
+    if (body.body?.type === "BlockStatement") {
+      for (const statement of body.body.body) handlerBodies.add(statement);
+    } else if (body.body) handlerBodies.add(body.body);
+  }
+}
+
+/**
+ * Refuses a read of an element reference (`<div/el>`) outside a handler or a
+ * `<script>` body, at the read: stock Marko reads one only once the element
+ * is rendered, and so does every host that binds it.
+ */
+function checkElementRefReads(
+  ctx: Ctx,
+  code: string | undefined,
+  node: Node,
+  rules: WriteRules,
+  pattern: boolean,
+): void {
+  const names = new Set<string>();
+  for (const [name, guard] of rules.guards ?? []) {
+    if (guard.kind !== "element") continue;
+    if (code === undefined || code.includes(name)) names.add(name);
+  }
+  if (names.size === 0) return;
+  const read = findElementRefRead(node, names, handlerBodies, pattern);
+  if (!read) return;
   raise(
-    bindingWriteCode(write),
-    bindingWriteMessage(write, voiceOfCtx(ctx)),
-    write.node,
+    INVALID_TAG_VAR_CODE,
+    `\`${read.name}\` is an element reference. Element references can only be read in scripts and event handlers.`,
+    read,
   );
 }
 
@@ -2657,6 +2720,15 @@ function rejectNativeLiteralFields(ctx: Ctx, node: Node): void {
       attributeTag,
     );
   }
+  rejectNativeTagVarPattern(node);
+}
+
+/**
+ * Marko's rule for a tag variable on a native tag: an identifier only (an
+ * element reference), never a pattern. Raised at the `/var`, on the element
+ * path and on a literal dynamic tag that stays dynamic.
+ */
+function rejectNativeTagVarPattern(node: Node): void {
   const tagVar = tagVarOf(node);
   if (tagVar && tagVar.type !== "Identifier") {
     raise(
@@ -3066,7 +3138,7 @@ function paramsOf(ctx: Ctx, node: Node): string[] {
   rejectUnreadableParams(ctx, node);
   // A default (`|x = count++|`) runs while the template renders.
   for (const param of tagParamsOf(node)) {
-    checkBindingWrites(ctx, undefined, param);
+    checkBindingWrites(ctx, undefined, param, false, true);
   }
   return tagParamsOf(node).map((p: Node) => {
     // Babel's generator omits a TypeScript annotation when an Identifier is
@@ -3507,6 +3579,7 @@ function lowerAuthoredAttributeTag(
     );
   }
   checkStaleDerivedReads(ctx, node);
+  markHandlerBodies(ctx, node);
   const hasParamsAtCall = hasParams(ctx, node);
 
   const nestedSchema: AttrSchema = {
@@ -7939,11 +8012,27 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       ctx,
     );
   }
+  // A pattern is refused on every host, whether it binds an element
+  // reference or not (Marko's own rule and text).
+  rejectNativeTagVarPattern(node);
   rejectUnsupportedFields(
     ctx,
     node,
     lazyOwner(() => voicedAt(node, () => tagText(ctx, name, node))),
+    { var: ctx.declarations.bindsElementVar === true },
   );
+  // An element reference (`<div/el>`) on a host that binds one: in force for
+  // the element's own attributes, its content and the rest of the enclosing
+  // body (whose `scopeBindings` undoes it). Never written, and read only in a
+  // handler or a `<script>` body (`checkElementRefReads`).
+  const elementVar = tagVarOf(node) ? declName(ctx, tagVarOf(node)) : undefined;
+  if (elementVar !== undefined) {
+    shadowBindings(
+      ctx,
+      [elementVar],
+      new Map([[elementVar, { kind: "element", inFunction: true }]]),
+    );
+  }
 
   // Void by the same table the parse read (the target's `nativeTags`, else
   // core's own HTML elements), so a body the parse kept is never dropped.
@@ -7987,6 +8076,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     attrs,
     children,
     void: isVoid,
+    ...(elementVar !== undefined ? { var: elementVar } : {}),
     loc: posOf(ctx, node),
   };
 }
@@ -8348,7 +8438,16 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
               if (!declaredDefines.has(binding.name)) hiding.add(binding.name);
             }
           }
-          return builtin || call || dynamic
+          // An element reference (`<div/el>`) on a host that binds one is a
+          // tag variable of this body too.
+          const element =
+            !builtin &&
+            !call &&
+            !dynamic &&
+            typeof name === "string" &&
+            ctx.declarations.bindsElementVar === true &&
+            ctx.declarations.isElement(name, ctx);
+          return builtin || call || dynamic || element
             ? bindingIdentifierNodes(tagVarOf(child))
             : [];
         });
@@ -8593,6 +8692,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
               }
             }
             checkStaleDerivedReads(ctx, child);
+            markHandlerBodies(ctx, child);
             checkScriptBodyWrites(ctx, child);
             // These checks collect multiple diagnostics without throwing. Their
             // owner still failed: omit it, not a parent with a failed child.

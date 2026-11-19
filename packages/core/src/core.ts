@@ -370,10 +370,12 @@ export interface BindingRegistry {
  * adds the code that runs later: a handler, a callback, a `<script>` body.
  * It is set for a `<const>`, a `<for>` parameter and a `<define>` parameter
  * bound as a plain name, and clear for a name from an object pattern, which is
- * written through its object (Marko allows that outside the render).
+ * written through its object (Marko allows that outside the render). An
+ * `"element"` guard is an element reference (`<div/el>`): never written, and
+ * read only in a handler or a `<script>` body (`findElementRefRead`).
  */
 export interface WriteGuard {
-  readonly kind: "const" | "for" | "define";
+  readonly kind: "const" | "for" | "define" | "element";
   readonly inFunction: boolean;
 }
 

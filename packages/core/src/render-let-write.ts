@@ -68,6 +68,7 @@ export type WriteReason =
   | "let-loop"
   /** A `<define>` parameter bound as a plain name, written anywhere. */
   | "define-plain"
+  /** `"element"` among them: an element reference (`<div/el>`), written anywhere. */
   | WriteGuard["kind"];
 
 /** The first refused write found, with the name it writes. */
@@ -315,5 +316,57 @@ export function bindingWriteMessage(write: BindingWrite, voice: Voice): string {
       return `${name} is a ${defineTag} parameter and cannot be written while the template renders. Write it in an event handler or a ${scriptTag} body, or derive a value with ${constTag}.`;
     case "define-plain":
       return `${name} is a ${defineTag} parameter and cannot be written. Keep a value that changes in a ${letTag}, or derive a new value with a ${constTag}.`;
+    case "element":
+      return `${name} is a tag variable on a native element (an element reference) and cannot be assigned to.`;
   }
+}
+
+/**
+ * Finds the first read of an element reference (`<div/el>`) in `expression`
+ * that is not inside a handler or a `<script>` body: a `ReferencedIdentifier`
+ * named in `names`, not bound by the expression itself, with no ancestor (or
+ * itself) in `allowed`. `allowed` holds the handler bodies the lowerer marked
+ * (their function, parameters and statements, which are the nodes a later walk
+ * of the same attribute sees). The `<script>` body is never walked here.
+ *
+ * `pattern` says `expression` is a tag parameter (`|x = el()|`): it is walked
+ * as a parameter, so the names it binds are not reads and its defaults are.
+ */
+export function findElementRefRead(
+  expression: Node,
+  names: ReadonlySet<string>,
+  allowed: WeakSet<Node>,
+  pattern = false,
+): Node | undefined {
+  if (!expression || names.size === 0) return undefined;
+  const { traverse, types } = coreBabel();
+  const statement = pattern
+    ? ({
+        type: "ExpressionStatement",
+        expression: {
+          type: "ArrowFunctionExpression",
+          params: [expression],
+          body: { type: "NumericLiteral", value: 0 },
+          expression: true,
+          async: false,
+        },
+      } as Node)
+    : ({ type: "ExpressionStatement", expression } as Node);
+  const file = types.file(
+    types.program(
+      expression.type === "Program" ? expression.body : [statement],
+    ),
+  );
+  let found: Node | undefined;
+  traverse(file, {
+    ReferencedIdentifier(path: Node) {
+      const name = path.node.name;
+      if (!names.has(name)) return;
+      if (path.scope.getBinding(name)) return;
+      if (path.find((parent: Node) => allowed.has(parent.node))) return;
+      found = path.node;
+      path.stop();
+    },
+  });
+  return found;
 }

@@ -246,6 +246,12 @@ export interface HostDeclarations {
    */
   bindsDynamicTagVar?: boolean;
   /**
+   * Whether this host binds `/var` on a native element (`<div/el>`) to an
+   * element reference. Absent or false, core refuses the binding at the
+   * `/var`.
+   */
+  bindsElementVar?: boolean;
+  /**
    * Whether this host's delegated dynamic tag (`<${expr}/v/>`) binds `/var`
    * itself, so core may tell an author whose static `<Name/v/>` it refuses to
    * write the dynamic form. Absent or false, core says nothing about it.

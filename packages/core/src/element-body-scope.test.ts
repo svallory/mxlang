@@ -386,3 +386,55 @@ describe("a literal naming an element is that element to every pre-scan", () => 
     expect(error?.diagnosticCode).toBe("MX_DUPLICATE_DECLARATION");
   });
 });
+
+describe("a tag variable on a native element (an element reference)", () => {
+  const bindsElement: HostDeclarations = { ...withLet, bindsElementVar: true };
+
+  it.each(["<div/el/>", '<${"div"}/el/>'])(
+    "lowers %s to an Element with `var` on a host that binds one",
+    (source) => {
+      expect(irOf(source, bindsElement)).toEqual([
+        {
+          kind: "Element",
+          name: "div",
+          attrs: [],
+          children: [],
+          void: false,
+          var: "el",
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    ["<div/el/>", 5],
+    ['<${"div"}/el/>', 10],
+  ])(
+    "keeps refusing %s at the `/var` on a host that does not",
+    (source, column) => {
+      const error = attempt(source);
+      expect(error?.message).toBe(
+        "tag variable `/el` on `<div>` is not supported in a standalone template",
+      );
+      expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+      expect([error?.line, error?.column]).toEqual([1, column]);
+    },
+  );
+
+  for (const [label, host] of [
+    ["a host that binds element references", bindsElement],
+    ["a host that does not", withLet],
+  ] as const) {
+    it.each(["<div/{a}/>", "<div/[a]/>"])(
+      `refuses the pattern in %s on ${label}`,
+      (source) => {
+        const error = attempt(source, host);
+        expect(error?.message).toBe(
+          "Tag variables on native tags cannot be destructured.",
+        );
+        expect(error?.diagnosticCode).toBe("MX_INVALID_TAG_VAR");
+        expect([error?.line, error?.column]).toEqual([1, 5]);
+      },
+    );
+  }
+});
