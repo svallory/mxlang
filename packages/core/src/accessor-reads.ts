@@ -261,12 +261,20 @@ export function freeIdentifiersIn(code: string): Set<string> {
  * member tag is left out too, although it is a value read (`item` in
  * `<item.Comp/>`), so a caller that must see every read of a local through a
  * tag keeps the default.
+ *
+ * `typePositions: false` leaves out a name read only in a TypeScript type
+ * (`MouseEvent` in `(e: MouseEvent) => e`, `Foo` in `x as Foo`, `Bar` in
+ * `f<Bar>(y)`), for a caller that asks which values a body reads: a type is
+ * erased and names no value. A `typeof` query still counts (`x` in
+ * `typeof x` names the value `x`), its member names do not (`k` in
+ * `typeof m.k`). Default `true`.
  */
 export function freeIdentifiersInProgram(
   code: string,
-  options: { jsxTagNames?: boolean } = {},
+  options: { jsxTagNames?: boolean; typePositions?: boolean } = {},
 ): Set<string> | null {
   const jsxTagNames = options.jsxTagNames ?? true;
+  const typePositions = options.typePositions ?? true;
   const { parse, traverse } = coreBabel();
   let file: Node;
   try {
@@ -285,6 +293,7 @@ export function freeIdentifiersInProgram(
       const name = path.node.name;
       if (path.scope.getBinding(name)) return;
       if (!jsxTagNames && isJsxTagName(path)) return;
+      if (!typePositions && isTypePositionName(path)) return;
       names.add(name);
     },
   });
@@ -309,6 +318,28 @@ function isJsxTagName(path: Node): boolean {
     current.key === "name" &&
     (parent === "JSXOpeningElement" || parent === "JSXClosingElement")
   );
+}
+
+/**
+ * Whether `path` is a name in a TypeScript type position (an annotation, a
+ * type argument or parameter, an `as`/`satisfies` target, an interface or a
+ * type alias), which names no value. Inside a `typeof` query the name is a
+ * value read (`x` in `typeof x`), unless it is the member side of a qualified
+ * name (`k` in `typeof m.k`).
+ */
+function isTypePositionName(path: Node): boolean {
+  const type = path.findParent(
+    (parent: Node) =>
+      parent.isTSType() ||
+      parent.isTSTypeAnnotation() ||
+      parent.isTSTypeParameterInstantiation() ||
+      parent.isTSTypeParameterDeclaration() ||
+      parent.isTSInterfaceDeclaration() ||
+      parent.isTSTypeAliasDeclaration(),
+  );
+  if (!type) return false;
+  if (!type.isTSTypeQuery()) return true;
+  return path.parentPath?.isTSQualifiedName() === true && path.key === "right";
 }
 
 /** One name a destructuring pattern binds, with the path that reads it. */

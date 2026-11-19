@@ -283,4 +283,33 @@ describe("freeIdentifiersInProgram", () => {
       ...(freeIdentifiersInProgram(code, { jsxTagNames: false }) ?? []),
     ]).toEqual(names);
   });
+
+  it.each([
+    ["const f = (e: MouseEvent) => e;", []],
+    ["x as Foo;", ["x"]],
+    ["x satisfies Foo;", ["x"]],
+    ["f<Bar>(y);", ["f", "y"]],
+    ["const g = <T extends Baz>(v: T) => v;", []],
+    ["const h = (e: Array<Qux>) => z;", ["z"]],
+  ])("with typePositions: false, %s reads %j", (code, names) => {
+    expect([
+      ...(freeIdentifiersInProgram(code, { typePositions: false }) ?? []),
+    ]).toEqual(names);
+  });
+
+  it.each([
+    ["let a: typeof x;", ["x"]],
+    ["let a: typeof m.k;", ["m"]],
+    ["let a: Array<typeof x>;", ["x"]],
+  ])("with typePositions: false, typeof in %s reads %j", (code, names) => {
+    expect([
+      ...(freeIdentifiersInProgram(code, { typePositions: false }) ?? []),
+    ]).toEqual(names);
+  });
+
+  it("reads a name in a type position by default", () => {
+    expect([
+      ...(freeIdentifiersInProgram("const f = (e: MouseEvent) => e;") ?? []),
+    ]).toEqual(["MouseEvent"]);
+  });
 });
