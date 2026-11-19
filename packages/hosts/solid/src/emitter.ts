@@ -2661,13 +2661,23 @@ function isIdentifier(text: string): boolean {
  * through Solid's array ref, `ref={[authored, callback]}`, which calls every
  * function in it. An element with no `/var` is returned as it is.
  */
+/**
+ * The parameter list of an element reference's callback `ref`
+ * (`elementRef`). Its `Element` is a type annotation the emitter writes, not
+ * a value the author reads, so the hoisted-define capture check reads the
+ * body with this text replaced by `ELEMENT_REF_PARAM_UNTYPED`: a `<define>`
+ * body holding `<div/el>` is not refused for "closing over" `Element`.
+ */
+const ELEMENT_REF_PARAM = "(__mxNode: Element)";
+const ELEMENT_REF_PARAM_UNTYPED = "(__mxNode)";
+
 function elementRef(node: Extract<IrNode, { kind: "Element" }>): {
   node: Extract<IrNode, { kind: "Element" }>;
   ref: MappedCode | string;
 } {
   if (!node.var) return { node, ref: "" };
   bindElementVar(node.var);
-  const callback = `(__mxNode: Element) => { ${node.var} = () => __mxNode; }`;
+  const callback = `${ELEMENT_REF_PARAM} => { ${node.var} = () => __mxNode; }`;
   const authored = [...node.attrs]
     .reverse()
     .find((attr) => attr.kind === "dynamic" && attr.name === "ref");
@@ -3556,9 +3566,16 @@ export class SolidEmitter implements Emitter<string> {
     // Names read only as a tag (`<Show>`, `<Errored>`) are imported
     // components, not captures; text Babel cannot parse is the emitter's own
     // bug, read as no names.
+    // An element reference's generated `(__mxNode: Element)` is read
+    // untyped (`ELEMENT_REF_PARAM`): its `Element` is the emitter's type
+    // annotation, not a region local.
+    const checkedBody = bodyCode.replaceAll(
+      ELEMENT_REF_PARAM,
+      ELEMENT_REF_PARAM_UNTYPED,
+    );
     const captured = [
       ...(freeIdentifiersInProgram(
-        returnCode ? `[${bodyCode}, ${returnCode}]` : bodyCode,
+        returnCode ? `[${checkedBody}, ${returnCode}]` : checkedBody,
         { jsxTagNames: false },
       ) ?? []),
     ].filter(

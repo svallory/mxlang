@@ -1604,9 +1604,17 @@ describe("a unit that returns a value", () => {
       { filename: "fixture.solid.mx" },
     );
     expect(result.returnVars).toEqual([]);
-    expect(result.code.startsWith("{(() => { let el: any; return <>")).toBe(
-      true,
+    expect(result.code).toMatch(/^\{\(\(\) => \{ let el: any; return <>/);
+  });
+
+  it("binds an element reference inside a region's hoisted <define> body", () => {
+    const result = compileSolidMx(
+      "<define/D><div/el/><button onClick() { el() }/></define><D/>",
+      { filename: "fixture.solid.mx" },
     );
+    expect(result.hoistedDefines.map((define) => define.code)).toEqual([
+      "function __mx_DefineD1() { return (() => { let el: any; return <><><div ref={(__mxNode: Element) => { el = () => __mxNode; }}></div><button onClick={function () { el(); }}></button></></>; })(); }",
+    ]);
   });
 
   it("still hands a region's call /var to the caller beside an element reference", () => {
@@ -1615,9 +1623,6 @@ describe("a unit that returns a value", () => {
       { filename: "fixture.solid.mx", customTags: { counter } },
     );
     expect(result.returnVars).toEqual(["n"]);
-    expect(result.code.startsWith("{(() => { let el: any; return <>")).toBe(
-      true,
-    );
   });
 
   // Every `/var` is declared with one `let` at the component's head, so a
