@@ -379,6 +379,45 @@ describe("solid: a <define> call passes its attributes as the first param", () =
   });
 });
 
+// The region hoists its attribute-tag runtime (`__mxAttrTag`, `__mxAttrTags`,
+// `__mxAttrTagsOf`) to module scope beside its defines, so a define body that
+// builds an attribute tag reads a module binding, not a region local. Stock
+// Marko 6.4.4 compiles both sources.
+describe("solid: an attribute tag in a <define> body", () => {
+  const ITEM =
+    "<define/Box|input|>x</define><define/Row><Box><@item|v|>${v}</@item></Box></define><Row/>";
+
+  it("compiles and hoists the attribute-tag runtime with the define", () => {
+    const result = compile(`<ul>${ITEM}</ul>`, "");
+    expect(result.code).toBe("<ul>{__mx_DefineRow1()}</ul>");
+    expect(result.hoistedDefines.map((entry) => entry.binding)).toEqual([
+      "__mxAttrTag",
+      "__mx_DefineBox1",
+      "__mx_DefineRow1",
+    ]);
+    expect(result.hoistedImports.map((entry) => entry.binding)).toEqual([
+      "__mxEscape",
+    ]);
+    expect(result.hoistedDefines[2]?.code).toContain("__mxAttrTag({");
+  });
+
+  it("renders with the runtime in scope", () => {
+    expect(render(ITEM)).toBe("<ul>x</ul>");
+  });
+
+  it("compiles an attribute-tag <for> in a define body", () => {
+    const { hoistedDefines } = compile(
+      "<ul><define/Box|input|>x</define><define/Row|xs|><Box><for|x| of=xs><@item>${x}</@item></for></Box></define><Row([1])/></ul>",
+      "",
+    );
+    expect(hoistedDefines.map((entry) => entry.binding)).toEqual([
+      "__mxAttrTag",
+      "__mx_DefineBox1",
+      "__mx_DefineRow1",
+    ]);
+  });
+});
+
 describe("solid: a <define> that declares <return>", () => {
   // Expected HTML is stock Marko 6.4.4's render, its resume comments removed,
   // inside the helper's `<ul>`.

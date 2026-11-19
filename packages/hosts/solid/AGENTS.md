@@ -260,8 +260,9 @@ Three facts worth knowing before touching it:
   **A hoisted `<define>` may not close over a value local to the region**
   (a signal, a prop, anything from the surrounding TypeScript function the
   region lives in) — only its own params, another top-level `<define>`'s
-  gensym'd name, and the module's own imports are safe once it becomes a
-  real module-scope function. Enforced by `freeJsxNames`, a hand-rolled
+  gensym'd name, the module's own imports and the helpers the region hoists
+  (`REGION_HOISTED_HELPERS`) are safe once it becomes a real module-scope
+  function. Enforced by `freeJsxNames`, a hand-rolled
   scope-aware AST walk over the rendered body (JSX + TS, so
   `@mxlang/core`'s `freeIdentifiersIn` — TypeScript-only — cannot be
   reused: it silently returns an empty set on a body that fails to parse
@@ -274,10 +275,12 @@ Three facts worth knowing before touching it:
   `packages/tsx-bridge/src/index.ts`'s `shadowedNames` already makes for an
   adjacent problem. `KNOWN_GLOBALS` allowlists common JS globals (`Math`,
   `console`, …, deliberately *not* DOM/browser globals, since SSR runs
-  under Node/Bun first); `$mxEscape` (the escape helper's own hoisted
-  import binding) is allowlisted separately, since a define body that
-  escapes an interpolation references it by name before it is known to
-  exist as an import.
+  under Node/Bun first); `REGION_HOISTED_HELPERS` allowlists by name each
+  helper `emitRegion` hoists beside the defines (`__mxEscape`, the
+  attribute-tag runtime, the attribute guards), since a define body
+  references one before the region hoists it. A helper added to
+  `emitRegion` must be added there; the `__mx` prefix is not exempt, so a
+  region-local generated name is still a capture.
   **On Solid, a `<define>` call is a plain function-call expression, not a
   JSX tag.** Every other `Component` target prints an ordinary `<Tag
   .../>` element; JSX has no positional-call syntax, so

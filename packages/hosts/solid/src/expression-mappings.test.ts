@@ -585,10 +585,25 @@ describe("solid hoisted define mappings", () => {
     ]);
   });
 
-  // An attribute tag inside a region `<define>` body does not compile (the
-  // capture check reports the region's `__mxAttrTag` helper), so its binder is
-  // pinned where it compiles, on the region's own mappings: Solid records a
-  // binder wherever it writes one.
+  it("maps an attribute tag's params in a define body as declarations", () => {
+    const result = compileSolidMx(
+      "<ul><define/Box|input|>x</define><define/Row><Box><@item|v|>${v}</@item></Box></define><Row/></ul>",
+      { filename: "/fixtures/view.solid.mx" },
+    );
+    expect(result.code).toBe("<ul>{__mx_DefineRow1()}</ul>");
+    // Index 0 is the attribute-tag runtime the region hoists.
+    expect(rows(result.hoistedDefines[2])).toEqual([
+      [41, "__mx_DefineRow1", { semantic: true }],
+      [46, "__mx_DefineBox1", undefined],
+      [52, "{", undefined],
+      [57, "v", USE],
+      [62, "v", undefined],
+      [52, "}", undefined],
+    ]);
+  });
+
+  // An attribute tag directly in the region: Solid records its binder on the
+  // region's own mappings, as it does in a define body.
   const regionRows = (result: ReturnType<typeof compileSolidMx>) =>
     result.mappings.map((m) => [
       m.sourceStart,

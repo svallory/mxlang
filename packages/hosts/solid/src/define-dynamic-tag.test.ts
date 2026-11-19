@@ -168,3 +168,24 @@ describe("solid: a dynamic tag reads a <define> without attributes", () => {
     );
   });
 });
+
+// The guard helpers a dynamic tag with args uses are hoisted to module scope
+// with the region, so a define body that calls one does not close over a
+// region local.
+describe("solid: a dynamic tag with args in a <define> body", () => {
+  it("compiles and hoists the helpers it reads", () => {
+    const { hoistedDefines, hoistedImports } = compile(
+      '<ul><define/Row|input|><${input.t}({ id: "a" })/></define><Row t="p"/></ul>',
+    );
+    expect(hoistedDefines.map((entry) => entry.binding)).toEqual([
+      "__mxTextareaDynSpread",
+      "__mxTextareaDynValue",
+      "__mxAttrSpread",
+      "__mxAttrValue",
+      "__mx_DefineRow1",
+    ]);
+    expect(hoistedImports.map((entry) => entry.binding)).toEqual([
+      "__mxIsServer",
+    ]);
+  });
+});

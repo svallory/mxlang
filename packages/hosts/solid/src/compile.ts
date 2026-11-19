@@ -517,8 +517,13 @@ function emitRegion(
     });
   }
   // Identical text and binding in every region of a module: the parser bridge
-  // collapses the repeats into one declaration.
-  if (usesAttrTagRuntime(emitted.code)) {
+  // collapses the repeats into one declaration. A hoisted define that builds
+  // an attribute tag reads the runtime at module scope even when the region's
+  // own code does not.
+  if (
+    usesAttrTagRuntime(emitted.code) ||
+    hoistedDefines.some((entry) => usesAttrTagRuntime(entry.code))
+  ) {
     hoistedDefines.unshift({
       code: ATTR_TAG_RUNTIME,
       binding: ATTR_TAG_RECORD,

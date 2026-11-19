@@ -47,6 +47,7 @@ import {
   MX_ATTR_SPREAD_BINDING,
   MX_ATTR_VALUE_BINDING,
   MX_CLASS_BINDING,
+  MX_IS_SERVER_BINDING,
   MX_REF_SINK_BINDING,
   MX_SCRIPT_TEXT_BINDING,
   MX_STYLE_TEXT_BINDING,
@@ -646,6 +647,33 @@ function generatedDefineBinding(
   } while (taken.has(binding));
   return binding;
 }
+
+/**
+ * The helpers a region hoists to module scope beside its defines. Each entry
+ * is hoisted by `compile.ts`'s `emitRegion` (`hoistedDefines` or
+ * `hoistedImports`) whenever the region or one of its hoisted defines uses
+ * it, so a define body that reads one does not close over a region local. A
+ * helper added there must be added here. Only these names: a region-local
+ * generated name (`__mxDefineN`, `__mxVar…`) is still a capture.
+ */
+const REGION_HOISTED_HELPERS: ReadonlySet<string> = new Set([
+  MX_ESCAPE_BINDING,
+  ATTR_TAG_RECORD,
+  ATTR_TAG_FOLD,
+  ATTR_TAG_BUILD,
+  MX_ATTR_VALUE_BINDING,
+  MX_CLASS_BINDING,
+  MX_ATTR_SPREAD_BINDING,
+  MX_REF_SINK_BINDING,
+  MX_SCRIPT_TEXT_BINDING,
+  MX_STYLE_TEXT_BINDING,
+  MX_IS_SERVER_BINDING,
+  MX_TEXTAREA_DYN_SPREAD_BINDING,
+  MX_TEXTAREA_DYN_VALUE_BINDING,
+  MX_TEXTAREA_OMIT_BINDING,
+  MX_TEXTAREA_PICK_BINDING,
+  MX_TEXTAREA_CONTENT_BINDING,
+]);
 
 /**
  * Well-known globals a hoisted `<define>` body may reference without that
@@ -3935,13 +3963,11 @@ export class SolidEmitter implements Emitter<string> {
         !bound.has(freeName) &&
         !hoistedNames?.has(freeName) &&
         !KNOWN_GLOBALS.has(freeName) &&
-        // The escape helper's binding is itself hoisted to module scope
-        // (`hoistedImports`, seeded by `needsEscapeImport`) whenever a
-        // define body escapes an interpolation, so it is never actually a
-        // region-local — it just isn't known to this check by name until
-        // the escape flag fires, which already happened by the time this
-        // body was rendered (`escapedBlockValue` sets `escapeUse.used`).
-        freeName !== MX_ESCAPE_BINDING,
+        // A helper the region hoists to module scope is not a region local:
+        // its use flag (`escapeUse`, `attrGuardUse`) or `emitRegion`'s scan
+        // of the hoisted define's code already hoists it by the time this
+        // body was rendered.
+        !REGION_HOISTED_HELPERS.has(freeName),
     );
     if (captured.length > 0) {
       fail(
