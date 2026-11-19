@@ -96,7 +96,8 @@ describe("the same /var inside a .preact.mx region, at its file position", () =>
   });
 });
 
-// An element reference (`<div/el>`) is read only in a `<script>` or an `on…`
+// An element reference (`<div/el>`, or `<${"my-el"}/el>` on a literal dynamic
+// tag) is read only in a `<script>` or an `on…`
 // handler. The language server reports MX diagnostics only (hover and
 // completion on `el()` come from the TypeScript plugin), so a valid use is
 // clean and a read in the template is refused on the read's `el`, at its
@@ -111,23 +112,49 @@ describe("an element reference, in the editor", () => {
   const use = "<div/el/><button onClick() { el().focus() }>go</button>\n";
   const region =
     "export const view = <section><div/el/><button onClick() { el().focus() }>go</button></section>;\n";
+  const dynamicUse =
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    '<${"my-el"}/el/><button onClick() { el().focus() }>go</button>\n';
+  const dynamicRegion =
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    'export const view = <section><${"my-el"}/el/><button onClick() { el().focus() }>go</button></section>;\n';
 
   it.each(
     hosts.flatMap(([target, host]) => [
       [target, "page.mx", use],
       [target, `view.${host}.mx`, region],
+      [target, "dyn.mx", dynamicUse],
+      [target, `dyn.${host}.mx`, dynamicRegion],
     ]),
   )("accepts a handler's read on %s in %s", (target, name, source) => {
     const uri = pathToFileURL(`/project/${name}`).href;
     expect(diagnoseDocument(source, uri, { target })).toEqual([]);
   });
 
-  it.each(hosts)(
-    "refuses a template read in a %s region at the read",
-    (target, host) => {
-      const [diagnostic, ...rest] = diagnoseDocument(
+  it.each(
+    hosts.flatMap(([target, host]) => [
+      [
+        target,
+        "<div/el>",
+        host,
         // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
         "export const view = <section><div/el/><p>${el()}</p></section>;\n",
+        [0, 43, 0, 45],
+      ],
+      [
+        target,
+        '<${"my-el"}/el>',
+        host,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+        'export const view = <section><${"my-el"}/el/><p>${el()}</p></section>;\n',
+        [0, 50, 0, 52],
+      ],
+    ]),
+  )(
+    "refuses a template read in a %s region of %s at the read",
+    (target, _form, host, source, [sl, sc, el, ec]) => {
+      const [diagnostic, ...rest] = diagnoseDocument(
+        source,
         pathToFileURL(`/project/view.${host}.mx`).href,
         { target },
       );
@@ -137,8 +164,8 @@ describe("an element reference, in the editor", () => {
         "`el` is an element reference. Element references can only be read in scripts and event handlers.",
       );
       expect(diagnostic?.range).toEqual({
-        start: { line: 0, character: 43 },
-        end: { line: 0, character: 45 },
+        start: { line: sl, character: sc },
+        end: { line: el, character: ec },
       });
     },
   );
