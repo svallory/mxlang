@@ -3723,8 +3723,8 @@ keeps the unit a component.
 **Element references.** A `/var` on a native element (`<div/el>`, and
 `<${"div"}/el>`, which is that element) binds an element reference, as in
 Marko 6.4.4: `el` is a function, and `el()` returns the rendered element
-(typed by its tag name on the JSX hosts: `HTMLDivElement` for `<div>`, the SVG
-element type for an SVG tag, `HTMLElement` for any other name). It is read
+(typed by its tag name on Preact and React: `HTMLDivElement` for `<div>`, the
+SVG element type for an SVG tag, `HTMLElement` for any other name). It is read
 only where the element exists: inside a `<script>` body, or inside a function
 given to an `on…` attribute of any tag or to a `<lifecycle>` hook, a function
 nested in one included. Every other read is a positioned compile error at the
@@ -3758,8 +3758,9 @@ authored `ref=` on the same element is composed through Solid's array ref,
 lvalue `ref=` (Solid's assignment form) is not assigned there; a `ref` key in a
 spread on that element is replaced; and an element reference in a component
 call's attribute-tag body binds in the enclosing scope, so a body the callee
-renders more than once shares one reference. **Hono** refuses `<div/el>` with the generic tag-variable refusal at
-the `/var`, and so do Angular and `.astro.mx` (below). Marko hoists a read outside the element's body, or above
+renders more than once shares one reference. **Hono** refuses `<div/el>` with
+the generic tag-variable refusal at the `/var`, and so do Angular and
+`.astro.mx` (below). Marko hoists a read outside the element's body, or above
 the element, into a getter; MX does not: such a read is an unbound name in the
 emitted module. A read above the element in render position is not caught at
 compile time either: on html it fails when the template renders, as Marko's
