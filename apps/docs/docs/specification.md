@@ -974,7 +974,9 @@ stays the element whatever is bound, silently for a value binding, with the
 warning below for a tag binding, and so is a **core taglib name** (`<debug>`,
 `<log>`): stock Marko compiles `import debug from "debug"` + `<debug/>` as the
 core tag, so the tag keeps whatever routing it has without the import — never
-the local-variable error:
+the local-variable error. Under the `none` tag rules a core taglib name is an
+ordinary name (§13.7.3), so `import log from "./log.mx"` + `<log/>` is the
+local-variable error there, as for any name:
 
 | `<x>` is… | Result |
 |---|---|
