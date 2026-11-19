@@ -2313,15 +2313,23 @@ In Marko, a tag variable named `input` inside an `<if>`, `<for>` or `<define>`
 body (`<if=x><div/input/></if>`) shadows the template's `input`; core does not
 refuse it there.
 
+An element reference named `input` in a native element's body
+(`<div><div/input/></div>`, or a literal dynamic tag's
+`<div><${"my-el"}/input/></div>`) is accepted, as Marko accepts it, on every
+host that binds element references. A native element's body is a scope of its
+own, at any depth and inside an `<if>`, `<for>` or `<define>` body too: `input`
+is the element in that body (a handler's `input()`), and the template's input
+outside it, so in
+`<div><div/input/><button onClick() { input() }/></div>${input.x}` the last
+read is the template's input.
+
 Known limit: in a nested body MX does not follow Marko exactly. The html target
 refuses a nested `<let>`/`<const>` named `input` through its `checkBinding` hook
 ("collides with the template input parameter"), where Marko accepts one in an
-`<if>`, `<for>` or `<define>` body. Marko refuses a `<const>`/`<let>` named
-`input` in a native element's body (`<div><const/input=1/></div>`), which core
-does not. On Preact and React an element reference `/input` inside a native
-element's body (`<div><div/input/></div>`, which Marko accepts) lands in the
-component's scope beside its own `input`, so the emitted module declares
-`input` twice.
+`<if>`, `<for>` or `<define>` body. Marko refuses a `<const>`, `<let>` or
+`<define>` named `input`, and a tag call's `/input`, in a native element's body
+reached from the top-level body through native elements only
+(`<div><const/input=1/></div>`), which core does not.
 
 This check is **not** `strict`-only: a silently-broken input is a bug under
 either policy.
