@@ -718,6 +718,22 @@ export interface Ctx {
    */
   tagVarShadowed?: ReadonlySet<string>;
   /**
+   * The tag-variable names two or more tags declare in nested (non-root)
+   * bodies of the template, of every kind (`/el` on an element, `<const>`,
+   * `<let>`, `<id>`, a call's `/var`, a `<define>` name). A read of one with no
+   * binding around it is ambiguous, and stock Marko refuses it at the read
+   * ("Ambiguous reference"). Counted once per template by `lowerTemplate`;
+   * `undefined` when no name is declared twice. Replaced, never mutated.
+   */
+  ambiguousTagVars?: ReadonlySet<string>;
+  /**
+   * The tag-variable names the body being lowered and every body around it
+   * declare: a body's tag variables are in scope for the whole body, so a
+   * read of one of these is bound, never ambiguous. Maintained by
+   * `lowerChildList`; replaced, never mutated.
+   */
+  openTagVars?: ReadonlySet<string>;
+  /**
    * The names of `<define>`s that a tag call's `/var`, declared in an
    * enclosing body, hides there.
    *

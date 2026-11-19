@@ -2116,18 +2116,20 @@ describe("an element reference's callback `ref` (Preact)", () => {
     );
   });
 
-  // Stock Marko refuses this read as ambiguous; here the two getters stay in
-  // their bodies' arrows and the read is an unbound name.
-  it("compiles a read outside two bodies binding the same /el with no component-scope `el`", () => {
-    const code = compile(
-      "<div><div/el/></div><div><div/el/></div><button onClick() { el() }>c</button>",
-    );
-    expect(code).not.toMatch(/^\s*const el = /m);
-    expect(code).toContain(
-      '<div>{(() => { let __mxEl0: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl0!;',
-    );
-    expect(code).toContain(
-      '<div>{(() => { let __mxEl1: __MxElement<"div"> | null = null; const el = (): __MxElement<"div"> => __mxEl1!;',
+  // Stock Marko refuses this read as ambiguous, and so does core, on every host.
+  it("refuses a read outside two bodies binding the same /el with no component-scope `el`", () => {
+    expect(() =>
+      compile(
+        "<div><div/el/></div><div><div/el/></div><button onClick() { el() }>c</button>",
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        diagnosticCode: "MX_INVALID_TAG_VAR",
+        message:
+          "Ambiguous reference, variable was defined in multiple places and was not shadowed.",
+        line: 1,
+        column: 60,
+      }),
     );
   });
 });

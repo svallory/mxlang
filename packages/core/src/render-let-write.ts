@@ -331,12 +331,20 @@ export function bindingWriteMessage(write: BindingWrite, voice: Voice): string {
  *
  * `pattern` says `expression` is a tag parameter (`|x = el()|`): it is walked
  * as a parameter, so the names it binds are not reads and its defaults are.
+ *
+ * `stockScope` applies stock Marko's scope-crawl rule for a free name instead:
+ * a name Babel's `hasBinding` counts as bound (its builtin globals, `Map`,
+ * `undefined` and the rest, included) is not a read, and neither is a name
+ * inside a type annotation (`: T`), which stock's crawl skips. Other type
+ * positions (`as T`, `satisfies T`, type arguments) stay reads, as they are
+ * to Babel in stock too.
  */
 export function findElementRefRead(
   expression: Node,
   names: ReadonlySet<string>,
   allowed: WeakSet<Node>,
   pattern = false,
+  stockScope = false,
 ): Node | undefined {
   if (!expression || names.size === 0) return undefined;
   const { traverse, types } = coreBabel();
@@ -362,7 +370,11 @@ export function findElementRefRead(
     ReferencedIdentifier(path: Node) {
       const name = path.node.name;
       if (!names.has(name)) return;
-      if (path.scope.getBinding(name)) return;
+      if (stockScope) {
+        if (path.scope.hasBinding(name)) return;
+        if (path.findParent((parent: Node) => parent.isTSTypeAnnotation()))
+          return;
+      } else if (path.scope.getBinding(name)) return;
       if (path.find((parent: Node) => allowed.has(parent.node))) return;
       found = path.node;
       path.stop();

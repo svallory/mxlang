@@ -522,3 +522,126 @@ describe("a tag variable on a native element (an element reference)", () => {
     );
   }
 });
+
+// Stock Marko 6.4.4 (probed on the stock parser) refuses a read of a name two
+// or more tags declare in nested bodies when nothing around the read binds it,
+// at the read; the columns are stock's indexes.
+describe("a read of a tag variable two nested bodies declare", () => {
+  const AMBIGUOUS =
+    "Ambiguous reference, variable was defined in multiple places and was not shadowed.";
+  const host: HostDeclarations = {
+    ...withLet,
+    bindsElementVar: true,
+    isBuiltinTag: (name) => name === "let" || name === "id",
+    isDelegatedTag: (name) => name === "let" || name === "id",
+  };
+  const refused = (source: string, column: number) => {
+    const error = attempt(source, host);
+    expect(error?.message).toBe(AMBIGUOUS);
+    expect(error?.diagnosticCode).toBe("MX_INVALID_TAG_VAR");
+    expect([error?.line, error?.column]).toEqual([1, column]);
+  };
+
+  it.each([
+    [
+      "<div><div/el/></div><div><div/el/></div><button onClick() { el() }>c</button>",
+      60,
+    ],
+    [
+      "<div><div/el/></div><div><div/el/></div><div><button onClick() { el() }>c</button></div>",
+      65,
+    ],
+    [
+      "<div><div/el/></div><div><div/el/></div><button onClick() { el(); el() }>c</button><button onClick() { el() }>d</button>",
+      60,
+    ],
+    [
+      "<div><span><div/el/></span><button onClick() { el() }>c</button></div><div><div/el/></div>",
+      47,
+    ],
+    [
+      "<if=true><div/el/></if><else><div/el/></else><button onClick() { el() }>c</button>",
+      65,
+    ],
+    [
+      "<if=true><div/el/></if><if=false><div/el/></if><button onClick() { el() }>c</button>",
+      67,
+    ],
+    [
+      "<for|i| of=[1]><div/el/></for><div><div/el/></div><button onClick() { el() }>c</button>",
+      70,
+    ],
+    [
+      "<div><div><div/el/></div><div><div/el/></div><button onClick() { el() }>c</button></div>",
+      65,
+    ],
+    [
+      '<div><${"my-el"}/el/></div><div><div/el/></div><button onClick() { el() }>c</button>',
+      67,
+    ],
+    [
+      "<div><div/el/></div><div><const/el=1/></div><button onClick() { el() }>c</button>",
+      64,
+    ],
+    ["<div><div/el/></div><div><div/el/></div><p>${typeof el}</p>", 52],
+    ["<div><div/el/></div><div><div/el/></div><const/f=() => el()/>", 55],
+    [
+      "<div><span><div/el/></span><div/el/></div><button onClick() { el() }>c</button>",
+      62,
+    ],
+    [
+      "<div><div/el/></div><div><span><div/el/></span></div><button onClick() { el() }>c</button>",
+      73,
+    ],
+  ])("refuses the element-reference read in %s at column %i", refused);
+
+  it.each([
+    ["<div><const/x=1/></div><div><const/x=2/></div><p>${x}</p>", 51],
+    [
+      "<div><const/x=1/></div><div><const/x=2/></div><button onClick() { x }>c</button>",
+      66,
+    ],
+    ["<div><let/x=1/></div><div><let/x=2/></div><p>${x}</p>", 47],
+    ["<div><id/x/></div><div><id/x/></div><p>${x}</p>", 41],
+    [
+      "<define/C><return=1/></define><div><C/x/></div><div><C/x/></div><p>${x}</p>",
+      69,
+    ],
+  ])("refuses the read in %s at column %i", refused);
+
+  it("refuses a read in a <script> body", () => {
+    refused(
+      "<div><div/el/></div><div><div/el/></div><script>el()</script>",
+      48,
+    );
+  });
+
+  it.each([
+    "<div><div/el/><button onClick() { el() }>a</button></div><div><div/el/></div>",
+    "<div><div/el/></div><button onClick() { el() }>c</button>",
+    "<div/el/><div><div/el/></div><div><div/el/></div><button onClick() { el() }>c</button>",
+    "<div><div/el/></div><div><div/el/></div><button onClick(el) { el }>c</button>",
+    "<div><div/el/></div><div><div/el/></div><button onClick() { const el = 1; el }>c</button>",
+    "<div><div/el/></div><div><div/el/></div>",
+    "<div><div/el/></div><div><div/el/></div><button onClick() { el }>c</button><div/el/>",
+    "<div><div/el/></div><div><div/el/></div><const/f=(x: el) => x/>",
+    "<div><const/Map=1/></div><div><const/Map=2/></div><p>${Map}</p>",
+    // A body's tag variable binds the whole body, reads above it included.
+    "<div><button onClick() { el() }>a</button><div/el/></div><div><div/el/></div>",
+  ])("compiles %s", (source) => {
+    expect(attempt(source, host)).toBeUndefined();
+  });
+
+  // Type-checking tooling keeps the annotation in the payload; stock's crawl
+  // skips a type annotation, so the name in it is no read.
+  it("compiles a name in a type annotation with the types kept", () => {
+    expect(() =>
+      compileSource(
+        "<div><div/el/></div><div><div/el/></div><const/f=(x: el) => x/>",
+        "/page.mx",
+        host,
+        { targets: lookup, emitIr: () => "", stripTypes: false } as never,
+      ),
+    ).not.toThrow();
+  });
+});

@@ -306,6 +306,20 @@ describe("an outer binding read after a body that declares its own /x", () => {
     );
   });
 
+  it("a /x two bodies declare, read outside both, is refused as stock refuses it", () => {
+    expect(() =>
+      compileMatrix("<div><counter/x/></div><div><counter/x/></div><p>${x}</p>"),
+    ).toThrowError(
+      expect.objectContaining({
+        diagnosticCode: "MX_INVALID_TAG_VAR",
+        message:
+          "Ambiguous reference, variable was defined in multiple places and was not shadowed.",
+        line: 1,
+        column: 51,
+      }),
+    );
+  });
+
   it("a body /x with no outer binding still does not escape its block", () => {
     expect(() => compileMatrix("<if=input.a><counter/x/></if>${x}")).toThrow(
       "`x` is a `/var` bound inside a nested block and is not in scope here",

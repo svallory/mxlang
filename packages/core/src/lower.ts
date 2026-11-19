@@ -643,6 +643,7 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
     });
   }
   const { code, nodes, generated } = exprWithNodes(ctx, node);
+  checkAmbiguousTagVarReads(ctx, code, node);
   checkTagVarReads(ctx, code, node);
   checkBindingWrites(ctx, code, node);
   const span = exprSpan(ctx, node);
@@ -918,15 +919,15 @@ function checkElementRefReads(
  * text body of a `<script>` is not looked at; it is a `<script>` body.
  */
 function checkTagValueWrites(ctx: Ctx, node: Node): void {
-  if (!writeRulesOf(ctx)) return;
-  for (const arg of tagArgsOf(node) ?? []) {
-    checkBindingWrites(ctx, undefined, arg);
-  }
+  const writes = writeRulesOf(ctx) !== undefined;
+  const check = (value: Node): void => {
+    checkAmbiguousTagVarReads(ctx, undefined, value);
+    if (writes) checkBindingWrites(ctx, undefined, value);
+  };
+  for (const arg of tagArgsOf(node) ?? []) check(arg);
   for (const attr of tagAttributesOf(node)) {
-    for (const arg of attrArgsOf(attr) ?? []) {
-      checkBindingWrites(ctx, undefined, arg);
-    }
-    checkBindingWrites(ctx, undefined, attrValueOf(ctx, attr));
+    for (const arg of attrArgsOf(attr) ?? []) check(arg);
+    check(attrValueOf(ctx, attr));
   }
 }
 
@@ -3199,6 +3200,7 @@ function paramsOf(ctx: Ctx, node: Node): string[] {
   rejectUnreadableParams(ctx, node);
   // A default (`|x = count++|`) runs while the template renders.
   for (const param of tagParamsOf(node)) {
+    checkAmbiguousTagVarReads(ctx, undefined, param, true);
     checkBindingWrites(ctx, undefined, param, false, true);
   }
   return tagParamsOf(node).map((p: Node) => {
@@ -8329,6 +8331,80 @@ function nestedDefineNames(
   return names;
 }
 
+/**
+ * The tag-variable names two or more tags declare in nested bodies of the
+ * template (`Ctx.ambiguousTagVars`), walked as `nestedDefineNames` walks:
+ * every tag below the root body that has a `/var`, of any kind, counts each
+ * name it binds. Root-body declarations do not count: stock Marko marks a name
+ * ambiguous in a scope only from two declarations below it, and the root body
+ * is the program's own scope. Nothing is counted under the `none` tag rules,
+ * as the duplicate rule counts nothing there.
+ */
+function ambiguousTagVarsOf(
+  ctx: Ctx,
+  body: readonly Node[],
+): ReadonlySet<string> | undefined {
+  if (ctx.tagRules === "none") return undefined;
+  const seen = new Set<string>();
+  const twice = new Set<string>();
+  const walk = (children: readonly Node[], depth: number): void => {
+    for (const child of children) {
+      if (!isTagNode(child) && child.type !== "MxAttributeTag") continue;
+      if (depth > 0 && tagVarOf(child)) {
+        for (const name of bindingIdentifiers(tagVarOf(child))) {
+          if (seen.has(name)) twice.add(name);
+          else seen.add(name);
+        }
+      }
+      walk(bodyChildren(child), depth + 1);
+    }
+  };
+  walk(body, 0);
+  return twice.size > 0 ? twice : undefined;
+}
+
+/**
+ * Refuses a read of a tag variable that two or more nested bodies declare
+ * (`Ctx.ambiguousTagVars`) when nothing around the read binds the name, at the
+ * read, with stock Marko's message: its scope crawl cannot tell which
+ * declaration the read means. Bound around the read: the expression binds the
+ * name itself; the read's body or a body around it declares it
+ * (`Ctx.openTagVars`); an enclosing tag's param (`Ctx.tagVarShadowed`), an
+ * import or a static binding is named so; it is `input`, the template's own
+ * parameter; or Babel's scope counts it as bound (a builtin global such as
+ * `Map`), as stock's does. `pattern` walks `node` as a tag parameter.
+ */
+function checkAmbiguousTagVarReads(
+  ctx: Ctx,
+  code: string | undefined,
+  node: Node,
+  pattern = false,
+): void {
+  const ambiguous = ctx.ambiguousTagVars;
+  if (!ambiguous) return;
+  const names = new Set<string>();
+  for (const name of ambiguous) {
+    if (
+      name === "input" ||
+      ctx.openTagVars?.has(name) ||
+      ctx.tagVarShadowed?.has(name) ||
+      ctx.imports.has(name) ||
+      ctx.importSpecifiers.has(name) ||
+      ctx.staticBindings.has(name)
+    )
+      continue;
+    if (code === undefined || code.includes(name)) names.add(name);
+  }
+  if (names.size === 0) return;
+  const read = findElementRefRead(node, names, new WeakSet(), pattern, true);
+  if (!read) return;
+  raise(
+    INVALID_TAG_VAR_CODE,
+    "Ambiguous reference, variable was defined in multiple places and was not shadowed.",
+    read,
+  );
+}
+
 function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // A body read straight off its tag: its line triggers as lowered.
   const children = childrenWithTriggers(authored);
@@ -8355,6 +8431,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   };
   const outerShadowed = ctx.tagVarShadowed;
   const outerHidden = ctx.hiddenDefines;
+  const outerOpen = ctx.openTagVars;
   let defineShadowed: Set<string> | undefined;
   // Every `/var` this block declares is registered *before* the walk, at the
   // sibling index it is declared at. A read earlier in the same block then
@@ -8450,6 +8527,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       pending: true,
     });
   }
+
+  // This body's tag variables are bound for every read in it and in the
+  // bodies nested in it (`checkAmbiguousTagVarReads`).
+  if (ctx.ambiguousTagVars && declaredHere.size > 0)
+    ctx.openTagVars = new Set([...(outerOpen ?? []), ...declaredHere]);
 
   // A `<define>` declared in a body nested inside this one is not readable
   // before the walk reaches it either (stock: "move the define before its first
@@ -8785,6 +8867,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             checkStaleDerivedReads(ctx, child);
             markHandlerBodies(ctx, child);
             checkScriptBodyWrites(ctx, child);
+            if (ctx.ambiguousTagVars && isBuiltinScript(ctx, child)) {
+              const program = scriptProgramOf(ctx, child);
+              if (program)
+                checkAmbiguousTagVarReads(ctx, undefined, program);
+            }
             // These checks collect multiple diagnostics without throwing. Their
             // owner still failed: omit it, not a parent with a failed child.
             if (errorsBefore !== undefined && ctx.errors!.length > errorsBefore)
@@ -8927,6 +9014,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     ctx.enclosingTagParams = enclosingParams;
     ctx.tagVarShadowed = outerShadowed;
     ctx.hiddenDefines = outerHidden;
+    ctx.openTagVars = outerOpen;
     // Restore every outer entry shadowed by this body, including a
     // still-pending outer define. A body `/var` with no outer entry keeps its
     // existing lifetime (escape tracking).
@@ -9094,6 +9182,9 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
     ? []
     : undefined;
   checkReservedTemplate(ctx, body);
+  // Before any read is lowered: the names a read of is ambiguous.
+  ctx.ambiguousTagVars = ambiguousTagVarsOf(ctx, body);
+  ctx.openTagVars = undefined;
   // Each file/template is its own authored root, including recursive units.
   ctx.authoredAncestors = [];
   ctx.authoredAncestorNodes = [];
@@ -9382,6 +9473,8 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   tagVars: "fresh",
   tagVarBlock: "fresh",
   tagVarShadowed: "fresh",
+  ambiguousTagVars: "fresh",
+  openTagVars: "fresh",
   hiddenDefines: "fresh",
   enclosingTagParams: "fresh",
   renderLets: "fresh",

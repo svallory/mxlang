@@ -1804,6 +1804,18 @@ describe("a unit that returns a value", () => {
     );
   });
 
+  // Two bodies, each with its own `/el`, and no read outside them: the first
+  // body keeps `el` and the second gets a reserved name.
+  it("gives the second of two element bodies repeating an element reference a binding of its own", () => {
+    const code = compileSolidUnit("<div><div/el/></div><div><div/el/></div>", {
+      filename: "/fixtures/page.mx",
+    }).code;
+    expect(code).toContain("let el: any, __mxVar0_el: any;");
+    expect(code).toContain(
+      "<div><div ref={(__mxNode: Element) => { el = () => __mxNode; }}></div></div><div><div ref={(__mxNode: Element) => { __mxVar0_el = () => __mxNode; }}></div></div>",
+    );
+  });
+
   // The head binds the template's `input`, and an element body declares into
   // the head or the nearest lazy body's arrow, so an element body's `/input`
   // gets a name of its own at any depth; a lazy body's own `/input` is its
