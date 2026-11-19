@@ -51,6 +51,25 @@ describe("solid: a <define> is scoped to the body that declares it", () => {
     }
   });
 
+  // An attribute-tag body is a `/var` scope of its own, but not a lazy body,
+  // so a `<define>` in it is hoisted as before.
+  it("a define in a call's attribute-tag body is hoisted as before", () => {
+    const result = compileSolidMx(
+      "<Layout><@tab><define/D><b/></define><D/></@tab></Layout>",
+      {
+        filename: "fixture.solid.mx",
+        importSpecifiers: new Map([["Layout", "./Layout.mx"]]),
+        importDefaultFromMarkoOrMx: new Set(["Layout"]),
+      },
+    );
+    expect(result.code).toBe(
+      "<Layout tab={__mxAttrTag({ content: () => <>{__mx_DefineD1()}</> })} />",
+    );
+    expect(result.hoistedDefines.at(-1)?.code).toBe(
+      "function __mx_DefineD1() { return <b></b>; }",
+    );
+  });
+
   it("a top-level define is called from every later block", () => {
     const code = compile(`${FOO}\n<div><Foo/></div>\n<Foo/>\n`, false);
     expect(code.match(/__mx_DefineFoo1\(\)/g)).toHaveLength(2);

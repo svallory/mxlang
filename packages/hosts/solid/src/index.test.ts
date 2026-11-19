@@ -1661,6 +1661,43 @@ describe("a unit that returns a value", () => {
     );
   });
 
+  // Each attribute-tag body is a `/var` scope of its own, declared inside
+  // its accessor: one `let` per render of the body, and per body.
+  it("declares an attribute-tag body's /var inside the body's accessor", () => {
+    const options = {
+      filename: "fixture.solid.mx",
+      customTags: { counter },
+      importSpecifiers: new Map([["Layout", "./Layout.mx"]]),
+      importDefaultFromMarkoOrMx: new Set(["Layout"]),
+    };
+    const result = compileSolidMx(
+      "<Layout><@tab><counter/n start=1/>${n}</@tab><@tab><counter/n start=2/>${n}</@tab><@foot|year|><counter/m start=year/>${m}</@foot></Layout>",
+      options,
+    );
+    expect(result.returnVars).toEqual([]);
+    // The region itself binds nothing, so it declares nothing in place.
+    expect(result.code).toMatch(/^<Layout tab=/);
+    expect(result.code).toContain(
+      "content: () => (() => { let n: any; return <><><$mx_Counter1 start={1} $mxReturn={(__mxV) => { n = __mxV; }} />",
+    );
+    expect(result.code).toContain(
+      "content: () => (() => { let __mxVar0_n: any; return <><><$mx_Counter1 start={2} $mxReturn={(__mxV) => { __mxVar0_n = __mxV; }} />",
+    );
+    expect(result.code).toContain(
+      "content: (year) => () => (() => { let m: any; return <><><$mx_Counter1 start={year} $mxReturn={(__mxV) => { m = __mxV; }} />",
+    );
+    expect(result.code.match(/let /g)).toHaveLength(3);
+
+    // A body that binds no `/var` is emitted as before.
+    expect(
+      compileSolidMx(
+        "<Layout><@tab><b>x</b></@tab><@foot|year|>${year}</@foot></Layout>",
+        options,
+      ).code,
+    ).toBe(
+      "<Layout tab={__mxAttrTag({ content: () => <b>x</b> })} foot={__mxAttrTag({ content: (year) => () => <>{() => { const __mxText0 = year; const __mxEscaped0 = __mxEscape(__mxText0); return __mxEscaped0 === undefined ? __mxText0 : __mxEscaped0; }}</> })} />",
+    );
+  });
 
   // Every `/var` is declared with one `let` at the component's head, so a
   // body that repeats a name another body binds gets a reserved name of its

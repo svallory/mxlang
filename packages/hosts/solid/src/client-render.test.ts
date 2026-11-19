@@ -418,7 +418,7 @@ describe("Solid client render: live signal updates through the real DOM", () => 
 });
 
 describe("Solid client render: element references", () => {
-  it("hands each handler its own element: top level, per <for> row, and beside an authored ref", () => {
+  it("hands each handler its own element: top level, per <for> row, per attribute-tag render, and beside an authored ref", () => {
     const { snapshots } = renderDomApp(
       [
         '<div/el/><button onClick() { el().dataset.hit = "1" }>go</button>',
@@ -427,14 +427,19 @@ describe("Solid client render: element references", () => {
         // A literal dynamic tag is a native tag to Marko: its `/var` is the element.
         '<${"my-el"}/dyn/><button onClick() { dyn().dataset.hit = "1" }>dyn</button>',
         '<${"my-el"}/dyn2 ref=((n) => n.setAttribute("data-authored", "1"))/><button onClick() { dyn2().dataset.hit = "1" }>dyn2</button>',
+        // `Twice` renders the body twice: each render binds its own element.
+        '<Twice><@tab><div/el/><button onClick() { el().dataset.hit = "1" }>tab</button></@tab></Twice>',
       ].join(""),
-      '(globalThis as any).clickAll = () => { for (const b of document.querySelectorAll("button")) (b as HTMLElement).click(); };',
+      [
+        '(globalThis as any).clickAll = () => { for (const b of document.querySelectorAll("button")) (b as HTMLElement).click(); };',
+        "const Twice = (props: any) => <>{props.tab.content()}{props.tab.content()}</>;",
+      ].join("\n  "),
       "clickAll",
       ["0"],
     );
     expect(snapshots).toEqual([
-      '<ul><div></div><button>go</button><p>x</p><button>row</button><p>y</p><button>row</button><div data-authored="1"></div><button>own</button><my-el></my-el><button>dyn</button><my-el data-authored="1"></my-el><button>dyn2</button></ul>',
-      '<ul><div data-hit="1"></div><button>go</button><p data-hit="1">x</p><button>row</button><p data-hit="1">y</p><button>row</button><div data-authored="1" data-hit="1"></div><button>own</button><my-el data-hit="1"></my-el><button>dyn</button><my-el data-authored="1" data-hit="1"></my-el><button>dyn2</button></ul>',
+      '<ul><div></div><button>go</button><p>x</p><button>row</button><p>y</p><button>row</button><div data-authored="1"></div><button>own</button><my-el></my-el><button>dyn</button><my-el data-authored="1"></my-el><button>dyn2</button><div></div><button>tab</button><div></div><button>tab</button></ul>',
+      '<ul><div data-hit="1"></div><button>go</button><p data-hit="1">x</p><button>row</button><p data-hit="1">y</p><button>row</button><div data-authored="1" data-hit="1"></div><button>own</button><my-el data-hit="1"></my-el><button>dyn</button><my-el data-authored="1" data-hit="1"></my-el><button>dyn2</button><div data-hit="1"></div><button>tab</button><div data-hit="1"></div><button>tab</button></ul>',
     ]);
   });
 });

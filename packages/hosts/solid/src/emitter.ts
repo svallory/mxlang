@@ -135,8 +135,10 @@ interface VarScope {
   /**
    * A lazy body (a `<for>` body, an `<if>` branch, a `<define>` body, a
    * call's content) that declares its `/var`s in its own arrow
-   * (`inLazyScope`); an element's or a delegated tag's body declares into
-   * the nearest enclosing lazy body or the component's head.
+   * (`inLazyScope`), or an attribute-tag body of a call or a `<define>`,
+   * which declares its own per render (`inVarScope`); an element's or a
+   * delegated tag's body declares into the nearest enclosing lazy body or
+   * the component's head.
    */
   lazy: boolean;
 }
@@ -146,13 +148,31 @@ interface VarScope {
  * (`<div/el>`, recorded in the scope that contains the element) in document
  * order: the top level, an element's children, a delegated tag's (`<try>`)
  * body and each of its attribute-tag blocks, a `<for>` body, each `<if>`
- * branch, a call's content body and a `<define>` body. The last four are the
- * lazy bodies that declare their own `let`s (`inLazyScope`); entering them
- * here keeps an outer scope's rename from rewriting the reads their own
- * `/var` binds.
+ * branch, a call's content body, a `<define>` body, and each attribute-tag
+ * body of a call or a `<define>`. The last five are the bodies that declare
+ * their own `let`s (`inLazyScope`, `inVarScope`); entering them here keeps
+ * an outer scope's rename from rewriting the reads their own `/var` binds.
+ * An attribute-tag body nested in another one is a scope beside it, with
+ * the call's (or the `<define>`'s) scope as parent: its record is built
+ * there, outside the outer body (`attributeTagValue`).
  */
 function varScopes(body: IrNode[]): Array<{ call: VarCall; scope: VarScope }> {
   const found: Array<{ call: VarCall; scope: VarScope }> = [];
+  const enterTags = (
+    tree: AttributeTagNode[] | undefined,
+    parent: VarScope,
+  ): void => {
+    for (const item of tree ?? []) {
+      if (item.kind === "AttributeTag") {
+        enter(item.tag.block.children, parent, true);
+        enterTags(item.tag.attributeTagTree, parent);
+      } else if (item.kind === "AttributeTagIf") {
+        for (const branch of item.branches) enterTags(branch.nodes, parent);
+      } else {
+        enterTags(item.nodes, parent);
+      }
+    }
+  };
   const enter = (
     children: IrNode[],
     parent: VarScope | null,
@@ -173,8 +193,11 @@ function varScopes(body: IrNode[]): Array<{ call: VarCall; scope: VarScope }> {
         for (const tag of node.tag.attributeTags) {
           if (tag.block) enter(tag.block.children, scope, false);
         }
-      } else if (node.kind === "For" || node.kind === "Define") {
+      } else if (node.kind === "For") {
         enter(node.children, scope, true);
+      } else if (node.kind === "Define") {
+        enter(node.children, scope, true);
+        enterTags(node.attributeTagTree, scope);
       } else if (node.kind === "IfChain") {
         for (const branch of node.branches) {
           enter(branch.children, scope, true);
@@ -182,6 +205,7 @@ function varScopes(body: IrNode[]): Array<{ call: VarCall; scope: VarScope }> {
       } else if (node.kind === "Component") {
         if (node.var) found.push({ call: node, scope });
         if (node.content) enter(node.content.children, scope, true);
+        enterTags(node.attributeTagTree, scope);
       }
     }
   };
@@ -209,8 +233,11 @@ function varNames(call: VarCall): string[] {
 
 /**
  * Gives a `/var` that repeats a name another body scope binds a binding of
- * its own, since this host declares every `/var` with one `let` at the
- * component's head. An element reference (`<div/el>`) counts as a `/var`
+ * its own, since this host declares a `/var` with one `let` at the head of
+ * the component, or of the lazy or attribute-tag body that binds it
+ * (`varScopes`), and those `let`s can share one closure. Two `<@tab>` bodies
+ * of one call that each bind `n` are two scopes too, so the second one's
+ * `n` is renamed. An element reference (`<div/el>`) counts as a `/var`
  * here: core shadows it per body, so `<div/el/><section><span/el/></section>`
  * is two bindings, and its callback `ref` and reads follow the rename.
  *
@@ -584,16 +611,34 @@ function inLazyScope(
   form: "value" | "child" = "value",
 ): MappedCode {
   const outer = lazyScope;
+  lazyScope = true;
+  try {
+    return inVarScope(emit, form);
+  } finally {
+    lazyScope = outer;
+  }
+}
+
+/**
+ * The `/var` scope half of `inLazyScope`, without marking the body lazy: the
+ * `/var`s `emit` binds are collected apart from the enclosing scope's and,
+ * when there are any, declared in place around the body (`declareInPlace`).
+ * A body with no `/var` is returned as it is. An attribute-tag body
+ * (`attributeTagRenderable`) uses it alone, so a `<define>` there is handled
+ * exactly as the `lazyScope` flag already decides.
+ */
+function inVarScope(
+  emit: () => MappedCode,
+  form: "value" | "child" = "value",
+): MappedCode {
   const outerVars = returnVars;
   const own = outerVars ? new Set<string>() : null;
-  lazyScope = true;
   returnVars = own;
   try {
     const body = emit();
     if (!own || own.size === 0) return body;
     return declareInPlace([...own], body, form);
   } finally {
-    lazyScope = outer;
     returnVars = outerVars;
   }
 }
@@ -2285,15 +2330,18 @@ function restoreStrayDefineFns(root: IrNode[]): void {
  * Solid's host renderable is therefore an accessor. Parameters add the outer
  * render-prop function declared by `AttrTagOf`, so `(p) => () => JSX` is the
  * intentional two-function shape.
+ *
+ * The body is a `/var` scope of its own (`inVarScope`): a `/var` or element
+ * reference it binds is declared inside the accessor,
+ * `() => (() => { let n: any; return <>…</>; })()`, so each render of the
+ * body, and each body, gets its own binding. A body with no `/var` is
+ * emitted as it is.
  */
 function attributeTagRenderable(tag: AttributeTag): MappedCode {
   if (!tag.hasBody) return concatMapped("undefined");
-  const body = blockExpression(tag.block.children);
-  if (!tag.block.hasParams) return concatMapped("() => ", jsxValue(body));
-  return concatMapped(
-    `(${tag.block.params.join(", ")}) => () => `,
-    jsxValue(body),
-  );
+  const body = inVarScope(() => jsxValue(blockExpression(tag.block.children)));
+  if (!tag.block.hasParams) return concatMapped("() => ", body);
+  return concatMapped(`(${tag.block.params.join(", ")}) => () => `, body);
 }
 
 /**
