@@ -40,6 +40,7 @@ import {
   isDefaultAttr,
   isMethodAttr,
   strippedValueRoots,
+  unstrippedOf,
 } from "./attr-fields.ts";
 import { attrLabel } from "./attr-label.ts";
 import { coreBabel, coreParser } from "./babel.ts";
@@ -295,6 +296,8 @@ import {
 } from "./syntax-table.ts";
 import {
   hasStaticName,
+  strippedTagTypeArgs,
+  strippedTagTypeParams,
   tagArgsOf,
   tagAttributesOf,
   tagNameExprOf,
@@ -920,6 +923,7 @@ function checkElementRefReads(
  */
 function checkTagValueWrites(ctx: Ctx, node: Node): void {
   const writes = writeRulesOf(ctx) !== undefined;
+  if (!writes && !ctx.ambiguousTagVars) return;
   const check = (value: Node): void => {
     checkAmbiguousTagVarReads(ctx, undefined, value);
     if (writes) checkBindingWrites(ctx, undefined, value);
@@ -8372,7 +8376,9 @@ function ambiguousTagVarsOf(
  * (`Ctx.openTagVars`); an enclosing tag's param (`Ctx.tagVarShadowed`), an
  * import or a static binding is named so; it is `input`, the template's own
  * parameter; or Babel's scope counts it as bound (a builtin global such as
- * `Map`), as stock's does. `pattern` walks `node` as a tag parameter.
+ * `Map`), as stock's does. `pattern` walks `node` as a tag parameter. The
+ * walk is over the payload as written (`unstrippedPayloads`), so a name in
+ * `x as T` is a read in a build as in a types-kept compile.
  */
 function checkAmbiguousTagVarReads(
   ctx: Ctx,
@@ -8382,6 +8388,11 @@ function checkAmbiguousTagVarReads(
 ): void {
   const ambiguous = ctx.ambiguousTagVars;
   if (!ambiguous) return;
+  // A build stripped the payload's TypeScript before lowering; its names
+  // outside a `: T` annotation (`x as T`) are reads to stock all the same,
+  // so the walk is over the payload as written. `code` is the stripped
+  // payload's, so it cannot rule a name out then.
+  const unstripped = unstrippedOf(node);
   const names = new Set<string>();
   for (const name of ambiguous) {
     if (
@@ -8393,16 +8404,55 @@ function checkAmbiguousTagVarReads(
       ctx.staticBindings.has(name)
     )
       continue;
-    if (code === undefined || code.includes(name)) names.add(name);
+    if (code === undefined || unstripped !== node || code.includes(name)) {
+      names.add(name);
+    }
   }
   if (names.size === 0) return;
-  const read = findElementRefRead(node, names, new WeakSet(), pattern, true);
+  const read = findElementRefRead(
+    unstripped,
+    names,
+    new WeakSet(),
+    pattern,
+    true,
+  );
   if (!read) return;
   raise(
     INVALID_TAG_VAR_CODE,
     "Ambiguous reference, variable was defined in multiple places and was not shadowed.",
     read,
   );
+}
+
+/**
+ * `checkAmbiguousTagVarReads` over a tag's type arguments (`<for<T>…>`) and
+ * type parameters (`<define/F<T extends U>|…|>`), which every compile drops
+ * from the tree before lowering: stock Marko's scope crawl reads the names in
+ * them all the same. The arguments sit on the tag, in the body around it; the
+ * parameters sit on the tag's body, so the body's own tag variables and params
+ * bind there too.
+ */
+function checkTagTypeReads(ctx: Ctx, tag: Node): void {
+  if (!ctx.ambiguousTagVars) return;
+  const args = (tag.typeArgs ?? strippedTagTypeArgs.get(tag))?.node;
+  if (args) checkAmbiguousTagVarReads(ctx, undefined, args);
+  const params = (tag.typeParams ?? strippedTagTypeParams.get(tag))?.node;
+  if (!params) return;
+  const outer = ctx.openTagVars;
+  const bodyNames = [
+    ...tagParamsOf(tag).flatMap((param: Node) => bindingIdentifiers(param)),
+    ...bodyChildren(tag).flatMap((child: Node) =>
+      isTagNode(child) && tagVarOf(child)
+        ? bindingIdentifiers(tagVarOf(child))
+        : [],
+    ),
+  ];
+  ctx.openTagVars = new Set([...(outer ?? []), ...bodyNames]);
+  try {
+    checkAmbiguousTagVarReads(ctx, undefined, params);
+  } finally {
+    ctx.openTagVars = outer;
+  }
 }
 
 function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
@@ -8772,11 +8822,12 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       const child: Node = children[index];
       if (isTagNode(child) && tagNameOf(child) === "if") {
         const lowered = recover(ctx, () =>
-          voicedAt(child, () =>
-            insideStructural(ctx, child, "if", () =>
+          voicedAt(child, () => {
+            checkTagTypeReads(ctx, child);
+            return insideStructural(ctx, child, "if", () =>
               lowerIfChain(ctx, children, index),
-            ),
-          ),
+            );
+          }),
         );
         if (lowered) {
           out.push(lowered[0]);
@@ -8795,6 +8846,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       // subtree; the walk goes on to the next sibling.
       recover(ctx, () => {
         rejectDuplicateDeclarations(index);
+        if (isTagNode(child)) checkTagTypeReads(ctx, child);
         switch (child.type) {
           case "MarkoText":
           case "MxText":

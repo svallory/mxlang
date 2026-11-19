@@ -2302,7 +2302,7 @@ in a tag's body also cannot repeat one of that tag's params: this applies to
 and `<await>`. For example, `<try><@catch|e|><const/e=1/></@catch>x</try>`
 and `<await|v|=p><const/v=1/></await>` are refused at the repeated name.
 A nested element or control body may shadow the param; a param itself named
-`input` remains legal (§5.6). A read after the body of a name declared only inside it (`<div><const/x=1/></div>${x}`) has no outer binding and is out of scope: Marko 6.4.4 hoists it into a getter, MX does not, and the template throws `x is not defined` at render. When two or more bodies declare the name (`<div><const/x=1/></div><div><const/x=2/></div>${x}`) and nothing around the read binds it, the read is refused at compile time, as in Marko: "Ambiguous reference, variable was defined in multiple places and was not shadowed." (`MX_INVALID_TAG_VAR`), at the read.
+`input` remains legal (§5.6). A read after the body of a name declared only inside it (`<div><const/x=1/></div>${x}`) has no outer binding and is out of scope: Marko 6.4.4 hoists it into a getter, MX does not, and the template throws `x is not defined` at render. When two or more bodies declare the name (`<div><const/x=1/></div><div><const/x=2/></div>${x}`) and nothing around the read binds it, the read is refused at compile time, as in Marko: "Ambiguous reference, variable was defined in multiple places and was not shadowed." (`MX_INVALID_TAG_VAR`), at the read. A name in a TypeScript type position counts as a read here, as in Marko, except inside a `: T` annotation: `x as T`, `x satisfies T`, a type argument (`f<T>()`, `<for<T>>`) and a type parameter's constraint are refused like any other read, whether the build strips the types or not.
 
 ### 5.6 A binding named `input`
 

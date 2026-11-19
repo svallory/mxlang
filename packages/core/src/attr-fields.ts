@@ -122,9 +122,69 @@ export const strippedPatterns = new WeakMap<
   { start?: number; end?: number; typed: boolean }
 >();
 
+/**
+ * The payloads as the parser built them, before `stripMxTypes` (or
+ * `stripAngleAssertions`) erased their TypeScript, keyed by what the strip
+ * left: a payload node, a payload list, and each element of a list whose
+ * length the strip kept. Recorded only for a payload with TypeScript outside
+ * a `: T` annotation (`x as T`, `x satisfies T`, `<T>x`, `f<T>()`, a type
+ * alias), whose names stock Marko's scope crawl still reads; a `: T`
+ * annotation it skips. The ambiguous tag-variable read check
+ * (`checkAmbiguousTagVarReads`) walks these, so a build refuses what the
+ * types-kept compile and stock refuse. Copies: nothing else reads them.
+ */
+export const unstrippedPayloads = new WeakMap<object, unknown>();
+
+/**
+ * The written type parameters of an `MxMethod` the strip dropped, as the
+ * parser built them, when they hold TypeScript outside a `: T` annotation
+ * (`<T extends el>`); see `unstrippedPayloads`.
+ */
+export const unstrippedMethodTypeParams = new WeakMap<object, Node>();
+
+/** The parser's payload behind a stripped one (`unstrippedPayloads`), else `payload` itself. */
+export function unstrippedOf<T>(payload: T): T {
+  if (payload === null || typeof payload !== "object") return payload;
+  return (unstrippedPayloads.get(payload) as T | undefined) ?? payload;
+}
+
 export function methodFunctionOf(ctx: Ctx, method: Node): Node {
-  const statements = payloadOf(method.body);
-  const params = payloadOf(method.params);
+  const fn = methodFunctionFrom(
+    ctx,
+    method,
+    payloadOf(method.body),
+    payloadOf(method.params),
+    method.typeParams ? payloadOf(method.typeParams) : undefined,
+  );
+  const typeParams = unstrippedMethodTypeParams.get(method);
+  const statements = unstrippedOf(fn.body.body);
+  const params = unstrippedOf(fn.params);
+  if (
+    typeParams !== undefined ||
+    statements !== fn.body.body ||
+    params !== fn.params
+  ) {
+    unstrippedPayloads.set(
+      fn,
+      methodFunctionFrom(
+        ctx,
+        method,
+        statements,
+        params,
+        typeParams ?? fn.typeParameters ?? undefined,
+      ),
+    );
+  }
+  return fn;
+}
+
+function methodFunctionFrom(
+  ctx: Ctx,
+  method: Node,
+  statements: Node,
+  params: Node,
+  typeParameters: Node | undefined,
+): Node {
   const locOf = (start: number, end: number) => ({
     start: positionAtOffset(ctx, start),
     end: positionAtOffset(ctx, end),
@@ -135,8 +195,8 @@ export function methodFunctionOf(ctx: Ctx, method: Node): Node {
     params,
     generator: false,
     async: method.async,
-    ...(method.typeParams
-      ? { typeParameters: payloadOf(method.typeParams) }
+    ...(typeParameters
+      ? { typeParameters }
       : strippedMethodTypeParams.has(method)
         ? { typeParameters: null }
         : {}),

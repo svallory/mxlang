@@ -195,6 +195,14 @@ export function tagParamsOf(node: Node): Node[] {
 export const strippedTagTypeParams = new WeakMap<object, Node>();
 
 /**
+ * The type-argument containers (`<for<T>|…|>`, `<let<T>/x/>`) a strip walk
+ * cleared from a tag, as `strippedTagTypeParams` keeps the parameters: the
+ * names in them are reads to stock Marko's scope crawl, and the ambiguous
+ * tag-variable read check (`checkTagTypeReads`) reads them there.
+ */
+export const strippedTagTypeArgs = new WeakMap<object, Node>();
+
+/**
  * The type parameters written on a tag (`<T extends string = "a">`), as their
  * source text without the angle brackets and its file-absolute span; read
  * through a strip walk that cleared them. `undefined` when none were written.

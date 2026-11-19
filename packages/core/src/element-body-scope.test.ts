@@ -624,6 +624,8 @@ describe("a read of a tag variable two nested bodies declare", () => {
     "<div><div/el/></div><div><div/el/></div><button onClick() { const el = 1; el }>c</button>",
     "<div><div/el/></div><div><div/el/></div>",
     "<div><div/el/></div><div><div/el/></div><button onClick() { el }>c</button><div/el/>",
+    // A build strips the annotation before lowering, so this row pins the
+    // build's outcome; the types-kept test below pins the annotation rule.
     "<div><div/el/></div><div><div/el/></div><const/f=(x: el) => x/>",
     "<div><const/Map=1/></div><div><const/Map=2/></div><p>${Map}</p>",
     // A body's tag variable binds the whole body, reads above it included.
@@ -643,5 +645,92 @@ describe("a read of a tag variable two nested bodies declare", () => {
         { targets: lookup, emitIr: () => "", stripTypes: false } as never,
       ),
     ).not.toThrow();
+  });
+
+  // A name in any other type position is a read to stock's crawl: `x as T`,
+  // `x satisfies T`, `<T>x`, a type argument, a type parameter's constraint,
+  // a type alias. A build strips the TypeScript before lowering, and a tag's
+  // type arguments and parameters leave the tree in every compile, so each row
+  // runs with the types stripped (the default) and kept.
+  const typesKept = (source: string) => {
+    try {
+      compileSource(source, "/page.mx", host, {
+        targets: lookup,
+        emitIr: () => "",
+        stripTypes: false,
+      } as never);
+    } catch (error) {
+      return error as TranslateError;
+    }
+    return undefined;
+  };
+  describe.each([
+    ["stripped", (source: string) => attempt(source, host)],
+    ["kept", typesKept],
+  ])("with the types %s", (_mode, compile) => {
+    it.each([
+      [
+        "<div><div/el/></div><div><div/el/></div><const/f=() => (1 as el)/>",
+        61,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><const/f=(1 as any as x)/>",
+        68,
+      ],
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><const/f=(1 satisfies x)/>",
+        68,
+      ],
+      ["<div><div/el/></div><div><div/el/></div><p>${(1 as el)}</p>", 51],
+      ["<div><div/el/></div><div><div/el/></div><p>${g<el>()}</p>", 47],
+      [
+        "<div><div/el/></div><div><div/el/></div><p>${(<T extends el>() => 1)}</p>",
+        57,
+      ],
+      [
+        "<div><div/el/></div><div><div/el/></div><button onClick() { 1 as el }>c</button>",
+        65,
+      ],
+      [
+        "<div><div/el/></div><div><div/el/></div><button onClick() { g<el>() }>c</button>",
+        62,
+      ],
+      [
+        "<div><div/el/></div><div><div/el/></div><button onClick() { type A = el }>c</button>",
+        69,
+      ],
+      [
+        "<div><div/el/></div><div><div/el/></div><button onClick<T extends el>() {}>c</button>",
+        66,
+      ],
+      [
+        "<div><div/el/></div><div><div/el/></div><for|i = (1 as el)| of=[1]></for>",
+        55,
+      ],
+      ["<div><div/el/></div><div><div/el/></div><for<el>|i| of=[1]></for>", 45],
+      ["<div><div/el/></div><div><div/el/></div><let<el>/y=1/>", 45],
+      [
+        "<div><div/el/></div><div><div/el/></div><define/F<T extends el>|i|></define>",
+        60,
+      ],
+    ])(
+      "refuses the type-position read in %s at column %i",
+      (source, column) => {
+        const error = compile(source);
+        expect(error?.message).toBe(AMBIGUOUS);
+        expect(error?.diagnosticCode).toBe("MX_INVALID_TAG_VAR");
+        expect([error?.line, error?.column]).toEqual([1, column]);
+      },
+    );
+
+    // The expression's own param binds the name; a tag's type parameters
+    // sit on its body, where the body's params and tag variables bind.
+    it.each([
+      "<div><div/el/></div><div><div/el/></div><const/f=(el: number) => (1 as el)/>",
+      "<div><div/el/></div><div><div/el/></div><define/F<T extends el>|el|></define>",
+      "<div><div/el/></div><div><div/el/></div><define/F<T extends el>|i|><div/el/></define>",
+    ])("compiles %s", (source) => {
+      expect(compile(source)).toBeUndefined();
+    });
   });
 });

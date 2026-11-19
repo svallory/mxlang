@@ -27,6 +27,8 @@ import {
   strippedMethodTypeParams,
   strippedPatterns,
   strippedValueRoots,
+  unstrippedMethodTypeParams,
+  unstrippedPayloads,
 } from "./attr-fields.ts";
 import { coreBabel, coreTsPlugin } from "./babel.ts";
 import { codedError, type Node, type TranslateError } from "./core.ts";
@@ -50,7 +52,7 @@ import type { SourceSpan } from "./mapping.ts";
 import { MX_VOICE, type Voice, voiceOf } from "./message-vocabulary.ts";
 import { namespaceEmits } from "./module-scope.ts";
 import type { Dialect, SyntaxTable } from "./syntax-table.ts";
-import { strippedTagTypeParams } from "./tag-fields.ts";
+import { strippedTagTypeArgs, strippedTagTypeParams } from "./tag-fields.ts";
 import type { TagTable } from "./tag-table.ts";
 import { parseErrorEnd } from "./token-span.ts";
 
@@ -1478,9 +1480,14 @@ export function stripMxTypes(document: Node): void {
         ) {
           // `stripTagTypesVisitor`: a tag's (and a body's) type arguments
           // and parameters are dropped whole.
-          if (value.type === "MxMethod") strippedMethodTypeParams.add(value);
-          else if (key === "typeParams")
+          if (value.type === "MxMethod") {
+            strippedMethodTypeParams.add(value);
+            if (holdsTypeRead(field.node)) {
+              unstrippedMethodTypeParams.set(value, cloneTree(field.node));
+            }
+          } else if (key === "typeParams")
             strippedTagTypeParams.set(value, field);
+          else if (key === "typeArgs") strippedTagTypeArgs.set(value, field);
           value[key] = null;
           continue;
         }
@@ -1584,6 +1591,7 @@ export function stripTagTypes(
           value.type !== "MxMethod"
         ) {
           if (key === "typeParams") strippedTagTypeParams.set(value, field);
+          else if (key === "typeArgs") strippedTagTypeArgs.set(value, field);
           value[key] = null;
           continue;
         }
@@ -1635,6 +1643,64 @@ function stripModuleBlock(container: Node): boolean {
 function stripContainer(container: Node, t: Node, moduleBlock = false): void {
   const node = container.node;
   if (node == null) return;
+  const unstripped = holdsTypeRead(node) ? cloneTree(node) : undefined;
+  stripContainerPayload(container, t, moduleBlock);
+  if (unstripped !== undefined) recordUnstripped(container.node, unstripped);
+}
+
+/**
+ * Keeps `unstripped`, the parser's payload, behind `stripped`, what the strip
+ * left of it (`unstrippedPayloads`); for a list, behind each element too, when
+ * the strip kept its length.
+ */
+function recordUnstripped(stripped: unknown, unstripped: unknown): void {
+  if (stripped === null || typeof stripped !== "object") return;
+  unstrippedPayloads.set(stripped, unstripped);
+  if (!Array.isArray(stripped) || !Array.isArray(unstripped)) return;
+  if (stripped.length !== unstripped.length) return;
+  stripped.forEach((each, i) => {
+    if (each && typeof each === "object") {
+      unstrippedPayloads.set(each, unstripped[i]);
+    }
+  });
+}
+
+/**
+ * Whether a payload holds TypeScript outside a `: T` annotation (`x as T`,
+ * `f<T>()`, `type A = T`): the names there are reads to stock Marko's scope
+ * crawl, which skips only `TSTypeAnnotation`.
+ */
+function holdsTypeRead(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(holdsTypeRead);
+  const node = value as Node;
+  if (typeof node.type === "string") {
+    if (node.type === "TSTypeAnnotation") return false;
+    if (node.type.startsWith("TS")) return true;
+  }
+  for (const [key, field] of Object.entries(node)) {
+    if (!NON_CHILD_FIELDS.has(key) && holdsTypeRead(field)) return true;
+  }
+  return false;
+}
+
+/** A deep copy of a parsed payload, positions included (`start`, `end`, `loc`). */
+function cloneTree<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(cloneTree) as T;
+  const copy: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value)) {
+    copy[key] = key === "loc" ? field : cloneTree(field);
+  }
+  return copy as T;
+}
+
+function stripContainerPayload(
+  container: Node,
+  t: Node,
+  moduleBlock: boolean,
+): void {
+  const node = container.node;
   switch (container.type) {
     case "MxExpression": {
       rejectNestedModuleDeclaration(node);
