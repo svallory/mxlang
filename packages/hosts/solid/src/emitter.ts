@@ -844,10 +844,10 @@ function rejectUnknownTag(
   );
 }
 
-/** Resolve-time questions for Solid's JSX target. */
 /** Solid's built-in `defaultTag`: the descriptor's field and the ladder's last rung. */
 export const DEFAULT_TAG = "div";
 
+/** Resolve-time questions for Solid's JSX target. */
 export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/host-solid",
   hostName: "Solid",

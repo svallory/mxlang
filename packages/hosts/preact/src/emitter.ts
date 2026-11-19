@@ -623,7 +623,6 @@ function isComponentName(name: string): boolean {
   return /^[A-Z]/.test(name);
 }
 
-/** Resolve-time questions for a Preact/React JSX dialect. */
 const ATTRIBUTE_VALUE_EXPRESSION = "__mxAttrValue";
 const ATTRIBUTE_SPREAD_EXPRESSION = "__mxAttrSpread";
 
@@ -670,6 +669,7 @@ const HONO_ELEMENT_NAMES: readonly string[] = [
   "httpEquiv",
 ];
 
+/** Resolve-time questions for a Preact/React JSX dialect. */
 export function createJsxDeclarations(
   dialectName: string,
   options: JsxDeclarationsOptions = {},

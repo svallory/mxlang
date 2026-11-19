@@ -197,10 +197,10 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
   },
 };
 
-/** Resolve-time questions for Angular's template target. */
 /** Angular's built-in `defaultTag`: the descriptor's field and the ladder's last rung. */
 export const DEFAULT_TAG = "div";
 
+/** Resolve-time questions for Angular's template target. */
 export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/host-angular",
   hostName: "Angular",
