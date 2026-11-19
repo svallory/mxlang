@@ -1238,6 +1238,93 @@ describe("MX language plugin", {
     ]);
   });
 
+  // As on html, so on the shared JSX emitter (Preact here; React and Hono share
+  // it), whole file and `.preact.mx` region.
+  it("navigates to and renames a tag variable's preact declaration", () => {
+    const directory = `${here}/fixtures/preact-policy`;
+    const page = `${directory}/page.mx`;
+    const view = `${directory}/view.preact.mx`;
+    const state = `${directory}/state.mx`;
+    const call = `${directory}/call.mx`;
+    const consumer = `${directory}/index.ts`;
+    const files = {
+      [page]: handlerUse,
+      [view]: regionUse,
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+      [state]: "<const/{ a, b: c }={ a: 1, b: 2 }/><p>${a}${c}</p>\n",
+      [call]:
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+        "<define/Twice|input: { n: number }|><return=input.n * 2/></define><Twice/v n=1/><p>${v}</p>\n",
+      [consumer]:
+        'import "./page.mx";\nimport "./view.preact.mx";\nimport "./state.mx";\nimport "./call.mx";\n',
+    };
+    const service = createPluginService(files, [consumer]);
+    const sites = (
+      locations: readonly ts.DocumentSpan[] | undefined,
+    ): [string, number, number][] =>
+      (locations ?? [])
+        .map((location): [string, number, number] => [
+          location.fileName,
+          location.textSpan.start,
+          location.textSpan.length,
+        ])
+        .sort((left, right) => left[1] - right[1]);
+    const rename = (file: string, at: number) =>
+      sites(service.findRenameLocations(file, at, false, false, {}));
+    const definition = (file: string, at: number) =>
+      sites(service.getDefinitionAtPosition(file, at));
+    const hover = (file: string, at: number) =>
+      (service.getQuickInfoAtPosition(file, at)?.displayParts ?? [])
+        .map((part) => part.text)
+        .join("");
+
+    for (const file of Object.keys(files)) {
+      expect(
+        service
+          .getSemanticDiagnostics(file)
+          .filter((diagnostic) => diagnostic.code !== 7026)
+          .map((diagnostic) => diagnostic.code),
+        file,
+      ).toEqual([]);
+    }
+
+    // `el`: whole file declared at 5, read at 29; region 34 and 58.
+    for (const [file, declared, read] of [
+      [page, 5, 29],
+      [view, 34, 58],
+    ] as const) {
+      expect(hover(file, declared), file).toBe(
+        'const el: () => __MxElement<"div">',
+      );
+      expect(definition(file, read), file).toEqual([[file, declared, 2]]);
+      expect(rename(file, read), file).toEqual([
+        [file, declared, 2],
+        [file, read, 2],
+      ]);
+      expect(rename(file, declared), file).toEqual([
+        [file, declared, 2],
+        [file, read, 2],
+      ]);
+    }
+
+    // `c` (in `{ a, b: c }`): 15 and 44; `v` (a returning define's call
+    // `/v`): 73 and 85.
+    for (const [file, declared, read] of [
+      [state, 15, 44],
+      [call, 73, 85],
+    ] as const) {
+      expect(definition(file, read), file).toEqual([[file, declared, 1]]);
+      expect(rename(file, read), file).toEqual([
+        [file, declared, 1],
+        [file, read, 1],
+      ]);
+      expect(rename(file, declared), file).toEqual([
+        [file, declared, 1],
+        [file, read, 1],
+      ]);
+    }
+  });
+
   describe("custom tag discovery", () => {
     const scratches: string[] = [];
 
