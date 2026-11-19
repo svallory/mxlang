@@ -3656,10 +3656,14 @@ function lowerAuthoredAttributeTag(
     customTagContract: schema.customTagContract,
   };
 
+  // Nested attribute tags (and attribute-position `<if>`/`<for>` around them)
+  // are fields of this tag's record beside its body, so they lower in the
+  // scope around the call, outside this tag's params, as stock evaluates them
+  // and as every host emits them.
+  const nested = lowerAttributeTags(ctx, node, nestedSchema);
   const unscope = scopeBindings(ctx);
   const bindings = paramBindings(ctx, node);
   const restore = shadowBindings(ctx, bindings);
-  const nested = lowerAttributeTags(ctx, node, nestedSchema);
   const block: Block = {
     hasParams: hasParamsAtCall,
     params: paramsOf(ctx, node),

@@ -607,6 +607,21 @@ describe("a read of a tag variable two nested bodies declare", () => {
       "<define/C><return=1/></define><div><C/x/></div><div><C/x/></div><p>${x}</p>",
       69,
     ],
+    // A nested attribute tag is a field of its parent's record, read in the
+    // scope around the call: the parent's params do not bind its attribute
+    // values, param defaults or body.
+    [
+      "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item|x|><@sub|v = x|>hi</@sub></@item></C>",
+      108,
+    ],
+    [
+      "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item|x|><@sub y=x/></@item></C>",
+      106,
+    ],
+    [
+      "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item|x|><@sub>${x}</@sub></@item></C>",
+      106,
+    ],
   ])("refuses the read in %s at column %i", refused);
 
   // A default in a tag variable's pattern is a read in the body around the
@@ -662,6 +677,9 @@ describe("a read of a tag variable two nested bodies declare", () => {
     "<div><const/{a = x}=input/><const/x=1/></div><div><const/x=2/></div>",
     "<div><const/x=1/></div><div><const/x=2/></div><const/{a = ((x) => x)(1)}=input/>",
     "<div><const/x=1/></div><div><const/x=2/></div><const/{x: a = 1}=input/>",
+    // A nested attribute tag's own param, and the parent's own body, bind it.
+    "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item|x|><@sub|x|>${x}</@sub></@item></C>",
+    "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item|x|>${x}</@item></C>",
   ])("compiles %s", (source) => {
     expect(attempt(source, host)).toBeUndefined();
   });
@@ -758,6 +776,12 @@ describe("a read of a tag variable two nested bodies declare", () => {
       [
         "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><const/x=3/><@item<x>>hi</@item></C>",
         107,
+      ],
+      // A nested attribute tag's type arguments are read outside its
+      // parent's params too.
+      [
+        "<div><const/x=1/></div><div><const/x=2/></div><define/C|input|>${input.item}</define><C><@item|x|><@sub<x>>hi</@sub></@item></C>",
+        104,
       ],
       // Type parameters after whitespace sit on the attribute tag's body.
       [
