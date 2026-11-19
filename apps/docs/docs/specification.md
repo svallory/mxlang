@@ -2302,7 +2302,7 @@ in a tag's body also cannot repeat one of that tag's params: this applies to
 and `<await>`. For example, `<try><@catch|e|><const/e=1/></@catch>x</try>`
 and `<await|v|=p><const/v=1/></await>` are refused at the repeated name.
 A nested element or control body may shadow the param; a param itself named
-`input` remains legal (§5.6). A read after the body of a name declared only inside it (`<div><const/x=1/></div>${x}`) has no outer binding and is out of scope: Marko 6.4.4 hoists it into a getter, MX does not, and the template throws `x is not defined` at render.
+`input` remains legal (§5.6). A read after the body of a name declared only inside it (`<div><const/x=1/></div>${x}`) has no outer binding and is out of scope: Marko 6.4.4 hoists it into a getter, MX does not, and the template throws `x is not defined` at render. When two or more bodies declare the name (`<div><const/x=1/></div><div><const/x=2/></div>${x}`) and nothing around the read binds it, the read is refused at compile time, as in Marko: "Ambiguous reference, variable was defined in multiple places and was not shadowed." (`MX_INVALID_TAG_VAR`), at the read.
 
 ### 5.6 A binding named `input`
 
@@ -3843,9 +3843,16 @@ Marko hoists a read outside the element's body, or above the element, into a
 getter. On html MX does not: a read outside the element's body is an unbound
 name in the emitted module. On Preact, React, Hono and Solid a reference
 declared once in its scope is reached from outside its element's body, as
-above. On Preact, React and Hono, when two bodies bind the name, each is a
-scope of its own, so a read outside both is an unbound name in the emitted
-module, where Marko refuses it as "Ambiguous reference". A
+above. When two or more bodies bind the name and nothing around a read binds
+it, the read is a compile error at the read on every host, as in Marko:
+`MX_INVALID_TAG_VAR`, "Ambiguous reference, variable was defined in multiple
+places and was not shadowed." A read in a body that declares the name, or in
+a body nested inside one that does, is bound as usual. Without such a read the two
+bodies compile: on Preact, React and Hono each body is a scope of its own, and
+on Solid the first body keeps the name and the second gets one of its own, so
+`<div><div/el/></div><div><div/el/></div>` declares
+`let el: any, __mxVar0_el: any;`, the first body's element filling `el` and
+the second's `__mxVar0_el`. A
 read above the element in render position is not caught at compile time either:
 on html it fails when the template renders, as Marko's does, on Preact, React
 and Hono `el()` returns `null` there, and on Solid it throws a `TypeError`. In
@@ -3975,6 +3982,7 @@ These positioned diagnostics stand in for what JavaScript would leave as
 | `` `/${var}` on `<${name}>` can't bind: ${path} ${reason} `` | A `/var` on an imported `.mx` unit that is missing or does not compile; reported at the tag variable (`MX_INVALID_TAG_VAR`). |
 | `` `${name}` is a `/var` bound inside a nested block and is not in scope here; a `/var` binds in the call site's own scope only `` | The read escaped the declaring block. |
 | `` `${name}` is read before the `/var` that binds it; move the read after the call that declares it `` | The read precedes the declaring call. |
+| `Ambiguous reference, variable was defined in multiple places and was not shadowed.` | Two or more nested bodies declare the name and nothing around the read binds it; reported at the read (`MX_INVALID_TAG_VAR`). |
 
 MX **rejects the escape** rather than hoisting the binding into a getter as Marko
 does, which would change its user-visible type (invariant §7.5-8).
