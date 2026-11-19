@@ -50,6 +50,7 @@ import {
   MX_ATTR_VALUE_BINDING,
   MX_CLASS_BINDING,
   MX_IS_SERVER_BINDING,
+  MX_REF_SINK_BINDING,
   MX_SCRIPT_TEXT_BINDING,
   MX_STYLE_TEXT_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
@@ -57,6 +58,7 @@ import {
   MX_TEXTAREA_DYN_VALUE_BINDING,
   MX_TEXTAREA_OMIT_BINDING,
   MX_TEXTAREA_PICK_BINDING,
+  REF_SINK_HELPER,
   SCRIPT_TEXT_HELPER,
   STYLE_TEXT_HELPER,
   TEXTAREA_CONTENT_HELPER,
@@ -533,6 +535,12 @@ function emitRegion(
       binding: MX_ATTR_SPREAD_BINDING,
     });
   }
+  if (needsAttrGuard.refSink) {
+    hoistedDefines.unshift({
+      code: REF_SINK_HELPER,
+      binding: MX_REF_SINK_BINDING,
+    });
+  }
   if (needsAttrGuard.scriptText) {
     hoistedDefines.unshift({
       code: SCRIPT_TEXT_HELPER,
@@ -781,6 +789,7 @@ export function compileSolidUnit(
     if (usesAttrTagRuntime(emittedBody.code)) {
       parts.unshift(`${ATTR_TAG_RUNTIME}\n`);
     }
+    if (needsAttrGuard.refSink) parts.unshift(`${REF_SINK_HELPER}\n`);
     if (needsAttrGuard.scriptText) parts.unshift(`${SCRIPT_TEXT_HELPER}\n`);
     if (needsAttrGuard.styleText) parts.unshift(`${STYLE_TEXT_HELPER}\n`);
     if (needsAttrGuard.klass) parts.unshift(`${CLASS_PROP_HELPER}\n`);

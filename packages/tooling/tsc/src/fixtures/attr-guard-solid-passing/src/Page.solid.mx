@@ -6,6 +6,8 @@ export function Page(input: {
   o: Record<string, unknown>;
   v: unknown;
 }) {
+  let d: HTMLElement | undefined;
+  const c = (n: Element) => n.setAttribute("data-c", "1");
   return (
     <div>
       <p ...input.a/>
@@ -14,6 +16,9 @@ export function Page(input: {
       <p ...input.b/>
       <p ...input.o data-x=input.v/>
       <p ...input.o/>
+      <div/el ref=d/>
+      <div/k ref=c/>
+      <button onClick() { el(); k(); }/>
     </div>
   );
 }

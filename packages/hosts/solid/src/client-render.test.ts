@@ -431,6 +431,9 @@ describe("Solid client render: element references", () => {
         '<Twice><@tab><div/el/><button onClick() { el().dataset.hit = "1" }>tab</button></@tab></Twice>',
         // A member-expression `ref=` is assigned the node, as Solid assigns it.
         '<div/r ref=refs.d/><button onClick() { refs.d.dataset.assigned = "1"; r().dataset.hit = "1" }>refs</button>',
+        // A `let` identifier is assigned the node; a `const` function is called with it.
+        '<div/x ref=d/><button onClick() { d.dataset.assigned = "1"; x().dataset.hit = "1" }>d</button>',
+        '<div/y ref=c/><button onClick() { y().dataset.hit = "1" }>c</button>',
         // A nested attribute tag's body sees the call's scope, as in Marko, not
         // its parent's body: `el` is the first fragment's `<div/el/>`.
         '<Nest><@tab><div/el/><@inner><button onClick() { el().dataset.inner = "1" }>inner</button></@inner></@tab></Nest>',
@@ -439,14 +442,16 @@ describe("Solid client render: element references", () => {
         '(globalThis as any).clickAll = () => { for (const b of document.querySelectorAll("button")) (b as HTMLElement).click(); };',
         "const Twice = (props: any) => <>{props.tab.content()}{props.tab.content()}</>;",
         "const refs: any = {};",
+        "let d: any;",
+        'const c = (n: Element) => n.setAttribute("data-c", "1");',
         "const Nest = (props: any) => <>{props.tab.content()}{props.tab.inner.content()}</>;",
       ].join("\n  "),
       "clickAll",
       ["0"],
     );
     expect(snapshots).toEqual([
-      '<ul><div></div><button>go</button><p>x</p><button>row</button><p>y</p><button>row</button><div data-authored="1"></div><button>own</button><my-el></my-el><button>dyn</button><my-el data-authored="1"></my-el><button>dyn2</button><div></div><button>tab</button><div></div><button>tab</button><div></div><button>refs</button><div></div><button>inner</button></ul>',
-      '<ul><div data-hit="1" data-inner="1"></div><button>go</button><p data-hit="1">x</p><button>row</button><p data-hit="1">y</p><button>row</button><div data-authored="1" data-hit="1"></div><button>own</button><my-el data-hit="1"></my-el><button>dyn</button><my-el data-authored="1" data-hit="1"></my-el><button>dyn2</button><div data-hit="1"></div><button>tab</button><div data-hit="1"></div><button>tab</button><div data-assigned="1" data-hit="1"></div><button>refs</button><div></div><button>inner</button></ul>',
+      '<ul><div></div><button>go</button><p>x</p><button>row</button><p>y</p><button>row</button><div data-authored="1"></div><button>own</button><my-el></my-el><button>dyn</button><my-el data-authored="1"></my-el><button>dyn2</button><div></div><button>tab</button><div></div><button>tab</button><div></div><button>refs</button><div></div><button>d</button><div data-c="1"></div><button>c</button><div></div><button>inner</button></ul>',
+      '<ul><div data-hit="1" data-inner="1"></div><button>go</button><p data-hit="1">x</p><button>row</button><p data-hit="1">y</p><button>row</button><div data-authored="1" data-hit="1"></div><button>own</button><my-el data-hit="1"></my-el><button>dyn</button><my-el data-authored="1" data-hit="1"></my-el><button>dyn2</button><div data-hit="1"></div><button>tab</button><div data-hit="1"></div><button>tab</button><div data-assigned="1" data-hit="1"></div><button>refs</button><div data-assigned="1" data-hit="1"></div><button>d</button><div data-c="1" data-hit="1"></div><button>c</button><div></div><button>inner</button></ul>',
     ]);
   });
 });

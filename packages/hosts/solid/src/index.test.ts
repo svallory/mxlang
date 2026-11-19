@@ -1626,21 +1626,34 @@ describe("a unit that returns a value", () => {
     );
   });
 
-  // A member expression is assigned the node as Solid's own `ref={X}`
-  // assigns it, unless it holds a function or an array; a bare identifier
-  // keeps the array form (it may be a `const`, which cannot be assigned).
-  it("composes an authored member-expression ref= with Solid's assignment", () => {
+  // An identifier or member-expression `ref=` goes through the hoisted sink
+  // component, so Solid's own compiler assigns or applies it as it does a
+  // native `ref={X}`; any other value keeps the plain array composition.
+  it("composes an authored lvalue ref= through the ref sink, once per unit", () => {
     const compile = (source: string) =>
       compileSolidUnit(source, { filename: "/fixtures/page.mx" }).code;
+    const sink =
+      "function __MxRefSink(props: { ref?: unknown }): any { return props.ref; }";
+    const callback = "(__mxNode: Element) => { el = () => __mxNode; }";
+    const identifier = compile("<div/el ref=d/>");
+    expect(identifier).toContain(
+      `<div ref={[(<__MxRefSink ref={d} /> as any), ${callback}]}></div>`,
+    );
+    expect(identifier.split(sink).length - 1).toBe(1);
     expect(compile("<div/el ref=fn/>")).toContain(
-      "<div ref={[fn, (__mxNode: Element) => { el = () => __mxNode; }]}></div>",
+      `<div ref={[(<__MxRefSink ref={fn} /> as any), ${callback}]}></div>`,
     );
     expect(compile("<div/el ref=refs.d/>")).toContain(
-      '<div ref={[((__mxRef: any) => typeof __mxRef === "function" || Array.isArray(__mxRef) ? __mxRef : (__mxNode: any) => { refs.d = __mxNode; })(refs.d), (__mxNode: Element) => { el = () => __mxNode; }]}></div>',
+      `<div ref={[(<__MxRefSink ref={refs.d} /> as any), ${callback}]}></div>`,
     );
     expect(compile("<div/el ref=(refs.d as any)/>")).toContain(
-      '<div ref={[((__mxRef: any) => typeof __mxRef === "function" || Array.isArray(__mxRef) ? __mxRef : (__mxNode: any) => { refs.d = __mxNode; })(refs.d as any), (__mxNode: Element) => { el = () => __mxNode; }]}></div>',
+      `<div ref={[(<__MxRefSink ref={refs.d as any} /> as any), ${callback}]}></div>`,
     );
+    const arrow = compile("<div/el ref=((n) => n)/>");
+    expect(arrow).toContain(`<div ref={[(n) => n, ${callback}]}></div>`);
+    expect(arrow).not.toContain("__MxRefSink");
+    const two = compile("<div/a ref=d/><div/b ref=refs.d/>");
+    expect(two.split(sink).length - 1).toBe(1);
   });
 
   it("binds an element reference on <html-script> after its attributes", () => {
@@ -1660,6 +1673,21 @@ describe("a unit that returns a value", () => {
     );
     expect(result.returnVars).toEqual([]);
     expect(result.code).toMatch(/^\{\(\(\) => \{ let el: any; return <>/);
+  });
+
+  it("hoists the ref sink as a dedupable define and uses it on a literal dynamic tag", () => {
+    const result = compileSolidMx('<div/el ref=d/><${"my-el"}/dyn ref=d/>', {
+      filename: "fixture.solid.mx",
+    });
+    expect(result.hoistedDefines).toEqual([
+      {
+        code: "function __MxRefSink(props: { ref?: unknown }): any { return props.ref; }",
+        binding: "__MxRefSink",
+      },
+    ]);
+    expect(result.code).toContain(
+      "ref={[(<__MxRefSink ref={d} /> as any), (__mxNode: Element) => { dyn = () => __mxNode; }]}",
+    );
   });
 
   it("binds an element reference inside a region's hoisted <define> body", () => {

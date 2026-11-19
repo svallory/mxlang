@@ -150,6 +150,11 @@ export const MX_SCRIPT_TEXT_BINDING = "__mxScriptText";
 export const MX_STYLE_TEXT_BINDING = "__mxStyleText";
 export const MX_TEXTAREA_DYN_VALUE_BINDING = "__mxTextareaDynValue";
 export const MX_TEXTAREA_DYN_SPREAD_BINDING = "__mxTextareaDynSpread";
+/**
+ * Starts with `_`, so Solid's compiler and TypeScript both read
+ * `<__MxRefSink/>` as a component, never an intrinsic element.
+ */
+export const MX_REF_SINK_BINDING = "__MxRefSink";
 
 /**
  * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.4.4
@@ -211,6 +216,17 @@ export const TEXTAREA_DYN_SPREAD_HELPER = `function ${MX_TEXTAREA_DYN_SPREAD_BIN
 export const SCRIPT_TEXT_HELPER = String.raw`function ${MX_SCRIPT_TEXT_BINDING}(...parts: unknown[]): string {
   return parts.map((part) => (part || part === 0 ? part + "" : "")).join("").replace(/<(\/?script|!--)/gi, "\\u003C$1");
 }`;
+
+/**
+ * A component that returns its `ref` prop. An authored lvalue `ref=X` beside
+ * an element reference is written `<__MxRefSink ref={X} />` inside Solid's
+ * array ref, so `@solidjs/babel-plugin` compiles the prop with its own
+ * component-ref rule: it assigns the node to `X` when `X` is not a `const`
+ * or an import and does not hold a function or an array, and passes `X`
+ * through otherwise. That is the same decision it makes for a native
+ * `<div ref={X}/>`; the array ref then calls whatever the sink returns.
+ */
+export const REF_SINK_HELPER = `function ${MX_REF_SINK_BINDING}(props: { ref?: unknown }): any { return props.ref; }`;
 
 /**
  * The body of `<html-style>`, as the text of a `<style>` element: placeholders
