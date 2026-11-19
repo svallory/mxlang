@@ -3794,7 +3794,17 @@ there for a handler passed to a custom tag or a `<define>` call; on a literal
 dynamic tag it binds the same function and no dynamic-tag value. **Preact, React
 and Hono** declare a slot and the getter among the scope's `/var` statements and
 fill the slot through a callback `ref` written after every other attribute, so
-the reference binds per `<for>` row and per branch; an authored `ref=` on the
+the reference binds per `<for>` row and per branch. A native element's body
+whose element reference repeats a name of its scope (another element reference,
+`/var` or `<const>` of that name, before or after it) is a scope of its own, an
+arrow called in place that holds the slot and the getter, as a native element's
+body is a scope in Marko: the same `/el` may appear in two bodies
+(`<div><div/el/></div><div><div/el/></div>`), and a handler in each body reaches
+its own element. A body whose reference names nothing else in its scope stays
+in the enclosing scope, so a read outside it reaches it. In a `.preact.mx`,
+`.react.mx` or `.hono.mx` region, a body with a `<define>` below it stays in the
+enclosing scope so that the define can still be lifted; two such bodies binding
+the same name are the duplicate-declaration error. An authored `ref=` on the
 same element is handed the node too (called when it is a function, given it as
 `.current` otherwise), and a `ref` key in a spread on that element is replaced.
 A string or bare `ref` beside the reference (`<div/el ref="x"/>`,
@@ -3852,8 +3862,11 @@ authored text.
 **Lifted names are unique on preact, react and hono.** In a whole-file
 component, the identifiers declared by `<const>` patterns, `<define>` names,
 and the identifiers declared by static or dynamic `/var` patterns share one
-JavaScript scope, including
-calls inside sibling native elements. A second declaration of a name is a
+JavaScript scope, including the `/var`s of tag calls inside sibling native
+elements (`<section><Counter/x/></section><p><Counter/x/></p>` is refused).
+Element references are the exception: a native element's body whose element
+reference repeats a name of its scope is a scope of its own (Element
+references, above). A second declaration of a name is a
 positioned compile error: `Duplicate declaration "x"` (at the later authored
 name when its span is available, otherwise at the declaration). A region's
 arrow has the same uniqueness rule for `<define>` and `/var`; `<const>` is
