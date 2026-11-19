@@ -1339,9 +1339,9 @@ describe("MX language plugin", {
     }
   });
 
-  // A returning define call's attribute value maps with its `/var` as without
-  // it, so the TS2304 for `missingN` lands on the authored name, not at an
-  // approximate position.
+  // A returning define call with a `/var` maps its attribute value and its tag
+  // name as the same call without the `/var`: the TS2304 for `missingN` lands
+  // on the authored name and hover on `Twice` reads the called function.
   it("reports a preact /var call's attribute value at the authored position", () => {
     const directory = `${here}/fixtures/preact-policy`;
     const call = `${directory}/call-attr.mx`;
@@ -1368,6 +1368,12 @@ describe("MX language plugin", {
             .includes("position approximate"),
         ]),
     ).toEqual([[2304, 77, 8, false]]);
+    // The define tag name is no expression, so only the emitter's own mapping
+    // reaches it: hover on `Twice` (67) reads the called function's type.
+    expect(service.getQuickInfoAtPosition(call, 68)?.textSpan).toEqual({
+      start: 67,
+      length: 5,
+    });
   });
 
   // On Solid the `let` declaring a `/var` maps to the authored `/var` too,
