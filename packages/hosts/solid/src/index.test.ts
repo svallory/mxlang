@@ -1669,6 +1669,40 @@ describe("a unit that returns a value", () => {
     );
   });
 
+  // The head binds the template's `input`, and an element body declares into
+  // the head or the nearest lazy body's arrow, so an element body's `/input`
+  // gets a name of its own at any depth; a lazy body's own `/input` is its
+  // own `let`, a shadow inside that body only.
+  it("gives an element reference named input in an element body a binding of its own", () => {
+    const code = compileSolidUnit(
+      "<div><div/input/><button onClick() { input() }/></div>${input.x}",
+      { filename: "/fixtures/page.mx" },
+    ).code;
+    expect(code).toContain("let __mxVar0_input: any;");
+    expect(code).toContain(
+      "<div><div ref={(__mxNode: Element) => { __mxVar0_input = () => __mxNode; }}></div><button onClick={function () { __mxVar0_input(); }}></button></div>{input.x}",
+    );
+  });
+
+  it("renames an element body's input inside a lazy body and keeps the template input there", () => {
+    const code = compileSolidUnit(
+      "<if=true><div><div/input/></div>${input.x}</if>",
+      { filename: "/fixtures/page.mx" },
+    ).code;
+    expect(code).toContain(
+      "{(() => { let __mxVar0_input: any; return <><><div><div ref={(__mxNode: Element) => { __mxVar0_input = () => __mxNode; }}></div></div>{() => { const __mxText0 = input.x;",
+    );
+  });
+
+  it("keeps a lazy body's own element reference named input", () => {
+    const code = compileSolidUnit("<if=true><div/input/></if>", {
+      filename: "/fixtures/page.mx",
+    }).code;
+    expect(code).toContain(
+      "<Show when={true}>{(() => { let input: any; return <><div ref={(__mxNode: Element) => { input = () => __mxNode; }}></div></>; })()}</Show>",
+    );
+  });
+
   it("gives a repeated /var in a <try> body a binding of its own", () => {
     const code = compileSolidUnit(
       "<counter/n start=1/><try><counter/n start=2/>${n}<@catch>e</@catch></try>${n}",

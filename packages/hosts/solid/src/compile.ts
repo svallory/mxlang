@@ -747,9 +747,11 @@ export function compileSolidUnit(
     let emittedBody!: ReturnType<typeof emitSolidWithMappings>;
     const { vars, needsEscapeImport, needsAttrGuard } = collectReturnVars(
       () => {
+        // The head binds the template's `input`, so an element body's
+        // `/input` gets a name of its own (`scopeReturnVars`).
         emittedBody = emitSolidWithMappings({
           ...ir,
-          body: scopeReturnVars(ir.body),
+          body: scopeReturnVars(ir.body, ["input"]),
         });
         return emittedBody.code;
       },

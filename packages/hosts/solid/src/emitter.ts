@@ -151,6 +151,13 @@ interface VarScope {
   children: IrNode[];
   depth: number;
   parent: VarScope | null;
+  /**
+   * A lazy body (a `<for>` body, an `<if>` branch, a `<define>` body, a
+   * call's content) that declares its `/var`s in its own arrow
+   * (`inLazyScope`); an element's or a delegated tag's body declares into
+   * the nearest enclosing lazy body or the component's head.
+   */
+  lazy: boolean;
 }
 
 /**
@@ -165,34 +172,48 @@ interface VarScope {
  */
 function varScopes(body: IrNode[]): Array<{ call: VarCall; scope: VarScope }> {
   const found: Array<{ call: VarCall; scope: VarScope }> = [];
-  const enter = (children: IrNode[], parent: VarScope | null): void => {
+  const enter = (
+    children: IrNode[],
+    parent: VarScope | null,
+    lazy: boolean,
+  ): void => {
     const scope: VarScope = {
       children,
       depth: parent ? parent.depth + 1 : 0,
       parent,
+      lazy,
     };
     for (const node of children) {
       if (node.kind === "Element") {
         if (node.var) found.push({ call: node, scope });
-        enter(node.children, scope);
+        enter(node.children, scope, false);
       } else if (node.kind === "DelegatedTag") {
-        enter(node.tag.children, scope);
+        enter(node.tag.children, scope, false);
         for (const tag of node.tag.attributeTags) {
-          if (tag.block) enter(tag.block.children, scope);
+          if (tag.block) enter(tag.block.children, scope, false);
         }
       } else if (node.kind === "For" || node.kind === "Define") {
-        enter(node.children, scope);
+        enter(node.children, scope, true);
       } else if (node.kind === "IfChain") {
-        for (const branch of node.branches) enter(branch.children, scope);
+        for (const branch of node.branches) {
+          enter(branch.children, scope, true);
+        }
       } else if (node.kind === "Component") {
         if (node.var) found.push({ call: node, scope });
-        if (node.content) enter(node.content.children, scope);
+        if (node.content) enter(node.content.children, scope, true);
       }
     }
   };
-  enter(body, null);
+  enter(body, null, false);
   return found;
 }
+
+/**
+ * The component's head as a keeping scope (`scopeReturnVars`): no `/var`
+ * declares into it from a body, so every declaring body of a name it keeps
+ * is renamed.
+ */
+const HEAD: VarScope = { children: [], depth: 0, parent: null, lazy: false };
 
 /**
  * The names a `/var` binds (`varBindings`, or its text for hand-built IR);
@@ -224,20 +245,48 @@ function varNames(call: VarCall): string[] {
  * that rename (its children are set aside while it runs), so its reads, and
  * an assignment to its own `/var`, keep the name.
  *
+ * `topNames` are names the component's head already binds (a unit's
+ * template `input`): an element's or delegated tag's body, at any depth,
+ * declares into the head or the nearest lazy body's arrow, so its `/var` of
+ * such a name is always renamed, as in
+ * `<div><div/input/></div>${input.x}`. The first lazy body that declares
+ * the name keeps it as its own `let`, a shadow inside that body only, as
+ * Marko scopes it.
+ *
  * Emits from a `cloneIr` copy (the IR is read-only to an emitter) and only
  * when a name repeats; otherwise `body` is returned as it is. A destructured
  * `/var` (`/{ n }`) that repeats a name is refused at that tag: its pattern
  * would need rewriting, not only its name.
  */
-export function scopeReturnVars(body: IrNode[]): IrNode[] {
+export function scopeReturnVars(
+  body: IrNode[],
+  topNames: readonly string[] = [],
+): IrNode[] {
+  // The scope that keeps each declared name. A name the component's head
+  // already binds (`topNames`) is kept by the first lazy body that declares
+  // it, which binds it in its own arrow, or by no declaring scope at all
+  // (`HEAD`): an element body declares into the head or a lazy arrow, where
+  // that name is already the head's.
+  const keepers = (
+    calls: ReturnType<typeof varScopes>,
+  ): Map<string, VarScope> => {
+    const kept = new Map<string, VarScope>();
+    for (const { call, scope } of calls) {
+      for (const name of varNames(call)) {
+        if (kept.has(name)) continue;
+        if (!topNames.includes(name)) kept.set(name, scope);
+        else if (scope.lazy) kept.set(name, scope);
+      }
+    }
+    for (const name of topNames) if (!kept.has(name)) kept.set(name, HEAD);
+    return kept;
+  };
   const repeats = (calls: ReturnType<typeof varScopes>): Set<string> => {
-    const first = new Map<string, VarScope>();
+    const kept = keepers(calls);
     const out = new Set<string>();
     for (const { call, scope } of calls) {
       for (const name of varNames(call)) {
-        const seen = first.get(name);
-        if (!seen) first.set(name, scope);
-        else if (seen !== scope) out.add(name);
+        if (kept.get(name) !== scope) out.add(name);
       }
     }
     return out;
@@ -247,6 +296,7 @@ export function scopeReturnVars(body: IrNode[]): IrNode[] {
   const copy = cloneIr(body);
   const calls = varScopes(copy);
   const repeated = repeats(calls);
+  const kepts = keepers(calls);
   let serial = 0;
   const jobs: Array<{
     scope: VarScope;
@@ -256,7 +306,7 @@ export function scopeReturnVars(body: IrNode[]): IrNode[] {
   }> = [];
   for (const name of repeated) {
     const declaring = calls.filter(({ call }) => varNames(call).includes(name));
-    const kept = (declaring[0] as { scope: VarScope }).scope;
+    const kept = kepts.get(name) as VarScope;
     const renamed = new Map<VarScope, string>();
     for (const { call, scope } of declaring) {
       if (scope === kept) continue;
