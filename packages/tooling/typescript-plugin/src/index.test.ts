@@ -1090,6 +1090,83 @@ describe("MX language plugin", {
     },
   );
 
+  // A tag variable's declaration maps to its authored `/var` on html: hover on
+  // the declared name, and definition and rename from a read or from the
+  // declaration, reach the authored text (spec §10 `/var`).
+  it("navigates to and renames a tag variable's html declaration", () => {
+    const files = {
+      "/project/ref.mx":
+        "<define/Child|input: { onPick: () => void }|>x</define><div/el/><Child onPick=(() => el().focus())/>\n",
+      "/project/state.mx":
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+        "<let/count=0/><const/{ a, b: c }={ a: 1, b: 2 }/><p>${count}${a}${c}</p>\n",
+      "/project/call.mx":
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+        "<define/Twice|input: { n: number }|><return=input.n * 2/></define><Twice/v n=1/><p>${v}</p>\n",
+      "/project/index.ts":
+        'import "./ref.mx";\nimport "./state.mx";\nimport "./call.mx";\n',
+    };
+    const service = createPluginService(files, ["/project/index.ts"]);
+    const sites = (
+      locations: readonly ts.DocumentSpan[] | undefined,
+    ): [string, number, number][] =>
+      (locations ?? [])
+        .map((location): [string, number, number] => [
+          location.fileName,
+          location.textSpan.start,
+          location.textSpan.length,
+        ])
+        .sort((left, right) => left[1] - right[1]);
+    const rename = (file: string, at: number) =>
+      sites(service.findRenameLocations(file, at, false, false, {}));
+    const definition = (file: string, at: number) =>
+      sites(service.getDefinitionAtPosition(file, at));
+
+    // `el`: declared at 60 (`<div/el/>`), read at 85 (`el().focus()`).
+    const ref = "/project/ref.mx";
+    expect(
+      (service.getQuickInfoAtPosition(ref, 60)?.displayParts ?? [])
+        .map((part) => part.text)
+        .join(""),
+    ).toBe('const el: () => __MxElement<"div">');
+    expect(definition(ref, 85)).toEqual([[ref, 60, 2]]);
+    expect(rename(ref, 85)).toEqual([
+      [ref, 60, 2],
+      [ref, 85, 2],
+    ]);
+    expect(rename(ref, 60)).toEqual([
+      [ref, 60, 2],
+      [ref, 85, 2],
+    ]);
+    // `Child`: declared at 8 (`<define/Child>`), called at 65.
+    expect(definition(ref, 65)).toEqual([[ref, 8, 5]]);
+    expect(rename(ref, 65)).toEqual([
+      [ref, 8, 5],
+      [ref, 65, 5],
+    ]);
+
+    // `count` (a `<let>`): 5 and 54; `c` (in `{ a, b: c }`): 29 and 66.
+    const state = "/project/state.mx";
+    expect(definition(state, 54)).toEqual([[state, 5, 5]]);
+    expect(rename(state, 54)).toEqual([
+      [state, 5, 5],
+      [state, 54, 5],
+    ]);
+    expect(definition(state, 66)).toEqual([[state, 29, 1]]);
+    expect(rename(state, 66)).toEqual([
+      [state, 29, 1],
+      [state, 66, 1],
+    ]);
+
+    // `v` (a returning define's call `/v`): 73 and 85.
+    const call = "/project/call.mx";
+    expect(definition(call, 85)).toEqual([[call, 73, 1]]);
+    expect(rename(call, 85)).toEqual([
+      [call, 73, 1],
+      [call, 85, 1],
+    ]);
+  });
+
   describe("custom tag discovery", () => {
     const scratches: string[] = [];
 

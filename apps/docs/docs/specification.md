@@ -3833,9 +3833,12 @@ on html it fails when the template renders, as Marko's does, on Preact, React
 and Hono `el()` returns `null` there, and on Solid it throws a `TypeError`. In
 an editor, hover and completion on `el()` come from the TypeScript plugin (the
 language server reports diagnostics only), so `el().` lists the element's
-members where `el()` is typed by tag. The declaration is not mapped to the
-source: hover on the `/el` in the tag, and go-to-definition or rename from a
-read, reach no authored text, as for every `/var`.
+members where `el()` is typed by tag. On html the declaration of every tag
+variable is mapped to the source (an element reference, a `<let>` or `<const>`
+pattern's names, a call's `/var` and a `<define>`'s name): hover on the `/el`
+in the tag reads its type, and go-to-definition and rename from a read reach
+the authored name. On Preact, React, Hono, Solid, Angular and Astro the
+declaration is not mapped yet, so there they reach no authored text.
 
 **Lifted names are unique on preact, react and hono.** In a whole-file
 component, the identifiers declared by `<const>` patterns, `<define>` names,
