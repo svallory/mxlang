@@ -3836,16 +3836,17 @@ on html it fails when the template renders, as Marko's does, on Preact, React
 and Hono `el()` returns `null` there, and on Solid it throws a `TypeError`. In
 an editor, hover and completion on `el()` come from the TypeScript plugin (the
 language server reports diagnostics only), so `el().` lists the element's
-members where `el()` is typed by tag. On html the declaration of every tag
-variable is mapped to the source (an element reference, a `<let>` or `<const>`
-pattern's names, a call's `/var` and a `<define>`'s name): hover on the `/el`
-in the tag reads its type, and go-to-definition and rename from a read reach
-the authored name. This includes a `.mx` file in an Astro project, which
-compiles through html. `.astro.mx` binds no tag variable, so there is nothing
-to map. On Angular the template reaches TypeScript as a string (a page has no
-virtual module, and a `.ng.mx` region is a template literal), so the editor has
-no navigation inside it and the declaration is not mapped. On Preact, React,
-Hono and Solid the declaration is not mapped yet, so there they reach no
+members where `el()` is typed by tag. On html, Preact, React and Hono the
+declaration of every tag variable is mapped to the source (an element
+reference, a `<let>` or `<const>` pattern's names, a call's `/var` and a
+`<define>`'s name), in a whole file and in a `.preact.mx` or `.react.mx`
+region: hover on the `/el` in the tag reads its type, and go-to-definition and
+rename from a read reach the authored name. A `.mx` file in an Astro project
+is mapped too, since it compiles through html. `.astro.mx` binds no tag
+variable, so there is nothing to map. On Angular the template reaches TypeScript as a
+string (a page has no virtual module, and a `.ng.mx` region is a template
+literal), so the editor has no navigation inside it and the declaration is not
+mapped. On Solid the declaration is not mapped yet, so there it reaches no
 authored text.
 
 **Lifted names are unique on preact, react and hono.** In a whole-file
