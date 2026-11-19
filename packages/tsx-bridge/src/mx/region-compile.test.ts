@@ -939,6 +939,105 @@ describe("mxRegionCompile: hoisted define mappings", () => {
     expect("mappings" in plain).toBe(false);
   });
 
+  it("rebases a define whose expression breaks a line outside JSX text", () => {
+    // The module print has no locations on the define, so it writes the
+    // conditional on one line; the measured text must match that.
+    const code =
+      "function __mx_DefineRow1(n) { return <b>{n > 1 ?\n  n :\n  0}</b>; }";
+    const printOne = (withMappings: boolean) =>
+      print(source, "x.solid.mx", {
+        mxRegionCompile: () => ({
+          code: "<p>{__mx_DefineRow1(1)}</p>",
+          hoistedDefines: [
+            {
+              code,
+              binding: "__mx_DefineRow1",
+              ...(withMappings
+                ? {
+                    mappings: [
+                      {
+                        generatedStart: 9,
+                        generatedEnd: 24,
+                        sourceStart: 50,
+                        sourceEnd: 53,
+                      },
+                      {
+                        generatedStart: 25,
+                        generatedEnd: 26,
+                        sourceStart: 60,
+                        sourceEnd: 61,
+                        use: USE,
+                      },
+                      {
+                        generatedStart: 41,
+                        generatedEnd: 42,
+                        sourceStart: 70,
+                        sourceEnd: 71,
+                      },
+                      // The read `n` after the line break.
+                      {
+                        generatedStart: 51,
+                        generatedEnd: 52,
+                        sourceStart: 80,
+                        sourceEnd: 81,
+                      },
+                    ],
+                  }
+                : {}),
+            },
+          ],
+        }),
+      });
+    const plain = printOne(false);
+    const mapped = printOne(true);
+    expect(rows(mapped)).toEqual([
+      ["__mx_DefineRow1", 50, undefined],
+      ["n", 60, USE],
+      ["n", 70, undefined],
+      ["n", 80, undefined],
+    ]);
+    expect(mapped.code).toBe(plain.code);
+    expect(mapped.map).toEqual(plain.map);
+  });
+
+  it("splits an identity copy the printer reformatted at its token starts", () => {
+    // `{ go(); }` (snippet 60-69) is printed without its spaces; each kept
+    // piece maps onto the source shifted by its offset inside the copy.
+    const printed = print(source, "x.solid.mx", {
+      mxRegionCompile: () => ({
+        code: "<p>{__mx_DefineRow1()}</p>",
+        hoistedDefines: [
+          {
+            code: "function __mx_DefineRow1() { return <b onClick={function () { go(); }}></b>; }",
+            binding: "__mx_DefineRow1",
+            mappings: [
+              {
+                generatedStart: 60,
+                generatedEnd: 69,
+                sourceStart: 200,
+                sourceEnd: 209,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    expect(
+      (printed.mappings ?? []).map((m) => [
+        printed.code.slice(m.generatedStart, m.generatedEnd),
+        m.sourceStart,
+        m.sourceEnd,
+      ]),
+    ).toEqual([
+      ["{", 200, 201],
+      ["go", 202, 204],
+      ["(", 204, 205],
+      [")", 205, 206],
+      [";", 206, 207],
+      ["}", 208, 209],
+    ]);
+  });
+
   it("keeps a renamed define's body mappings and drops its name", () => {
     const printed = print("const a = <p/>;\nconst b = <i/>;\n", "x.solid.mx", {
       mxRegionCompile: (input) =>

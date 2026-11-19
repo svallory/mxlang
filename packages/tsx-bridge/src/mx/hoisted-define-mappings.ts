@@ -53,6 +53,45 @@ interface RawMapping {
 /** A character that continues an identifier. */
 const NAME_CHAR = /[\p{ID_Continue}$\u200c\u200d]/u;
 
+/**
+ * Puts every location in `snippet` on line 1, column = the node's offset.
+ *
+ * The module print has no locations on a hoisted define (`detachLocations`),
+ * so under `retainLines` it writes the define without the authored line
+ * breaks outside JSX text (`{n > 1 ?\n 'a' : 'b'}` prints on one line).
+ * Printed with its own multi-line locations the snippet would get those line
+ * breaks back, and its text would never occur in the module. On one line it
+ * prints exactly as the module does, and a raw mapping's `original.column`
+ * is the snippet offset itself.
+ */
+function flattenLocations(snippet: File): void {
+  const visit = (node: unknown) => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    const { start, end, loc } = record;
+    if (
+      typeof start === "number" &&
+      typeof end === "number" &&
+      loc !== null &&
+      typeof loc === "object"
+    ) {
+      record.loc = {
+        ...loc,
+        start: { line: 1, column: start, index: start },
+        end: { line: 1, column: end, index: end },
+      };
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "loc" && key !== "extra") visit(child);
+    }
+  };
+  visit(snippet);
+}
+
 /** The offset of each line's first character in `text`. */
 function lineStarts(text: string): number[] {
   const starts = [0];
@@ -64,7 +103,8 @@ function lineStarts(text: string): number[] {
 
 /**
  * Records where `entry.mappings` land when `snippet` — `entry.code` parsed on
- * its own, still carrying its snippet locations — is printed, for `printAst`
+ * its own, still carrying its snippet locations (flattened onto line 1 here)
+ * — is printed, for `printAst`
  * to rebase onto `file`'s printed module. The hoisted declarations are
  * spliced into `file` without locations (a location would move the printed
  * module under `retainLines`), so the generator's source map cannot carry
@@ -86,6 +126,7 @@ export function recordHoistedDefineMappings(
   entry: HoistedDefine,
 ): void {
   if (!entry.mappings?.length) return;
+  flattenLocations(snippet);
   const printed = generator(snippet, {
     ...PRINT_OPTIONS,
     sourceMaps: true,
@@ -94,17 +135,17 @@ export function recordHoistedDefineMappings(
   const raw = (printed as unknown as { rawMappings?: RawMapping[] })
     .rawMappings;
   if (!raw) return;
-  const snippetLines = lineStarts(entry.code);
   const printedLines = lineStarts(printed.code);
   // Snippet offset -> printed offset, first mapping per original position.
+  // Every snippet location is on line 1, so `original.column` is the offset.
   const printedAt = new Map<number, number>();
   for (const { generated, original } of raw) {
     if (!original) continue;
-    const from = snippetLines[original.line - 1];
     const to = printedLines[generated.line - 1];
-    if (from === undefined || to === undefined) continue;
-    const offset = from + original.column;
-    if (!printedAt.has(offset)) printedAt.set(offset, to + generated.column);
+    if (to === undefined) continue;
+    if (!printedAt.has(original.column)) {
+      printedAt.set(original.column, to + generated.column);
+    }
   }
   const tokenStarts = [...printedAt.keys()].sort((a, b) => a - b);
   // A match that ends inside a longer name in the printed text is not that
