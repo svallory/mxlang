@@ -976,6 +976,89 @@ describe("MX language plugin", {
     ).toBe(true);
   });
 
+  // Element references (`<div/el>`): hover and completion on `el()` come
+  // from tsserver through this plugin, whole file and region. html, Preact
+  // and React type the getter by tag (html in the type check only); Solid
+  // binds `let el: any` (D250), so it pins the hover and a clean check only.
+  // TS7026 is dropped: a fixture directory has no JSX types installed, and
+  // that error names the JSX element, never the reference.
+  const handlerUse =
+    "<div/el/><button onClick() { el().focus() }>go</button>\n";
+  const regionUse =
+    "export const view = <section><div/el/><button onClick() { el().focus() }>go</button></section>;\n";
+  const typed = 'const el: () => __MxElement<"div">';
+  it.each([
+    [
+      "html",
+      "/project",
+      {
+        "page.mx":
+          "<define/Child|input: { onPick: () => void }|>x</define><div/el/><Child onPick=(() => el().focus())/>\n",
+      },
+      typed,
+    ],
+    [
+      "preact",
+      `${here}/fixtures/preact-policy`,
+      { "page.mx": handlerUse, "view.preact.mx": regionUse },
+      typed,
+    ],
+    [
+      "react",
+      `${here}/fixtures/react-policy`,
+      { "page.mx": handlerUse, "view.react.mx": regionUse },
+      typed,
+    ],
+    [
+      "solid",
+      `${here}/fixtures/solid-policy`,
+      { "page.mx": handlerUse, "view.solid.mx": regionUse },
+      "let el: any",
+    ],
+  ])(
+    "types a %s element reference read in a handler",
+    (host, directory, sources, hover) => {
+      const files: Record<string, string> = {};
+      for (const [name, source] of Object.entries(sources)) {
+        files[`${directory}/${name}`] = source;
+      }
+      const consumer = `${directory}/index.ts`;
+      files[consumer] = Object.keys(sources)
+        .map((name) => `import "./${name}";\n`)
+        .join("");
+      const service = createPluginService(files, [consumer]);
+      service.getSemanticDiagnostics(consumer);
+
+      for (const [name, source] of Object.entries(sources)) {
+        const fileName = `${directory}/${name}`;
+        const read = source.indexOf("el().focus");
+        expect(
+          service
+            .getSemanticDiagnostics(fileName)
+            .filter((diagnostic) => diagnostic.code !== 7026)
+            .map((diagnostic) => diagnostic.code),
+          name,
+        ).toEqual([]);
+        expect(
+          (service.getQuickInfoAtPosition(fileName, read)?.displayParts ?? [])
+            .map((part) => part.text)
+            .join(""),
+          name,
+        ).toBe(hover);
+        if (host === "solid") continue;
+        const completions = service.getCompletionsAtPosition(
+          fileName,
+          read + "el().".length,
+          undefined,
+        );
+        expect(
+          completions?.entries.map((entry) => entry.name),
+          name,
+        ).toContain("focus");
+      }
+    },
+  );
+
   describe("custom tag discovery", () => {
     const scratches: string[] = [];
 
