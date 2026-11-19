@@ -2,9 +2,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { posix, resolve } from "node:path";
 import ts from "typescript";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { configDefaults } from "vitest/config";
-import { createVitest } from "vitest/node";
+import { createVitest, type Vitest } from "vitest/node";
 import {
   commandLog,
   commentOnly,
@@ -1004,46 +1004,56 @@ describe("spawned sources", () => {
 });
 
 describe("dist consumers", () => {
-  /** The test files `project` selects for `related`, filtered by `filter`. Needs built dists (CI and verify build first). */
+  let ctx: Vitest | undefined;
+
+  beforeAll(async () => {
+    ctx = await createVitest("test", {
+      root: resolve(import.meta.dirname, ".."),
+      watch: false,
+      project: ["@mxlang/host-preact", "@mxlang/tsc"],
+    });
+    await ctx.init();
+  });
+
+  afterAll(async () => {
+    await ctx?.close();
+  });
+
+  /**
+   * The test files selected for `related`, filtered by `filter`. Needs built dists (CI and verify build first).
+   * One shared Vitest context: a fresh one per query reloads every config and re-walks the import graph, which hit the 5 s default timeout in CI.
+   */
   const selected = async (
-    project: string,
     filter: string,
     related: string[],
   ): Promise<string[]> => {
-    const ctx = await createVitest("test", {
-      root: resolve(import.meta.dirname, ".."),
-      watch: false,
-      project: [project],
-      related: related.map((f) => resolve(import.meta.dirname, "..", f)),
-    });
-    try {
-      await ctx.init();
-      const specs = await ctx.getRelevantTestSpecifications([filter]);
-      return specs.map((s) =>
-        posix.relative(ctx.config.root, s.moduleId.replaceAll("\\", "/")),
-      );
-    } finally {
-      await ctx.close();
-    }
+    if (!ctx)
+      throw new Error("the dist consumers Vitest context was not created");
+    const root = ctx.config.root;
+    ctx.config.related = related.map((f) =>
+      resolve(import.meta.dirname, "..", f),
+    );
+    const specs = await ctx.getRelevantTestSpecifications([filter]);
+    return specs.map((s) =>
+      posix.relative(root, s.moduleId.replaceAll("\\", "/")),
+    );
   };
 
   it("a test that reaches core only through its dist is selected by core's entry, not by a core source", async () => {
+    expect(await selected("region-errors", CORE_DIST)).toEqual([
+      "packages/hosts/preact/src/region-errors.test.ts",
+    ]);
     expect(
-      await selected("@mxlang/host-preact", "region-errors", CORE_DIST),
-    ).toEqual(["packages/hosts/preact/src/region-errors.test.ts"]);
-    expect(
-      await selected("@mxlang/host-preact", "region-errors", [
-        "packages/core/src/custom-tags.ts",
-      ]),
+      await selected("region-errors", ["packages/core/src/custom-tags.ts"]),
     ).toEqual([]);
   });
 
   it("a test that reaches a CJS dist only by name is selected by its entry, not by the package's source", async () => {
+    expect(await selected("shorthand-mappings", TS_PLUGIN_DIST)).toEqual([
+      "packages/tooling/tsc/src/shorthand-mappings.test.ts",
+    ]);
     expect(
-      await selected("@mxlang/tsc", "shorthand-mappings", TS_PLUGIN_DIST),
-    ).toEqual(["packages/tooling/tsc/src/shorthand-mappings.test.ts"]);
-    expect(
-      await selected("@mxlang/tsc", "shorthand-mappings", [
+      await selected("shorthand-mappings", [
         "packages/tooling/typescript-plugin/src/index.ts",
       ]),
     ).toEqual([]);
