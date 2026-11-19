@@ -424,14 +424,17 @@ describe("Solid client render: element references", () => {
         '<div/el/><button onClick() { el().dataset.hit = "1" }>go</button>',
         '<for|item| of=["x", "y"]><p/row>${item}</p><button onClick() { row().dataset.hit = "1" }>row</button></for>',
         '<div/own ref=((n) => n.setAttribute("data-authored", "1"))/><button onClick() { own().dataset.hit = "1" }>own</button>',
+        // A literal dynamic tag is a native tag to Marko: its `/var` is the element.
+        '<${"my-el"}/dyn/><button onClick() { dyn().dataset.hit = "1" }>dyn</button>',
+        '<${"my-el"}/dyn2 ref=((n) => n.setAttribute("data-authored", "1"))/><button onClick() { dyn2().dataset.hit = "1" }>dyn2</button>',
       ].join(""),
       '(globalThis as any).clickAll = () => { for (const b of document.querySelectorAll("button")) (b as HTMLElement).click(); };',
       "clickAll",
       ["0"],
     );
     expect(snapshots).toEqual([
-      '<ul><div></div><button>go</button><p>x</p><button>row</button><p>y</p><button>row</button><div data-authored="1"></div><button>own</button></ul>',
-      '<ul><div data-hit="1"></div><button>go</button><p data-hit="1">x</p><button>row</button><p data-hit="1">y</p><button>row</button><div data-authored="1" data-hit="1"></div><button>own</button></ul>',
+      '<ul><div></div><button>go</button><p>x</p><button>row</button><p>y</p><button>row</button><div data-authored="1"></div><button>own</button><my-el></my-el><button>dyn</button><my-el data-authored="1"></my-el><button>dyn2</button></ul>',
+      '<ul><div data-hit="1"></div><button>go</button><p data-hit="1">x</p><button>row</button><p data-hit="1">y</p><button>row</button><div data-authored="1" data-hit="1"></div><button>own</button><my-el data-hit="1"></my-el><button>dyn</button><my-el data-authored="1" data-hit="1"></my-el><button>dyn2</button></ul>',
     ]);
   });
 });

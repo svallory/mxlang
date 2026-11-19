@@ -2662,30 +2662,29 @@ const ELEMENT_REF_PARAM = "(__mxNode: Element)";
 const ELEMENT_REF_PARAM_UNTYPED = "(__mxNode)";
 
 /**
- * Binds an element reference (`<div/el>`): `el` joins the scope's `/var`
- * `let`s (`bindElementVar`), and a callback `ref`, written after every other
- * attribute, sets it to a getter of the node,
+ * Binds an element reference (`<div/el>`, `<${"my-el"}/el>`): `el` joins the
+ * scope's `/var` `let`s (`bindElementVar`), and a callback `ref`, written
+ * after every other attribute, sets it to a getter of the node,
  * `ref={(__mxNode: Element) => { el = () => __mxNode; }}`. A callback ref
  * runs per row, per branch and per instance, with no hook. An authored
- * `ref=` (the last `dynamic` one) is taken off the element and composed
+ * `ref=` (the last `dynamic` one) is taken off the attributes and composed
  * through Solid's array ref, `ref={[authored, callback]}`, which calls every
- * function in it. An element with no `/var` is returned as it is.
+ * function in it. Returns the attributes to write and the `ref`.
  */
-function elementRef(node: Extract<IrNode, { kind: "Element" }>): {
-  node: Extract<IrNode, { kind: "Element" }>;
-  ref: MappedCode | string;
-} {
-  if (!node.var) return { node, ref: "" };
-  bindElementVar(node.var);
-  const callback = `${ELEMENT_REF_PARAM} => { ${node.var} = () => __mxNode; }`;
-  const authored = [...node.attrs]
+function elementRef(
+  attrs: Attr[],
+  name: string,
+): { attrs: Attr[]; ref: MappedCode | string } {
+  bindElementVar(name);
+  const callback = `${ELEMENT_REF_PARAM} => { ${name} = () => __mxNode; }`;
+  const authored = [...attrs]
     .reverse()
     .find((attr) => attr.kind === "dynamic" && attr.name === "ref");
   if (authored?.kind !== "dynamic") {
-    return { node, ref: ` ref={${callback}}` };
+    return { attrs, ref: ` ref={${callback}}` };
   }
   return {
-    node: { ...node, attrs: node.attrs.filter((attr) => attr !== authored) },
+    attrs: attrs.filter((attr) => attr !== authored),
     ref: concatMapped(" ref={[", mappedExpr(authored.value), `, ${callback}]}`),
   };
 }
@@ -2778,7 +2777,9 @@ export class SolidEmitter implements Emitter<string> {
    * after every other attribute.
    */
   element(element: Extract<IrNode, { kind: "Element" }>): void {
-    const { node, ref } = elementRef(element);
+    const bound = element.var ? elementRef(element.attrs, element.var) : null;
+    const node = bound ? { ...element, attrs: bound.attrs } : element;
+    const ref = bound?.ref ?? "";
     if (node.name === "html-script" || node.name === "html-style") {
       this.#htmlScript(
         node,
@@ -3122,10 +3123,18 @@ export class SolidEmitter implements Emitter<string> {
     const innerHtml = raw
       ? concatMapped(" innerHTML={", mappedExpr(raw.expr), "}")
       : concatMapped();
-    const returnProp = node.var
-      ? ` ${MX_RETURN_PROP}={(__mxV) => { ${node.var} = __mxV; }}`
-      : "";
-    if (node.var) bindReturnVar({ ...node, var: node.var });
+    // A literal dynamic tag's element reference (`<${"my-el"}/el>`) is bound
+    // as `<div/el>`'s, with its callback `ref` on each `<Dynamic>` after the
+    // other attributes, and no returned value; any other `/var` binds the
+    // callee's returned value.
+    const bound =
+      node.elementRef && node.var ? elementRef(node.attrs, node.var) : null;
+    const returnProp: MappedCode | string = bound
+      ? bound.ref
+      : node.var
+        ? ` ${MX_RETURN_PROP}={(__mxV) => { ${node.var} = __mxV; }}`
+        : "";
+    if (node.var && !bound) bindReturnVar({ ...node, var: node.var });
     const serial = dynSerial.n++;
     const temp = `__mxDyn${serial}`;
     const value = node.args.length > 0 ? `__mxDynValue${serial}` : temp;
@@ -3140,7 +3149,7 @@ export class SolidEmitter implements Emitter<string> {
       tag: value,
       when: `typeof ${value} === "string"`,
     };
-    const attrs = renderAttrs(node.attrs, true, native);
+    const attrs = renderAttrs(bound?.attrs ?? node.attrs, true, native);
     // A value-import target is a component, never a native element.
     const tags = attributeTagProps(
       node.attributeTagTree,
@@ -3267,7 +3276,8 @@ export class SolidEmitter implements Emitter<string> {
             component,
             attrs,
             tagsProps,
-            `${returnProp}>`,
+            returnProp,
+            ">",
             children,
             "</Dynamic>",
           ),
