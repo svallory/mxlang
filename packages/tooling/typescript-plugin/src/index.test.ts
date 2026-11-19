@@ -976,51 +976,81 @@ describe("MX language plugin", {
     ).toBe(true);
   });
 
-  // Element references (`<div/el>`): hover and completion on `el()` come
-  // from tsserver through this plugin, whole file and region. html, Preact
-  // and React type the getter by tag (html in the type check only); Solid
-  // binds `let el: any` (spec §10 `/var`, "Element references"), so it
-  // pins the hover and a clean check only.
+  // Element references (`<div/el>`, and `<${"my-el"}/el>` on a literal
+  // dynamic tag): hover and completion on `el()` come from tsserver through
+  // this plugin, whole file and region. html, Preact and React type the
+  // getter by tag (html in the type check only; a name outside the tag maps,
+  // like `my-el`, is `HTMLElement`); Solid binds `let el: any` (spec §10
+  // `/var`, "Element references"), so it pins the hover and a clean check
+  // only. Each host's service holds both forms.
   // TS7026 is dropped: a fixture directory has no JSX types installed, and
   // that error names the JSX element, never the reference.
   const handlerUse =
     "<div/el/><button onClick() { el().focus() }>go</button>\n";
   const regionUse =
     "export const view = <section><div/el/><button onClick() { el().focus() }>go</button></section>;\n";
+  const dynamicUse =
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    '<${"my-el"}/el/><button onClick() { el().focus() }>go</button>\n';
+  const dynamicRegionUse =
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    'export const view = <section><${"my-el"}/el/><button onClick() { el().focus() }>go</button></section>;\n';
   const typed = 'const el: () => __MxElement<"div">';
+  const dynamicTyped = 'const el: () => __MxElement<"my-el">';
+  const untyped = "let el: any";
   it.each([
     [
       "html",
       "/project",
       {
-        "page.mx":
-          "<define/Child|input: { onPick: () => void }|>x</define><div/el/><Child onPick=(() => el().focus())/>\n",
+        "page.mx": {
+          source:
+            "<define/Child|input: { onPick: () => void }|>x</define><div/el/><Child onPick=(() => el().focus())/>\n",
+          hover: typed,
+        },
+        "dyn.mx": {
+          source:
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+            '<define/Child|input: { onPick: () => void }|>x</define><${"my-el"}/el/><Child onPick=(() => el().focus())/>\n',
+          hover: dynamicTyped,
+        },
       },
-      typed,
     ],
     [
       "preact",
       `${here}/fixtures/preact-policy`,
-      { "page.mx": handlerUse, "view.preact.mx": regionUse },
-      typed,
+      {
+        "page.mx": { source: handlerUse, hover: typed },
+        "view.preact.mx": { source: regionUse, hover: typed },
+        "dyn.mx": { source: dynamicUse, hover: dynamicTyped },
+        "dyn.preact.mx": { source: dynamicRegionUse, hover: dynamicTyped },
+      },
     ],
     [
       "react",
       `${here}/fixtures/react-policy`,
-      { "page.mx": handlerUse, "view.react.mx": regionUse },
-      typed,
+      {
+        "page.mx": { source: handlerUse, hover: typed },
+        "view.react.mx": { source: regionUse, hover: typed },
+        "dyn.mx": { source: dynamicUse, hover: dynamicTyped },
+        "dyn.react.mx": { source: dynamicRegionUse, hover: dynamicTyped },
+      },
     ],
     [
       "solid",
       `${here}/fixtures/solid-policy`,
-      { "page.mx": handlerUse, "view.solid.mx": regionUse },
-      "let el: any",
+      {
+        "page.mx": { source: handlerUse, hover: untyped },
+        "view.solid.mx": { source: regionUse, hover: untyped },
+        "dyn.mx": { source: dynamicUse, hover: untyped },
+        "dyn.solid.mx": { source: dynamicRegionUse, hover: untyped },
+      },
     ],
   ])(
     "types a %s element reference read in a handler",
-    (host, directory, sources, hover) => {
+    (host, directory, sources) => {
       const files: Record<string, string> = {};
-      for (const [name, source] of Object.entries(sources)) {
+      for (const [name, { source }] of Object.entries(sources)) {
         files[`${directory}/${name}`] = source;
       }
       const consumer = `${directory}/index.ts`;
@@ -1030,7 +1060,7 @@ describe("MX language plugin", {
       const service = createPluginService(files, [consumer]);
       service.getSemanticDiagnostics(consumer);
 
-      for (const [name, source] of Object.entries(sources)) {
+      for (const [name, { source, hover }] of Object.entries(sources)) {
         const fileName = `${directory}/${name}`;
         const read = source.indexOf("el().focus");
         expect(
