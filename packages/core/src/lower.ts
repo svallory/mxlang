@@ -7759,7 +7759,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // `import debug from "debug"` + `<debug/>` as the core tag, never blaming
   // the import, so the tag keeps whatever routing it has without one - the
   // name set comes from `CORE_TAG_NAMES` (not the lookup: only the html
-  // target's table registers the full core taglib).
+  // target's table registers the full core taglib). The exemption applies
+  // outside the `none` tag rules only: under `none` a core taglib name is an
+  // ordinary name (`isCoreTaglibTag` answers by the reserved names there).
   if (
     lowercaseBinding &&
     !isNativeElementName(ctx, name) &&

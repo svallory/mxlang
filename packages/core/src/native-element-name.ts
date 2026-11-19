@@ -6,7 +6,10 @@
 
 import type { Ctx } from "./core.ts";
 import { CORE_TAG_NAMES, CORE_TAGLIB_ID } from "./core-taglib.ts";
+import { RESERVED_NAMES } from "./tag-names.ts";
 import { coreNativeTags, ELEMENT_TAGLIB_IDS } from "./tag-table.ts";
+
+const RESERVED: ReadonlySet<string> = new Set(RESERVED_NAMES);
 
 /**
  * Whether `name` is one of Marko's core taglib tags (`<debug>`, `<log>`, ...):
@@ -15,8 +18,14 @@ import { coreNativeTags, ELEMENT_TAGLIB_IDS } from "./tag-table.ts";
  * every target judges the same set. Stock Marko lets a core tag win over a
  * same-named lowercase import, so the local-variable rule must not fire for
  * one.
+ *
+ * Under the `none` tag rules only the reserved names are core (spec
+ * §13.7.3): `<log>` there is an ordinary name, the same set wildcard
+ * eligibility uses (`isBuiltin`). No host row is read: the host rows core
+ * keeps under `none` are rows for reserved names only.
  */
 export function isCoreTaglibTag(ctx: Ctx, name: string): boolean {
+  if (ctx.tagRules === "none") return RESERVED.has(name);
   if (ctx.tagTable?.getTag(name)?.taglibId === CORE_TAGLIB_ID) return true;
   return CORE_TAG_NAMES.has(name);
 }

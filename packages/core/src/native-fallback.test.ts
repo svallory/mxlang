@@ -13,6 +13,7 @@ import type { HostDeclarations } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Ir, IrNode } from "./ir.ts";
 import { lower } from "./lower.ts";
+import type { Dialect } from "./syntax-table.ts";
 import { lookup } from "./test-targets.ts";
 
 const thirdParty: HostDeclarations = {
@@ -377,4 +378,53 @@ describe("a lowercase tag naming a local binding", () => {
       expect(warnings).toEqual([]);
     },
   );
+
+  // Under the `none` tag rules only the reserved names are core (spec
+  // §13.7.3), so a core taglib name is an ordinary name there: bound
+  // locally, it gets the local-variable error exactly as `zzz` does.
+  describe("under the none tag rules", () => {
+    const none: Dialect = Object.freeze({
+      id: "loose",
+      name: "Loose",
+      table: {},
+      tagRules: "none",
+    });
+
+    function thrownUnderNone(source: string): unknown {
+      try {
+        compileSource(source, "/tmp/native-fallback.mx", thirdParty, {
+          targets: lookup,
+          emitIr: () => "",
+          dialect: none,
+        });
+      } catch (caught) {
+        return caught;
+      }
+      return undefined;
+    }
+
+    it.each([
+      "debug",
+      "log",
+      "id",
+      "lifecycle",
+      "effect",
+      "script",
+      "style",
+      "zzz",
+    ])("an imported `%s` is the local-variable error", (name) => {
+      expect(
+        thrownUnderNone(`import ${name} from "./${name}.mx"\n<${name}/>\n`),
+      ).toMatchObject({ message: LOCAL_VARIABLE(name), line: 2, column: 1 });
+    });
+
+    it("a `<define>`d core taglib name is the local-variable error, as `zzz` is", () => {
+      for (const name of ["debug", "zzz"]) {
+        expect(
+          thrownUnderNone(`<define/${name}|x|>d</define>\n<${name}/>\n`),
+          name,
+        ).toMatchObject({ message: LOCAL_VARIABLE(name), line: 2, column: 1 });
+      }
+    });
+  });
 });
