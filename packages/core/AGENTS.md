@@ -992,7 +992,10 @@ Five facts worth knowing before editing it:
   registered tag, not a *built-in of the target*: an entry of core's own
   taglib (`CORE_TAG_NAMES`, on every target), a name the host
   declares a disposition for, or a non-element in the target's `ctx.tagTable`
-  (`isBuiltin`). Core holds no list and no host literal. A native element name is
+  (`isBuiltin`). Under the `none` tag rules only `RESERVED_NAMES` count as
+  core taglib entries, and only a host row for a reserved name applies
+  (`hostTagRow`), so `<log>` there is claimable like any ordinary name.
+  Core holds no list and no host literal. A native element name is
   claimable (the contract decides inside a contract parent), and a
   PascalCase file-local binding beats a match. The parse-only IR-entry scan
   (`src/ir-entry/authored-tags.ts`) reuses `matchWildcardChild`/`scopeForChildren`
