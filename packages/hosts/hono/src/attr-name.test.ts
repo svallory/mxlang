@@ -157,6 +157,11 @@ describe("other frameworks' attribute names (hono)", () => {
       7,
       "`defaultChecked` is not a valid attribute, did you mean `checked`?",
     ],
+    [
+      '<div ref="x"/>',
+      5,
+      "`ref` on a native element must be a function or a ref object (`ref=myRef`): Hono has no string refs, so a string or bare `ref` cannot receive the node.",
+    ],
   ])("refuses %s at the attribute", (source, column, message) => {
     expect(failure(source)).toEqual({ message, line: 1, column });
   });

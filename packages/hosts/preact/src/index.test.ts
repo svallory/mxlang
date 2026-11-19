@@ -2011,7 +2011,32 @@ describe("text with JSX-significant characters (rendered)", () => {
   });
 });
 
-describe("a string or bare `ref` beside an element reference", () => {
+describe("a string or bare `ref` on a native element", () => {
+  it.each([
+    ['<div ref="x"/>', 5],
+    ["<div ref/>", 5],
+    ['<${"my-el"} ref="x"/>', 12],
+    ['<html-script ref="x">x</html-script>', 13],
+  ])("refuses %s at the `ref` attribute", (source, column) => {
+    let failure: { message: string; line: number; column: number } | null =
+      null;
+    try {
+      compile(source);
+    } catch (error) {
+      failure = error as { message: string; line: number; column: number };
+    }
+    expect({
+      message: failure?.message,
+      line: failure?.line,
+      column: failure?.column,
+    }).toEqual({
+      message:
+        "`ref` on a native element must be a function or a ref object (`ref=myRef`): Preact has no string refs, so a string or bare `ref` cannot receive the node.",
+      line: 1,
+      column,
+    });
+  });
+
   it.each(['<div/el ref="x"/>', "<div/el ref/>"])(
     "refuses %s at the `ref` attribute",
     (source) => {

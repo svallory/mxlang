@@ -1952,7 +1952,10 @@ export class PreactEmitter implements Emitter<string> {
     tag?: string,
     textareaBody = false,
   ): MappedCode {
-    if (!isComponent) this.#rejectRawHtmlAttr(attrs);
+    if (!isComponent) {
+      this.#rejectRawHtmlAttr(attrs);
+      this.#rejectStringRef(attrs);
+    }
     if (!isComponent && attrs.some((attr) => attr.kind === "spread")) {
       // Validate after the authored merge: an overwritten object is never
       // serialized by Marko and must not throw just because it appeared first.
@@ -2054,6 +2057,40 @@ export class PreactEmitter implements Emitter<string> {
         attr,
       );
     }
+  }
+
+  /**
+   * Marko refuses every `ref` on a native element; this host keeps one whose
+   * value is an expression (a callback or a ref object, the framework's own
+   * escape hatch). Neither framework has string refs, so a string or bare
+   * `ref` is refused at the attribute rather than written as a JSX string
+   * prop. An element with `/var` reaches `#elementRef`'s own refusal first.
+   */
+  #rejectStringRef(attrs: Attr[]): void {
+    for (const attr of attrs) {
+      if (
+        attr.kind === "spread" ||
+        attr.name !== "ref" ||
+        (attr.kind !== "static" && attr.kind !== "boolean")
+      )
+        continue;
+      fail(
+        `\`ref\` on a native element must be a function or a ref object (\`ref=myRef\`): ${this.#dialect.name} has no string refs, so a string or bare \`ref\` cannot receive the node.`,
+        attr,
+      );
+    }
+  }
+
+  /**
+   * Whether a dynamic tag's name is a literal (`<${"my-el"}>`): the one-quasi
+   * test core applies to a dynamic tag name.
+   */
+  #isLiteralTarget(target: Expr): boolean {
+    const node = target.node;
+    return (
+      node?.type === "StringLiteral" ||
+      (node?.type === "TemplateLiteral" && node.expressions.length === 0)
+    );
   }
 
   /** `__mxTextareaContent(<value>)` for a textarea's explicit `value`. */
@@ -2978,6 +3015,10 @@ export class PreactEmitter implements Emitter<string> {
         );
         return;
       }
+      // A literal name is a native element: a string or bare `ref` is
+      // refused there as on `<div>`.
+      if (this.#isLiteralTarget(node.target.expr))
+        this.#rejectStringRef(node.attrs);
       // Marko parity: args combine with a body/attribute tag
       // (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) — only a
       // plain attribute alongside args is still rejected
@@ -3028,10 +3069,7 @@ export class PreactEmitter implements Emitter<string> {
       // throws only for a params body whose string target arrives at run
       // time, rather than render an empty element. The literal test is the
       // one-quasi test core applies to a dynamic tag name.
-      const target = node.target.expr.node;
-      const literalTarget =
-        target?.type === "StringLiteral" ||
-        (target?.type === "TemplateLiteral" && target.expressions.length === 0);
+      const literalTarget = this.#isLiteralTarget(node.target.expr);
       const hasParams =
         hasContent &&
         node.content?.hasParams === true &&
