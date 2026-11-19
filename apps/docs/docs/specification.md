@@ -3827,12 +3827,14 @@ component instance (a `.solid.mx` region declares all its top-level `/var`s,
 element references and call `/var`s alike, in place, in an arrow called around
 its JSX). `el()` is not typed by tag name: a `/var` binds `any` on Solid. An
 authored `ref=` on the same element is composed through Solid's array ref,
-`ref={[authored, callback]}`, which calls every function in it. A
-member-expression `ref=` (`<div/el ref=refs.d/>`) is assigned the node there
-as Solid assigns `ref={refs.d}`, unless it holds a function or an array, which
-is applied; a bare identifier (`ref=d`) is not assigned, since it may be a
-`const`. A string or bare `ref` beside the reference (`<div/el ref="x"/>`,
-`<div/el ref/>`) is a compile error at the `ref` attribute: "`ref` beside the
+`ref={[authored, callback]}`, which calls every function in it. An
+identifier or member-expression `ref=` (`<div/el ref=d/>`,
+`<div/el ref=refs.d/>`) is assigned or applied there as Solid's own `ref={X}`
+would be: a `let` or a member is assigned the node, unless it holds a function
+or an array, which is applied, and a `const` or an import is applied. An
+optional member (`ref=refs?.d`) or a `satisfies` is not assigned, as Solid's
+own native `ref=` does not assign one. A string or bare `ref` beside the
+reference (`<div/el ref="x"/>`, `<div/el ref/>`) is a compile error at the `ref` attribute: "`ref` beside the
 element reference `/el` must be a function (`ref=myRef`): Solid has no string
 refs, so a string or bare `ref` cannot receive the node." A `ref` key in a
 spread on that element is replaced. On a literal dynamic tag the callback
