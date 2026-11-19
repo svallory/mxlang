@@ -217,6 +217,12 @@ describe("Hono dialect", () => {
     }
   });
 
+  it("passes an element reference's callback `ref` only where a `document` exists", () => {
+    expect(
+      compile("<div/el/><button onClick() { el() }>go</button>"),
+    ).toContain('ref={typeof document === "undefined" ? undefined : (__mxNode');
+  });
+
   it("uses Hono's raw HTML prop", () => {
     expect(markup("<div>$!{input.html}</div>")).toBe(
       "<div dangerouslySetInnerHTML={{ __html: input.html }} />",

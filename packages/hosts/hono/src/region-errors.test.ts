@@ -212,13 +212,15 @@ describe("region rule", () => {
   });
 
   it("names the region, not a standalone template, when refusing a tag variable", () => {
-    expect(errorOf(inRegion("<p/x>text</p>"))).toMatchObject({
+    // `<p/x>` binds an element reference on this host; a `<if>` never takes
+    // a `/var`.
+    expect(errorOf(inRegion("<if/x=true>text</if>"))).toMatchObject({
       message: expect.stringContaining(
         "is not supported in a `.hono.mx` region",
       ),
       line: 5,
       // At the `/x` itself, not the tag (dynamic-tag-var-silent-drop).
-      column: 9,
+      column: 10,
     });
   });
 

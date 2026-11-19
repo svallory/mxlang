@@ -16,6 +16,9 @@ export const honoDialect: JsxDialect = {
   forAttr: "for",
   textareaContent: "children",
   textareaLeadingNewline: "ssr",
+  // `hono@4.6.20`'s string renderer throws on a function `ref`: an element
+  // reference's callback is passed only where a `document` exists.
+  elementRefClientOnly: true,
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,
   // `<try>` lowers to this package's own `MxErrorBoundary`, which wraps

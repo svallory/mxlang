@@ -79,6 +79,14 @@ export interface JsxDialect {
    * does it (React). `"always"` is for a renderer that can only write markup.
    */
   textareaLeadingNewline: "ssr" | "always" | "never";
+  /**
+   * Whether an element reference's callback `ref` (`<div/el>`) is passed only
+   * where a `document` exists, and `undefined` in a server render: for a
+   * renderer whose string output throws on a function `ref` (hono 4.6.20,
+   * "Invalid prop 'ref' of type 'function'"). Keys on `typeof document`, as
+   * `textareaLeadingNewline: "ssr"` does. Absent or false: always passed.
+   */
+  elementRefClientOnly?: boolean;
   /** The prop that sets raw HTML from a sole `$!{expr}` child. */
   rawHtmlProp: string;
   /**

@@ -2035,3 +2035,11 @@ describe("a string or bare `ref` beside an element reference", () => {
     },
   );
 });
+
+describe("an element reference's callback `ref` (Preact)", () => {
+  it("is passed unguarded: only Hono keys it on `typeof document`", () => {
+    const code = compile("<div/el/><button onClick() { el() }>go</button>");
+    expect(code).toContain("ref={(__mxNode");
+    expect(code).not.toContain('typeof document === "undefined" ? undefined');
+  });
+});

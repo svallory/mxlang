@@ -68,6 +68,9 @@ describe(".hono.mx region renders what the whole-file .mx renders", () => {
     '<${"e" + "m"} title="t">dyn</>',
     '<define/Item|label: string|><li>${label}</li></define><ol><Item("one")/><Item("two")/></ol>',
     '<div>$!{"<b>raw</b>"}</div>',
+    // An element reference: the server render skips its client-only `ref`.
+    "<div/el/><button onClick() { el() }>go</button>",
+    '<${"my-el"}/el/><button onClick() { el() }>go</button>',
   ];
 
   it.each(markups)("%s", async (markup) => {

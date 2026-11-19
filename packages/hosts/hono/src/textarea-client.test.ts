@@ -5,6 +5,11 @@
  * nodes and sets the text through the DOM, where a doubled newline would show
  * as a second one: this test pins that the client render keeps `value === x`
  * while the string renderer's markup carries the extra newline.
+ *
+ * The same harness runs an element reference (`<div/el>`): `hono/jsx/dom`
+ * calls the callback `ref` the emitter passes on the client, so a handler's
+ * `el()` reads the rendered element. (The server render, which gets
+ * `undefined` for that `ref`, is the region parity row in `region.test.ts`.)
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -83,4 +88,86 @@ describe("<textarea value> leading newline: server vs client (Hono)", () => {
     },
     30_000,
   );
+});
+
+describe("an element reference (`<div/el>`) is the rendered element in a handler (Hono)", () => {
+  const SOURCES = {
+    base: '<div/el/><button onClick() { el().dataset.hit = "1" }>go</button>',
+    rows: "<for|n| of=[1, 2]><div/el/><button onClick() { el().dataset.hit = String(n) }>go</button></for>",
+    authoredRef:
+      '<div/el ref=input.r/><button onClick() { el().dataset.hit = "1" }>go</button>',
+    // A literal dynamic tag is a native tag to Marko: `el` is the element.
+    dynamic:
+      '<${"my-el"}/el/><button onClick() { el().dataset.hit = "1" }>go</button>',
+    dynamicAuthoredRef:
+      '<${"my-el"}/el ref=input.r/><button onClick() { el().dataset.hit = "1" }>go</button>',
+  } as const;
+  const files = {} as Record<keyof typeof SOURCES, string>;
+
+  // One client process for every case: render, click the given button, read
+  // the markup back. The globals are set before `hono/jsx/dom` loads.
+  const REF_CLIENT = `
+import { JSDOM } from "jsdom";
+const dom = new JSDOM("<!doctype html><body></body>");
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
+globalThis.Node = dom.window.Node;
+globalThis.HTMLElement = dom.window.HTMLElement;
+const { render } = await import("hono/jsx/dom");
+const { jsx } = await import("hono/jsx");
+const out = {};
+for (const [name, file, click] of JSON.parse(process.argv[2])) {
+  const mod = await import(file);
+  const root = document.createElement("div");
+  document.body.append(root);
+  let received = null;
+  render(jsx(mod.default, { r: (node) => { if (node) received = node; } }), root);
+  root.querySelectorAll("button")[click].click();
+  out[name] = { html: root.innerHTML };
+  // Only the authored-ref cases read the \`r\` prop.
+  if (name === "authoredRef") out[name].refIsDiv = received === root.querySelector("div");
+  if (name === "dynamicAuthoredRef") out[name].refIsMyEl = received === root.querySelector("my-el");
+}
+console.log(JSON.stringify(out));
+`;
+
+  beforeAll(() => {
+    for (const [name, source] of Object.entries(SOURCES)) {
+      const file = join(scratch, `${name}.tsx`);
+      writeFileSync(file, compileHonoMx(source, file).code);
+      files[name as keyof typeof SOURCES] = file;
+    }
+  });
+
+  it("a click reaches the element, per row in a <for>, with an authored ref composed", () => {
+    const result = run(
+      REF_CLIENT,
+      JSON.stringify([
+        ["base", files.base, 0],
+        ["rows", files.rows, 1],
+        ["authoredRef", files.authoredRef, 0],
+        ["dynamic", files.dynamic, 0],
+        ["dynamicAuthoredRef", files.dynamicAuthoredRef, 0],
+      ]),
+    );
+    expect(result).toEqual({
+      base: {
+        html: '<div data-hit="1"></div><button>go</button>',
+      },
+      rows: {
+        html: '<div></div><button>go</button><div data-hit="2"></div><button>go</button>',
+      },
+      authoredRef: {
+        html: '<div data-hit="1"></div><button>go</button>',
+        refIsDiv: true,
+      },
+      dynamic: {
+        html: '<my-el data-hit="1"></my-el><button>go</button>',
+      },
+      dynamicAuthoredRef: {
+        html: '<my-el data-hit="1"></my-el><button>go</button>',
+        refIsMyEl: true,
+      },
+    });
+  }, 30_000);
 });

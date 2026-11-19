@@ -698,9 +698,9 @@ export function createJsxDeclarations(
     // a dynamic tag binds instead of being refused.
     bindsDynamicTagVar: true,
     // `<div/el>` binds an element reference through a callback `ref`
-    // (`element`). Not on Hono: its server renderer throws on a function
-    // `ref` on an element.
-    bindsElementVar: dialectName !== "Hono",
+    // (`element`). On Hono, whose server renderer throws on a function `ref`,
+    // the callback is passed only on the client (`elementRefClientOnly`).
+    bindsElementVar: true,
     tags: statefulErrors(dialectName, region),
     // The ladder: the parent's contract `defaultTag`, then
     // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
@@ -2800,14 +2800,19 @@ export class PreactEmitter implements Emitter<string> {
       ? nodeAttrs.filter((attr) => attr !== authored)
       : nodeAttrs;
     const store = `${slot} = __mxNode;`;
+    // A renderer whose server output throws on a function `ref` gets
+    // `undefined` there, which it skips; the client still gets the callback.
+    const guard = this.#dialect.elementRefClientOnly
+      ? 'typeof document === "undefined" ? undefined : '
+      : "";
     const callback =
       authored?.kind === "dynamic"
         ? concatMapped(
-            `(__mxNode: ${type} | null) => { ${store} const __mxRef: any = `,
+            `${guard}(__mxNode: ${type} | null) => { ${store} const __mxRef: any = `,
             mappedExpr(authored.value),
             '; if (typeof __mxRef === "function") __mxRef(__mxNode); else if (__mxRef) __mxRef.current = __mxNode; }',
           )
-        : concatMapped(`(__mxNode: ${type} | null) => { ${store} }`);
+        : concatMapped(`${guard}(__mxNode: ${type} | null) => { ${store} }`);
     return { attrs, callback };
   }
 
