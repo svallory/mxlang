@@ -421,6 +421,15 @@ describe("a tag variable on a native element (an element reference)", () => {
     },
   );
 
+  it("refuses a second element reference of the same name in one body", () => {
+    const error = attempt("<div/el/><div/el/>", bindsElement);
+    expect(error?.message).toBe(
+      "Duplicate declaration of `el`: it is already declared in this body at 1:6. A body declares each tag variable once; rename one of them.",
+    );
+    expect(error?.diagnosticCode).toBe("MX_DUPLICATE_DECLARATION");
+    expect([error?.line, error?.column]).toEqual([1, 14]);
+  });
+
   for (const [label, host] of [
     ["a host that binds element references", bindsElement],
     ["a host that does not", withLet],

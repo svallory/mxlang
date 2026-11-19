@@ -2698,6 +2698,11 @@ describe("an element reference (`<div/el>`)", () => {
   it.each([
     ["<div/el>x</div>", "<div>x</div>"],
     ["<div/el/><script>el().focus()</script>", "<div></div>"],
+    // Each element body binds its own `el`: html wraps the body in a block.
+    [
+      "<section><div/el/></section><section><div/el/></section>",
+      "<section><div></div></section><section><div></div></section>",
+    ],
   ])("renders %s as %s", async (source, html) => {
     expect(await renderModules({ "entry.mx": source }, "entry.mx")).toBe(html);
   });
